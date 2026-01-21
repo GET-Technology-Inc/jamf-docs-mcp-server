@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/GET-Technology-Inc/jamf-docs-mcp-server#readme
+    about: Check the README for usage instructions
+  - name: MCP Protocol
+    url: https://modelcontextprotocol.io/
+    about: Learn more about the Model Context Protocol

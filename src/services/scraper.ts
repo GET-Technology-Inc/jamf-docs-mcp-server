@@ -1,0 +1,809 @@
+/**
+ * Web scraping service for Jamf documentation
+ *
+ * This module handles fetching and parsing HTML from learn.jamf.com
+ * (Jamf documentation has moved from docs.jamf.com to learn.jamf.com)
+ */
+
+import axios, { AxiosError } from 'axios';
+import * as cheerio from 'cheerio';
+import TurndownService from 'turndown';
+
+import {
+  DOCS_BASE_URL,
+  DOCS_API_URL,
+  JAMF_PRODUCTS,
+  JAMF_TOPICS,
+  REQUEST_CONFIG,
+  SELECTORS,
+  CONTENT_LIMITS,
+  TOKEN_CONFIG,
+  PAGINATION_CONFIG,
+  type ProductId,
+  type TopicId
+} from '../constants.js';
+import {
+  JamfDocsError,
+  JamfDocsErrorCode,
+  type SearchResult,
+  type ParsedArticle,
+  type TocEntry,
+  type SearchParams,
+  type ZoominSearchResponse,
+  type TokenInfo,
+  type PaginationInfo,
+  type ArticleSection
+} from '../types.js';
+import { cache } from './cache.js';
+import {
+  estimateTokens,
+  createTokenInfo,
+  extractSections,
+  extractSection,
+  truncateToTokenLimit,
+  calculatePagination
+} from './tokenizer.js';
+
+// Initialize Turndown for HTML to Markdown conversion
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-',
+  emDelimiter: '*',
+  strongDelimiter: '**'
+});
+
+// Custom Turndown rules
+turndown.addRule('codeBlocks', {
+  filter: 'pre',
+  replacement: (content, node) => {
+    // Handle code element extraction safely
+    const nodeElement = node as unknown as { querySelector?: (selector: string) => { className?: string } | null };
+    const codeElement = nodeElement.querySelector?.('code');
+    const language = codeElement?.className?.replace('language-', '') || '';
+    return `\n\`\`\`${language}\n${content.trim()}\n\`\`\`\n`;
+  }
+});
+
+// Rate limiter
+let lastRequestTime = 0;
+
+async function throttle(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+
+  if (elapsed < REQUEST_CONFIG.RATE_LIMIT_DELAY) {
+    await new Promise(resolve =>
+      setTimeout(resolve, REQUEST_CONFIG.RATE_LIMIT_DELAY - elapsed)
+    );
+  }
+
+  lastRequestTime = Date.now();
+}
+
+/**
+ * Transform frontend URL to backend URL for content fetching
+ * learn.jamf.com -> learn-be.jamf.com
+ */
+function transformToBackendUrl(url: string): string {
+  return url.replace('learn.jamf.com', 'learn-be.jamf.com');
+}
+
+/**
+ * Transform backend URL to frontend URL for display
+ * learn-be.jamf.com -> learn.jamf.com
+ */
+function transformToFrontendUrl(url: string): string {
+  return url.replace('learn-be.jamf.com', 'learn.jamf.com');
+}
+
+/**
+ * Strip HTML tags from a string
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Fetch JSON data from a URL with error handling
+ */
+async function fetchJson<T>(url: string): Promise<T> {
+  await throttle();
+
+  try {
+    const response = await axios.get<T>(url, {
+      timeout: REQUEST_CONFIG.TIMEOUT,
+      headers: {
+        'User-Agent': REQUEST_CONFIG.USER_AGENT,
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+
+      if (axiosError.response?.status === 404) {
+        throw new JamfDocsError(
+          `Resource not found: ${url}`,
+          JamfDocsErrorCode.NOT_FOUND,
+          url,
+          404
+        );
+      }
+
+      if (axiosError.response?.status === 429) {
+        throw new JamfDocsError(
+          'Rate limited. Please wait and try again.',
+          JamfDocsErrorCode.RATE_LIMITED,
+          url,
+          429
+        );
+      }
+
+      if (axiosError.code === 'ECONNABORTED') {
+        throw new JamfDocsError(
+          'Request timed out',
+          JamfDocsErrorCode.TIMEOUT,
+          url
+        );
+      }
+
+      throw new JamfDocsError(
+        `Network error: ${axiosError.message}`,
+        JamfDocsErrorCode.NETWORK_ERROR,
+        url
+      );
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Fetch HTML content from a URL with error handling
+ */
+async function fetchHtml(url: string): Promise<string> {
+  await throttle();
+
+  try {
+    const response = await axios.get<string>(url, {
+      timeout: REQUEST_CONFIG.TIMEOUT,
+      headers: {
+        'User-Agent': REQUEST_CONFIG.USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+
+      if (axiosError.response?.status === 404) {
+        throw new JamfDocsError(
+          `Article not found: ${url}`,
+          JamfDocsErrorCode.NOT_FOUND,
+          url,
+          404
+        );
+      }
+
+      if (axiosError.response?.status === 429) {
+        throw new JamfDocsError(
+          'Rate limited. Please wait and try again.',
+          JamfDocsErrorCode.RATE_LIMITED,
+          url,
+          429
+        );
+      }
+
+      if (axiosError.code === 'ECONNABORTED') {
+        throw new JamfDocsError(
+          'Request timed out',
+          JamfDocsErrorCode.TIMEOUT,
+          url
+        );
+      }
+
+      throw new JamfDocsError(
+        `Network error: ${axiosError.message}`,
+        JamfDocsErrorCode.NETWORK_ERROR,
+        url
+      );
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Clean HTML content by removing unwanted elements
+ */
+function cleanHtml($: cheerio.CheerioAPI): void {
+  // Remove unwanted elements
+  $(SELECTORS.REMOVE).remove();
+
+  // Fix relative URLs
+  $('a[href^="/"]').each((_, el) => {
+    const href = $(el).attr('href');
+    if (href) {
+      $(el).attr('href', `${DOCS_BASE_URL}${href}`);
+    }
+  });
+
+  $('img[src^="/"]').each((_, el) => {
+    const src = $(el).attr('src');
+    if (src) {
+      $(el).attr('src', `${DOCS_BASE_URL}${src}`);
+    }
+  });
+}
+
+/**
+ * Extract product and version from URL
+ * Supports both old docs.jamf.com and new learn.jamf.com URL structures
+ */
+function extractProductInfo(url: string): { product: string | undefined; version: string | undefined } {
+  // learn.jamf.com structure: /en-US/bundle/{product}-documentation/page/{page}.html
+  const bundleMatch = url.match(/\/bundle\/([^/]+)-documentation\//);
+  if (bundleMatch) {
+    const bundleSlug = bundleMatch[1];
+    const product = Object.values(JAMF_PRODUCTS).find(p =>
+      p.bundleId.includes(bundleSlug ?? '')
+    );
+    return { product: product?.name, version: 'current' };
+  }
+
+  // Legacy docs.jamf.com structure: /{version}/{product}/...
+  const urlObj = new URL(url);
+  const pathParts = urlObj.pathname.split('/').filter(Boolean);
+
+  // Check for versioned paths like /11.5.0/jamf-pro/...
+  const versionMatch = pathParts[0]?.match(/^\d+\.\d+(\.\d+)?$/);
+  if (versionMatch) {
+    const version = pathParts[0];
+    const productSlug = pathParts[1];
+    const product = Object.values(JAMF_PRODUCTS).find(p =>
+      p.urlPattern.includes(productSlug ?? '')
+    );
+    return { product: product?.name, version };
+  }
+
+  // Check for unversioned paths like /jamf-connect/...
+  for (const [, product] of Object.entries(JAMF_PRODUCTS)) {
+    if (url.includes(product.bundleId) || url.includes(product.id)) {
+      return { product: product.name, version: 'current' };
+    }
+  }
+
+  return { product: undefined, version: undefined };
+}
+
+/**
+ * Search result with metadata for filtering
+ */
+interface SearchResultWithMeta {
+  result: SearchResult;
+  bundleSlug: string | null;
+  matchedTopics: TopicId[];
+}
+
+/**
+ * Check if a search result matches a topic based on keywords
+ */
+function matchesTopic(result: SearchResult, topicId: TopicId): boolean {
+  const topic = JAMF_TOPICS[topicId];
+  const searchText = `${result.title} ${result.snippet}`.toLowerCase();
+
+  return topic.keywords.some(keyword =>
+    searchText.includes(keyword.toLowerCase())
+  );
+}
+
+/**
+ * Search response with token and pagination info
+ */
+export interface SearchDocumentationResult {
+  results: SearchResult[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+}
+
+/**
+ * Search Jamf documentation using Zoomin Search API
+ */
+export async function searchDocumentation(params: SearchParams): Promise<SearchDocumentationResult> {
+  const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
+  const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
+  const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+  const cacheKey = `search:${JSON.stringify({ ...params, page: 1 })}`; // Cache without page for full results
+
+  // Check cache for full results
+  let allResults: SearchResultWithMeta[] | null = await cache.get<SearchResultWithMeta[]>(cacheKey);
+
+  if (!allResults) {
+    // Fetch more results to allow for filtering
+    const fetchLimit = CONTENT_LIMITS.MAX_SEARCH_RESULTS;
+
+    // Build API URL with query params
+    const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
+    apiUrl.searchParams.set('q', params.query);
+    apiUrl.searchParams.set('rpp', fetchLimit.toString());
+
+    console.error(`[SEARCH] Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, URL: ${apiUrl.toString()}`);
+
+    try {
+      const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString());
+
+      // Transform Zoomin results to SearchResult format with metadata
+      allResults = response.Results
+        .filter(wrapper => wrapper.leading_result !== null)
+        .map(wrapper => {
+          const result = wrapper.leading_result;
+
+          // Extract product from bundle_id
+          const bundleId = result.bundle_id || '';
+          const bundleMatch = bundleId.match(/^(jamf-[a-z]+)-documentation/);
+          const bundleSlug: string | null = bundleMatch?.[1] ?? null;
+          const productEntry = bundleSlug
+            ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
+            : null;
+
+          const searchResult: SearchResult = {
+            title: result.title || 'Untitled',
+            url: transformToFrontendUrl(result.url || ''),
+            snippet: stripHtml(result.snippet || '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH),
+            product: productEntry ? productEntry[1].name : (result.publication_title || 'Jamf'),
+            version: 'current'
+          };
+
+          if (result.score !== undefined && result.score !== null) {
+            searchResult.relevance = result.score;
+          }
+
+          // Find matched topics
+          const matchedTopics: TopicId[] = (Object.keys(JAMF_TOPICS) as TopicId[])
+            .filter(topicId => matchesTopic(searchResult, topicId));
+
+          return { result: searchResult, bundleSlug, matchedTopics };
+        });
+
+      // Cache full results
+      await cache.set(cacheKey, allResults);
+    } catch (error) {
+      console.error('[SEARCH] Error:', error);
+
+      if (error instanceof JamfDocsError) {
+        throw error;
+      }
+
+      // Return empty results on error
+      return {
+        results: [],
+        pagination: {
+          page: 1,
+          pageSize,
+          totalPages: 0,
+          totalItems: 0,
+          hasNext: false,
+          hasPrev: false
+        },
+        tokenInfo: createTokenInfo('', maxTokens)
+      };
+    }
+  }
+
+  // Apply filters
+  let filteredResults = allResults;
+
+  // Product filter
+  if (params.product) {
+    filteredResults = filteredResults.filter(r => r.bundleSlug === params.product);
+  }
+
+  // Topic filter
+  if (params.topic) {
+    const topicFilter = params.topic;
+    filteredResults = filteredResults.filter(r => r.matchedTopics.includes(topicFilter));
+  }
+
+  // Calculate pagination
+  const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
+
+  // Get paginated results
+  const paginatedResults = filteredResults
+    .slice(paginationInfo.startIndex, paginationInfo.endIndex)
+    .map(r => r.result);
+
+  // Calculate token info
+  const resultText = paginatedResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n');
+  const tokenCount = estimateTokens(resultText);
+
+  // Check if we need to truncate
+  let finalResults = paginatedResults;
+  let truncated = false;
+
+  if (tokenCount > maxTokens) {
+    // Truncate results to fit token limit
+    let runningTokens = 0;
+    finalResults = [];
+
+    for (const result of paginatedResults) {
+      const resultTokens = estimateTokens(`${result.title}\n${result.snippet}\n${result.url}`);
+      if (runningTokens + resultTokens > maxTokens) {
+        truncated = true;
+        break;
+      }
+      finalResults.push(result);
+      runningTokens += resultTokens;
+    }
+  }
+
+  return {
+    results: finalResults,
+    pagination: {
+      page: paginationInfo.page,
+      pageSize: paginationInfo.pageSize,
+      totalPages: paginationInfo.totalPages,
+      totalItems: filteredResults.length,
+      hasNext: paginationInfo.hasNext || truncated,
+      hasPrev: paginationInfo.hasPrev
+    },
+    tokenInfo: {
+      tokenCount: estimateTokens(finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')),
+      truncated,
+      maxTokens
+    }
+  };
+}
+
+/**
+ * Options for fetching articles
+ */
+export interface FetchArticleOptions {
+  includeRelated?: boolean;
+  section?: string;
+  maxTokens?: number;
+}
+
+/**
+ * Article result with token and section info
+ */
+export interface FetchArticleResult extends ParsedArticle {
+  tokenInfo: TokenInfo;
+  sections: ArticleSection[];
+}
+
+/**
+ * Fetch and parse a documentation article
+ * Uses backend URL (learn-be.jamf.com) for pre-rendered content
+ */
+export async function fetchArticle(
+  url: string,
+  options: FetchArticleOptions = {}
+): Promise<FetchArticleResult> {
+  const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+
+  // Store original URL for display, use backend URL for fetching
+  const displayUrl = transformToFrontendUrl(url);
+  const fetchUrl = transformToBackendUrl(url);
+  const cacheKey = `article:${displayUrl}`;
+
+  // Check cache for raw article (without section/token processing)
+  let rawArticle = await cache.get<ParsedArticle>(cacheKey);
+
+  if (!rawArticle) {
+    // Fetch HTML from backend URL (pre-rendered content, not SPA shell)
+    const html = await fetchHtml(fetchUrl);
+    const $ = cheerio.load(html);
+
+    // Clean content
+    cleanHtml($);
+
+    // Extract content
+    const contentHtml = $(SELECTORS.CONTENT).html() ?? '';
+    const title = $(SELECTORS.TITLE).first().text().trim() || 'Untitled';
+
+    // Convert to Markdown
+    const content = turndown.turndown(contentHtml);
+
+    // Extract breadcrumb
+    const breadcrumb = $(SELECTORS.BREADCRUMB)
+      .map((_, el) => $(el).text().trim())
+      .get()
+      .filter(Boolean);
+
+    // Extract related articles
+    const relatedArticles = options.includeRelated
+      ? $(SELECTORS.RELATED).map((_, el) => ({
+          title: $(el).text().trim(),
+          url: $(el).attr('href') ?? ''
+        })).get().filter(r => r.title && r.url)
+      : undefined;
+
+    // Extract product info from URL
+    const { product, version } = extractProductInfo(displayUrl);
+
+    rawArticle = {
+      title,
+      content,
+      url: displayUrl,
+      product,
+      version,
+      breadcrumb: breadcrumb.length > 0 ? breadcrumb : undefined,
+      relatedArticles: relatedArticles && relatedArticles.length > 0 ? relatedArticles : undefined
+    };
+
+    // Cache raw article
+    await cache.set(cacheKey, rawArticle);
+  }
+
+  // Extract all sections
+  const allSections = extractSections(rawArticle.content);
+
+  // Handle section extraction if requested
+  let processedContent = rawArticle.content;
+  let tokenInfo: TokenInfo;
+
+  if (options.section) {
+    // Extract specific section
+    const sectionResult = extractSection(rawArticle.content, options.section, maxTokens);
+    processedContent = sectionResult.content;
+    tokenInfo = sectionResult.tokenInfo;
+
+    if (!sectionResult.section) {
+      // Section not found, return error info
+      processedContent = `*Section "${options.section}" not found.*\n\n**Available sections:**\n${allSections.map(s => `- ${s.title}`).join('\n')}`;
+      tokenInfo = createTokenInfo(processedContent, maxTokens);
+    }
+  } else {
+    // Apply token limit with smart truncation
+    const truncateResult = truncateToTokenLimit(rawArticle.content, maxTokens);
+    processedContent = truncateResult.content;
+    tokenInfo = truncateResult.tokenInfo;
+  }
+
+  return {
+    ...rawArticle,
+    content: processedContent,
+    tokenInfo,
+    sections: allSections
+  };
+}
+
+/**
+ * Discover the latest bundle version for a product via search API
+ */
+async function discoverLatestBundleId(product: ProductId): Promise<string | null> {
+  const productInfo = JAMF_PRODUCTS[product];
+  const baseBundleId = productInfo.bundleId;
+
+  try {
+    // Search for any document from this product to discover the latest version
+    const apiUrl = `${DOCS_API_URL}/api/search?q=${encodeURIComponent(productInfo.name)}&rpp=10`;
+    const response = await fetchJson<ZoominSearchResponse>(apiUrl);
+
+    // Find a result with a matching bundle prefix
+    for (const wrapper of response.Results) {
+      const bundleId = wrapper.leading_result?.bundle_id;
+      if (bundleId && bundleId.startsWith(baseBundleId)) {
+        return bundleId;
+      }
+    }
+  } catch (error) {
+    console.error(`[TOC] Error discovering bundle version for ${product}:`, error);
+  }
+
+  return null;
+}
+
+/**
+ * Parse TOC HTML from Zoomin backend
+ */
+function parseTocHtml(html: string): TocEntry[] {
+  const $ = cheerio.load(html);
+  const toc: TocEntry[] = [];
+
+  // Parse the nested list structure
+  $('ul.list-links > li.toc').each((_, el) => {
+    const entry = parseTocEntry($, el);
+    if (entry) {
+      toc.push(entry);
+    }
+  });
+
+  return toc;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseTocEntry($: cheerio.CheerioAPI, el: any): TocEntry | null {
+  const $el = $(el);
+  const $link = $el.children('.inner').children('a').first();
+
+  const title = $link.text().trim();
+  let url = $link.attr('href') ?? '';
+
+  if (!title || !url) {
+    return null;
+  }
+
+  // Transform to frontend URL for display
+  url = transformToFrontendUrl(url);
+
+  const entry: TocEntry = { title, url };
+
+  // Check for children
+  const $children = $el.children('ul.list-links');
+  if ($children.length > 0) {
+    const children: TocEntry[] = [];
+    $children.children('li.toc').each((_, childEl) => {
+      const childEntry = parseTocEntry($, childEl);
+      if (childEntry) {
+        children.push(childEntry);
+      }
+    });
+    if (children.length > 0) {
+      entry.children = children;
+    }
+  }
+
+  return entry;
+}
+
+/**
+ * Options for fetching table of contents
+ */
+export interface FetchTocOptions {
+  page?: number;
+  maxTokens?: number;
+}
+
+/**
+ * TOC result with pagination and token info
+ */
+export interface FetchTocResult {
+  toc: TocEntry[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+}
+
+/**
+ * Convert TOC entry to string for token counting
+ */
+function tocEntryToString(entry: TocEntry, depth: number = 0): string {
+  const indent = '  '.repeat(depth);
+  let result = `${indent}- ${entry.title}\n`;
+  if (entry.children) {
+    for (const child of entry.children) {
+      result += tocEntryToString(child, depth + 1);
+    }
+  }
+  return result;
+}
+
+/**
+ * Count total TOC entries including children
+ */
+function countTocEntries(entries: TocEntry[]): number {
+  let count = entries.length;
+  for (const entry of entries) {
+    if (entry.children) {
+      count += countTocEntries(entry.children);
+    }
+  }
+  return count;
+}
+
+/**
+ * Fetch table of contents for a product
+ * Uses backend TOC endpoint (learn-be.jamf.com/bundle/{bundleId}/toc)
+ */
+export async function fetchTableOfContents(
+  product: ProductId,
+  _version: string,  // Version is not used for learn.jamf.com (always current)
+  options: FetchTocOptions = {}
+): Promise<FetchTocResult> {
+  const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
+  const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+  const cacheKey = `toc:${product}`;
+
+  // Check cache
+  let allToc = await cache.get<TocEntry[]>(cacheKey);
+
+  if (!allToc) {
+    // Discover the latest bundle version
+    const bundleId = await discoverLatestBundleId(product);
+    if (!bundleId) {
+      throw new JamfDocsError(
+        `Could not discover bundle version for ${product}`,
+        JamfDocsErrorCode.NOT_FOUND
+      );
+    }
+
+    // Fetch TOC from backend
+    const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
+    console.error(`[TOC] Fetching TOC from: ${tocUrl}`);
+
+    const tocJson = await fetchJson<Record<string, string>>(tocUrl);
+
+    // Parse TOC
+    allToc = [];
+    for (const [, html] of Object.entries(tocJson)) {
+      if (typeof html === 'string' && html.includes('<ul')) {
+        const entries = parseTocHtml(html);
+        allToc.push(...entries);
+      }
+    }
+
+    // Cache result
+    await cache.set(cacheKey, allToc);
+  }
+
+  // Count total entries
+  const totalItems = countTocEntries(allToc);
+
+  // For TOC, we paginate at the top-level entries
+  const topLevelCount = allToc.length;
+  const pageSize = PAGINATION_CONFIG.DEFAULT_PAGE_SIZE;
+  const paginationInfo = calculatePagination(topLevelCount, page, pageSize);
+
+  // Get paginated top-level entries (with their children)
+  const paginatedToc = allToc.slice(paginationInfo.startIndex, paginationInfo.endIndex);
+
+  // Calculate tokens for paginated TOC
+  const tocText = paginatedToc.map(e => tocEntryToString(e)).join('');
+  let tokenCount = estimateTokens(tocText);
+  let truncated = false;
+  let finalToc = paginatedToc;
+
+  // Truncate if over token limit
+  if (tokenCount > maxTokens) {
+    truncated = true;
+    finalToc = [];
+    let runningTokens = 0;
+
+    for (const entry of paginatedToc) {
+      const entryText = tocEntryToString(entry);
+      const entryTokens = estimateTokens(entryText);
+
+      if (runningTokens + entryTokens > maxTokens) {
+        break;
+      }
+
+      finalToc.push(entry);
+      runningTokens += entryTokens;
+    }
+
+    tokenCount = runningTokens;
+  }
+
+  return {
+    toc: finalToc,
+    pagination: {
+      page: paginationInfo.page,
+      pageSize: paginationInfo.pageSize,
+      totalPages: paginationInfo.totalPages,
+      totalItems,
+      hasNext: paginationInfo.hasNext || truncated,
+      hasPrev: paginationInfo.hasPrev
+    },
+    tokenInfo: {
+      tokenCount,
+      truncated,
+      maxTokens
+    }
+  };
+}
