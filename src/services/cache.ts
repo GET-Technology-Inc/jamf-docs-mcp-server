@@ -15,36 +15,23 @@ import type { CacheEntry } from '../types.js';
  * File-based cache implementation
  */
 class FileCache {
-  private cacheDir: string;
-  private memoryCache: Map<string, CacheEntry<unknown>> = new Map();
+  private readonly cacheDir: string;
+  private readonly memoryCache = new Map<string, CacheEntry<unknown>>();
 
   constructor(cacheDir: string = CACHE_DIR) {
     this.cacheDir = cacheDir;
   }
 
-  /**
-   * Generate a cache key hash
-   */
-  private getCacheKey(key: string): string {
+  private static getCacheKey(key: string): string {
     return crypto.createHash('md5').update(key).digest('hex');
   }
 
-  /**
-   * Get the file path for a cache key
-   */
   private getCachePath(key: string): string {
-    return path.join(this.cacheDir, `${this.getCacheKey(key)}.json`);
+    return path.join(this.cacheDir, `${FileCache.getCacheKey(key)}.json`);
   }
 
-  /**
-   * Ensure cache directory exists
-   */
   private async ensureCacheDir(): Promise<void> {
-    try {
-      await fs.mkdir(this.cacheDir, { recursive: true });
-    } catch {
-      // Directory may already exist
-    }
+    await fs.mkdir(this.cacheDir, { recursive: true }).catch(() => { /* ignore if exists */ });
   }
 
   /**
@@ -53,7 +40,7 @@ class FileCache {
   async get<T>(key: string): Promise<T | null> {
     // Check memory cache first
     const memCached = this.memoryCache.get(key) as CacheEntry<T> | undefined;
-    if (memCached) {
+    if (memCached !== undefined) {
       if (Date.now() - memCached.timestamp < memCached.ttl) {
         return memCached.data;
       }
@@ -65,7 +52,7 @@ class FileCache {
     try {
       const cachePath = this.getCachePath(key);
       const content = await fs.readFile(cachePath, 'utf-8');
-      const entry: CacheEntry<T> = JSON.parse(content);
+      const entry = JSON.parse(content) as CacheEntry<T>;
 
       // Check if expired
       if (Date.now() - entry.timestamp > entry.ttl) {
@@ -86,10 +73,10 @@ class FileCache {
   /**
    * Set a value in cache
    */
-  async set<T>(key: string, data: T, ttl: number = CACHE_TTL.ARTICLE_CONTENT): Promise<void> {
+  async set(key: string, data: unknown, ttl: number = CACHE_TTL.ARTICLE_CONTENT): Promise<void> {
     await this.ensureCacheDir();
 
-    const entry: CacheEntry<T> = {
+    const entry: CacheEntry<unknown> = {
       data,
       timestamp: Date.now(),
       ttl
@@ -104,7 +91,7 @@ class FileCache {
       await fs.writeFile(cachePath, JSON.stringify(entry), 'utf-8');
     } catch (error) {
       // Log but don't fail
-      console.error(`[CACHE] Failed to write cache: ${error}`);
+      console.error(`[CACHE] Failed to write cache: ${String(error)}`);
     }
   }
 
@@ -112,31 +99,20 @@ class FileCache {
    * Delete a cache entry
    */
   async delete(key: string): Promise<void> {
-    // Remove from memory
     this.memoryCache.delete(key);
-
-    // Remove file
-    try {
-      await fs.unlink(this.getCachePath(key));
-    } catch {
-      // File may not exist
-    }
+    await fs.unlink(this.getCachePath(key)).catch(() => { /* ignore if not exists */ });
   }
 
   /**
    * Clear all cache entries
    */
   async clear(): Promise<void> {
-    // Clear memory
     this.memoryCache.clear();
-
-    // Clear files
     try {
       const files = await fs.readdir(this.cacheDir);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
       await Promise.all(
-        files
-          .filter(f => f.endsWith('.json'))
-          .map(f => fs.unlink(path.join(this.cacheDir, f)))
+        jsonFiles.map(async f => { await fs.unlink(path.join(this.cacheDir, f)); })
       );
     } catch {
       // Directory may not exist
@@ -192,7 +168,7 @@ class FileCache {
         try {
           const filePath = path.join(this.cacheDir, file);
           const content = await fs.readFile(filePath, 'utf-8');
-          const entry: CacheEntry<unknown> = JSON.parse(content);
+          const entry = JSON.parse(content) as CacheEntry<unknown>;
 
           if (Date.now() - entry.timestamp > entry.ttl) {
             await fs.unlink(filePath);

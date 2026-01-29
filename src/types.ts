@@ -2,7 +2,7 @@
  * Type definitions for Jamf Docs MCP Server
  */
 
-import { ResponseFormat, ProductId, TopicId } from './constants.js';
+import type { ResponseFormat, ProductId, TopicId } from './constants.js';
 
 // ============================================================================
 // Context7-style Token and Pagination Types
@@ -51,13 +51,13 @@ export interface JamfProduct {
 }
 
 export interface ProductListResponse {
-  products: Array<{
+  products: {
     id: string;
     name: string;
     description: string;
     currentVersion: string;
     availableVersions: string[];
-  }>;
+  }[];
   tokenInfo: TokenInfo;
 }
 
@@ -112,10 +112,10 @@ export interface ParsedArticle {
   version?: string | undefined;
   lastUpdated?: string | undefined;
   breadcrumb?: string[] | undefined;
-  relatedArticles?: Array<{
+  relatedArticles?: {
     title: string;
     url: string;
-  }> | undefined;
+  }[] | undefined;
 }
 
 export interface ArticleResponse extends ParsedArticle {
@@ -182,21 +182,13 @@ export enum JamfDocsErrorCode {
   TIMEOUT = 'TIMEOUT'
 }
 
-// HTTP types
-export interface HttpRequestOptions {
-  timeout?: number;
-  headers?: Record<string, string>;
-  retries?: number;
-  retryDelay?: number;
-}
-
 // MCP Tool types - compatible with MCP SDK CallToolResult
 export interface ToolResult {
   [key: string]: unknown;
-  content: Array<{
+  content: {
     type: 'text';
     text: string;
-  }>;
+  }[];
   isError?: boolean;
 }
 
@@ -208,7 +200,7 @@ export interface ZoominSearchResponse {
 }
 
 export interface ZoominSearchResultWrapper {
-  leading_result: ZoominLeadingResult;
+  leading_result?: ZoominLeadingResult | null;
   follower_result?: ZoominLeadingResult[];
   bundle_data?: unknown;
 }
@@ -236,7 +228,3 @@ export interface ZoominPagination {
   TotalResults: number;
 }
 
-// Utility types
-export type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
-};
