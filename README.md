@@ -4,202 +4,124 @@
 [![npm version](https://img.shields.io/npm/v/@get-technology-inc/jamf-docs-mcp-server.svg)](https://www.npmjs.com/package/@get-technology-inc/jamf-docs-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An MCP (Model Context Protocol) server that provides AI assistants with direct access to Jamf documentation from learn.jamf.com.
+An MCP server that gives AI assistants (Claude, Cursor, etc.) direct access to Jamf official documentation. Ask Jamf-related questions and get answers based on the latest docs from learn.jamf.com.
 
-## Features
+**Supported Products**: Jamf Pro, Jamf School, Jamf Connect, Jamf Protect
 
-- 🔍 **Search**: Search across all Jamf product documentation
-- 📖 **Read Articles**: Fetch full article content in Markdown format
-- 📚 **Browse TOC**: Explore documentation structure by product
-- 🏷️ **Product Filtering**: Filter by Jamf Pro, School, Connect, or Protect
-- 💾 **Caching**: Built-in caching for faster responses
+[中文文件](docs/README.zh-TW.md)
 
-## Supported Products
+## Quick Start
 
-| Product | Description |
-|---------|-------------|
-| Jamf Pro | Enterprise Apple device management |
-| Jamf School | Education-focused device management |
-| Jamf Connect | Identity and access management |
-| Jamf Protect | Endpoint security for Apple |
+### Claude Desktop
 
-## Requirements
+Edit `claude_desktop_config.json`:
 
-- Node.js 20.0.0 or higher
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/GET-Technology-Inc/jamf-docs-mcp-server.git
-cd jamf-docs-mcp-server
-
-# Install dependencies
-npm install
-
-# Build
-npm run build
-```
-
-## Usage
-
-### Quick Start with npx
-
-```bash
-npx @get-technology-inc/jamf-docs-mcp-server
-```
-
-### With Claude Desktop
-
-Add to your `claude_desktop_config.json`:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "jamf-docs": {
-      "command": "node",
-      "args": ["/path/to/jamf-docs-mcp-server/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@get-technology-inc/jamf-docs-mcp-server"]
     }
   }
 }
 ```
 
-### With Claude Code
+Restart Claude Desktop to apply.
+
+### Claude Code (CLI)
 
 ```bash
-claude mcp add jamf-docs -- node /path/to/jamf-docs-mcp-server/dist/index.js
+claude mcp add jamf-docs -- npx -y @get-technology-inc/jamf-docs-mcp-server
 ```
 
-### Testing with MCP Inspector
+### Cursor
+
+Edit `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jamf-docs": {
+      "command": "npx",
+      "args": ["-y", "@get-technology-inc/jamf-docs-mcp-server"]
+    }
+  }
+}
+```
+
+### Verify Installation
+
+Test with MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector node dist/index.js
+npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-server
 ```
+
+## Usage Examples
+
+Once configured, just ask your AI assistant:
+
+- "How do I configure SSO in Jamf Pro?"
+- "What are the system requirements for Jamf Protect?"
+- "Explain the MDM enrollment process"
 
 ## Available Tools
 
-### `jamf_docs_list_products`
+| Tool | Description |
+|------|-------------|
+| `jamf_docs_search` | Search documentation |
+| `jamf_docs_get_article` | Get article content |
+| `jamf_docs_get_toc` | Get table of contents |
+| `jamf_docs_list_products` | List supported products |
 
-List all available Jamf products and their documentation versions.
+## MCP Resources
 
-```
-"What Jamf products have documentation?"
-```
+Static reference data accessible without tool calls:
 
-### `jamf_docs_search`
+| Resource | Description |
+|----------|-------------|
+| `jamf://products` | List of products with version info |
+| `jamf://topics` | Topic categories for filtering |
 
-Search Jamf documentation for articles matching your query.
+## Key Features
 
-```
-"Search for SSO configuration in Jamf Pro"
-"Find articles about MDM enrollment"
-```
-
-### `jamf_docs_get_article`
-
-Retrieve the full content of a specific documentation article.
-
-```
-"Get the article at https://docs.jamf.com/..."
-```
-
-### `jamf_docs_get_toc`
-
-Get the table of contents for a product's documentation.
-
-```
-"Show me the Jamf Pro documentation structure"
-```
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
-
-# Type check
-npm run typecheck
-```
-
-## Project Structure
-
-```
-jamf-docs-mcp-server/
-├── src/
-│   ├── index.ts          # Entry point
-│   ├── types.ts          # Type definitions
-│   ├── constants.ts      # Configuration
-│   ├── tools/            # MCP tool implementations
-│   │   ├── list-products.ts
-│   │   ├── search.ts
-│   │   ├── get-article.ts
-│   │   └── get-toc.ts
-│   ├── services/         # Core services
-│   │   ├── scraper.ts    # Web scraping
-│   │   └── cache.ts      # Caching
-│   └── schemas/          # Zod validation schemas
-├── .cache/               # Local cache (gitignored)
-├── dist/                 # Build output
-├── package.json
-├── tsconfig.json
-└── CLAUDE.md             # Development guide
-```
+- **Compact Mode**: Use `outputMode: "compact"` for token-efficient responses
+- **Summary Only**: Use `summaryOnly: true` to preview articles before fetching full content
+- **Version Query**: Use `version` parameter to query specific product versions
+- **Search Suggestions**: Get helpful suggestions when no results found
 
 ## Configuration
 
-The server uses sensible defaults but can be configured via environment variables:
+Optional environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `CACHE_DIR` | Cache directory | `.cache` |
-| `REQUEST_TIMEOUT` | HTTP timeout (ms) | `15000` |
-| `RATE_LIMIT_DELAY` | Delay between requests (ms) | `500` |
-| `MAX_RETRIES` | Maximum retry attempts | `3` |
-| `RETRY_DELAY` | Delay between retries (ms) | `1000` |
-| `USER_AGENT` | Custom User-Agent string | `JamfDocsMCP/1.0` |
-| `CACHE_TTL_SEARCH` | Search results cache TTL (ms) | `1800000` (30 min) |
-| `CACHE_TTL_ARTICLE` | Article content cache TTL (ms) | `86400000` (24 hr) |
-| `CACHE_TTL_TOC` | TOC cache TTL (ms) | `86400000` (24 hr) |
-| `CACHE_TTL_PRODUCTS` | Products list cache TTL (ms) | `604800000` (7 days) |
+| `REQUEST_TIMEOUT` | Request timeout (ms) | `15000` |
+| `CACHE_TTL_ARTICLE` | Article cache TTL (ms) | `86400000` (24hr) |
 
-Example:
+## Development
 
 ```bash
-CACHE_DIR=/tmp/jamf-cache REQUEST_TIMEOUT=30000 node dist/index.js
+git clone https://github.com/GET-Technology-Inc/jamf-docs-mcp-server.git
+cd jamf-docs-mcp-server
+npm install
+npm run dev
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and type checks
-5. Submit a pull request
 
 ## License
 
 MIT - Copyright (c) 2025 GET Technology Inc.
 
-## Maintainer
-
-Developed and maintained by [GET Technology Inc.](https://github.com/GET-Technology-Inc)
-
 ## Disclaimer
 
-This is an unofficial tool for accessing Jamf documentation. It is not affiliated with or endorsed by Jamf. Use responsibly and respect Jamf's terms of service.
+This is an unofficial tool and is not affiliated with Jamf.
 
-## Related Resources
+## Links
 
 - [Jamf Documentation](https://learn.jamf.com)
-- [Jamf Developer Portal](https://developer.jamf.com)
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
-- [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)

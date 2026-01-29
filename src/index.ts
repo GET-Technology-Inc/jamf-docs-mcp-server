@@ -13,6 +13,7 @@ import { registerSearchTool } from './tools/search.js';
 import { registerGetArticleTool } from './tools/get-article.js';
 import { registerListProductsTool } from './tools/list-products.js';
 import { registerGetTocTool } from './tools/get-toc.js';
+import { registerResources } from './resources/index.js';
 
 // Create server instance
 const server = new McpServer({
@@ -26,6 +27,9 @@ registerSearchTool(server);
 registerGetArticleTool(server);
 registerGetTocTool(server);
 
+// Register resources
+registerResources(server);
+
 // Start server
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
@@ -34,9 +38,10 @@ async function main(): Promise<void> {
   // Log to stderr (not stdout, which is used for MCP protocol)
   console.error('Jamf Docs MCP Server running on stdio');
   console.error('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc');
+  console.error('Available resources: jamf://products, jamf://topics');
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });

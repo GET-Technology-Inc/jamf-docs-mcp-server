@@ -105,6 +105,22 @@ describe('Jamf Docs MCP Server', () => {
       expect(topicIds).toContain('security');
       expect(topicIds).toContain('filevault');
     });
+
+    it('should return compact output when outputMode is compact', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { outputMode: 'compact' }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      // Compact mode should be shorter and simpler
+      expect(text).toContain('## Products');
+      expect(text).toContain('## Topics');
+      expect(text).toContain('`jamf-pro`');
+      // Should NOT have detailed descriptions
+      expect(text).not.toContain('Apple device management for enterprise');
+    });
   });
 
   describe('jamf_docs_search', () => {
@@ -215,6 +231,38 @@ describe('Jamf Docs MCP Server', () => {
       expect(text).toContain('Search Results');
       expect(text).not.toMatch(/^\{/); // Not JSON
     });
+
+    it('should return compact output when outputMode is compact', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: {
+          query: 'policy',
+          outputMode: 'compact'
+        }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      // Compact mode uses numbered list format
+      expect(text).toMatch(/^\d+\. \[/m);
+      // Should NOT have the full "### [Title]" format
+      expect(text).not.toContain('### [');
+    });
+
+    it('should provide search suggestions when no results found', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: {
+          query: 'xyznonexistent123456'
+        }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      expect(text).toContain('No results found');
+      expect(text).toContain('Search Suggestions');
+      expect(text).toContain('Tips');
+    });
   });
 
   describe('jamf_docs_get_article', () => {
@@ -303,6 +351,99 @@ describe('Jamf Docs MCP Server', () => {
 
       const text = (result.content[0] as { type: 'text'; text: string }).text;
       expect(text).not.toMatch(/^\{/); // Not JSON
+    });
+
+    it('should return summary only when summaryOnly is true', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: {
+          url: validArticleUrl,
+          summaryOnly: true
+        }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      // Summary mode should contain summary section and outline
+      expect(text).toContain('## Summary');
+      expect(text).toContain('Article Outline');
+      expect(text).toContain('tokens)');
+      expect(text).toContain('Estimated read time');
+    });
+
+    it('should return compact output when outputMode is compact', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: {
+          url: validArticleUrl,
+          outputMode: 'compact'
+        }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      // Compact mode should have content but shorter footer
+      expect(text).toContain('# ');
+      expect(text).toContain('[Source]');
+      // Should NOT have the verbose "Source: [url](url)" format
+      expect(text).not.toContain('*Source: [');
+    });
+  });
+
+  describe('resources/list', () => {
+    it('should list all resources', async () => {
+      const result = await client.listResources();
+
+      expect(result.resources).toHaveLength(2);
+
+      const resourceUris = result.resources.map(r => r.uri);
+      expect(resourceUris).toContain('jamf://products');
+      expect(resourceUris).toContain('jamf://topics');
+    });
+
+    it('should have proper resource metadata', async () => {
+      const result = await client.listResources();
+
+      for (const resource of result.resources) {
+        expect(resource.name).toBeDefined();
+        expect(resource.uri).toBeDefined();
+        expect(resource.mimeType).toBe('application/json');
+      }
+    });
+  });
+
+  describe('resources/read', () => {
+    it('should read products resource', async () => {
+      const result = await client.readResource({ uri: 'jamf://products' });
+
+      expect(result.contents).toHaveLength(1);
+      expect(result.contents[0].mimeType).toBe('application/json');
+
+      const json = JSON.parse(result.contents[0].text as string);
+      expect(json.products).toBeDefined();
+      expect(json.products.length).toBe(4);
+
+      const productIds = json.products.map((p: { id: string }) => p.id);
+      expect(productIds).toContain('jamf-pro');
+      expect(productIds).toContain('jamf-school');
+      expect(productIds).toContain('jamf-connect');
+      expect(productIds).toContain('jamf-protect');
+    });
+
+    it('should read topics resource', async () => {
+      const result = await client.readResource({ uri: 'jamf://topics' });
+
+      expect(result.contents).toHaveLength(1);
+      expect(result.contents[0].mimeType).toBe('application/json');
+
+      const json = JSON.parse(result.contents[0].text as string);
+      expect(json.topics).toBeDefined();
+      expect(json.totalTopics).toBeGreaterThan(30);
+
+      const topicIds = json.topics.map((t: { id: string }) => t.id);
+      expect(topicIds).toContain('enrollment');
+      expect(topicIds).toContain('security');
+      expect(topicIds).toContain('policies');
     });
   });
 
@@ -407,6 +548,24 @@ describe('Jamf Docs MCP Server', () => {
       const text = (result.content[0] as { type: 'text'; text: string }).text;
       expect(text).toContain('Table of Contents');
       expect(text).not.toMatch(/^\{/); // Not JSON
+    });
+
+    it('should return compact output when outputMode is compact', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: {
+          product: 'jamf-pro',
+          outputMode: 'compact'
+        }
+      });
+
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+
+      // Compact mode should have simpler header
+      expect(text).toContain('## Jamf Pro TOC');
+      expect(text).toContain('entries)');
+      // Should NOT have the full "# Jamf Pro Documentation" header
+      expect(text).not.toContain('# Jamf Pro Documentation');
     });
   });
 });

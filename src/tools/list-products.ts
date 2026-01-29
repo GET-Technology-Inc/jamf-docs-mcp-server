@@ -3,9 +3,9 @@
  * Lists all available Jamf products and their documentation versions.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
-import { JAMF_PRODUCTS, JAMF_TOPICS, ResponseFormat, TOKEN_CONFIG } from '../constants.js';
+import { JAMF_PRODUCTS, JAMF_TOPICS, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo } from '../services/tokenizer.js';
 
@@ -19,6 +19,7 @@ topic filters for search.
 
 Args:
   - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
+  - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief list
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
 Returns:
@@ -57,7 +58,7 @@ export function registerListProductsTool(server: McpServer): void {
         openWorldHint: false
       }
     },
-    async (args): Promise<ToolResult> => {
+    (args): ToolResult => {
       // Parse and validate input
       const parseResult = ListProductsInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -102,7 +103,25 @@ export function registerListProductsTool(server: McpServer): void {
           };
         }
 
-        // Markdown format
+        // Compact mode: minimal output
+        if (params.outputMode === OutputMode.COMPACT) {
+          let markdown = '## Products\n';
+          for (const product of products) {
+            markdown += `- \`${product.id}\`: ${product.name}\n`;
+          }
+          markdown += '\n## Topics\n';
+          for (const topic of topics) {
+            markdown += `- \`${topic.id}\`: ${topic.name}\n`;
+          }
+          return {
+            content: [{
+              type: 'text',
+              text: markdown
+            }]
+          };
+        }
+
+        // Full markdown format
         let markdown = '# Jamf Documentation Products\n\n';
 
         for (const product of products) {

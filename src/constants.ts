@@ -6,22 +6,21 @@
  */
 
 // Environment variable helpers
-const getEnvNumber = (key: string, defaultValue: number): number => {
+function getEnvNumber(key: string, defaultValue: number): number {
   const value = process.env[key];
   if (value === undefined) {
     return defaultValue;
   }
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
-};
+}
 
-const getEnvString = (key: string, defaultValue: string): string => {
+function getEnvString(key: string, defaultValue: string): string {
   return process.env[key] ?? defaultValue;
-};
+}
 
 // Base URLs
 export const DOCS_BASE_URL = 'https://learn.jamf.com';
-export const LEARN_BASE_URL = 'https://learn.jamf.com';
 export const DOCS_API_URL = 'https://learn-be.jamf.com';
 
 // Supported products - updated URL patterns for learn.jamf.com
@@ -74,6 +73,12 @@ export type ProductId = keyof typeof JAMF_PRODUCTS;
 export enum ResponseFormat {
   MARKDOWN = 'markdown',
   JSON = 'json'
+}
+
+// Output mode (detail level)
+export enum OutputMode {
+  FULL = 'full',
+  COMPACT = 'compact'
 }
 
 // Cache settings (in milliseconds) - configurable via environment variables

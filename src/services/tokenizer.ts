@@ -18,6 +18,18 @@ export interface TruncateResult {
 }
 
 /**
+ * Result of summary extraction
+ */
+export interface SummaryResult {
+  title: string;
+  summary: string;
+  outline: ArticleSection[];
+  totalTokens: number;
+  estimatedReadTime: number;
+  tokenInfo: TokenInfo;
+}
+
+/**
  * Result of section extraction
  */
 export interface ExtractSectionResult {
@@ -30,19 +42,19 @@ export interface ExtractSectionResult {
  * Estimate token count for a text string
  * Uses different ratios for code blocks vs normal text
  */
-export function estimateTokens(text: string): number {
-  if (!text) {return 0;}
+export function estimateTokens(text: string | null | undefined): number {
+  if (text === null || text === undefined || text === '') {
+    return 0;
+  }
 
-  // Split content into code blocks and regular text
   const codeBlockRegex = /```[\s\S]*?```/g;
-  const codeBlocks = text.match(codeBlockRegex) || [];
+  const codeBlocks = text.match(codeBlockRegex) ?? [];
   const regularText = text.replace(codeBlockRegex, '');
 
-  // Calculate tokens for each type
-  const codeTokens = codeBlocks.reduce((sum, block) => {
-    return sum + Math.ceil(block.length / TOKEN_CONFIG.CODE_CHARS_PER_TOKEN);
-  }, 0);
-
+  const codeTokens = codeBlocks.reduce(
+    (sum, block) => sum + Math.ceil(block.length / TOKEN_CONFIG.CODE_CHARS_PER_TOKEN),
+    0
+  );
   const textTokens = Math.ceil(regularText.length / TOKEN_CONFIG.CHARS_PER_TOKEN);
 
   return codeTokens + textTokens;
@@ -54,7 +66,7 @@ export function estimateTokens(text: string): number {
 export function createTokenInfo(
   content: string,
   maxTokens: number,
-  truncated: boolean = false
+  truncated = false
 ): TokenInfo {
   return {
     tokenCount: estimateTokens(content),
@@ -69,51 +81,36 @@ export function createTokenInfo(
 export function extractSections(content: string): ArticleSection[] {
   const sections: ArticleSection[] = [];
   const lines = content.split('\n');
-
-  let currentSection: { title: string; level: number; startLine: number } | null = null;
+  let currentSection: { title: string; level: number } | null = null;
   let sectionContent = '';
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-
-    if (headingMatch) {
-      // Save previous section
-      if (currentSection) {
-        const id = generateSectionId(currentSection.title);
-        sections.push({
-          id,
-          title: currentSection.title,
-          level: currentSection.level,
-          tokenCount: estimateTokens(sectionContent)
-        });
-      }
-
-      // Start new section
-      const title = headingMatch[2]?.trim() ?? '';
-      const level = headingMatch[1]?.length ?? 1;
-      currentSection = {
-        title,
-        level,
-        startLine: i
-      };
-      sectionContent = line + '\n';
-    } else if (currentSection) {
-      sectionContent += line + '\n';
+  function saveCurrentSection(): void {
+    if (currentSection !== null) {
+      sections.push({
+        id: generateSectionId(currentSection.title),
+        title: currentSection.title,
+        level: currentSection.level,
+        tokenCount: estimateTokens(sectionContent)
+      });
     }
   }
 
-  // Don't forget the last section
-  if (currentSection) {
-    const id = generateSectionId(currentSection.title);
-    sections.push({
-      id,
-      title: currentSection.title,
-      level: currentSection.level,
-      tokenCount: estimateTokens(sectionContent)
-    });
+  for (const line of lines) {
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+
+    if (headingMatch !== null) {
+      saveCurrentSection();
+      currentSection = {
+        title: headingMatch[2]?.trim() ?? '',
+        level: headingMatch[1]?.length ?? 1
+      };
+      sectionContent = `${line}\n`;
+    } else if (currentSection !== null) {
+      sectionContent += `${line}\n`;
+    }
   }
 
+  saveCurrentSection();
   return sections;
 }
 
@@ -137,52 +134,36 @@ export function extractSection(
 ): ExtractSectionResult {
   const lines = content.split('\n');
   const normalizedId = generateSectionId(sectionIdentifier);
-
-  let inTargetSection = false;
-  let targetLevel = 0;
   const sectionLines: string[] = [];
   let foundSection: ArticleSection | null = null;
+  let targetLevel = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+  for (const line of lines) {
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
 
-    if (headingMatch) {
+    if (headingMatch !== null) {
       const level = headingMatch[1]?.length ?? 1;
       const title = headingMatch[2]?.trim() ?? '';
       const id = generateSectionId(title);
 
-      if (inTargetSection) {
-        // Check if we've reached a heading at the same or higher level
-        if (level <= targetLevel) {
-          break; // End of target section
-        }
-      }
+      // End section if we hit same or higher level heading
+      if (foundSection !== null && level <= targetLevel) {break;}
 
       // Check if this is the target section
-      if (id === normalizedId || title.toLowerCase().includes(sectionIdentifier.toLowerCase())) {
-        inTargetSection = true;
+      if (foundSection === null && (id === normalizedId || title.toLowerCase().includes(sectionIdentifier.toLowerCase()))) {
         targetLevel = level;
-        foundSection = {
-          id,
-          title,
-          level,
-          tokenCount: 0 // Will be calculated later
-        };
+        foundSection = { id, title, level, tokenCount: 0 };
       }
     }
 
-    if (inTargetSection) {
+    if (foundSection !== null) {
       sectionLines.push(line);
     }
   }
 
-  const sectionContent = sectionLines.join('\n');
+  const truncateResult = truncateToTokenLimit(sectionLines.join('\n'), maxTokens);
 
-  // Apply token limit with smart truncation
-  const truncateResult = truncateToTokenLimit(sectionContent, maxTokens);
-
-  if (foundSection) {
+  if (foundSection !== null) {
     foundSection.tokenCount = truncateResult.tokenInfo.tokenCount;
   }
 
@@ -236,7 +217,7 @@ export function truncateToTokenLimit(
       inCodeBlock = !inCodeBlock;
     }
 
-    const lineTokens = estimateTokens(line + '\n');
+    const lineTokens = estimateTokens(`${line}\n`);
 
     if (runningTokens + lineTokens > effectiveMax) {
       // Close any open code block
@@ -286,6 +267,104 @@ export function truncateToTokenLimit(
 }
 
 /**
+ * Extract summary from Markdown content
+ * Returns the first paragraph and an outline of sections with token estimates
+ */
+export function extractSummary(
+  content: string,
+  title: string,
+  maxTokens: number = TOKEN_CONFIG.DEFAULT_MAX_TOKENS
+): SummaryResult {
+  const lines = content.split('\n');
+  const sections = extractSections(content);
+  const totalTokens = estimateTokens(content);
+
+  // Extract first meaningful paragraph (skip headings, code blocks, and empty lines)
+  let summary = '';
+  let inParagraph = false;
+  let inCodeBlock = false;
+
+  for (const line of lines) {
+    // Track code blocks
+    if (line.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      if (inParagraph) {break;}
+      continue;
+    }
+
+    // Skip content inside code blocks
+    if (inCodeBlock) {
+      continue;
+    }
+
+    // Skip headings
+    if (line.startsWith('#')) {
+      if (inParagraph) {break;}
+      continue;
+    }
+
+    // Skip empty lines at the start
+    if (line.trim() === '' && !inParagraph) {
+      continue;
+    }
+
+    // Skip list items and other non-paragraph content
+    if (line.trim().startsWith('-') || line.trim().startsWith('*') || line.trim().startsWith('|')) {
+      if (inParagraph) {break;}
+      continue;
+    }
+
+    // Found content
+    if (line.trim() !== '') {
+      inParagraph = true;
+      summary += `${line} `;
+    } else if (inParagraph) {
+      // End of paragraph
+      break;
+    }
+  }
+
+  summary = summary.trim();
+
+  // If no paragraph found, use first 200 chars of content
+  if (summary === '') {
+    const plainText = content.replace(/^#+\s+.+$/gm, '').replace(/\n+/g, ' ').trim();
+    summary = plainText.slice(0, 200) + (plainText.length > 200 ? '...' : '');
+  }
+
+  // Estimate read time (assuming 200 words per minute, ~5 chars per word)
+  const wordCount = Math.ceil(content.length / 5);
+  const estimatedReadTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  // Build the summary output
+  let output = `# ${title}\n\n`;
+  output += `## Summary\n\n${summary}\n\n`;
+  output += `## Article Outline (${sections.length} sections)\n\n`;
+
+  for (const section of sections) {
+    const indent = '  '.repeat(Math.max(0, section.level - 1));
+    output += `${indent}- ${section.title} (~${section.tokenCount} tokens)\n`;
+  }
+
+  output += `\n*Estimated read time: ${estimatedReadTime} min | Total: ${totalTokens.toLocaleString()} tokens*\n`;
+
+  const outputTokens = estimateTokens(output);
+
+  return {
+    title,
+    summary,
+    outline: sections,
+    totalTokens,
+    estimatedReadTime,
+    tokenInfo: {
+      tokenCount: outputTokens,
+      truncated: false,
+      maxTokens
+    }
+  };
+}
+
+/**
  * Calculate pagination info
  */
 export function calculatePagination(
@@ -303,7 +382,7 @@ export function calculatePagination(
   endIndex: number;
 } {
   const totalPages = Math.ceil(totalItems / pageSize);
-  const normalizedPage = Math.min(Math.max(1, page), totalPages || 1);
+  const normalizedPage = Math.min(Math.max(1, page), Math.max(totalPages, 1));
 
   return {
     page: normalizedPage,
@@ -325,8 +404,8 @@ export function truncateItemsToTokenLimit<T>(
   items: T[],
   maxTokens: number,
   itemToString: (item: T) => string,
-  page: number = 1,
-  pageSize: number = 10
+  page = 1,
+  pageSize = 10
 ): {
   items: T[];
   tokenInfo: TokenInfo;

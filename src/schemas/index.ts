@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import {
   ResponseFormat,
+  OutputMode,
   JAMF_PRODUCTS,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
@@ -20,6 +21,9 @@ const topicIds = Object.keys(JAMF_TOPICS) as [string, ...string[]];
 
 // Response format enum
 const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
+
+// Output mode enum
+const OutputModeSchema = z.nativeEnum(OutputMode);
 
 // Common maxTokens parameter schema
 const MaxTokensSchema = z.number()
@@ -44,6 +48,10 @@ export const ListProductsInputSchema = z.object({
   maxTokens: MaxTokensSchema
     .optional()
     .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+
+  outputMode: OutputModeSchema
+    .default(OutputMode.FULL)
+    .describe('Output detail level: "full" for detailed output or "compact" for brief output'),
 
   responseFormat: ResponseFormatSchema
     .default(ResponseFormat.MARKDOWN)
@@ -88,6 +96,10 @@ export const SearchInputSchema = z.object({
     .optional()
     .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
 
+  outputMode: OutputModeSchema
+    .default(OutputMode.FULL)
+    .describe('Output detail level: "full" for detailed output or "compact" for brief output'),
+
   responseFormat: ResponseFormatSchema
     .default(ResponseFormat.MARKDOWN)
     .describe('Output format: "markdown" for human-readable or "json" for machine-readable')
@@ -111,6 +123,10 @@ export const GetArticleInputSchema = z.object({
     .optional()
     .describe('Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")'),
 
+  summaryOnly: z.boolean()
+    .default(false)
+    .describe('Return only article summary and outline instead of full content (token-efficient)'),
+
   includeRelated: z.boolean()
     .default(false)
     .describe('Include related article links in the response'),
@@ -118,6 +134,10 @@ export const GetArticleInputSchema = z.object({
   maxTokens: MaxTokensSchema
     .optional()
     .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+
+  outputMode: OutputModeSchema
+    .default(OutputMode.FULL)
+    .describe('Output detail level: "full" for detailed output or "compact" for brief output'),
 
   responseFormat: ResponseFormatSchema
     .default(ResponseFormat.MARKDOWN)
@@ -144,6 +164,10 @@ export const GetTocInputSchema = z.object({
   maxTokens: MaxTokensSchema
     .optional()
     .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+
+  outputMode: OutputModeSchema
+    .default(OutputMode.FULL)
+    .describe('Output detail level: "full" for detailed output or "compact" for brief output'),
 
   responseFormat: ResponseFormatSchema
     .default(ResponseFormat.MARKDOWN)
