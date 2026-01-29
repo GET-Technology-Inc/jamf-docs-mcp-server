@@ -94,9 +94,16 @@ const HTML_ENTITIES: Record<string, string> = {
 
 /**
  * Strip HTML tags from a string
+ * Uses iterative approach to handle nested/malformed tags
  */
 function stripHtml(html: string): string {
-  let text = html.replace(/<[^>]*>/g, '');
+  let text = html;
+  // Iteratively remove HTML tags until none remain (handles nested cases like <scr<script>ipt>)
+  let prev = '';
+  while (prev !== text) {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, '');
+  }
   for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
     text = text.replaceAll(entity, char);
   }
@@ -254,6 +261,9 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
 
       // Transform Zoomin results to SearchResult format with metadata
       allResults = response.Results
+        .filter((wrapper): wrapper is typeof wrapper & { leading_result: NonNullable<typeof wrapper.leading_result> } =>
+          wrapper.leading_result !== null && wrapper.leading_result !== undefined
+        )
         .map(wrapper => {
           const result = wrapper.leading_result;
 
@@ -486,7 +496,7 @@ export async function fetchArticle(
   }
 
   // Handle section extraction if requested
-  let processedContent = article.content;
+  let processedContent: string;
   let tokenInfo: TokenInfo;
 
   if (options.section !== undefined && options.section !== '') {
@@ -529,6 +539,9 @@ async function discoverLatestBundleId(product: ProductId): Promise<string | null
 
     // Find a result with a matching bundle prefix
     for (const wrapper of response.Results) {
+      if (wrapper.leading_result === null || wrapper.leading_result === undefined) {
+        continue;
+      }
       const bundleId = wrapper.leading_result.bundle_id;
       if (bundleId.startsWith(baseBundleId)) {
         return bundleId;

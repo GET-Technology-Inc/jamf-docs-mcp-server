@@ -200,7 +200,7 @@ export interface ZoominSearchResponse {
 }
 
 export interface ZoominSearchResultWrapper {
-  leading_result: ZoominLeadingResult;
+  leading_result?: ZoominLeadingResult | null;
   follower_result?: ZoominLeadingResult[];
   bundle_data?: unknown;
 }
