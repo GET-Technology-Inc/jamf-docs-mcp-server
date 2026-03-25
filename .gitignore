@@ -39,3 +39,9 @@ coverage/
 .mcp.json
 CLAUDE.md
 
+# AI tooling configuration
+.codex/
+.github/prompts/
+.github/skills/
+openspec/
+

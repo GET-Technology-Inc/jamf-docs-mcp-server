@@ -93,7 +93,7 @@ export default tseslint.config(
       }],
       '@typescript-eslint/no-shadow': 'error',
       '@typescript-eslint/only-throw-error': 'error',
-      '@typescript-eslint/no-deprecated': 'warn',
+      '@typescript-eslint/no-deprecated': 'off', // disabled: crashes with eslint 10 + typescript-eslint 8.x
       '@typescript-eslint/no-import-type-side-effects': 'error',
       '@typescript-eslint/no-array-delete': 'error',
       '@typescript-eslint/prefer-includes': 'error',

@@ -188,12 +188,23 @@ export async function getProductsMetadata(): Promise<ProductMetadata[]> {
     return cached;
   }
 
+  // Fetch metadata for all products concurrently
+  const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
+  const fetchResults = await Promise.all(
+    productIds.map(async (productId) => {
+      try {
+        const metadata = await fetchProductMetadata(productId);
+        return { productId, metadata };
+      } catch (error: unknown) {
+        console.error(`[METADATA] Failed to fetch metadata for ${productId}:`, error);
+        return { productId, metadata: null };
+      }
+    })
+  );
+
   const products: ProductMetadata[] = [];
 
-  // Fetch metadata for each product
-  for (const productId of Object.keys(JAMF_PRODUCTS) as ProductId[]) {
-    const metadata = await fetchProductMetadata(productId);
-
+  for (const { productId, metadata } of fetchResults) {
     if (metadata !== null) {
       products.push(metadata);
     } else {
@@ -393,18 +404,23 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
     });
   }
 
-  // Fetch TOC categories from ALL products
+  // Fetch TOC categories from ALL products concurrently
   const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
-
-  for (const productId of productIds) {
-    try {
-      const categories = await fetchTopicCategories(productId);
-      for (const category of categories) {
-        upsertTopic(topicsMap, category);
+  const tocResults = await Promise.all(
+    productIds.map(async (productId) => {
+      try {
+        const categories = await fetchTopicCategories(productId);
+        return { productId, categories };
+      } catch (error: unknown) {
+        console.error(`[METADATA] Error fetching TOC for ${productId}:`, error);
+        return { productId, categories: [] as TocCategory[] };
       }
-    } catch (error) {
-      console.error(`[METADATA] Error fetching TOC for ${productId}:`, error);
-      // Continue with other products
+    })
+  );
+
+  for (const { categories } of tocResults) {
+    for (const category of categories) {
+      upsertTopic(topicsMap, category);
     }
   }
 

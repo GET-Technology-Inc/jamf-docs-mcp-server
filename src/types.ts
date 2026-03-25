@@ -2,7 +2,7 @@
  * Type definitions for Jamf Docs MCP Server
  */
 
-import type { ResponseFormat, ProductId, TopicId } from './constants.js';
+import type { ResponseFormat, ProductId, TopicId, DocTypeId } from './constants.js';
 
 // ============================================================================
 // Context7-style Token and Pagination Types
@@ -67,6 +67,7 @@ export interface SearchParams {
   product?: ProductId | undefined;
   version?: string | undefined;
   topic?: TopicId | undefined;
+  docType?: DocTypeId | undefined;
   limit?: number | undefined;
   page?: number | undefined;
   maxTokens?: number | undefined;
@@ -77,9 +78,10 @@ export interface SearchResult {
   title: string;
   url: string;
   snippet: string;
-  product: string;
+  product: string | null;  // API may return null for some results
   version?: string;
   relevance?: number;
+  docType?: DocTypeId;
 }
 
 export interface SearchResponse {
@@ -190,6 +192,7 @@ export interface ToolResult {
     text: string;
   }[];
   isError?: boolean;
+  structuredContent?: Record<string, unknown>;
 }
 
 // Zoomin API types (learn-be.jamf.com)

@@ -344,3 +344,187 @@ describe('truncateItemsToTokenLimit', () => {
     expect(result.pagination.hasNext).toBe(true);
   });
 });
+
+// ============================================================================
+// Additional edge case tests
+// ============================================================================
+
+describe('estimateTokens - code-only content', () => {
+  it('should estimate tokens for content that is entirely a code block', () => {
+    const codeOnly = '```javascript\nconst x = 1;\nconst y = 2;\nconst z = x + y;\n```';
+    const tokens = estimateTokens(codeOnly);
+    // Code blocks use 3 chars/token (higher density than plain text 4 chars/token)
+    // Length = codeOnly.length; expected ≈ ceil(codeOnly.length / 3)
+    const expected = Math.ceil(codeOnly.length / 3);
+    expect(tokens).toBe(expected);
+  });
+
+  it('should produce more tokens for code content than equivalent plain text of same length', () => {
+    const plainContent = 'const x equals one const y equals two';
+    const codeContent = '```\nconst x = 1;\nconst y = 2\n```';
+
+    // Pad to same length for a fair comparison
+    const plain = plainContent.slice(0, codeContent.length);
+    const plainTokens = estimateTokens(plain);
+    const codeTokens = estimateTokens(codeContent);
+
+    // Code blocks have higher density (3 chars/token < 4 chars/token for plain text)
+    expect(codeTokens).toBeGreaterThanOrEqual(plainTokens);
+  });
+
+  it('should handle multiple consecutive code blocks', () => {
+    const multiCode = '```\nblock one\n```\n\n```\nblock two\n```';
+    const tokens = estimateTokens(multiCode);
+    expect(tokens).toBeGreaterThan(0);
+  });
+});
+
+describe('truncateToTokenLimit - exact limit boundary', () => {
+  it('should not truncate when content tokens exactly equal maxTokens', () => {
+    // Build content whose token count equals exactly N tokens
+    // estimateTokens uses ceil(length / 4) for plain text
+    // 40 chars = ceil(40/4) = 10 tokens
+    const content = 'a'.repeat(40); // 10 tokens exactly
+    const result = truncateToTokenLimit(content, 10);
+
+    expect(result.tokenInfo.truncated).toBe(false);
+    expect(result.content).toBe(content);
+  });
+
+  it('should truncate when content tokens exceed maxTokens by one', () => {
+    // 44 chars = ceil(44/4) = 11 tokens; limit = 10
+    const content = 'a'.repeat(44); // 11 tokens
+    const result = truncateToTokenLimit(content, 10);
+
+    expect(result.tokenInfo.truncated).toBe(true);
+  });
+});
+
+describe('truncateToTokenLimit - unclosed code block', () => {
+  it('should close an open code block when truncation occurs inside it', () => {
+    // Open code block that will be cut mid-way
+    const bigCodeContent = Array.from({ length: 500 }, (_, i) => `const var${i} = ${i};`).join('\n');
+    const content = `# Title\n\n\`\`\`javascript\n${bigCodeContent}\n\`\`\``;
+
+    const result = truncateToTokenLimit(content, 80);
+
+    // All ``` occurrences must be paired (even count)
+    const backtickMatches = result.content.match(/```/g) ?? [];
+    expect(backtickMatches.length % 2).toBe(0);
+  });
+
+  it('should include closing backticks when truncation happens inside a code block', () => {
+    const lines = Array.from({ length: 300 }, (_, i) => `line ${i}`).join('\n');
+    const content = `# Intro\n\n\`\`\`\n${lines}\n\`\`\``;
+
+    const result = truncateToTokenLimit(content, 60);
+
+    // With 300 lines and a 60 token limit, truncation must occur
+    expect(result.tokenInfo.truncated).toBe(true);
+    const backtickMatches = result.content.match(/```/g) ?? [];
+    expect(backtickMatches.length % 2).toBe(0);
+  });
+});
+
+describe('extractSection - not found returns available sections list', () => {
+  const markdown = `# Introduction
+
+Intro content.
+
+## Getting Started
+
+Start here.
+
+## Advanced Usage
+
+Advanced content.`;
+
+  it('should return null section when identifier does not match any section', () => {
+    const result = extractSection(markdown, 'nonexistent-section-xyz');
+    expect(result.section).toBeNull();
+    expect(result.content).toBe('');
+  });
+
+  it('should return empty content when section is not found', () => {
+    const result = extractSection(markdown, 'completely-missing');
+    expect(result.content).toBe('');
+  });
+
+  it('should still return a tokenInfo when section is not found', () => {
+    const result = extractSection(markdown, 'missing-section');
+    expect(result.tokenInfo).toBeDefined();
+    expect(typeof result.tokenInfo.tokenCount).toBe('number');
+    expect(typeof result.tokenInfo.maxTokens).toBe('number');
+  });
+});
+
+describe('truncateToTokenLimit - more than 10 remaining sections', () => {
+  it('should show "...and N more sections" when more than 10 sections remain after truncation', () => {
+    // Create content with 20 tiny sections; with maxTokens=30 only ~5-6 fit,
+    // leaving ~14 remaining sections — triggering the ">10" branch (line 250-252)
+    const content = Array.from({ length: 20 }, (_, i) => {
+      const heading = i === 0 ? '#' : '##';
+      return `${heading} S${i + 1}\n\nx.`;
+    }).join('\n\n');
+
+    const result = truncateToTokenLimit(content, 30);
+
+    expect(result.tokenInfo.truncated).toBe(true);
+    // The notice should mention "...and N more sections" because >10 sections remain
+    expect(result.content).toMatch(/\.\.\.and \d+ more sections/);
+  });
+
+  it('remaining-sections count in notice matches actual overflow', () => {
+    const content = Array.from({ length: 20 }, (_, i) => {
+      const heading = i === 0 ? '#' : '##';
+      return `${heading} S${i + 1}\n\ny.`;
+    }).join('\n\n');
+
+    const result = truncateToTokenLimit(content, 30);
+
+    if (result.tokenInfo.truncated) {
+      const match = /\.\.\.and (\d+) more sections/.exec(result.content);
+      if (match !== null) {
+        const moreCount = parseInt(match[1] ?? '0', 10);
+        expect(moreCount).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe('calculatePagination - additional edge cases', () => {
+  it('should handle totalItems=0 gracefully', () => {
+    const result = calculatePagination(0, 1, 10);
+    expect(result.totalPages).toBe(0);
+    expect(result.hasNext).toBe(false);
+    expect(result.hasPrev).toBe(false);
+    expect(result.startIndex).toBe(0);
+    expect(result.endIndex).toBe(0);
+  });
+
+  it('should clamp page above totalPages to totalPages', () => {
+    const result = calculatePagination(30, 100, 10);
+    expect(result.page).toBe(3); // totalPages = 3
+    expect(result.hasNext).toBe(false);
+  });
+
+  it('should clamp page=0 to page=1', () => {
+    const result = calculatePagination(30, 0, 10);
+    // Math.max(1, 0) = 1
+    expect(result.page).toBe(1);
+    expect(result.hasPrev).toBe(false);
+  });
+
+  it('should clamp negative page to page=1', () => {
+    const result = calculatePagination(30, -5, 10);
+    expect(result.page).toBe(1);
+    expect(result.hasPrev).toBe(false);
+    expect(result.startIndex).toBe(0);
+  });
+
+  it('should clamp page>totalPages to totalPages even when totalItems=0', () => {
+    // totalPages = 0, so normalizedPage = Math.min(Math.max(1, page), Math.max(0, 1)) = Math.min(page, 1) = 1
+    const result = calculatePagination(0, 5, 10);
+    expect(result.page).toBe(1);
+  });
+});

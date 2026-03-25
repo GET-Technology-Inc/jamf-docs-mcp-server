@@ -7,6 +7,9 @@
 
 import axios, { type AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
+import type { Element } from 'domhandler';
+import { sanitizeErrorMessage } from '../utils/sanitize.js';
+import { isAllowedHostname } from '../utils/url.js';
 import TurndownService from 'turndown';
 
 import {
@@ -34,6 +37,7 @@ import {
   type PaginationInfo,
   type ArticleSection
 } from '../types.js';
+import { inferDocType } from '../utils/doc-type.js';
 import { cache } from './cache.js';
 import {
   estimateTokens,
@@ -83,9 +87,35 @@ async function throttle(): Promise<void> {
   lastRequestTime = Date.now();
 }
 
+// Re-export URL utilities for backward compatibility
+export { ALLOWED_HOSTNAMES, isAllowedHostname } from '../utils/url.js';
+
 // URL transformation between frontend (learn.jamf.com) and backend (learn-be.jamf.com)
-const transformToBackendUrl = (url: string): string => url.replace('learn.jamf.com', 'learn-be.jamf.com');
-const transformToFrontendUrl = (url: string): string => url.replace('learn-be.jamf.com', 'learn.jamf.com');
+function transformToBackendUrl(urlStr: string): string {
+  const url = new URL(urlStr);
+  if (url.hostname === 'learn.jamf.com') {
+    url.hostname = 'learn-be.jamf.com';
+  }
+  return url.toString();
+}
+
+function transformToFrontendUrl(urlStr: string): string {
+  const url = new URL(urlStr);
+  if (url.hostname === 'learn-be.jamf.com') {
+    url.hostname = 'learn.jamf.com';
+  }
+  return url.toString();
+}
+
+// bundleId validation pattern
+const BUNDLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+
+function validateBundleId(bundleId: string): string {
+  if (!BUNDLE_ID_PATTERN.test(bundleId)) {
+    throw new JamfDocsError(`Invalid bundle ID: ${bundleId}`, JamfDocsErrorCode.PARSE_ERROR);
+  }
+  return bundleId;
+}
 
 // HTML entity map for stripping HTML
 const HTML_ENTITIES: Record<string, string> = {
@@ -97,12 +127,18 @@ const HTML_ENTITIES: Record<string, string> = {
  * Uses iterative approach to handle nested/malformed tags
  */
 function stripHtml(html: string): string {
-  let text = html;
+  // Truncate input before processing to prevent CPU exhaustion on large inputs
+  let text = html.length > CONTENT_LIMITS.MAX_SNIPPET_LENGTH * 2
+    ? html.slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH * 2)
+    : html;
   // Iteratively remove HTML tags until none remain (handles nested cases like <scr<script>ipt>)
+  const MAX_ITERATIONS = 10;
   let prev = '';
-  while (prev !== text) {
+  let iterations = 0;
+  while (prev !== text && iterations < MAX_ITERATIONS) {
     prev = text;
     text = text.replace(/<[^>]*>/g, '');
+    iterations++;
   }
   for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
     text = text.replaceAll(entity, char);
@@ -125,7 +161,7 @@ function handleAxiosError(error: AxiosError, url: string, resourceType: string):
   if (error.code === 'ECONNABORTED') {
     throw new JamfDocsError('Request timed out', JamfDocsErrorCode.TIMEOUT, url);
   }
-  throw new JamfDocsError(`Network error: ${error.message}`, JamfDocsErrorCode.NETWORK_ERROR, url);
+  throw new JamfDocsError(`Network error: ${sanitizeErrorMessage(error.message)}`, JamfDocsErrorCode.NETWORK_ERROR, url);
 }
 
 /**
@@ -209,6 +245,7 @@ function extractProductInfo(url: string): { product: string | undefined; version
 interface SearchResultWithMeta {
   result: SearchResult;
   bundleSlug: string | null;
+  bundleId: string;
   matchedTopics: TopicId[];
 }
 
@@ -264,6 +301,15 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
         .filter((wrapper): wrapper is typeof wrapper & { leading_result: NonNullable<typeof wrapper.leading_result> } =>
           wrapper.leading_result !== null && wrapper.leading_result !== undefined
         )
+        .filter(wrapper => {
+          // Validate URL hostname from external API
+          const resultUrl = wrapper.leading_result.url;
+          if (resultUrl !== '' && !isAllowedHostname(resultUrl)) {
+            console.error(`[SEARCH] Skipping result with unexpected hostname: ${resultUrl}`);
+            return false;
+          }
+          return true;
+        })
         .map(wrapper => {
           const result = wrapper.leading_result;
 
@@ -280,7 +326,8 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
             url: transformToFrontendUrl(result.url !== '' ? result.url : ''),
             snippet: stripHtml(result.snippet !== '' ? result.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH),
             product: productEntry !== null && productEntry !== undefined ? productEntry[1].name : (result.publication_title !== '' ? result.publication_title : 'Jamf'),
-            version: 'current'
+            version: 'current',
+            docType: inferDocType(bundleId)
           };
 
           if (result.score !== undefined) {
@@ -291,7 +338,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
           const matchedTopics: TopicId[] = (Object.keys(JAMF_TOPICS) as TopicId[])
             .filter(topicId => matchesTopic(searchResult, topicId));
 
-          return { result: searchResult, bundleSlug, matchedTopics };
+          return { result: searchResult, bundleSlug, bundleId, matchedTopics };
         });
 
       // Cache full results
@@ -333,6 +380,12 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     filteredResults = filteredResults.filter(r => r.matchedTopics.includes(topicFilter));
   }
 
+  // DocType filter
+  if (params.docType !== undefined) {
+    const docTypeFilter = params.docType;
+    filteredResults = filteredResults.filter(r => r.result.docType === docTypeFilter);
+  }
+
   // Calculate pagination
   const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
 
@@ -365,6 +418,11 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     }
   }
 
+  // Reuse already-computed token count when no truncation occurred
+  const finalTokenCount = truncated
+    ? estimateTokens(finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n'))
+    : tokenCount;
+
   return {
     results: finalResults,
     pagination: {
@@ -376,7 +434,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       hasPrev: paginationInfo.hasPrev
     },
     tokenInfo: {
-      tokenCount: estimateTokens(finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')),
+      tokenCount: finalTokenCount,
       truncated,
       maxTokens
     }
@@ -544,7 +602,7 @@ async function discoverLatestBundleId(product: ProductId): Promise<string | null
       }
       const bundleId = wrapper.leading_result.bundle_id;
       if (bundleId.startsWith(baseBundleId)) {
-        return bundleId;
+        return validateBundleId(bundleId);
       }
     }
   } catch (error) {
@@ -572,8 +630,7 @@ function parseTocHtml(html: string): TocEntry[] {
   return toc;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseTocEntry($: cheerio.CheerioAPI, el: any): TocEntry | null {
+function parseTocEntry($: cheerio.CheerioAPI, el: Element): TocEntry | null {
   const $el = $(el);
   const $link = $el.children('.inner').children('a').first();
 

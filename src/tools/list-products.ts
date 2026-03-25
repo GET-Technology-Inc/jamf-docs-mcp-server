@@ -5,17 +5,19 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
-import { JAMF_PRODUCTS, JAMF_TOPICS, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
+import { ProductListOutputSchema } from '../schemas/output.js';
+import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo } from '../services/tokenizer.js';
+import { getSafeErrorMessage } from '../utils/sanitize.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
 
 const TOOL_DESCRIPTION = `List all available Jamf products, topics, and their documentation versions.
 
 This tool returns information about all Jamf products with available documentation,
-including Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect. Also lists available
-topic filters for search.
+including Jamf Pro, Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet,
+and more. Also lists available topic and docType filters for search.
 
 Args:
   - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
@@ -51,6 +53,7 @@ export function registerListProductsTool(server: McpServer): void {
       title: 'List Jamf Products',
       description: TOOL_DESCRIPTION,
       inputSchema: ListProductsInputSchema,
+      outputSchema: ProductListOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -87,19 +90,21 @@ export function registerListProductsTool(server: McpServer): void {
           keywords: topic.keywords
         }));
 
-        // Format output based on requested format
+        const structuredContent = { products, topics };
+
         if (params.responseFormat === ResponseFormat.JSON) {
+          const jsonData = JSON.stringify(structuredContent);
           const jsonOutput = JSON.stringify({
-            products,
-            topics,
-            tokenInfo: createTokenInfo(JSON.stringify({ products, topics }), maxTokens)
+            ...structuredContent,
+            tokenInfo: createTokenInfo(jsonData, maxTokens)
           }, null, 2);
 
           return {
             content: [{
               type: 'text',
               text: jsonOutput
-            }]
+            }],
+            structuredContent
           };
         }
 
@@ -117,7 +122,8 @@ export function registerListProductsTool(server: McpServer): void {
             content: [{
               type: 'text',
               text: markdown
-            }]
+            }],
+            structuredContent
           };
         }
 
@@ -142,6 +148,13 @@ export function registerListProductsTool(server: McpServer): void {
         }
 
         markdown += '\n---\n\n';
+        markdown += '# Document Types for Filtering\n\n';
+        markdown += 'Use `docType` parameter in `jamf_docs_search` to filter by document type:\n\n';
+        for (const [id, dt] of Object.entries(DOC_TYPES)) {
+          markdown += `- **\`${id}\`**: ${dt.description}\n`;
+        }
+
+        markdown += '\n---\n\n';
 
         // Token info
         const tokenCount = estimateTokens(markdown);
@@ -154,15 +167,15 @@ export function registerListProductsTool(server: McpServer): void {
           content: [{
             type: 'text',
             text: markdown
-          }]
+          }],
+          structuredContent
         };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return {
           isError: true,
           content: [{
             type: 'text',
-            text: `Error listing products: ${errorMessage}`
+            text: `Error listing products: ${getSafeErrorMessage(error)}`
           }]
         };
       }

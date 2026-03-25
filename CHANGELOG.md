@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-25
+
+### Added
+
+- **HTTP/SSE Transport**: `--transport http` flag with Streamable HTTP server support
+  - `npm run start:http` for HTTP mode, default stdio unchanged
+  - CLI argument parsing (`--port`, `--host`, `--transport`)
+
+- **MCP Prompts**: 3 prompt templates for AI-guided workflows
+  - `jamf_troubleshoot` — guided troubleshooting with product/keyword input
+  - `jamf_setup_guide` — step-by-step product setup guidance
+  - `jamf_compare_versions` — version comparison for migration planning
+
+- **Completions**: Auto-complete support for product, topic, and version fields in tool inputs
+
+- **Resource Templates**: Dynamic resources with URI templates
+  - `jamf://products/{productId}/toc` — product table of contents
+  - `jamf://products/{productId}/versions` — available documentation versions
+
+- **Output Schemas**: Structured output for `get_article` and `get_toc` tools via `structuredContent`
+
+- **Server Instructions**: AI-facing usage guide embedded in server metadata (tool usage order, output modes, token management)
+
+- **Server Icon**: 32x32 PNG base64 data URI in server metadata
+
+- **9 New Products**: Jamf Now, Jamf Safe Internet, Jamf Insights, RapidIdentity, Jamf Trust, Jamf Routines, Self Service+, Jamf App Catalog
+
+- **Doc Type Filter**: New `docType` parameter on search (documentation, release-notes, install-guide, technical-paper, configuration-guide, training)
+
+- **Progress Reporting**: `reportProgress()` on article fetch and TOC operations
+
+### Changed
+
+- **LRU Cache**: Memory cache now bounded with LRU eviction (configurable `CACHE_MAX_ENTRIES`, default 500)
+- **SHA-256 Cache Keys**: Replaced MD5 with SHA-256 for cache key hashing
+- **Concurrent Metadata Fetch**: `Promise.all` with internal error handling for parallel product metadata loading
+- **Cache Entry Validation**: Zod schema validation on disk cache reads
+- **Atomic Cache Writes**: Write to `.tmp` then rename to prevent corruption
+
+### Security
+
+- URL hostname allowlist validation — rejects search results from unexpected domains
+- Markdown injection prevention (`sanitizeMarkdownText`, `sanitizeMarkdownUrl`)
+- Cache directory path traversal protection (rejects `../`, sensitive system paths)
+- Bundle ID validation pattern (regex whitelist)
+- HTTP header injection prevention (CRLF stripping in env vars)
+- Error message sanitization — no internal details leaked to clients
+- `stripHtml` iteration cap (max 10) to prevent CPU exhaustion
+- CI workflow: `permissions: contents: read` (least privilege)
+- `getEnvNumber` min/max bounds validation
+
+### Dependencies
+
+- `@modelcontextprotocol/sdk`: `^1.0.0` → `^1.27.1`
+- `axios`: `^1.7.0` → `^1.13.6`
+- `eslint`: `10.x` → `9.x` (typescript-eslint 8.x compatibility)
+
+### Tests
+
+- ~30 new test files covering tools, services, schemas, prompts, resources, transport, utils
+- E2E test for HTTP transport lifecycle
+- Integration tests for server instructions, icons, prompts, completions, resource templates
+- Total: 848 tests (29 test files)
+
 ## [1.1.0] - 2025-01-29
 
 ### Added

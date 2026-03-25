@@ -5,19 +5,45 @@
  * The new URL structure is: learn.jamf.com/en-US/bundle/{product}-documentation/page/{page}.html
  */
 
+import * as path from 'path';
+
 // Environment variable helpers
-function getEnvNumber(key: string, defaultValue: number): number {
+export function getEnvNumber(
+  key: string,
+  defaultValue: number,
+  min?: number,
+  max?: number
+): number {
   const value = process.env[key];
   if (value === undefined) {
     return defaultValue;
   }
   const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? defaultValue : parsed;
+  if (isNaN(parsed)) {
+    return defaultValue;
+  }
+  if (min !== undefined && parsed < min) {
+    console.error(`[WARNING] ${key}=${parsed} is below minimum ${min}. Using default ${defaultValue}.`);
+    return defaultValue;
+  }
+  if (max !== undefined && parsed > max) {
+    console.error(`[WARNING] ${key}=${parsed} exceeds maximum ${max}. Using default ${defaultValue}.`);
+    return defaultValue;
+  }
+  return parsed;
 }
 
 function getEnvString(key: string, defaultValue: string): string {
-  return process.env[key] ?? defaultValue;
+  const value = process.env[key] ?? defaultValue;
+  // Strip CRLF characters to prevent HTTP header injection
+  return value.replace(/[\r\n]/g, '');
 }
+
+// Server icon (32x32 PNG, document theme, base64 data URI)
+export const SERVER_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAiUlEQVR4nGNgGAU4QEpKxX9qYpItpwSA9N+58wyOSXYENR0AYw+IA9AdQr4DehgQmEgHYIsGujuA7IRIqQNwOYp8B1ABUOQAOat4svDwcQA1wNB2ACVBPzwcQA0wtB0w4NlwwB1ADTC0HUBu1hs+DqAGGNoOAAbxCVLx8HIANQBZvaMB65qNKAAA5fafYXNsHh0AAAAASUVORK5CYII=';
+
+// Server metadata (keep in sync with package.json)
+export const SERVER_VERSION = '1.2.0';
 
 // Base URLs
 export const DOCS_BASE_URL = 'https://learn.jamf.com';
@@ -64,6 +90,86 @@ export const JAMF_PRODUCTS = {
     searchLabel: 'product-protect',
     latestVersion: 'current',
     versions: ['current']
+  },
+  'jamf-now': {
+    id: 'jamf-now',
+    name: 'Jamf Now',
+    description: 'Simple Apple device management for small businesses',
+    urlPattern: 'en-US/bundle/jamf-now-documentation/page',
+    bundleId: 'jamf-now-documentation',
+    searchLabel: 'product-now',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-safe-internet': {
+    id: 'jamf-safe-internet',
+    name: 'Jamf Safe Internet',
+    description: 'Content filtering and web security for education and business',
+    urlPattern: 'en-US/bundle/jamf-safe-internet-documentation/page',
+    bundleId: 'jamf-safe-internet-documentation',
+    searchLabel: 'product-safeinternet',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-insights': {
+    id: 'jamf-insights',
+    name: 'Jamf Insights',
+    description: 'Analytics and reporting platform for Apple fleet',
+    urlPattern: 'en-US/bundle/jamf-insights-documentation/page',
+    bundleId: 'jamf-insights-documentation',
+    searchLabel: 'product-insights',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-rapididentity': {
+    id: 'jamf-rapididentity',
+    name: 'RapidIdentity',
+    description: 'Identity and access management platform',
+    urlPattern: 'en-US/bundle/jamf-rapididentity-documentation/page',
+    bundleId: 'jamf-rapididentity-documentation',
+    searchLabel: 'product-rapididentity',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-trust': {
+    id: 'jamf-trust',
+    name: 'Jamf Trust',
+    description: 'Zero-trust network access for Apple devices',
+    urlPattern: 'en-US/bundle/jamf-trust-documentation/page',
+    bundleId: 'jamf-trust-documentation',
+    searchLabel: 'product-trust',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-routines': {
+    id: 'jamf-routines',
+    name: 'Jamf Routines',
+    description: 'Automated workflow orchestration for device management',
+    urlPattern: 'en-US/bundle/jamf-routines-documentation/page',
+    bundleId: 'jamf-routines-documentation',
+    searchLabel: 'product-routines',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'self-service-plus': {
+    id: 'self-service-plus',
+    name: 'Self Service+',
+    description: 'Next-generation self-service portal for macOS',
+    urlPattern: 'en-US/bundle/self-service-plus-documentation/page',
+    bundleId: 'self-service-plus-documentation',
+    searchLabel: 'product-self-service',
+    latestVersion: 'current',
+    versions: ['current']
+  },
+  'jamf-app-catalog': {
+    id: 'jamf-app-catalog',
+    name: 'Jamf App Catalog',
+    description: 'Curated application catalog for managed deployments',
+    urlPattern: 'en-US/bundle/jamf-app-catalog/page',
+    bundleId: 'jamf-app-catalog',
+    searchLabel: 'product-appcatalog',
+    latestVersion: 'current',
+    versions: ['current']
   }
 } as const;
 
@@ -82,22 +188,59 @@ export enum OutputMode {
 }
 
 // Cache settings (in milliseconds) - configurable via environment variables
+// Range: 1 minute to 30 days
+const CACHE_TTL_MIN = 60_000;
+const CACHE_TTL_MAX = 30 * 24 * 60 * 60 * 1000;
+
 export const CACHE_TTL = {
-  SEARCH_RESULTS: getEnvNumber('CACHE_TTL_SEARCH', 30 * 60 * 1000),      // 30 minutes
-  ARTICLE_CONTENT: getEnvNumber('CACHE_TTL_ARTICLE', 24 * 60 * 60 * 1000), // 24 hours
-  PRODUCT_LIST: getEnvNumber('CACHE_TTL_PRODUCTS', 7 * 24 * 60 * 60 * 1000), // 7 days
-  TOC: getEnvNumber('CACHE_TTL_TOC', 24 * 60 * 60 * 1000)              // 24 hours
+  SEARCH_RESULTS: getEnvNumber('CACHE_TTL_SEARCH', 30 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
+  ARTICLE_CONTENT: getEnvNumber('CACHE_TTL_ARTICLE', 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
+  PRODUCT_LIST: getEnvNumber('CACHE_TTL_PRODUCTS', 7 * 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
+  TOC: getEnvNumber('CACHE_TTL_TOC', 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX)
 } as const;
 
-// Cache directory - configurable via environment variable
-export const CACHE_DIR = getEnvString('CACHE_DIR', '.cache');
+// Cache memory limits
+export const CACHE_MAX_ENTRIES = getEnvNumber('CACHE_MAX_ENTRIES', 500, 10, 10000);
+
+// Cache directory - configurable via environment variable with path traversal protection
+const DEFAULT_CACHE_DIR = '.cache';
+
+// System-sensitive directory prefixes that should not be used as cache directories
+const SENSITIVE_DIR_PREFIXES = ['/etc', '/usr', '/var', '/sys', '/proc', '/dev', '/sbin', '/bin'];
+
+function getValidatedCacheDir(): string {
+  const raw = getEnvString('CACHE_DIR', DEFAULT_CACHE_DIR);
+  const resolved = path.resolve(raw);
+  const cwd = process.cwd();
+
+  if (path.isAbsolute(raw)) {
+    // Reject absolute paths pointing to system-sensitive directories
+    const normalizedResolved = resolved.toLowerCase();
+    for (const prefix of SENSITIVE_DIR_PREFIXES) {
+      if (normalizedResolved === prefix || normalizedResolved.startsWith(`${prefix}/`)) {
+        console.error(`[SECURITY WARNING] CACHE_DIR "${raw}" points to a sensitive system directory. Using default "${DEFAULT_CACHE_DIR}".`);
+        return DEFAULT_CACHE_DIR;
+      }
+    }
+  } else {
+    // Relative paths must resolve within cwd
+    if (!resolved.startsWith(cwd)) {
+      console.error(`[SECURITY WARNING] CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
+      return DEFAULT_CACHE_DIR;
+    }
+  }
+
+  return raw;
+}
+
+export const CACHE_DIR = getValidatedCacheDir();
 
 // Request settings - configurable via environment variables
 export const REQUEST_CONFIG = {
-  TIMEOUT: getEnvNumber('REQUEST_TIMEOUT', 15000),                       // 15 seconds
-  MAX_RETRIES: getEnvNumber('MAX_RETRIES', 3),
-  RETRY_DELAY: getEnvNumber('RETRY_DELAY', 1000),                    // 1 second
-  RATE_LIMIT_DELAY: getEnvNumber('RATE_LIMIT_DELAY', 500),                // 500ms between requests
+  TIMEOUT: getEnvNumber('REQUEST_TIMEOUT', 15000, 1000, 60000),          // 15s (1s-60s)
+  MAX_RETRIES: getEnvNumber('MAX_RETRIES', 3, 0, 10),                   // 3 (0-10)
+  RETRY_DELAY: getEnvNumber('RETRY_DELAY', 1000, 100, 30000),           // 1s (100ms-30s)
+  RATE_LIMIT_DELAY: getEnvNumber('RATE_LIMIT_DELAY', 500, 0, 10000),    // 500ms (0-10s)
   USER_AGENT: getEnvString('USER_AGENT', 'JamfDocsMCP/1.0 (https://github.com/GET-Technology-Inc/jamf-docs-mcp-server)')
 } as const;
 
@@ -323,6 +466,46 @@ export const JAMF_TOPICS = {
 } as const;
 
 export type TopicId = keyof typeof JAMF_TOPICS;
+
+// Document types for filtering search results by content category
+export const DOC_TYPES = {
+  'documentation': {
+    name: 'Documentation',
+    description: 'Main product documentation',
+  },
+  'release-notes': {
+    name: 'Release Notes',
+    description: 'Version release notes and changelogs',
+    bundlePattern: /-release-notes/,
+  },
+  'install-guide': {
+    name: 'Installation Guide',
+    description: 'Installation and configuration guides',
+    bundlePattern: /-install-guide-/,
+  },
+  'technical-paper': {
+    name: 'Technical Paper',
+    description: 'Technical white papers and integration guides',
+    bundlePattern: /^technical-paper-/,
+  },
+  'configuration-guide': {
+    name: 'Configuration Guide',
+    description: 'Setup and configuration guides',
+    bundlePattern: /-configuration-guide|compliance-benchmarks|blueprints/,
+  },
+  'training': {
+    name: 'Training',
+    description: 'Training materials and video guides',
+    bundlePattern: /^training-|^jamf-100-|^jamf-170-/,
+  },
+} as const;
+
+export type DocTypeId = keyof typeof DOC_TYPES;
+
+// Derived ID arrays (shared by schemas, completions, etc.)
+export const PRODUCT_IDS = Object.keys(JAMF_PRODUCTS) as [string, ...string[]];
+export const TOPIC_IDS = Object.keys(JAMF_TOPICS) as [string, ...string[]];
+export const DOC_TYPE_IDS = Object.keys(DOC_TYPES) as [string, ...string[]];
 
 // HTML selectors for learn.jamf.com (React-based site)
 export const SELECTORS = {

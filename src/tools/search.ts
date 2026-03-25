@@ -5,11 +5,13 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SearchInputSchema } from '../schemas/index.js';
-import type { ProductId, TopicId } from '../constants.js';
+import { SearchOutputSchema } from '../schemas/output.js';
+import type { ProductId, TopicId, DocTypeId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/scraper.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
 interface SearchFilters {
   product?: string;
@@ -32,11 +34,11 @@ function formatFiltersLine(filters: SearchFilters): string {
 }
 
 function formatSearchResult(result: SearchResult): string {
-  let output = `### [${result.title}](${result.url})\n\n`;
-  output += `> ${result.snippet}\n\n`;
-  if (result.product !== '' || result.version !== undefined) {
+  let output = `### [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)})\n\n`;
+  output += `> ${sanitizeMarkdownText(result.snippet)}\n\n`;
+  if ((result.product !== null && result.product !== '') || result.version !== undefined) {
     const meta: string[] = [];
-    if (result.product !== '') {
+    if (result.product !== null && result.product !== '') {
       meta.push(`**Product**: ${result.product}`);
     }
     if (result.version !== undefined) {
@@ -77,7 +79,7 @@ function formatSearchResultCompact(result: SearchResult, index: number): string 
   const snippetPreview = result.snippet.length > 80
     ? `${result.snippet.slice(0, 77)}...`
     : result.snippet;
-  return `${index}. [${result.title}](${result.url}) - ${snippetPreview}\n`;
+  return `${index}. [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)}) - ${sanitizeMarkdownText(snippetPreview)}\n`;
 }
 
 /**
@@ -127,13 +129,14 @@ const TOOL_NAME = 'jamf_docs_search';
 const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
 This tool searches across all Jamf product documentation including Jamf Pro,
-Jamf School, Jamf Connect, and Jamf Protect. Results include article titles,
-snippets, and direct links.
+Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet, and more.
+Results include article titles, snippets, and direct links.
 
 Args:
   - query (string, required): Search keywords (2-200 characters)
-  - product (string, optional): Filter by product ID (jamf-pro, jamf-school, jamf-connect, jamf-protect)
+  - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): Filter by topic (enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network)
+  - docType (string, optional): Filter by document type: documentation, release-notes, install-guide, technical-paper, configuration-guide, training
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
   - limit (number, optional): Maximum results per page 1-50 (default: 10)
   - page (number, optional): Page number for pagination 1-100 (default: 1)
@@ -184,6 +187,7 @@ export function registerSearchTool(server: McpServer): void {
       title: 'Search Jamf Documentation',
       description: TOOL_DESCRIPTION,
       inputSchema: SearchInputSchema,
+      outputSchema: SearchOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -203,7 +207,6 @@ export function registerSearchTool(server: McpServer): void {
       const params = parseResult.data;
 
       try {
-        // Validate product if provided
         if (params.product !== undefined && !(params.product in JAMF_PRODUCTS)) {
           return {
             isError: true,
@@ -214,7 +217,6 @@ export function registerSearchTool(server: McpServer): void {
           };
         }
 
-        // Validate topic if provided
         if (params.topic !== undefined && !(params.topic in JAMF_TOPICS)) {
           return {
             isError: true,
@@ -225,11 +227,12 @@ export function registerSearchTool(server: McpServer): void {
           };
         }
 
-        // Perform search with new parameters
+        // Perform search
         const searchResult = await searchDocumentation({
           query: params.query,
           product: params.product as ProductId | undefined,
           topic: params.topic as TopicId | undefined,
+          docType: params.docType as DocTypeId | undefined,
           version: params.version,
           limit: params.limit,
           page: params.page,
@@ -260,21 +263,54 @@ export function registerSearchTool(server: McpServer): void {
             params.topic !== undefined
           );
 
+          const suggestionTexts = [
+            ...(suggestions.simplifiedQuery !== null ? [`Try: ${suggestions.simplifiedQuery}`] : []),
+            ...suggestions.alternativeKeywords,
+            ...suggestions.tips
+          ];
+
+          const structuredContent = {
+            query: params.query,
+            totalResults: 0,
+            page: 1,
+            totalPages: 0,
+            hasMore: false,
+            results: [],
+            suggestions: suggestionTexts
+          };
+
           return {
             content: [{
               type: 'text',
               text: formatSearchSuggestions(params.query, suggestions)
-            }]
+            }],
+            structuredContent
           };
         }
 
-        // Format output
+        const structuredContent = {
+          query: params.query,
+          totalResults: pagination.totalItems,
+          page: pagination.page,
+          totalPages: pagination.totalPages,
+          hasMore: pagination.hasNext,
+          results: results.map(r => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet,
+            product: r.product ?? '',
+            ...(r.version !== undefined ? { version: r.version } : {}),
+            ...(r.docType !== undefined ? { docType: r.docType } : {})
+          }))
+        };
+
         if (params.responseFormat === ResponseFormat.JSON) {
           return {
             content: [{
               type: 'text',
               text: JSON.stringify(response, null, 2)
-            }]
+            }],
+            structuredContent
           };
         }
 
@@ -299,15 +335,15 @@ export function registerSearchTool(server: McpServer): void {
           content: [{
             type: 'text',
             text: markdown
-          }]
+          }],
+          structuredContent
         };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return {
           isError: true,
           content: [{
             type: 'text',
-            text: `Search error: ${errorMessage}\n\nPlease try again or use different search terms.`
+            text: `Search error: ${getSafeErrorMessage(error)}\n\nPlease try again or use different search terms.`
           }]
         };
       }

@@ -3,21 +3,19 @@
  */
 
 import { z } from 'zod';
+import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
 import {
   ResponseFormat,
   OutputMode,
-  JAMF_PRODUCTS,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
-  JAMF_TOPICS
+  PRODUCT_IDS,
+  TOPIC_IDS,
+  DOC_TYPE_IDS
 } from '../constants.js';
-
-// Valid product IDs
-const productIds = Object.keys(JAMF_PRODUCTS) as [string, ...string[]];
-
-// Valid topic IDs
-const topicIds = Object.keys(JAMF_TOPICS) as [string, ...string[]];
+import { completeProduct, completeTopic, completeVersion } from '../completions.js';
+import { isAllowedHostname } from '../utils/url.js';
 
 // Response format enum
 const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
@@ -69,17 +67,30 @@ export const SearchInputSchema = z.object({
     .max(200, 'Query must not exceed 200 characters')
     .describe('Search keywords to find in Jamf documentation'),
 
-  product: z.enum(productIds)
-    .optional()
-    .describe('Filter by product: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+  product: completable(
+    z.enum(PRODUCT_IDS)
+      .optional()
+      .describe('Filter by product: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+    completeProduct
+  ),
 
-  topic: z.enum(topicIds)
-    .optional()
-    .describe('Filter by topic: enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network'),
+  topic: completable(
+    z.enum(TOPIC_IDS)
+      .optional()
+      .describe('Filter by topic: enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network'),
+    completeTopic
+  ),
 
-  version: z.string()
+  version: completable(
+    z.string()
+      .optional()
+      .describe('Filter by version (e.g., "11.5.0", "10.x")'),
+    completeVersion
+  ),
+
+  docType: z.enum(DOC_TYPE_IDS)
     .optional()
-    .describe('Filter by version (e.g., "11.5.0", "10.x")'),
+    .describe('Filter by document type: documentation, release-notes, install-guide, technical-paper, configuration-guide, training'),
 
   limit: z.number()
     .int()
@@ -114,7 +125,7 @@ export const GetArticleInputSchema = z.object({
   url: z.string()
     .url('Must be a valid URL')
     .refine(
-      (url) => url.includes('docs.jamf.com') || url.includes('learn.jamf.com'),
+      (url) => isAllowedHostname(url),
       'URL must be from docs.jamf.com or learn.jamf.com'
     )
     .describe('Full URL of the Jamf documentation article'),
@@ -150,12 +161,18 @@ export type GetArticleInput = z.infer<typeof GetArticleInputSchema>;
  * Schema for jamf_docs_get_toc
  */
 export const GetTocInputSchema = z.object({
-  product: z.enum(productIds)
-    .describe('Product ID: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+  product: completable(
+    z.enum(PRODUCT_IDS)
+      .describe('Product ID: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+    completeProduct
+  ),
 
-  version: z.string()
-    .optional()
-    .describe('Specific version (defaults to latest)'),
+  version: completable(
+    z.string()
+      .optional()
+      .describe('Specific version (defaults to latest)'),
+    completeVersion
+  ),
 
   page: PageSchema
     .optional()

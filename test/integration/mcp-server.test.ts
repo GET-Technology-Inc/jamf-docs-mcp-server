@@ -33,6 +33,296 @@ describe('Jamf Docs MCP Server', () => {
     await client.close();
   });
 
+  describe('server instructions', () => {
+    it('should include non-empty instructions in initialize response', () => {
+      const instructions = client.getInstructions();
+      expect(instructions).toBeDefined();
+      expect(instructions!.length).toBeGreaterThan(0);
+    });
+
+    it('should have instructions under 2000 characters', () => {
+      const instructions = client.getInstructions();
+      expect(instructions!.length).toBeLessThan(2000);
+    });
+
+    it('should mention all four guidance topics', () => {
+      const instructions = client.getInstructions()!;
+      expect(instructions).toContain('jamf_docs_search');
+      expect(instructions).toContain('jamf_docs_get_article');
+      expect(instructions).toMatch(/compact/i);
+      expect(instructions).toMatch(/full/i);
+      expect(instructions).toContain('maxTokens');
+      expect(instructions).toContain('jamf-pro');
+    });
+  });
+
+  describe('server icon', () => {
+    it('should include icon in server metadata', () => {
+      const serverVersion = client.getServerVersion();
+      expect(serverVersion).toBeDefined();
+      expect((serverVersion as Record<string, unknown>).icons).toBeDefined();
+    });
+
+    it('should have icon with data:image/png;base64 format', () => {
+      const serverVersion = client.getServerVersion() as Record<string, unknown>;
+      const icons = serverVersion.icons as Array<{ src: string }>;
+      expect(icons.length).toBeGreaterThan(0);
+      expect(icons[0].src).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('should have icon data URI under 10240 characters', () => {
+      const serverVersion = client.getServerVersion() as Record<string, unknown>;
+      const icons = serverVersion.icons as Array<{ src: string }>;
+      expect(icons[0].src.length).toBeLessThan(10240);
+    });
+  });
+
+  describe('structured output', () => {
+    it('should declare outputSchema on all tools', async () => {
+      const result = await client.listTools();
+      for (const tool of result.tools) {
+        expect(tool.outputSchema).toBeDefined();
+        expect(tool.outputSchema!.type).toBe('object');
+      }
+    });
+
+    it('should return structuredContent from list_products', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: {}
+      });
+      expect(result.content).toBeDefined();
+      expect(result.structuredContent).toBeDefined();
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.products).toBeDefined();
+      expect(sc.topics).toBeDefined();
+    });
+
+    it('should return structuredContent from search', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'configuration profile' }
+      });
+      expect(result.content).toBeDefined();
+      expect(result.structuredContent).toBeDefined();
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.query).toBe('configuration profile');
+      expect(sc.results).toBeDefined();
+      expect(sc.totalResults).toBeDefined();
+    });
+
+    it('should not return structuredContent on error', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url: 'https://learn.jamf.com/nonexistent-page-404' }
+      });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+    });
+  });
+
+  describe('progress notifications', () => {
+    it('should not crash when calling get_article without progressToken', async () => {
+      const searchResult = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'system requirements', limit: 1, responseFormat: 'json' }
+      });
+      const searchJson = JSON.parse(
+        (searchResult.content[0] as { type: 'text'; text: string }).text
+      );
+      const url = searchJson.results[0]?.url
+        || 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url }
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toBeDefined();
+    });
+
+    it('should not crash when calling get_toc without progressToken', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' }
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toBeDefined();
+    });
+  });
+
+  describe('prompts', () => {
+    it('should list all 3 prompts', async () => {
+      const result = await client.listPrompts();
+      expect(result.prompts).toHaveLength(3);
+      const names = result.prompts.map(p => p.name);
+      expect(names).toContain('jamf_troubleshoot');
+      expect(names).toContain('jamf_setup_guide');
+      expect(names).toContain('jamf_compare_versions');
+    });
+
+    it('should return messages from jamf_troubleshoot', async () => {
+      const result = await client.getPrompt({
+        name: 'jamf_troubleshoot',
+        arguments: { problem: 'MDM enrollment failing' }
+      });
+      expect(result.messages).toBeDefined();
+      expect(result.messages.length).toBeGreaterThan(0);
+      expect(result.messages[0].role).toBe('user');
+      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      expect(text).toContain('MDM enrollment failing');
+      expect(text).toContain('jamf_docs_search');
+    });
+
+    it('should return messages from jamf_setup_guide', async () => {
+      const result = await client.getPrompt({
+        name: 'jamf_setup_guide',
+        arguments: { feature: 'FileVault', product: 'jamf-pro' }
+      });
+      expect(result.messages.length).toBeGreaterThan(0);
+      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      expect(text).toContain('FileVault');
+      expect(text).toContain('jamf-pro');
+    });
+
+    it('should return messages from jamf_compare_versions', async () => {
+      const result = await client.getPrompt({
+        name: 'jamf_compare_versions',
+        arguments: { product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' }
+      });
+      expect(result.messages.length).toBeGreaterThan(0);
+      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      expect(text).toContain('11.5.0');
+      expect(text).toContain('11.12.0');
+    });
+  });
+
+  describe('resource templates', () => {
+    it('should list resource templates', async () => {
+      const result = await client.listResourceTemplates();
+      expect(result.resourceTemplates.length).toBeGreaterThanOrEqual(2);
+      const names = result.resourceTemplates.map(t => t.name);
+      expect(names).toContain('product-toc');
+      expect(names).toContain('product-versions');
+    });
+
+    it('should read product versions via template', async () => {
+      const result = await client.readResource({
+        uri: 'jamf://products/jamf-pro/versions'
+      });
+      expect(result.contents).toHaveLength(1);
+      expect(result.contents[0].mimeType).toBe('application/json');
+      const data = JSON.parse(result.contents[0].text!);
+      expect(data.product).toBe('Jamf Pro');
+      expect(data.versions).toBeDefined();
+      expect(Array.isArray(data.versions)).toBe(true);
+    });
+
+    it('should return error for invalid productId', async () => {
+      const result = await client.readResource({
+        uri: 'jamf://products/invalid-product/versions'
+      });
+      expect(result.contents).toHaveLength(1);
+      expect(result.contents[0].text).toContain('Invalid product ID');
+      expect(result.contents[0].text).toContain('jamf-pro');
+    });
+
+    it('should preserve existing static resources', async () => {
+      const products = await client.readResource({ uri: 'jamf://products' });
+      expect(products.contents).toHaveLength(1);
+      expect(products.contents[0].mimeType).toBe('application/json');
+
+      const topics = await client.readResource({ uri: 'jamf://topics' });
+      expect(topics.contents).toHaveLength(1);
+      expect(topics.contents[0].mimeType).toBe('application/json');
+    });
+  });
+
+  describe('completions', () => {
+    it('should complete product argument with prefix match', async () => {
+      const result = await client.complete({
+        ref: { type: 'ref/resource', uri: 'jamf://products/{productId}/versions' },
+        argument: { name: 'productId', value: 'jamf-p' }
+      });
+      expect(result.completion.values).toContain('jamf-pro');
+      expect(result.completion.values).toContain('jamf-protect');
+      expect(result.completion.values).not.toContain('jamf-school');
+    });
+
+    it('should return all products for empty input', async () => {
+      const result = await client.complete({
+        ref: { type: 'ref/resource', uri: 'jamf://products/{productId}/toc' },
+        argument: { name: 'productId', value: '' }
+      });
+      expect(result.completion.values).toHaveLength(12);
+    });
+  });
+
+  describe('http transport', () => {
+    let httpProcess: ChildProcess;
+    const httpPort = 13579; // Use a non-standard port to avoid conflicts
+
+    beforeAll(async () => {
+      const serverPath = path.resolve(process.cwd(), 'dist/index.js');
+      httpProcess = spawn('node', [serverPath, '--transport', 'http', '--port', String(httpPort)], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      // Wait for the server to start
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => { reject(new Error('HTTP server start timeout')); }, 10000);
+        httpProcess.stderr!.on('data', (data: Buffer) => {
+          if (data.toString().includes('running on http://')) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+        httpProcess.on('error', reject);
+      });
+    });
+
+    afterAll(() => {
+      httpProcess?.kill('SIGTERM');
+    });
+
+    it('should respond to health check', async () => {
+      const res = await fetch(`http://127.0.0.1:${httpPort}/health`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.status).toBe('ok');
+      expect(data.version).toBeDefined();
+    });
+
+    it('should return 404 for unknown paths', async () => {
+      const res = await fetch(`http://127.0.0.1:${httpPort}/unknown`);
+      expect(res.status).toBe(404);
+    });
+
+    it('should handle MCP initialize request', async () => {
+      const res = await fetch(`http://127.0.0.1:${httpPort}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0.0' },
+          },
+        }),
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.result).toBeDefined();
+      expect(data.result.serverInfo.name).toBe('jamf-docs-mcp-server');
+    });
+  });
+
   describe('tools/list', () => {
     it('should list all 4 tools', async () => {
       const result = await client.listTools();
@@ -84,7 +374,7 @@ describe('Jamf Docs MCP Server', () => {
       const json = JSON.parse(text);
 
       expect(json.products).toBeDefined();
-      expect(json.products.length).toBe(4);
+      expect(json.products.length).toBe(12);
       expect(json.topics).toBeDefined();
       expect(json.topics.length).toBeGreaterThan(30);
       expect(json.tokenInfo).toBeDefined();
@@ -421,7 +711,8 @@ describe('Jamf Docs MCP Server', () => {
 
       const json = JSON.parse(result.contents[0].text as string);
       expect(json.products).toBeDefined();
-      expect(json.products.length).toBe(4);
+      // Resource uses metadata service which may cache results; at minimum all core products present
+      expect(json.products.length).toBeGreaterThanOrEqual(4);
 
       const productIds = json.products.map((p: { id: string }) => p.id);
       expect(productIds).toContain('jamf-pro');

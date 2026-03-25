@@ -5,18 +5,21 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GetTocInputSchema } from '../schemas/index.js';
+import { reportProgress } from '../utils/progress.js';
+import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
 import { fetchTableOfContents } from '../services/scraper.js';
 import { getAvailableVersions } from '../services/metadata.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
 /**
  * Render a single TOC entry as markdown
  */
 function renderTocEntry(entry: TocEntry, depth = 0, compact = false): string {
   const indent = '  '.repeat(depth);
-  let result = `${indent}- [${entry.title}](${entry.url})\n`;
+  let result = `${indent}- [${sanitizeMarkdownText(entry.title)}](${sanitizeMarkdownUrl(entry.url)})\n`;
 
   if (!compact && entry.children !== undefined && entry.children.length > 0) {
     for (const child of entry.children) {
@@ -82,6 +85,20 @@ function formatTocFull(
   return markdown;
 }
 
+/**
+ * Flatten nested TOC entries into a flat list
+ */
+function flattenTocEntries(entries: TocEntry[]): { title: string; url: string }[] {
+  const flat: { title: string; url: string }[] = [];
+  for (const entry of entries) {
+    flat.push({ title: entry.title, url: entry.url });
+    if (entry.children !== undefined && entry.children.length > 0) {
+      flat.push(...flattenTocEntries(entry.children));
+    }
+  }
+  return flat;
+}
+
 const TOOL_NAME = 'jamf_docs_get_toc';
 
 const TOOL_DESCRIPTION = `Get the table of contents for a Jamf product's documentation.
@@ -140,6 +157,7 @@ export function registerGetTocTool(server: McpServer): void {
       title: 'Get Documentation Table of Contents',
       description: TOOL_DESCRIPTION,
       inputSchema: GetTocInputSchema,
+      outputSchema: TocOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -147,7 +165,7 @@ export function registerGetTocTool(server: McpServer): void {
         openWorldHint: true
       }
     },
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       // Parse and validate input
       const parseResult = GetTocInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -190,10 +208,14 @@ export function registerGetTocTool(server: McpServer): void {
           }
         }
 
+        await reportProgress(extra, 0, 100);
+
         const tocResult = await fetchTableOfContents(productId, version, {
           ...(params.page !== undefined && { page: params.page }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
+
+        await reportProgress(extra, 50, 100);
 
         const { toc, pagination, tokenInfo } = tocResult;
 
@@ -206,13 +228,24 @@ export function registerGetTocTool(server: McpServer): void {
           pagination
         };
 
-        // Format output
+        const structuredContent = {
+          product: productInfo.name,
+          version,
+          totalEntries: pagination.totalItems,
+          page: pagination.page,
+          totalPages: pagination.totalPages,
+          hasMore: pagination.hasNext,
+          entries: flattenTocEntries(toc)
+        };
+
         if (params.responseFormat === ResponseFormat.JSON) {
+          await reportProgress(extra, 100, 100);
           return {
             content: [{
               type: 'text',
               text: JSON.stringify(response, null, 2)
-            }]
+            }],
+            structuredContent
           };
         }
 
@@ -221,19 +254,20 @@ export function registerGetTocTool(server: McpServer): void {
           ? formatTocCompact(productInfo.name, toc, pagination)
           : formatTocFull(productInfo.name, version, toc, pagination, tokenInfo);
 
+        await reportProgress(extra, 100, 100);
         return {
           content: [{
             type: 'text',
             text: markdown
-          }]
+          }],
+          structuredContent
         };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         return {
           isError: true,
           content: [{
             type: 'text',
-            text: `Error fetching table of contents: ${errorMessage}`
+            text: `Error fetching table of contents: ${getSafeErrorMessage(error)}`
           }]
         };
       }

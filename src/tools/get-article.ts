@@ -5,9 +5,12 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
+import { reportProgress } from '../utils/progress.js';
+import { ArticleOutputSchema } from '../schemas/output.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, ArticleResponse, ArticleSection, TokenInfo } from '../types.js';
 import { fetchArticle, type FetchArticleResult } from '../services/scraper.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
 interface FormatOptions {
   section?: string | undefined;
@@ -74,18 +77,19 @@ function formatRelatedArticles(articles: RelatedArticle[] | undefined): string {
 
   let result = '\n\n---\n\n## Related Articles\n\n';
   for (const related of articles) {
-    result += `- [${related.title}](${related.url})\n`;
+    result += `- [${sanitizeMarkdownText(related.title)}](${sanitizeMarkdownUrl(related.url)})\n`;
   }
   return result;
 }
 
 function formatFooter(url: string, tokenInfo: TokenInfo, compact = false): string {
+  const safeUrl = sanitizeMarkdownUrl(url);
   if (compact) {
-    return `\n---\n*[Source](${url}) | ${tokenInfo.tokenCount} tokens${tokenInfo.truncated ? ' (truncated)' : ''}*\n`;
+    return `\n---\n*[Source](${safeUrl}) | ${tokenInfo.tokenCount} tokens${tokenInfo.truncated ? ' (truncated)' : ''}*\n`;
   }
 
   let result = '\n\n---\n\n';
-  result += `*Source: [${url}](${url})*\n`;
+  result += `*Source: [${sanitizeMarkdownText(url)}](${safeUrl})*\n`;
   result += `*${tokenInfo.tokenCount.toLocaleString()} tokens`;
   if (tokenInfo.truncated) {
     result += ` (truncated from original, max: ${tokenInfo.maxTokens.toLocaleString()})`;
@@ -99,8 +103,7 @@ function formatFooter(url: string, tokenInfo: TokenInfo, compact = false): strin
  */
 function formatArticleAsCompact(
   article: FetchArticleResult,
-  tokenInfo: TokenInfo,
-  _sections: ArticleSection[]
+  tokenInfo: TokenInfo
 ): string {
   let markdown = `# ${article.title}\n\n`;
 
@@ -221,6 +224,7 @@ export function registerGetArticleTool(server: McpServer): void {
       title: 'Get Jamf Documentation Article',
       description: TOOL_DESCRIPTION,
       inputSchema: GetArticleInputSchema,
+      outputSchema: ArticleOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -228,7 +232,7 @@ export function registerGetArticleTool(server: McpServer): void {
         openWorldHint: true
       }
     },
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       // Parse and validate input
       const parseResult = GetArticleInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -240,12 +244,16 @@ export function registerGetArticleTool(server: McpServer): void {
       const params = parseResult.data;
 
       try {
+        await reportProgress(extra, 0, 100);
+
         const article = await fetchArticle(params.url, {
           includeRelated: params.includeRelated,
           summaryOnly: params.summaryOnly,
           ...(params.section !== undefined && { section: params.section }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
+
+        await reportProgress(extra, 70, 100);
 
         const { tokenInfo, sections } = article;
 
@@ -257,32 +265,52 @@ export function registerGetArticleTool(server: McpServer): void {
           sections
         };
 
-        // Format output
+        const structuredContent = {
+          title: article.title,
+          url: article.url,
+          content: article.content,
+          ...(article.product !== undefined ? { product: article.product } : {}),
+          ...(article.version !== undefined ? { version: article.version } : {}),
+          ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
+          ...(article.breadcrumb !== undefined ? { breadcrumb: article.breadcrumb } : {}),
+          sections: sections.map(s => ({
+            id: s.id,
+            title: s.title,
+            level: s.level,
+            tokenCount: s.tokenCount
+          })),
+          truncated: tokenInfo.truncated
+        };
+
         if (params.responseFormat === ResponseFormat.JSON) {
+          await reportProgress(extra, 100, 100);
           return {
             content: [{
               type: 'text',
               text: JSON.stringify(response, null, 2)
-            }]
+            }],
+            structuredContent
           };
         }
 
         // Markdown format (full or compact)
         const markdown = params.outputMode === OutputMode.COMPACT
-          ? formatArticleAsCompact(article, tokenInfo, sections)
+          ? formatArticleAsCompact(article, tokenInfo)
           : formatArticleAsMarkdown(article, tokenInfo, sections, {
               section: params.section,
               includeRelated: params.includeRelated
             });
 
+        await reportProgress(extra, 100, 100);
         return {
           content: [{
             type: 'text',
             text: markdown
-          }]
+          }],
+          structuredContent
         };
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        const errorMessage = getSafeErrorMessage(error);
 
         // Provide helpful error messages
         let helpText = '';
