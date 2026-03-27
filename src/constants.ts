@@ -6,6 +6,7 @@
  */
 
 import * as path from 'path';
+import { createRequire } from 'module';
 
 // Environment variable helpers
 export function getEnvNumber(
@@ -42,8 +43,10 @@ function getEnvString(key: string, defaultValue: string): string {
 // Server icon (32x32 PNG, document theme, base64 data URI)
 export const SERVER_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAiUlEQVR4nGNgGAU4QEpKxX9qYpItpwSA9N+58wyOSXYENR0AYw+IA9AdQr4DehgQmEgHYIsGujuA7IRIqQNwOYp8B1ABUOQAOat4svDwcQA1wNB2ACVBPzwcQA0wtB0w4NlwwB1ADTC0HUBu1hs+DqAGGNoOAAbxCVLx8HIANQBZvaMB65qNKAAA5fafYXNsHh0AAAAASUVORK5CYII=';
 
-// Server metadata (keep in sync with package.json)
-export const SERVER_VERSION = '1.2.0';
+// Server metadata (auto-read from package.json)
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json') as { version: string };
+export const SERVER_VERSION = pkg.version;
 
 // Base URLs
 export const DOCS_BASE_URL = 'https://learn.jamf.com';
