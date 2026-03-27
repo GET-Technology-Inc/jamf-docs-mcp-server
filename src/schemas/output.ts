@@ -31,6 +31,7 @@ export const SearchOutputSchema = z.object({
     snippet: z.string(),
     product: z.string(),
     version: z.string().optional(),
+    docType: z.string().optional(),
   })),
   suggestions: z.array(z.string()).optional(),
 });
