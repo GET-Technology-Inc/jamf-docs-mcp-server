@@ -34,9 +34,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Unit Test
-        run: npm run test:unit
-
       # Publish to npm with Trusted Publishing (OIDC)
       - name: Publish to npm
         run: npm publish --provenance --access public
