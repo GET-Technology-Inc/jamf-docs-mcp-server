@@ -6,6 +6,8 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/jamf-docs-mcp-server.git`
+
+   (Upstream repository: `https://github.com/GET-Technology-Inc/jamf-docs-mcp-server.git`)
 3. Install dependencies: `npm install`
 4. Create a branch: `git checkout -b feature/your-feature-name`
 
@@ -41,9 +43,10 @@ npm run test:inspector
 ## Pull Request Process
 
 1. Ensure all tests pass: `npm test`
-2. Ensure code is linted: `npm run lint`
-3. Update documentation if needed
-4. Create a pull request with a clear description
+2. Ensure type checking passes: `npm run typecheck`
+3. Ensure code is linted: `npm run lint`
+4. Update documentation if needed
+5. Create a pull request with a clear description
 
 ### PR Title Convention
 
