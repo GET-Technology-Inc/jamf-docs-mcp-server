@@ -1,3 +1,18 @@
+## [1.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.2.0...v1.3.0) (2026-03-27)
+
+### Features
+
+* migrate to semantic-release for automated versioning ([#51](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/51)) ([6f3c4a7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6f3c4a7b48ac306f7addbf122939335a2abf2fc4))
+
+### Bug Fixes
+
+* use GitHub App token for semantic-release push ([#52](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/52)) ([f48a3d5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/f48a3d50993c3fa49e7c987f0937cfeebeca62d4))
+
+### Dependencies
+
+* bump @vitest/coverage-v8 from 4.0.18 to 4.1.0 ([#42](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/42)) ([9493891](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9493891579494950e7db421c89df37b5230e0939))
+* bump typescript-eslint from 8.56.1 to 8.57.1 ([#40](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/40)) ([190e7be](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/190e7be0be33b85d1abc6fc9b7ac07d09b54acc3))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
