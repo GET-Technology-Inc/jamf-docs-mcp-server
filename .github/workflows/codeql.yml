@@ -3,20 +3,16 @@ name: CodeQL
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.claude/**'
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.claude/**'
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
   schedule:
     - cron: '0 6 * * 1' # every Monday 6:00 UTC
 

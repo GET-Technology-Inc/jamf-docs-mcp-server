@@ -3,27 +3,37 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.claude/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '.github/workflows/**'
-      - '*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.claude/**'
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'test/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig*.json'
+              - 'vitest*.ts'
+              - 'eslint.config.*'
+
   test:
     name: Test (Node ${{ matrix.node-version }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,8 +63,22 @@ jobs:
       - name: Test
         run: npm test
 
+  # Required status check — reports success when test is skipped
+  test-gate:
+    name: Test (Node ${{ matrix.node-version }})
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - run: echo "Skipped — no code changes"
+
   audit:
     name: Security Audit
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -73,6 +97,8 @@ jobs:
 
   coverage:
     name: Coverage
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
