@@ -2,14 +2,31 @@
  * Shared test fixtures — type-safe factory functions for all core data types
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type {
   SearchResult,
   TocEntry,
   TokenInfo,
   PaginationInfo,
   ArticleSection,
+  ZoominSearchResponse,
 } from '../../src/types.js';
 import type { FetchArticleResult } from '../../src/services/scraper.js';
+
+// ============================================================================
+// Fixture loading
+// ============================================================================
+
+const FIXTURES_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'fixtures');
+
+/**
+ * Load a JSON fixture file from test/fixtures/
+ */
+export function loadFixture<T>(name: string): T {
+  const filePath = path.join(FIXTURES_DIR, name);
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
+}
 
 export function createSearchResult(overrides?: Partial<SearchResult>): SearchResult {
   return {
@@ -80,4 +97,55 @@ export function createFetchArticleResult(overrides?: Partial<FetchArticleResult>
     ],
     ...overrides,
   };
+}
+
+// ============================================================================
+// Realistic factory functions (based on real API response fixtures)
+// ============================================================================
+
+interface ArticleFixture {
+  articles: { url: string; html: string }[];
+}
+
+/**
+ * Create a realistic Zoomin search response from the fixture file.
+ * Supports partial overrides on the top-level response.
+ */
+export function createRealisticSearchResponse(
+  overrides?: Partial<ZoominSearchResponse>
+): ZoominSearchResponse {
+  const data = loadFixture<ZoominSearchResponse>('search-response.json');
+  return { ...data, ...overrides };
+}
+
+/**
+ * Get realistic article HTML from the fixture file.
+ * @param index — article index (0 = Configuration Profiles, 1 = SSO with special chars)
+ */
+export function createRealisticArticleHtml(index = 0): { url: string; html: string } {
+  const data = loadFixture<ArticleFixture>('article-html.json');
+  const article = data.articles[index];
+  if (!article) {
+    throw new Error(`Article fixture index ${index} not found (available: ${data.articles.length})`);
+  }
+  return article;
+}
+
+/**
+ * Get realistic TOC response from the fixture file.
+ * @param product — 'jamf-pro' for populated TOC, 'jamf-routines' for empty TOC
+ */
+export function createRealisticTocResponse(
+  product: 'jamf-pro' | 'jamf-routines' = 'jamf-pro'
+): Record<string, unknown> {
+  if (product === 'jamf-routines') {
+    return loadFixture<Record<string, unknown>>('toc-jamf-routines-documentation.json');
+  }
+  // Find the jamf-pro TOC fixture (may have versioned filename)
+  const files = fs.readdirSync(FIXTURES_DIR);
+  const proTocFile = files.find(f => f.startsWith('toc-jamf-pro-documentation') && f.endsWith('.json'));
+  if (!proTocFile) {
+    throw new Error('No jamf-pro TOC fixture found');
+  }
+  return loadFixture<Record<string, unknown>>(proTocFile);
 }

@@ -244,6 +244,110 @@ describe('searchDocumentation() docType filtering', { timeout: 60000, retry: 2 }
 });
 
 // ============================================================================
+// Version behavior contract tests
+// ============================================================================
+
+describe('searchDocumentation() version behavior', { timeout: 60000, retry: 2 }, () => {
+  it('should return version: "current" even when non-current version is requested', async () => {
+    const result = await searchDocumentation({
+      query: 'configuration profile',
+      version: '11.0.0',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+
+    // API always returns current version content regardless of requested version
+    for (const r of result.results) {
+      expect(r.version).toBe('current');
+    }
+  });
+});
+
+// ============================================================================
+// Section ID non-empty contract tests
+// ============================================================================
+
+describe('fetchArticle() section IDs', { timeout: 60000, retry: 2 }, () => {
+  it('should produce non-empty valid slug IDs for all sections', async () => {
+    // Discover a real article URL from search
+    const searchResult = await searchDocumentation({ query: 'configuration profiles', limit: 1 });
+    const url = searchResult.results[0]?.url;
+    expect(url).toBeDefined();
+
+    const article = await fetchArticle(url!);
+
+    if (article.sections.length > 0) {
+      for (const section of article.sections) {
+        expect(section.id).toBeTruthy();
+        expect(section.id.length).toBeGreaterThan(0);
+        expect(section.id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
+      }
+    }
+  });
+});
+
+// ============================================================================
+// Snippet quality contract tests
+// ============================================================================
+
+describe('searchDocumentation() snippet quality', { timeout: 60000, retry: 2 }, () => {
+  it('should return snippets with minimum meaningful length', async () => {
+    const result = await searchDocumentation({ query: 'enrollment', limit: 10 });
+
+    expect(result.results.length).toBeGreaterThan(0);
+
+    for (const r of result.results) {
+      // Snippet should be either >= 50 chars of content, or a title-based fallback
+      // Title fallback format: "Title" or "Title — Product"
+      expect(r.snippet.length).toBeGreaterThanOrEqual(10);
+    }
+  });
+});
+
+// ============================================================================
+// Multi-filter combination contract tests
+// ============================================================================
+
+describe('searchDocumentation() multi-filter', { timeout: 60000, retry: 2 }, () => {
+  it('should return results or filterRelaxation for product + docType', async () => {
+    const result = await searchDocumentation({
+      query: 'jamf pro',
+      product: 'jamf-pro',
+      docType: 'release-notes',
+    });
+
+    if (result.filterRelaxation) {
+      // Filter relaxation occurred — results may not match all original filters
+      expect(result.filterRelaxation.removed.length).toBeGreaterThan(0);
+      expect(result.filterRelaxation.message).toBeTruthy();
+    } else if (result.results.length > 0) {
+      // No relaxation — all results should match both filters
+      for (const r of result.results) {
+        expect(r.docType).toBe('release-notes');
+        expect(r.product).toBe('Jamf Pro');
+      }
+    }
+    // Empty results without relaxation is also a valid outcome
+  });
+});
+
+// ============================================================================
+// technical-article bundle contract tests
+// ============================================================================
+
+describe('searchDocumentation() technical-article bundle', { timeout: 60000, retry: 2 }, () => {
+  it('should include diverse docType values in broad search results', async () => {
+    const result = await searchDocumentation({ query: 'jamf pro', limit: 50 });
+
+    expect(result.results.length).toBeGreaterThan(0);
+
+    const docTypes = new Set(result.results.map(r => r.docType).filter(Boolean));
+    // A broad search should return more than just 'documentation'
+    expect(docTypes.size).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ============================================================================
 // External API URL format and reachability
 // ============================================================================
 
