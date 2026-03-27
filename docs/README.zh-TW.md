@@ -70,7 +70,7 @@ node dist/index.js --transport http --port 8080 --host 0.0.0.0
 | 端點 | 說明 |
 |------|------|
 | `POST /mcp` | MCP 協議端點 |
-| `GET /health` | 健康檢查，回傳 `{"status":"ok","version":"1.2.0"}` |
+| `GET /health` | 健康檢查，回傳 `{"status":"ok","version":"<current>"}` |
 
 在 MCP 客戶端設定中使用 HTTP 模式：
 
