@@ -21,15 +21,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # patch/minor: auto-approve + auto-merge
-      - name: Approve patch/minor updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
-        run: gh pr review "$PR_URL" --approve --body "Auto-approved (${UPDATE_TYPE})"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+      # patch/minor: auto-merge (approval bypassed via ruleset)
       - name: Enable auto-merge for patch/minor updates
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         run: gh pr merge "$PR_URL" --auto --squash
@@ -37,10 +29,10 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # major: auto-approve only, don't merge
-      - name: Approve major updates (no auto-merge)
+      # major: label for manual review
+      - name: Label major updates for review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        run: gh pr review "$PR_URL" --approve --body "Auto-approved (major update) — please review changelog before merging"
+        run: gh pr edit "$PR_URL" --add-label "major-update"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
