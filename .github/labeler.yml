@@ -1,0 +1,53 @@
+tools:
+  - changed-files:
+      - any-glob-to-any-file: 'src/tools/**'
+
+services:
+  - changed-files:
+      - any-glob-to-any-file: 'src/services/**'
+
+schemas:
+  - changed-files:
+      - any-glob-to-any-file: 'src/schemas/**'
+
+prompts:
+  - changed-files:
+      - any-glob-to-any-file: 'src/prompts/**'
+
+transport:
+  - changed-files:
+      - any-glob-to-any-file: 'src/transport/**'
+
+utils:
+  - changed-files:
+      - any-glob-to-any-file: 'src/utils/**'
+
+core:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/index.ts'
+          - 'src/types.ts'
+          - 'src/constants.ts'
+          - 'src/completions.ts'
+
+test:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*.md'
+          - 'docs/**'
+
+config:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'tsconfig.json'
+          - 'vitest.config.ts'
+          - 'eslint.config.js'
