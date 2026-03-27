@@ -77,17 +77,31 @@ export function createTokenInfo(
 
 /**
  * Extract sections (headings) from Markdown content
+ * Generates unique slugified IDs with duplicate suffix handling
  */
 export function extractSections(content: string): ArticleSection[] {
   const sections: ArticleSection[] = [];
   const lines = content.split('\n');
   let currentSection: { title: string; level: number } | null = null;
   let sectionContent = '';
+  const idCounts = new Map<string, number>();
+  let sectionIndex = 0;
 
   function saveCurrentSection(): void {
     if (currentSection !== null) {
+      sectionIndex++;
+      let baseId = slugify(currentSection.title);
+      if (baseId === '') {
+        baseId = `section-${sectionIndex}`;
+      }
+
+      // Handle duplicate IDs
+      const count = idCounts.get(baseId) ?? 0;
+      idCounts.set(baseId, count + 1);
+      const id = count === 0 ? baseId : `${baseId}-${count}`;
+
       sections.push({
-        id: generateSectionId(currentSection.title),
+        id,
         title: currentSection.title,
         level: currentSection.level,
         tokenCount: estimateTokens(sectionContent)
@@ -115,9 +129,12 @@ export function extractSections(content: string): ArticleSection[] {
 }
 
 /**
- * Generate a section ID from title
+ * Generate a section ID (slug) from heading title
  */
-function generateSectionId(title: string): string {
+export function slugify(title: string): string {
+  if (title.trim() === '') {
+    return '';
+  }
   return title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -133,7 +150,7 @@ export function extractSection(
   maxTokens: number = TOKEN_CONFIG.DEFAULT_MAX_TOKENS
 ): ExtractSectionResult {
   const lines = content.split('\n');
-  const normalizedId = generateSectionId(sectionIdentifier);
+  const normalizedId = slugify(sectionIdentifier);
   const sectionLines: string[] = [];
   let foundSection: ArticleSection | null = null;
   let targetLevel = 0;
@@ -144,7 +161,7 @@ export function extractSection(
     if (headingMatch !== null) {
       const level = headingMatch[1]?.length ?? 1;
       const title = headingMatch[2]?.trim() ?? '';
-      const id = generateSectionId(title);
+      const id = slugify(title);
 
       // End section if we hit same or higher level heading
       if (foundSection !== null && level <= targetLevel) {break;}

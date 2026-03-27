@@ -95,8 +95,8 @@ describe('SearchInputSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept maxTokens 20000 (maximum valid)', () => {
-    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 20000 });
+  it('should accept maxTokens 50000 (maximum valid)', () => {
+    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 50000 });
     expect(result.success).toBe(true);
   });
 
@@ -105,8 +105,8 @@ describe('SearchInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject maxTokens 30000 (above maximum)', () => {
-    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 30000 });
+  it('should reject maxTokens 60000 (above maximum)', () => {
+    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 60000 });
     expect(result.success).toBe(false);
   });
 
@@ -151,8 +151,8 @@ describe('SearchInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject maxTokens=20001 (one above maximum of 20000)', () => {
-    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 20001 });
+  it('should reject maxTokens=50001 (one above maximum of 50000)', () => {
+    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 50001 });
     expect(result.success).toBe(false);
   });
 
@@ -343,8 +343,8 @@ describe('ListProductsInputSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept maxTokens 20000 (maximum valid)', () => {
-    const result = ListProductsInputSchema.safeParse({ maxTokens: 20000 });
+  it('should accept maxTokens 50000 (maximum valid)', () => {
+    const result = ListProductsInputSchema.safeParse({ maxTokens: 50000 });
     expect(result.success).toBe(true);
   });
 
@@ -353,8 +353,8 @@ describe('ListProductsInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject maxTokens 30000 (above maximum)', () => {
-    const result = ListProductsInputSchema.safeParse({ maxTokens: 30000 });
+  it('should reject maxTokens 60000 (above maximum)', () => {
+    const result = ListProductsInputSchema.safeParse({ maxTokens: 60000 });
     expect(result.success).toBe(false);
   });
 
@@ -368,8 +368,8 @@ describe('ListProductsInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject maxTokens=20001 (one above maximum of 20000)', () => {
-    const result = ListProductsInputSchema.safeParse({ maxTokens: 20001 });
+  it('should reject maxTokens=50001 (one above maximum of 50000)', () => {
+    const result = ListProductsInputSchema.safeParse({ maxTokens: 50001 });
     expect(result.success).toBe(false);
   });
 

@@ -433,6 +433,45 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
 }
 
 // ============================================================================
+// Product Availability
+// ============================================================================
+
+/**
+ * Check which products have TOC content available
+ */
+export async function getProductAvailability(): Promise<Record<string, boolean>> {
+  const cacheKey = 'metadata:product-availability';
+
+  const cached = await cache.get<Record<string, boolean>>(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const availability: Record<string, boolean> = {};
+  const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
+
+  const results = await Promise.all(
+    productIds.map(async (productId) => {
+      try {
+        const categories = await fetchTopicCategories(productId);
+        return { productId, hasContent: categories.length > 0 };
+      } catch {
+        return { productId, hasContent: false };
+      }
+    })
+  );
+
+  for (const { productId, hasContent } of results) {
+    availability[productId] = hasContent;
+  }
+
+  // Cache for 1 hour
+  await cache.set(cacheKey, availability, 60 * 60 * 1000);
+
+  return availability;
+}
+
+// ============================================================================
 // Convenience functions for Resources
 // ============================================================================
 

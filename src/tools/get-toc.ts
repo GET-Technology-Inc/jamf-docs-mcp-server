@@ -110,7 +110,7 @@ Args:
   - product (string, required): Product ID - one of: jamf-pro, jamf-school, jamf-connect, jamf-protect
   - version (string, optional): Specific version (defaults to latest)
   - page (number, optional): Page number for pagination 1-100 (default: 1)
-  - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for flat list without nested children
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -238,21 +238,35 @@ export function registerGetTocTool(server: McpServer): void {
           entries: flattenTocEntries(toc)
         };
 
+        // Version transparency note
+        const versionNote = (params.version !== undefined && params.version !== '' && params.version !== 'current')
+          ? 'The Jamf documentation API only provides current version content. Results shown are from the latest version.'
+          : undefined;
+
         if (params.responseFormat === ResponseFormat.JSON) {
           await reportProgress(extra, 100, 100);
+          const jsonResponse = versionNote !== undefined
+            ? { ...response, versionNote }
+            : response;
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify(jsonResponse, null, 2)
             }],
-            structuredContent
+            structuredContent: versionNote !== undefined
+              ? { ...structuredContent, versionNote }
+              : structuredContent
           };
         }
 
         // Format as markdown (compact or full)
-        const markdown = params.outputMode === OutputMode.COMPACT
+        let markdown = params.outputMode === OutputMode.COMPACT
           ? formatTocCompact(productInfo.name, toc, pagination)
           : formatTocFull(productInfo.name, version, toc, pagination, tokenInfo);
+
+        if (versionNote !== undefined) {
+          markdown += `\n> **Version Note:** ${versionNote}\n`;
+        }
 
         await reportProgress(extra, 100, 100);
         return {
@@ -260,7 +274,9 @@ export function registerGetTocTool(server: McpServer): void {
             type: 'text',
             text: markdown
           }],
-          structuredContent
+          structuredContent: versionNote !== undefined
+            ? { ...structuredContent, versionNote }
+            : structuredContent
         };
       } catch (error) {
         return {

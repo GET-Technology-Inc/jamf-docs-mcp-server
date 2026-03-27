@@ -140,7 +140,7 @@ Args:
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
   - limit (number, optional): Maximum results per page 1-50 (default: 10)
   - page (number, optional): Page number for pagination 1-100 (default: 1)
-  - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief, token-efficient output
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -239,7 +239,12 @@ export function registerSearchTool(server: McpServer): void {
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
 
-        const { results, pagination, tokenInfo } = searchResult;
+        const { results, pagination, tokenInfo, filterRelaxation, truncatedContent } = searchResult;
+
+        // Version transparency
+        const versionNote = (params.version !== undefined && params.version !== 'current')
+          ? 'The Jamf documentation API only provides current version content. Results shown are from the latest version.'
+          : undefined;
 
         // Build response
         const response: SearchResponse = {
@@ -252,7 +257,10 @@ export function registerSearchTool(server: McpServer): void {
             ...(params.topic !== undefined ? { topic: params.topic } : {})
           },
           tokenInfo,
-          pagination
+          pagination,
+          ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+          ...(versionNote !== undefined ? { versionNote } : {}),
+          ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
         // Handle no results with suggestions
@@ -301,21 +309,32 @@ export function registerSearchTool(server: McpServer): void {
             product: r.product ?? '',
             ...(r.version !== undefined ? { version: r.version } : {}),
             ...(r.docType !== undefined ? { docType: r.docType } : {})
-          }))
+          })),
+          ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+          ...(versionNote !== undefined ? { versionNote } : {}),
+          ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
         if (params.responseFormat === ResponseFormat.JSON) {
+          // Add relevance note only in JSON format
+          const jsonResponse = {
+            ...response,
+            relevanceNote: 'Relevance scores are provided by the Zoomin Search API based on text matching. Higher values indicate stronger keyword matches.'
+          };
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(response, null, 2)
+              text: JSON.stringify(jsonResponse, null, 2)
             }],
-            structuredContent
+            structuredContent: {
+              ...structuredContent,
+              relevanceNote: jsonResponse.relevanceNote
+            }
           };
         }
 
         // Markdown format (full or compact)
-        const markdown = params.outputMode === OutputMode.COMPACT
+        let markdown = params.outputMode === OutputMode.COMPACT
           ? formatSearchResultsAsCompact(
               params.query,
               results,
@@ -330,6 +349,17 @@ export function registerSearchTool(server: McpServer): void {
               pagination,
               tokenInfo
             );
+
+        // Append notices for markdown
+        if (filterRelaxation !== undefined) {
+          markdown += `\n> **Note:** ${filterRelaxation.message}\n`;
+        }
+        if (versionNote !== undefined) {
+          markdown += `\n> **Version Note:** ${versionNote}\n`;
+        }
+        if (truncatedContent !== undefined && truncatedContent.omittedCount > 0) {
+          markdown += `\n*${truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
+        }
 
         return {
           content: [{

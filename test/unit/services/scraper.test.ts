@@ -146,7 +146,7 @@ describe('searchDocumentation - filtering', () => {
     expect(result.results.every(r => r.product === 'Jamf Pro')).toBe(true);
   });
 
-  it('should return empty results when filter matches nothing', async () => {
+  it('should relax filter and return results with filterRelaxation when filter matches nothing', async () => {
     vi.mocked(axios.get).mockResolvedValue({
       data: makeSearchResponse([
         {
@@ -159,8 +159,11 @@ describe('searchDocumentation - filtering', () => {
     });
 
     const result = await searchDocumentation({ query: 'test', product: 'jamf-pro' });
-    expect(result.results).toHaveLength(0);
-    expect(result.pagination.totalItems).toBe(0);
+    // Filter fallback should relax the product filter and return the result
+    expect(result.results).toHaveLength(1);
+    expect(result.filterRelaxation).toBeDefined();
+    expect(result.filterRelaxation!.removed).toContain('product');
+    expect(result.filterRelaxation!.original['product']).toBe('jamf-pro');
   });
 });
 
