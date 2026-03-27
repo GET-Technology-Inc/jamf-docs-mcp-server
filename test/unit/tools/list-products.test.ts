@@ -6,10 +6,15 @@
  * tested via an in-process McpServer + Client pair.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+
+vi.mock('../../../src/services/metadata.js', () => ({
+  getProductAvailability: vi.fn().mockResolvedValue({}),
+}));
+
 import { registerListProductsTool } from '../../../src/tools/list-products.js';
 
 // ---------------------------------------------------------------------------

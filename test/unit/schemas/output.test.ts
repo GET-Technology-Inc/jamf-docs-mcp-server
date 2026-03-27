@@ -304,6 +304,7 @@ describe('ProductListOutputSchema', () => {
         description: 'Apple device management for enterprise',
         currentVersion: '11.5.0',
         availableVersions: ['11.5.0', '11.4.0'],
+        hasContent: true,
       },
     ],
     topics: [
@@ -336,6 +337,7 @@ describe('ProductListOutputSchema', () => {
           description: 'Enterprise MDM',
           currentVersion: 'current',
           availableVersions: [],
+          hasContent: true,
         },
       ],
     };

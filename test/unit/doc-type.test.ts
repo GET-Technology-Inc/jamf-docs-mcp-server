@@ -47,6 +47,12 @@ describe('inferDocType', () => {
     expect(inferDocType('jamf-170-course-current')).toBe('training');
   });
 
+  it('should return "technical-article" for technical article bundles', () => {
+    expect(inferDocType('technical-article-device-compliance')).toBe('technical-article');
+    expect(inferDocType('technical-article-macos-security-compliance')).toBe('technical-article');
+    expect(inferDocType('technical-article-byod-current')).toBe('technical-article');
+  });
+
   it('should return "documentation" for unknown bundle patterns', () => {
     expect(inferDocType('unknown-bundle')).toBe('documentation');
     expect(inferDocType('')).toBe('documentation');

@@ -44,6 +44,7 @@ vi.mock('../../src/services/metadata.js', () => ({
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
   getProductsMetadata: vi.fn().mockResolvedValue([]),
+  getProductAvailability: vi.fn().mockResolvedValue({}),
   getProductsResourceData: vi.fn(),
   getTopicsResourceData: vi.fn(),
 }));
