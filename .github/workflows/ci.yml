@@ -3,8 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/**'
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.claude/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/**'
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.claude/**'
 
 permissions:
   contents: read
