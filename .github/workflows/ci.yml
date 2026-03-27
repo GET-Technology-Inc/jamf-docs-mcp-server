@@ -60,8 +60,39 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npm test
+      - name: Unit Test
+        run: npm run test:unit
+
+  integration:
+    name: Integration Test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    # Integration tests hit real APIs — flaky due to rate limits.
+    # Not a required status check; failures don't block merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Integration Test (with retry)
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npm run test:integration
 
   # Required status check — reports success when test is skipped
   test-gate:
@@ -115,8 +146,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run tests with coverage
-        run: npm run test:coverage
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
