@@ -50,14 +50,17 @@ export interface JamfProduct {
   versions: readonly string[];
 }
 
+export interface ProductInfo {
+  id: string;
+  name: string;
+  description: string;
+  currentVersion: string;
+  availableVersions: string[];
+  hasContent: boolean;
+}
+
 export interface ProductListResponse {
-  products: {
-    id: string;
-    name: string;
-    description: string;
-    currentVersion: string;
-    availableVersions: string[];
-  }[];
+  products: ProductInfo[];
   tokenInfo: TokenInfo;
 }
 
@@ -84,6 +87,17 @@ export interface SearchResult {
   docType?: DocTypeId;
 }
 
+export interface FilterRelaxation {
+  removed: string[];
+  original: Record<string, string>;
+  message: string;
+}
+
+export interface TruncatedContentInfo {
+  omittedCount: number;
+  omittedItems: { title: string; estimatedTokens: number }[];
+}
+
 export interface SearchResponse {
   total: number;
   results: SearchResult[];
@@ -95,6 +109,10 @@ export interface SearchResponse {
   };
   tokenInfo: TokenInfo;
   pagination: PaginationInfo;
+  filterRelaxation?: FilterRelaxation;
+  versionNote?: string;
+  relevanceNote?: string;
+  truncatedContent?: TruncatedContentInfo;
 }
 
 // Article types

@@ -172,7 +172,7 @@ Args:
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article
   - includeRelated (boolean, optional): Include links to related articles (default: false)
-  - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 

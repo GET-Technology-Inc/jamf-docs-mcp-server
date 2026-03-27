@@ -11,6 +11,7 @@ export const ProductListOutputSchema = z.object({
     description: z.string(),
     currentVersion: z.string(),
     availableVersions: z.array(z.string()),
+    hasContent: z.boolean(),
   })),
   topics: z.array(z.object({
     id: z.string(),
@@ -34,6 +35,20 @@ export const SearchOutputSchema = z.object({
     docType: z.string().optional(),
   })),
   suggestions: z.array(z.string()).optional(),
+  filterRelaxation: z.object({
+    removed: z.array(z.string()),
+    original: z.record(z.string(), z.string()),
+    message: z.string(),
+  }).optional(),
+  versionNote: z.string().optional(),
+  relevanceNote: z.string().optional(),
+  truncatedContent: z.object({
+    omittedCount: z.number(),
+    omittedItems: z.array(z.object({
+      title: z.string(),
+      estimatedTokens: z.number(),
+    })),
+  }).optional(),
 });
 
 export const ArticleOutputSchema = z.object({

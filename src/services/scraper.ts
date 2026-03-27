@@ -35,7 +35,9 @@ import {
   type ZoominSearchResponse,
   type TokenInfo,
   type PaginationInfo,
-  type ArticleSection
+  type ArticleSection,
+  type FilterRelaxation,
+  type TruncatedContentInfo
 } from '../types.js';
 import { inferDocType } from '../utils/doc-type.js';
 import { cache } from './cache.js';
@@ -144,6 +146,36 @@ function stripHtml(html: string): string {
     text = text.replaceAll(entity, char);
   }
   return text.replace(/\s+/g, ' ').trim();
+}
+
+// Minimum meaningful snippet length
+const MIN_SNIPPET_LENGTH = 50;
+
+// Breadcrumb/navigation patterns to filter
+const NAV_PATTERNS = [
+  /^Home\s*>/i,
+  /^[\w\s]+>\s*[\w\s]+>\s*[\w\s]+/,  // "A > B > C" breadcrumb pattern
+];
+
+/**
+ * Clean and validate a search result snippet
+ * Filters navigation-only text and ensures minimum content quality
+ */
+export function cleanSnippet(snippet: string, title: string, product: string | null): string {
+  let cleaned = snippet;
+
+  // Strip navigation/breadcrumb prefixes
+  for (const pattern of NAV_PATTERNS) {
+    cleaned = cleaned.replace(pattern, '').trim();
+  }
+
+  // If snippet is too short after cleaning, use fallback
+  if (cleaned.length < MIN_SNIPPET_LENGTH) {
+    const productSuffix = product !== null && product !== '' ? ` \u2014 ${product}` : '';
+    return `${title}${productSuffix}`;
+  }
+
+  return cleaned;
 }
 
 /**
@@ -262,12 +294,79 @@ function matchesTopic(result: SearchResult, topicId: TopicId): boolean {
 }
 
 /**
+ * Active filter definition for progressive relaxation
+ */
+interface ActiveFilter {
+  name: string;
+  value: string;
+  apply: (results: SearchResultWithMeta[]) => SearchResultWithMeta[];
+}
+
+/**
+ * Apply filters with progressive relaxation when results are zero
+ * Relaxation order: docType → topic → product
+ */
+function applyFiltersWithFallback(
+  allResults: SearchResultWithMeta[],
+  activeFilters: ActiveFilter[]
+): { filtered: SearchResultWithMeta[]; relaxation?: FilterRelaxation } {
+  // Apply all filters
+  let filtered = allResults;
+  for (const filter of activeFilters) {
+    filtered = filter.apply(filtered);
+  }
+
+  if (filtered.length > 0 || activeFilters.length === 0) {
+    return { filtered };
+  }
+
+  // Progressive relaxation
+  const relaxOrder = ['docType', 'topic', 'product'];
+  const removed: string[] = [];
+  const original: Record<string, string> = {};
+
+  for (const filterName of relaxOrder) {
+    if (filtered.length > 0) {break;}
+
+    const filterIndex = activeFilters.findIndex(f => f.name === filterName);
+    if (filterIndex === -1) {continue;}
+
+    const removedFilter = activeFilters[filterIndex];
+    if (removedFilter === undefined) {continue;}
+    removed.push(removedFilter.name);
+    original[removedFilter.name] = removedFilter.value;
+    activeFilters.splice(filterIndex, 1);
+
+    // Re-apply remaining filters
+    filtered = allResults;
+    for (const filter of activeFilters) {
+      filtered = filter.apply(filtered);
+    }
+  }
+
+  if (removed.length > 0) {
+    return {
+      filtered,
+      relaxation: {
+        removed,
+        original,
+        message: `No results with all filters applied. Removed filter(s): ${removed.join(', ')}. Try broader search terms or fewer filters.`
+      }
+    };
+  }
+
+  return { filtered };
+}
+
+/**
  * Search response with token and pagination info
  */
 export interface SearchDocumentationResult {
   results: SearchResult[];
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
+  filterRelaxation?: FilterRelaxation;
+  truncatedContent?: TruncatedContentInfo;
 }
 
 /**
@@ -321,11 +420,15 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
             ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
             : null;
 
+          const resultTitle = result.title !== '' ? result.title : 'Untitled';
+          const resultProduct = productEntry !== null && productEntry !== undefined ? productEntry[1].name : (result.publication_title !== '' ? result.publication_title : 'Jamf');
+          const rawSnippet = stripHtml(result.snippet !== '' ? result.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH);
+
           const searchResult: SearchResult = {
-            title: result.title !== '' ? result.title : 'Untitled',
+            title: resultTitle,
             url: transformToFrontendUrl(result.url !== '' ? result.url : ''),
-            snippet: stripHtml(result.snippet !== '' ? result.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH),
-            product: productEntry !== null && productEntry !== undefined ? productEntry[1].name : (result.publication_title !== '' ? result.publication_title : 'Jamf'),
+            snippet: cleanSnippet(rawSnippet, resultTitle, resultProduct),
+            product: resultProduct,
             version: 'current',
             docType: inferDocType(bundleId)
           };
@@ -366,25 +469,36 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     }
   }
 
-  // Apply filters
-  let filteredResults = allResults;
+  // Build active filters
+  const activeFilters: ActiveFilter[] = [];
 
-  // Product filter
   if (params.product !== undefined) {
-    filteredResults = filteredResults.filter(r => r.bundleSlug === params.product);
+    activeFilters.push({
+      name: 'product',
+      value: params.product,
+      apply: (results) => results.filter(r => r.bundleSlug === params.product)
+    });
   }
-
-  // Topic filter
   if (params.topic !== undefined) {
     const topicFilter = params.topic;
-    filteredResults = filteredResults.filter(r => r.matchedTopics.includes(topicFilter));
+    activeFilters.push({
+      name: 'topic',
+      value: topicFilter,
+      apply: (results) => results.filter(r => r.matchedTopics.includes(topicFilter))
+    });
   }
-
-  // DocType filter
   if (params.docType !== undefined) {
     const docTypeFilter = params.docType;
-    filteredResults = filteredResults.filter(r => r.result.docType === docTypeFilter);
+    activeFilters.push({
+      name: 'docType',
+      value: docTypeFilter,
+      apply: (results) => results.filter(r => r.result.docType === docTypeFilter)
+    });
   }
+
+  // Apply filters with progressive relaxation
+  const { filtered: filteredResults, relaxation: filterRelaxation } =
+    applyFiltersWithFallback(allResults, activeFilters);
 
   // Calculate pagination
   const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
@@ -423,6 +537,19 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     ? estimateTokens(finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n'))
     : tokenCount;
 
+  // Build truncated content info
+  let truncatedContent: TruncatedContentInfo | undefined;
+  if (truncated) {
+    const omittedResults = paginatedResults.slice(finalResults.length);
+    truncatedContent = {
+      omittedCount: omittedResults.length,
+      omittedItems: omittedResults.map(r => ({
+        title: r.title,
+        estimatedTokens: estimateTokens(`${r.title}\n${r.snippet}\n${r.url}`)
+      }))
+    };
+  }
+
   return {
     results: finalResults,
     pagination: {
@@ -437,7 +564,9 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       tokenCount: finalTokenCount,
       truncated,
       maxTokens
-    }
+    },
+    ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+    ...(truncatedContent !== undefined ? { truncatedContent } : {})
   };
 }
 

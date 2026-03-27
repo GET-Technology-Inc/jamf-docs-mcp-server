@@ -9,6 +9,7 @@ import { ProductListOutputSchema } from '../schemas/output.js';
 import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo } from '../services/tokenizer.js';
+import { getProductAvailability } from '../services/metadata.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
@@ -61,7 +62,7 @@ export function registerListProductsTool(server: McpServer): void {
         openWorldHint: false
       }
     },
-    (args): ToolResult => {
+    async (args): Promise<ToolResult> => {
       // Parse and validate input
       const parseResult = ListProductsInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -74,13 +75,17 @@ export function registerListProductsTool(server: McpServer): void {
       const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
       try {
+        // Fetch product availability (cached)
+        const availability = await getProductAvailability();
+
         // Build product list
         const products = Object.values(JAMF_PRODUCTS).map(product => ({
           id: product.id,
           name: product.name,
           description: product.description,
           currentVersion: product.latestVersion,
-          availableVersions: [...product.versions]
+          availableVersions: [...product.versions],
+          hasContent: availability[product.id] ?? true
         }));
 
         // Build topics list
@@ -135,7 +140,11 @@ export function registerListProductsTool(server: McpServer): void {
           markdown += `- **ID**: \`${product.id}\`\n`;
           markdown += `- **Description**: ${product.description}\n`;
           markdown += `- **Current Version**: ${product.currentVersion}\n`;
-          markdown += `- **Available Versions**: ${product.availableVersions.join(', ')}\n\n`;
+          markdown += `- **Available Versions**: ${product.availableVersions.join(', ')}\n`;
+          if (!product.hasContent) {
+            markdown += '- **Status**: No documentation content available\n';
+          }
+          markdown += '\n';
         }
 
         markdown += '---\n\n';

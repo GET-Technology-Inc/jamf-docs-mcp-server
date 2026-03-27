@@ -255,7 +255,7 @@ export const CONTENT_LIMITS = {
 // Token configuration (Context7 style)
 export const TOKEN_CONFIG = {
   DEFAULT_MAX_TOKENS: 5000,
-  MAX_TOKENS_LIMIT: 20000,
+  MAX_TOKENS_LIMIT: 50000,
   MIN_TOKENS: 100,
   CHARS_PER_TOKEN: 4,  // Estimation ratio
   CODE_CHARS_PER_TOKEN: 3  // Code blocks have higher token density
@@ -497,6 +497,11 @@ export const DOC_TYPES = {
     name: 'Training',
     description: 'Training materials and video guides',
     bundlePattern: /^training-|^jamf-100-|^jamf-170-/,
+  },
+  'technical-article': {
+    name: 'Technical Article',
+    description: 'Technical articles and knowledge base content',
+    bundlePattern: /^technical-article-/,
   },
 } as const;
 
