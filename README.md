@@ -237,7 +237,7 @@ node dist/index.js --transport http --port 8080 --host 127.0.0.1
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/mcp` | `POST` | MCP JSON-RPC endpoint (streamable HTTP transport) |
-| `/health` | `GET` | Health check — returns `{"status":"ok","version":"1.2.0"}` |
+| `/health` | `GET` | Health check — returns `{"status":"ok","version":"<current>"}` |
 
 ### Connecting an MCP Client via HTTP
 
