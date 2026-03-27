@@ -204,7 +204,7 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 - **Section Extraction**: Use `section: "Prerequisites"` to retrieve only the part of an article you need
 - **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, or `training`
 - **Version Query**: Use the `version` parameter to query documentation for a specific product version
-- **Pagination**: All list and search results support `page` and `limit` parameters
+- **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated
 - **Search Suggestions**: Receive helpful suggestions when a search returns no results
 - **Token Management**: All tools accept a `maxTokens` parameter (100–20000, default 5000) to control response size
 
