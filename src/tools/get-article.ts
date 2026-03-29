@@ -244,7 +244,7 @@ export function registerGetArticleTool(server: McpServer): void {
       const params = parseResult.data;
 
       try {
-        await reportProgress(extra, 0, 100);
+        await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching article...' });
 
         const article = await fetchArticle(params.url, {
           includeRelated: params.includeRelated,
@@ -254,9 +254,13 @@ export function registerGetArticleTool(server: McpServer): void {
           locale: params.language as LocaleId | undefined
         });
 
-        await reportProgress(extra, 70, 100);
+        await reportProgress(extra, { progress: 1, total: 4, message: 'Parsing article...' });
+
+        await reportProgress(extra, { progress: 2, total: 4, message: 'Processing content...' });
 
         const { tokenInfo, sections } = article;
+
+        await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
         // Build response
         const response: ArticleResponse = {
@@ -284,7 +288,7 @@ export function registerGetArticleTool(server: McpServer): void {
         };
 
         if (params.responseFormat === ResponseFormat.JSON) {
-          await reportProgress(extra, 100, 100);
+          await reportProgress(extra, { progress: 4, total: 4 });
           return {
             content: [{
               type: 'text',
@@ -302,7 +306,7 @@ export function registerGetArticleTool(server: McpServer): void {
               includeRelated: params.includeRelated
             });
 
-        await reportProgress(extra, 100, 100);
+        await reportProgress(extra, { progress: 4, total: 4 });
         return {
           content: [{
             type: 'text',

@@ -101,7 +101,7 @@ async function throttle(): Promise<void> {
 export { ALLOWED_HOSTNAMES, isAllowedHostname } from '../utils/url.js';
 
 // URL transformation between frontend (learn.jamf.com) and backend (learn-be.jamf.com)
-function transformToBackendUrl(urlStr: string): string {
+export function transformToBackendUrl(urlStr: string): string {
   const url = new URL(urlStr);
   if (url.hostname === 'learn.jamf.com') {
     url.hostname = 'learn-be.jamf.com';
@@ -109,7 +109,7 @@ function transformToBackendUrl(urlStr: string): string {
   return url.toString();
 }
 
-function transformToFrontendUrl(urlStr: string): string {
+export function transformToFrontendUrl(urlStr: string): string {
   const url = new URL(urlStr);
   if (url.hostname === 'learn-be.jamf.com') {
     url.hostname = 'learn.jamf.com';
@@ -207,7 +207,7 @@ function handleAxiosError(error: AxiosError, url: string, resourceType: string):
 /**
  * Build Accept-Language header value for a given locale
  */
-function buildAcceptLanguage(locale: string): string {
+export function buildAcceptLanguage(locale: string): string {
   if (locale === 'en-US') {
     return 'en-US,en;q=0.9';
   }
@@ -240,7 +240,7 @@ async function fetchUrl<T>(url: string, accept: string, resourceType: string, lo
 
 const fetchJson = async <T>(url: string, locale?: string): Promise<T> =>
   await fetchUrl<T>(url, 'application/json', 'Resource', locale);
-const fetchHtml = async (url: string, locale?: string): Promise<string> =>
+export const fetchHtml = async (url: string, locale?: string): Promise<string> =>
   await fetchUrl<string>(url, 'text/html,application/xhtml+xml', 'Article', locale);
 
 /**

@@ -228,7 +228,7 @@ export function registerGetTocTool(server: McpServer): void {
           }
         }
 
-        await reportProgress(extra, 0, 100);
+        await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
         const tocResult = await fetchTableOfContents(productId, version, {
           ...(params.page !== undefined && { page: params.page }),
@@ -236,7 +236,7 @@ export function registerGetTocTool(server: McpServer): void {
           locale: params.language as LocaleId | undefined
         });
 
-        await reportProgress(extra, 50, 100);
+        await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
         const { toc, pagination, tokenInfo } = tocResult;
 
@@ -261,8 +261,10 @@ export function registerGetTocTool(server: McpServer): void {
 
         const versionNote = getVersionNote(params.version);
 
+        await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
+
         if (params.responseFormat === ResponseFormat.JSON) {
-          await reportProgress(extra, 100, 100);
+          await reportProgress(extra, { progress: 4, total: 4 });
           return {
             content: [{
               type: 'text',
@@ -281,7 +283,7 @@ export function registerGetTocTool(server: McpServer): void {
           markdown += `\n> **Version Note:** ${versionNote}\n`;
         }
 
-        await reportProgress(extra, 100, 100);
+        await reportProgress(extra, { progress: 4, total: 4 });
         return {
           content: [{
             type: 'text',

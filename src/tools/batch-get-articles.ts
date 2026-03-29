@@ -36,39 +36,8 @@ interface BatchSummary {
   failed: number;
 }
 
-// ============================================================================
-// Concurrency limiter
-// ============================================================================
-
-/**
- * Simple concurrency limiter (no external deps).
- * Runs async tasks with at most `limit` in parallel.
- */
-export async function limitConcurrency<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number
-): Promise<T[]> {
-  const results: T[] = [];
-  let nextIndex = 0;
-
-  async function worker(): Promise<void> {
-    while (nextIndex < tasks.length) {
-      const index = nextIndex++;
-      const task = tasks[index];
-      if (task !== undefined) {
-        results[index] = await task();
-      }
-    }
-  }
-
-  const workers: Promise<void>[] = [];
-  for (let i = 0; i < Math.min(limit, tasks.length); i++) {
-    workers.push(worker());
-  }
-  await Promise.all(workers);
-
-  return results;
-}
+import { limitConcurrency } from '../utils/concurrency.js';
+export { limitConcurrency };
 
 // ============================================================================
 // Token budget
@@ -210,7 +179,7 @@ export function registerBatchGetArticlesTool(server: McpServer): void {
       const perArticleTokens = distributeTokenBudget(totalMaxTokens, params.urls.length);
       const compact = params.outputMode === OutputMode.COMPACT;
 
-      await reportProgress(extra, 0, params.urls.length);
+      await reportProgress(extra, { progress: 0, total: params.urls.length, message: 'Starting batch fetch...' });
 
       let completedCount = 0;
 
@@ -224,12 +193,12 @@ export function registerBatchGetArticlesTool(server: McpServer): void {
             });
 
             completedCount++;
-            await reportProgress(extra, completedCount, params.urls.length);
+            await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });
 
             return { status: 'success', url: article.url, article };
           } catch (error) {
             completedCount++;
-            await reportProgress(extra, completedCount, params.urls.length);
+            await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });
 
             return { status: 'error', url, error: getSafeErrorMessage(error) };
           }

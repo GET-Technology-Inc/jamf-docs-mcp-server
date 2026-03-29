@@ -35,6 +35,8 @@ const LLMS_TXT = `# Jamf Docs MCP Server
 - jamf_docs_search: search documentation by keyword with product/topic filters
 - jamf_docs_get_article: retrieve full article content in markdown
 - jamf_docs_get_toc: browse table of contents for a product
+- jamf_docs_glossary_lookup: look up glossary terms with fuzzy matching
+- jamf_docs_batch_get_articles: retrieve multiple articles in a single request
 
 ## Resources
 - jamf://products — product list with metadata and versions

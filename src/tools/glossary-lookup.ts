@@ -11,6 +11,7 @@ import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../cons
 import type { ToolResult, GlossaryEntry, TokenInfo } from '../types.js';
 import { lookupGlossaryTerm } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
+import { reportProgress } from '../utils/progress.js';
 
 function formatEntryMarkdown(entry: GlossaryEntry): string {
   let output = `### ${sanitizeMarkdownText(entry.term)}\n\n`;
@@ -91,7 +92,7 @@ export function registerGlossaryLookupTool(server: McpServer): void {
         openWorldHint: true,
       },
     },
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       const parseResult = GlossaryLookupInputSchema.safeParse(args);
       if (!parseResult.success) {
         return {
@@ -112,12 +113,16 @@ export function registerGlossaryLookupTool(server: McpServer): void {
           };
         }
 
+        await reportProgress(extra, { progress: 0, total: 3, message: 'Looking up term...' });
+
         const result = await lookupGlossaryTerm({
           term: params.term,
           product: params.product as ProductId | undefined,
           language: params.language as LocaleId | undefined,
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
         });
+
+        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing matches...' });
 
         const structuredContent = {
           term: params.term,
@@ -131,6 +136,8 @@ export function registerGlossaryLookupTool(server: McpServer): void {
           truncated: result.tokenInfo.truncated,
         };
 
+        await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
+
         // No results
         if (result.entries.length === 0) {
           const productHint = params.product !== undefined
@@ -138,6 +145,7 @@ export function registerGlossaryLookupTool(server: McpServer): void {
             : '';
           const noResultText = `No glossary entries found for "${params.term}".${productHint}\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
 
+          await reportProgress(extra, { progress: 3, total: 3 });
           return {
             content: [{ type: 'text', text: noResultText }],
             structuredContent,
@@ -146,6 +154,7 @@ export function registerGlossaryLookupTool(server: McpServer): void {
 
         // JSON format
         if (params.responseFormat === ResponseFormat.JSON) {
+          await reportProgress(extra, { progress: 3, total: 3 });
           return {
             content: [{
               type: 'text',
@@ -177,6 +186,7 @@ export function registerGlossaryLookupTool(server: McpServer): void {
           markdown += formatTokenFooter(result.tokenInfo, result.totalMatches, result.entries.length);
         }
 
+        await reportProgress(extra, { progress: 3, total: 3 });
         return {
           content: [{ type: 'text', text: markdown }],
           structuredContent,

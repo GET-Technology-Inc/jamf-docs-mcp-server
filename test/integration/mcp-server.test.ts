@@ -149,6 +149,32 @@ describe('Jamf Docs MCP Server', () => {
       expect(result.isError).toBeUndefined();
       expect(result.content).toBeDefined();
     });
+
+    it('should not crash when calling search without progressToken', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'MDM enrollment' }
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toBeDefined();
+    });
+
+    it('should not crash when calling glossary_lookup without progressToken', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'MDM' }
+      });
+      expect(result.content).toBeDefined();
+    });
+
+    it('should not crash when calling list_products without progressToken', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: {}
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toBeDefined();
+    });
   });
 
   describe('prompts', () => {

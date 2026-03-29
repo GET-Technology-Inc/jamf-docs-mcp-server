@@ -12,6 +12,7 @@ import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInf
 import { searchDocumentation } from '../services/scraper.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
+import { reportProgress } from '../utils/progress.js';
 
 interface SearchFilters {
   product?: string;
@@ -296,7 +297,7 @@ export function registerSearchTool(server: McpServer): void {
         openWorldHint: true
       }
     },
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       // Parse and validate input
       const parseResult = SearchInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -328,6 +329,8 @@ export function registerSearchTool(server: McpServer): void {
           };
         }
 
+        await reportProgress(extra, { progress: 0, total: 3, message: 'Searching documentation...' });
+
         // Perform search
         const searchResult = await searchDocumentation({
           query: params.query,
@@ -340,6 +343,8 @@ export function registerSearchTool(server: McpServer): void {
           page: params.page,
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
+
+        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
 
         const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
 
@@ -357,8 +362,11 @@ export function registerSearchTool(server: McpServer): void {
           ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
+        await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
+
         // Handle no results with suggestions
         if (results.length === 0 && pagination.totalItems === 0) {
+          await reportProgress(extra, { progress: 3, total: 3 });
           return buildNoResultsResponse(
             params.query,
             params.product !== undefined,
@@ -378,6 +386,7 @@ export function registerSearchTool(server: McpServer): void {
             ...response,
             relevanceNote: 'Relevance scores are provided by the Zoomin Search API based on text matching. Higher values indicate stronger keyword matches.'
           };
+          await reportProgress(extra, { progress: 3, total: 3 });
           return {
             content: [{
               type: 'text',
@@ -399,6 +408,7 @@ export function registerSearchTool(server: McpServer): void {
           filterRelaxation, versionNote, truncatedContent
         );
 
+        await reportProgress(extra, { progress: 3, total: 3 });
         return {
           content: [{
             type: 'text',

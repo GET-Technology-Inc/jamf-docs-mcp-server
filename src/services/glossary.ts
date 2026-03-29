@@ -13,14 +13,13 @@
  */
 
 import Fuse from 'fuse.js';
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 
 import {
   CACHE_TTL,
+  SELECTORS,
   TOKEN_CONFIG,
-  REQUEST_CONFIG,
   DEFAULT_LOCALE,
   type ProductId,
   type LocaleId,
@@ -31,10 +30,16 @@ import type {
   SearchParams,
   TokenInfo,
 } from '../types.js';
-import { searchDocumentation } from './scraper.js';
+import {
+  searchDocumentation,
+  fetchHtml,
+  transformToBackendUrl,
+  transformToFrontendUrl,
+} from './scraper.js';
 import { cache } from './cache.js';
 import { createLogger } from './logging.js';
 import { estimateTokens } from './tokenizer.js';
+import { limitConcurrency } from '../utils/concurrency.js';
 
 const log = createLogger('glossary');
 
@@ -43,29 +48,6 @@ const turndown = new TurndownService({
   codeBlockStyle: 'fenced',
   bulletListMarker: '-',
 });
-
-function buildAcceptLanguage(locale: string): string {
-  if (locale === 'en-US') {
-    return 'en-US,en;q=0.9';
-  }
-  return `${locale},en;q=0.5`;
-}
-
-/**
- * Fetch raw HTML from a learn.jamf.com URL
- */
-async function fetchGlossaryHtml(url: string, locale: string): Promise<string> {
-  const fetchUrl = url.replace('learn.jamf.com', 'learn-be.jamf.com');
-  const response = await axios.get<string>(fetchUrl, {
-    timeout: REQUEST_CONFIG.TIMEOUT,
-    headers: {
-      'User-Agent': REQUEST_CONFIG.USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': buildAcceptLanguage(locale),
-    },
-  });
-  return response.data;
-}
 
 /**
  * Parse glossary entries from HTML content.
@@ -80,7 +62,7 @@ export function parseGlossaryEntries(html: string, sourceUrl: string, product?: 
   const $ = cheerio.load(html);
 
   // Remove unwanted elements
-  $('script, style, noscript, footer').remove();
+  $(SELECTORS.REMOVE).remove();
 
   // 1. Try DITA glossentry format (Jamf's actual structure)
   const ditaEntries = parseDitaGlossentry($, sourceUrl, product);
@@ -179,7 +161,7 @@ function parseDlFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: strin
 
 function parseHeadingFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: string): GlossaryEntry[] {
   const entries: GlossaryEntry[] = [];
-  const contentArea = $('article, .article-content, main article, #content').first();
+  const contentArea = $(SELECTORS.CONTENT).first();
   if (contentArea.length === 0) { return entries; }
 
   const headings = contentArea.find('h2, h3');
@@ -221,7 +203,7 @@ function parseFallbackFormat($: cheerio.CheerioAPI, sourceUrl: string, product?:
   const h1 = $('h1').first().text().trim();
   const termName = h1 !== '' ? h1 : 'Glossary';
 
-  const contentArea = $('article, .article-content, main article, #content').first();
+  const contentArea = $(SELECTORS.CONTENT).first();
   if (contentArea.length === 0) { return []; }
 
   const html = contentArea.html() ?? '';
@@ -310,21 +292,25 @@ export async function lookupGlossaryTerm(params: {
     };
   }
 
-  // Step 2: Fetch and parse glossary pages (with caching)
-  const allEntries: GlossaryEntry[] = [];
+  // Step 2: Fetch and parse glossary pages concurrently (with caching)
   const seenUrls = new Set<string>();
+  const uniqueResults = searchResult.results.filter(r => {
+    if (seenUrls.has(r.url)) { return false; }
+    seenUrls.add(r.url);
+    return true;
+  });
 
-  for (const result of searchResult.results) {
-    if (seenUrls.has(result.url)) { continue; }
-    seenUrls.add(result.url);
-
+  const tasks = uniqueResults.map(result => async () => {
     try {
-      const entries = await fetchAndParseGlossaryPage(result.url, locale, result.product ?? undefined);
-      allEntries.push(...entries);
+      return await fetchAndParseGlossaryPage(result.url, locale, result.product ?? undefined);
     } catch (error) {
       log.warning(`Failed to fetch glossary page ${result.url}: ${String(error)}`);
+      return [];
     }
-  }
+  });
+
+  const fetchedEntries = await limitConcurrency(tasks, 3);
+  const allEntries = fetchedEntries.flat();
 
   if (allEntries.length === 0) {
     return {
@@ -384,12 +370,13 @@ async function fetchAndParseGlossaryPage(
     return cached;
   }
 
-  // Fetch raw HTML for glossary-specific parsing
+  // Fetch raw HTML (reuses scraper's throttle + error handling)
   log.info(`Fetching glossary page: ${url}`);
-  const html = await fetchGlossaryHtml(url, locale);
+  const backendUrl = transformToBackendUrl(url);
+  const html = await fetchHtml(backendUrl, locale);
 
   // Transform URL to frontend format for display
-  const displayUrl = url.replace('learn-be.jamf.com', 'learn.jamf.com');
+  const displayUrl = transformToFrontendUrl(url);
   const entries = parseGlossaryEntries(html, displayUrl, product);
 
   // Cache parsed entries
