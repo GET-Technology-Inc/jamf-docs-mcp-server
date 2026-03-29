@@ -122,6 +122,46 @@ Nested content.`;
     expect(sections).toHaveLength(0);
   });
 
+  it('should strip empty anchor prefixes from section titles', () => {
+    const markdown = `## [](#)Payload Variables for Configuration Profiles
+
+Content here.`;
+    const sections = extractSections(markdown);
+    expect(sections[0]?.title).toBe('Payload Variables for Configuration Profiles');
+  });
+
+  it('should strip named anchor prefixes from section titles', () => {
+    const markdown = `## [](#payload-variables)Payload Variables
+
+Content here.`;
+    const sections = extractSections(markdown);
+    expect(sections[0]?.title).toBe('Payload Variables');
+  });
+
+  it('should keep anchor text when anchor has both text and id', () => {
+    const markdown = `## [Payload Variables](#payload-variables) Overview
+
+Content here.`;
+    const sections = extractSections(markdown);
+    expect(sections[0]?.title).toBe('Payload Variables Overview');
+  });
+
+  it('should not strip normal markdown links (non-anchor)', () => {
+    const markdown = `## See [Jamf Pro](https://learn.jamf.com) Documentation
+
+Content here.`;
+    const sections = extractSections(markdown);
+    expect(sections[0]?.title).toBe('See [Jamf Pro](https://learn.jamf.com) Documentation');
+  });
+
+  it('should handle multiple anchor patterns in one title', () => {
+    const markdown = `## [](#id1)First [](#id2)Second
+
+Content here.`;
+    const sections = extractSections(markdown);
+    expect(sections[0]?.title).toBe('First Second');
+  });
+
   it('should calculate token counts for each section', () => {
     const markdown = `# Short
 

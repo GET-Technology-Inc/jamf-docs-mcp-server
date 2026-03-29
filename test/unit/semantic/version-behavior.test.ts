@@ -1,14 +1,11 @@
 /**
  * Semantic tests for version parameter behavior with realistic data.
  *
- * Key insight: The Jamf API ignores the version parameter entirely.
- * searchDocumentation() doesn't pass version to the API, and results
- * always come from whatever version the API currently serves (e.g., 11.25.0).
- *
- * These tests verify that:
- * 1. Requesting version=11.0.0 does NOT filter out results with 11.25.0 URLs
- * 2. The versionNote is generated at the tool layer (not scraper layer)
- * 3. Realistic fixture data with mixed bundle versions passes through unfiltered
+ * Version filtering now works via follower_result:
+ * 1. Each search result has a follower_result array with all historical versions
+ * 2. When version is requested, the scraper selects the matching follower's URL
+ * 3. If no follower matches, falls back to leading_result
+ * 4. Version is extracted from bundle_id (e.g., "jamf-pro-documentation-11.25.0" → "11.25.0")
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -49,45 +46,35 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('version parameter — scraper layer', () => {
-  it('should NOT filter results by requested version (API ignores version)', async () => {
+describe('version parameter — scraper layer (follower_result matching)', () => {
+  it('should extract actual version from bundle_id instead of hardcoding current', async () => {
     const fixtureData = createRealisticSearchResponse();
     mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
 
-    // Request version=11.0.0, but fixture has 11.25.0, 11.13.0, current URLs
-    const result = await searchDocumentation({ query: 'jamf pro', version: '11.0.0' });
+    const result = await searchDocumentation({ query: 'jamf pro' });
 
-    // Results should include URLs from the API's actual version (11.25.0), not filtered to 11.0.0
-    const urlVersions = result.results
-      .map(r => {
-        const match = /documentation-(\d+\.\d+\.\d+)/.exec(r.url);
-        return match?.[1];
-      })
-      .filter(Boolean);
-
-    // Should have at least some versioned URLs that are NOT 11.0.0
-    if (urlVersions.length > 0) {
-      expect(urlVersions.some(v => v !== '11.0.0')).toBe(true);
-    }
+    // Results with versioned bundle_ids should have actual version numbers
+    const versionedResults = result.results.filter(r => r.version !== 'current');
+    expect(versionedResults.length).toBeGreaterThan(0);
   });
 
-  it('should return same result count regardless of version parameter', async () => {
+  it('should return results regardless of version parameter', async () => {
     const fixtureData = createRealisticSearchResponse();
 
-    // Call 1: with version=11.0.0
+    // Call 1: with version
     mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
-    const withVersion = await searchDocumentation({ query: 'jamf pro', version: '11.0.0' });
+    const withVersion = await searchDocumentation({ query: 'jamf pro', version: '11.13.0' });
 
     // Call 2: without version
     mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
     const withoutVersion = await searchDocumentation({ query: 'jamf pro' });
 
-    // Same fixture → same result count (version param has no effect at scraper level)
+    // Both should return results (version matching falls back to leading if no match)
     expect(withVersion.results.length).toBe(withoutVersion.results.length);
   });
 });
 
-describe('version parameter — tool layer (versionNote)', () => {
+describe('version parameter — tool layer (no versionNote)', () => {
   let client: Client;
   let server: McpServer;
 
@@ -103,22 +90,17 @@ describe('version parameter — tool layer (versionNote)', () => {
     await client.connect(clientTransport);
   });
 
-  it('should include versionNote in JSON when non-current version requested', async () => {
+  it('should include versionNote when requested version not found in followers', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_search',
-      arguments: { query: 'jamf pro', version: '11.0.0', responseFormat: 'json' },
+      arguments: { query: 'jamf pro', version: '99.0.0', responseFormat: 'json' },
     });
 
     const json = JSON.parse((result.content[0] as TextContent).text);
+    // 99.0.0 doesn't exist in fixture data → versionNote should be present
     expect(json.versionNote).toBeDefined();
-    expect(json.versionNote).toContain('current version content');
-
-    // Despite versionNote, results should still be present
+    expect(json.versionNote).toContain('not available');
     expect(json.results.length).toBeGreaterThan(0);
-    // All result versions should be 'current' (the API's actual behavior)
-    for (const r of json.results) {
-      expect(r.version).toBe('current');
-    }
   });
 
   it('should NOT include versionNote when version is "current"', async () => {
@@ -141,10 +123,10 @@ describe('version parameter — tool layer (versionNote)', () => {
     expect(json.versionNote).toBeUndefined();
   });
 
-  it('should include versionNote in markdown output', async () => {
+  it('should include versionNote in markdown output when version not found', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_search',
-      arguments: { query: 'jamf pro', version: '10.0.0' },
+      arguments: { query: 'jamf pro', version: '99.0.0' },
     });
 
     const text = (result.content[0] as TextContent).text;

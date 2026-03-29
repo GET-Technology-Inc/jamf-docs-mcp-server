@@ -251,6 +251,8 @@ export const REQUEST_CONFIG = {
 export const CONTENT_LIMITS = {
   MAX_SEARCH_RESULTS: 50,
   DEFAULT_SEARCH_RESULTS: 10,
+  FILTER_OVERFETCH_MULTIPLIER: 3,       // fetch 3× when client-side filters need post-filtering
+  FILTER_OVERFETCH_CAP: 150,            // absolute cap on over-fetched results
   MAX_CONTENT_LENGTH: 100000,           // 100KB
   MAX_SNIPPET_LENGTH: 500
 } as const;
@@ -471,42 +473,54 @@ export const JAMF_TOPICS = {
 export type TopicId = keyof typeof JAMF_TOPICS;
 
 // Document types for filtering search results by content category
+// Each type maps to a Zoomin API `content-*` label key
 export const DOC_TYPES = {
   'documentation': {
     name: 'Documentation',
     description: 'Main product documentation',
+    labelKey: 'content-techdocs',
   },
   'release-notes': {
     name: 'Release Notes',
     description: 'Version release notes and changelogs',
-    bundlePattern: /-release-notes/,
-  },
-  'install-guide': {
-    name: 'Installation Guide',
-    description: 'Installation and configuration guides',
-    bundlePattern: /-install-guide-/,
-  },
-  'technical-paper': {
-    name: 'Technical Paper',
-    description: 'Technical white papers and integration guides',
-    bundlePattern: /^technical-paper-/,
-  },
-  'configuration-guide': {
-    name: 'Configuration Guide',
-    description: 'Setup and configuration guides',
-    bundlePattern: /-configuration-guide|compliance-benchmarks|blueprints/,
+    labelKey: 'content-releasenotes',
   },
   'training': {
     name: 'Training',
     description: 'Training materials and video guides',
-    bundlePattern: /^training-|^jamf-100-|^jamf-170-/,
+    labelKey: 'content-training',
   },
-  'technical-article': {
-    name: 'Technical Article',
-    description: 'Technical articles and knowledge base content',
-    bundlePattern: /^technical-article-/,
+  'solution-guide': {
+    name: 'Solution Guide',
+    description: 'Solution guides and best practices',
+    labelKey: 'content-solutionguide',
+  },
+  'glossary': {
+    name: 'Glossary',
+    description: 'Technical glossary and terminology',
+    labelKey: 'content-glossary',
+  },
+  'getting-started': {
+    name: 'Getting Started',
+    description: 'Getting started guides and quickstart content',
+    labelKey: 'content-gettingstarted',
+  },
+  'archive': {
+    name: 'Archive',
+    description: 'Archived documentation from previous versions',
+    labelKey: 'content-archive',
   },
 } as const;
+
+// Forward mapping: docType enum value → API label key
+export const DOC_TYPE_LABEL_MAP: Record<DocTypeId, string> = Object.fromEntries(
+  Object.entries(DOC_TYPES).map(([id, dt]) => [id, dt.labelKey])
+) as Record<DocTypeId, string>;
+
+// Reverse mapping: API label key → docType enum value
+export const LABEL_TO_DOC_TYPE: Record<string, DocTypeId> = Object.fromEntries(
+  Object.entries(DOC_TYPES).map(([id, dt]) => [dt.labelKey, id])
+) as Record<string, DocTypeId>;
 
 export type DocTypeId = keyof typeof DOC_TYPES;
 

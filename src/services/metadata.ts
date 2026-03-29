@@ -16,6 +16,7 @@ import {
   CACHE_TTL,
   type ProductId
 } from '../constants.js';
+import { extractVersionFromBundleId } from '../utils/bundle.js';
 import { cache } from './cache.js';
 
 // ============================================================================
@@ -89,7 +90,6 @@ async function discoverProductVersions(productId: ProductId): Promise<string[]> 
     const apiUrl = `${DOCS_API_URL}/api/search?q=${encodeURIComponent(product.name)}&rpp=100`;
     const response = await fetchJson<ZoominSearchResult>(apiUrl);
 
-    const versionRegex = /-(\d+\.\d+\.\d+)$/;
     const bundlePrefix = `${product.bundleId}-`;
 
     for (const wrapper of response.Results) {
@@ -102,9 +102,9 @@ async function discoverProductVersions(productId: ProductId): Promise<string[]> 
 
       // Check if this is a versioned documentation bundle for our product
       if (bundleId.startsWith(bundlePrefix) || bundleId === product.bundleId) {
-        const match = versionRegex.exec(bundleId);
-        if (match?.[1] !== undefined) {
-          versions.add(match[1]);
+        const version = extractVersionFromBundleId(bundleId);
+        if (version !== null) {
+          versions.add(version);
         }
       }
     }
@@ -149,10 +149,7 @@ async function fetchProductMetadata(productId: ProductId): Promise<ProductMetada
         continue;
       }
 
-      // Extract version from bundle_id (e.g., "jamf-pro-documentation-11.24.0" → "11.24.0")
-      const versionRegex = /-(\d+\.\d+\.\d+)$/;
-      const versionMatch = versionRegex.exec(bundleId);
-      const latestVersion = versionMatch?.[1] ?? 'current';
+      const latestVersion = extractVersionFromBundleId(bundleId) ?? 'current';
 
       // Find product label key
       const productLabel = result?.labels?.find(l => l.key.startsWith('product-') && !l.key.includes('-'));

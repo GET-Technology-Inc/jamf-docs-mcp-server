@@ -17,6 +17,7 @@ import {
   DOCS_API_URL,
   JAMF_PRODUCTS,
   JAMF_TOPICS,
+  DOC_TYPE_LABEL_MAP,
   REQUEST_CONFIG,
   SELECTORS,
   CONTENT_LIMITS,
@@ -33,13 +34,15 @@ import {
   type TocEntry,
   type SearchParams,
   type ZoominSearchResponse,
+  type ZoominLeadingResult,
   type TokenInfo,
   type PaginationInfo,
   type ArticleSection,
   type FilterRelaxation,
   type TruncatedContentInfo
 } from '../types.js';
-import { inferDocType } from '../utils/doc-type.js';
+import { extractVersionFromBundleId } from '../utils/bundle.js';
+import { docTypeFromLabels } from '../utils/doc-type.js';
 import { cache } from './cache.js';
 import {
   estimateTokens,
@@ -279,25 +282,27 @@ interface SearchResultWithMeta {
   bundleSlug: string | null;
   bundleId: string;
   matchedTopics: TopicId[];
+  labelKeys: string[];
+  versionMatched: boolean;
 }
 
-/**
- * Check if a search result matches a topic based on keywords
- */
-function matchesTopic(result: SearchResult, topicId: TopicId): boolean {
-  const topic = JAMF_TOPICS[topicId];
-  const searchText = `${result.title} ${result.snippet}`.toLowerCase();
+/** Pre-computed lowercase keywords per topic (avoids repeated toLowerCase on static data) */
+const TOPIC_KEYWORDS_LOWER: Record<TopicId, string[]> = Object.fromEntries(
+  (Object.keys(JAMF_TOPICS) as TopicId[]).map(id => [
+    id,
+    JAMF_TOPICS[id].keywords.map(k => k.toLowerCase())
+  ])
+) as Record<TopicId, string[]>;
 
-  return topic.keywords.some(keyword =>
-    searchText.includes(keyword.toLowerCase())
-  );
-}
+const ALL_TOPIC_IDS = Object.keys(JAMF_TOPICS) as TopicId[];
+
+type FilterName = 'product' | 'topic' | 'docType';
 
 /**
  * Active filter definition for progressive relaxation
  */
 interface ActiveFilter {
-  name: string;
+  name: FilterName;
   value: string;
   apply: (results: SearchResultWithMeta[]) => SearchResultWithMeta[];
 }
@@ -321,7 +326,7 @@ function applyFiltersWithFallback(
   }
 
   // Progressive relaxation
-  const relaxOrder = ['docType', 'topic', 'product'];
+  const relaxOrder: FilterName[] = ['docType', 'topic', 'product'];
   const removed: string[] = [];
   const original: Record<string, string> = {};
 
@@ -359,6 +364,41 @@ function applyFiltersWithFallback(
 }
 
 /**
+ * Select the best result entry for the requested version from leading + followers.
+ * Returns the matching entry's URL, bundle_id, and whether the match was exact.
+ */
+function selectVersionedEntry(
+  leading: ZoominLeadingResult,
+  followers: ZoominLeadingResult[] | undefined,
+  requestedVersion: string | undefined
+): { url: string; bundleId: string; version: string; versionMatched: boolean } {
+  const leadingVersion = extractVersionFromBundleId(leading.bundle_id) ?? 'current';
+
+  // No version filter or 'current' — use leading
+  if (requestedVersion === undefined || requestedVersion === '' || requestedVersion === 'current') {
+    return { url: leading.url, bundleId: leading.bundle_id, version: leadingVersion, versionMatched: true };
+  }
+
+  // Check if leading already matches
+  if (leadingVersion === requestedVersion) {
+    return { url: leading.url, bundleId: leading.bundle_id, version: leadingVersion, versionMatched: true };
+  }
+
+  // Search followers for matching version
+  if (followers !== undefined && followers.length > 0) {
+    for (const follower of followers) {
+      const followerVersion = extractVersionFromBundleId(follower.bundle_id);
+      if (followerVersion === requestedVersion) {
+        return { url: follower.url, bundleId: follower.bundle_id, version: followerVersion, versionMatched: true };
+      }
+    }
+  }
+
+  // No match found — fallback to leading
+  return { url: leading.url, bundleId: leading.bundle_id, version: leadingVersion, versionMatched: false };
+}
+
+/**
  * Search response with token and pagination info
  */
 export interface SearchDocumentationResult {
@@ -366,6 +406,7 @@ export interface SearchDocumentationResult {
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
   filterRelaxation?: FilterRelaxation;
+  versionNote?: string;
   truncatedContent?: TruncatedContentInfo;
 }
 
@@ -382,8 +423,11 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   let allResults: SearchResultWithMeta[] | null = await cache.get<SearchResultWithMeta[]>(cacheKey);
 
   if (allResults === null) {
-    // Fetch more results to allow for filtering
-    const fetchLimit = CONTENT_LIMITS.MAX_SEARCH_RESULTS;
+    // Over-fetch when client-side filters (docType/version) are active
+    const hasClientFilter = params.docType !== undefined || (params.version !== undefined && params.version !== 'current');
+    const fetchLimit = hasClientFilter
+      ? Math.min(CONTENT_LIMITS.MAX_SEARCH_RESULTS * CONTENT_LIMITS.FILTER_OVERFETCH_MULTIPLIER, CONTENT_LIMITS.FILTER_OVERFETCH_CAP)
+      : CONTENT_LIMITS.MAX_SEARCH_RESULTS;
 
     // Build API URL with query params
     const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
@@ -410,38 +454,51 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
           return true;
         })
         .map(wrapper => {
-          const result = wrapper.leading_result;
+          const leading = wrapper.leading_result;
+
+          // Select versioned entry (leading or matching follower)
+          const versioned = selectVersionedEntry(
+            leading, wrapper.follower_result, params.version
+          );
 
           // Extract product from bundle_id
-          const bundleId = result.bundle_id;
+          const { bundleId } = versioned;
           const bundleMatch = /^(jamf-[a-z]+)-documentation/.exec(bundleId);
           const bundleSlug: string | null = bundleMatch?.[1] ?? null;
           const productEntry = bundleSlug !== null
             ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
             : null;
 
-          const resultTitle = result.title !== '' ? result.title : 'Untitled';
-          const resultProduct = productEntry !== null && productEntry !== undefined ? productEntry[1].name : (result.publication_title !== '' ? result.publication_title : 'Jamf');
-          const rawSnippet = stripHtml(result.snippet !== '' ? result.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH);
+          const resultTitle = leading.title !== '' ? leading.title : 'Untitled';
+          const resultProduct = productEntry !== null && productEntry !== undefined ? productEntry[1].name : (leading.publication_title !== '' ? leading.publication_title : 'Jamf');
+          const rawSnippet = stripHtml(leading.snippet !== '' ? leading.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH);
+
+          // Derive docType from labels instead of bundle_id regex
+          const { labels } = leading;
+          const labelKeys = (labels ?? []).map(l => l.key);
 
           const searchResult: SearchResult = {
             title: resultTitle,
-            url: transformToFrontendUrl(result.url !== '' ? result.url : ''),
+            url: transformToFrontendUrl(versioned.url !== '' ? versioned.url : ''),
             snippet: cleanSnippet(rawSnippet, resultTitle, resultProduct),
             product: resultProduct,
-            version: 'current',
-            docType: inferDocType(bundleId)
+            version: versioned.version,
+            docType: docTypeFromLabels(labels)
           };
 
-          if (result.score !== undefined) {
-            searchResult.relevance = result.score;
+          if (leading.score !== undefined) {
+            searchResult.relevance = leading.score;
           }
 
-          // Find matched topics
-          const matchedTopics: TopicId[] = (Object.keys(JAMF_TOPICS) as TopicId[])
-            .filter(topicId => matchesTopic(searchResult, topicId));
+          // Find matched topics (searchText lowercased once, keywords pre-computed)
+          const searchText = `${searchResult.title} ${searchResult.snippet}`.toLowerCase();
+          const matchedTopics: TopicId[] = ALL_TOPIC_IDS
+            .filter(topicId => TOPIC_KEYWORDS_LOWER[topicId].some(kw => searchText.includes(kw)));
 
-          return { result: searchResult, bundleSlug, bundleId, matchedTopics };
+          return {
+            result: searchResult, bundleSlug, bundleId, matchedTopics, labelKeys,
+            versionMatched: versioned.versionMatched
+          };
         });
 
       // Cache full results
@@ -489,10 +546,15 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   }
   if (params.docType !== undefined) {
     const docTypeFilter = params.docType;
+    const targetLabelKey = DOC_TYPE_LABEL_MAP[docTypeFilter];
     activeFilters.push({
       name: 'docType',
       value: docTypeFilter,
-      apply: (results) => results.filter(r => r.result.docType === docTypeFilter)
+      apply: (results) => results.filter(r => {
+        // If result has no labels, include it (don't filter out)
+        if (r.labelKeys.length === 0) {return true;}
+        return r.labelKeys.includes(targetLabelKey);
+      })
     });
   }
 
@@ -550,6 +612,16 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     };
   }
 
+  // Generate versionNote only when version was requested but not found in some results
+  const requestedVersion = params.version;
+  const hasVersionMismatch = requestedVersion !== undefined
+    && requestedVersion !== 'current'
+    && requestedVersion !== ''
+    && filteredResults.some(r => !r.versionMatched);
+  const versionNote = hasVersionMismatch
+    ? `Version "${requestedVersion}" was not available for some results. Showing the latest version instead.`
+    : undefined;
+
   return {
     results: finalResults,
     pagination: {
@@ -566,6 +638,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       maxTokens
     },
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+    ...(versionNote !== undefined ? { versionNote } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {})
   };
 }

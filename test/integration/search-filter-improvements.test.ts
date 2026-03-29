@@ -129,10 +129,10 @@ describe('Integration: Search filter fallback flow', () => {
     expect(text).toContain('Removed filter');
   });
 
-  it('should include versionNote in JSON when non-current version used', async () => {
+  it('should not include versionNote when requested version was found', async () => {
     vi.mocked(searchDocumentation).mockResolvedValue({
       results: [
-        { title: 'Test', url: 'https://learn.jamf.com/t.html', snippet: 'Test content for version transparency testing', product: 'Jamf Pro', version: 'current' },
+        { title: 'Test', url: 'https://learn.jamf.com/t.html', snippet: 'Test content for version transparency testing', product: 'Jamf Pro', version: '11.0.0' },
       ],
       pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
       tokenInfo: { tokenCount: 20, truncated: false, maxTokens: 5000 },
@@ -144,8 +144,28 @@ describe('Integration: Search filter fallback flow', () => {
     });
 
     const json = JSON.parse(getText(result));
+    // versionNote is only set by scraper when version mismatch occurs; mock doesn't include it
+    expect(json.versionNote).toBeUndefined();
+  });
+
+  it('should include versionNote when requested version was not available', async () => {
+    vi.mocked(searchDocumentation).mockResolvedValue({
+      results: [
+        { title: 'Test', url: 'https://learn.jamf.com/t.html', snippet: 'Test content', product: 'Jamf Pro', version: 'current' },
+      ],
+      pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
+      tokenInfo: { tokenCount: 20, truncated: false, maxTokens: 5000 },
+      versionNote: 'Version "99.0.0" was not available for some results. Showing the latest version instead.',
+    });
+
+    const result = await client.callTool({
+      name: 'jamf_docs_search',
+      arguments: { query: 'test', version: '99.0.0', responseFormat: 'json' },
+    });
+
+    const json = JSON.parse(getText(result));
     expect(json.versionNote).toBeDefined();
-    expect(json.versionNote).toContain('current version content');
+    expect(json.versionNote).toContain('not available');
   });
 
   it('should include truncatedContent in JSON when search results truncated', async () => {
@@ -290,7 +310,7 @@ describe('Integration: list_products with hasContent', () => {
     }
   });
 
-  it('should mark jamf-routines as hasContent=false', async () => {
+  it('should exclude jamf-routines (hasContent=false) from product list', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
       arguments: { responseFormat: 'json' },
@@ -298,11 +318,10 @@ describe('Integration: list_products with hasContent', () => {
 
     const json = JSON.parse(getText(result));
     const routines = json.products.find((p: { id: string }) => p.id === 'jamf-routines');
-    expect(routines).toBeDefined();
-    expect(routines.hasContent).toBe(false);
+    expect(routines).toBeUndefined();
   });
 
-  it('should mark jamf-pro as hasContent=true', async () => {
+  it('should include jamf-pro (hasContent=true) in product list', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
       arguments: { responseFormat: 'json' },
@@ -314,23 +333,23 @@ describe('Integration: list_products with hasContent', () => {
     expect(pro.hasContent).toBe(true);
   });
 
-  it('should show "No documentation content available" in markdown for empty products', async () => {
+  it('should not show empty products in markdown output', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
       arguments: {},
     });
 
     const text = getText(result);
-    expect(text).toContain('No documentation content available');
+    expect(text).not.toContain('Jamf Routines');
   });
 
-  it('should include technical-article in docType list', async () => {
+  it('should include solution-guide in docType list', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
       arguments: {},
     });
 
     const text = getText(result);
-    expect(text).toContain('technical-article');
+    expect(text).toContain('solution-guide');
   });
 });

@@ -1,17 +1,28 @@
 /**
- * Document type inference utility
+ * Document type utilities based on API result labels
  */
 
-import { DOC_TYPES, type DocTypeId } from '../constants.js';
+import { LABEL_TO_DOC_TYPE, type DocTypeId } from '../constants.js';
+import type { ZoominLabel } from '../types.js';
 
 /**
- * Infer document type from bundle ID using pattern matching
+ * Derive document type from result labels.
+ * Finds the first `content-*` label key that matches a known docType.
+ * Falls back to 'documentation' if no match found.
  */
-export function inferDocType(bundleId: string): DocTypeId {
-  for (const [id, docType] of Object.entries(DOC_TYPES)) {
-    if ('bundlePattern' in docType && docType.bundlePattern.test(bundleId)) {
-      return id as DocTypeId;
+export function docTypeFromLabels(labels: ZoominLabel[] | undefined | null): DocTypeId {
+  if (labels === undefined || labels === null || labels.length === 0) {
+    return 'documentation';
+  }
+
+  for (const label of labels) {
+    if (label.key.startsWith('content-')) {
+      const docType = LABEL_TO_DOC_TYPE[label.key];
+      if (docType !== undefined) {
+        return docType;
+      }
     }
   }
+
   return 'documentation';
 }

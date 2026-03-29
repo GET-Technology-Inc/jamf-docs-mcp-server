@@ -90,7 +90,7 @@ export const SearchInputSchema = z.object({
 
   docType: z.enum(DOC_TYPE_IDS)
     .optional()
-    .describe('Filter by document type: documentation, release-notes, install-guide, technical-paper, configuration-guide, training'),
+    .describe('Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started, archive'),
 
   limit: z.number()
     .int()

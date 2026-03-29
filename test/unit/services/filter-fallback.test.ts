@@ -15,7 +15,7 @@ vi.mock('../../../src/services/cache.js', () => ({
   },
 }));
 
-function makeSearchResponse(results: { title: string; url: string; snippet: string; bundle_id: string; score?: number }[]): object {
+function makeSearchResponse(results: { title: string; url: string; snippet: string; bundle_id: string; score?: number; labels?: { key: string }[] }[]): object {
   return {
     status: 'OK',
     Results: results.map(r => ({
@@ -27,6 +27,7 @@ function makeSearchResponse(results: { title: string; url: string; snippet: stri
         page_id: 'page-1',
         publication_title: 'Jamf Docs',
         score: r.score ?? 1.0,
+        labels: r.labels,
       },
     })),
     Pagination: { CurrentPage: 1, TotalPages: 1, ResultsPerPage: 50, TotalResults: results.length },
@@ -47,11 +48,12 @@ describe('Search filter fallback', () => {
           url: 'https://learn-be.jamf.com/article.html',
           snippet: 'MDM enrollment configuration profile for device management',
           bundle_id: 'jamf-pro-documentation',
+          labels: [{ key: 'content-techdocs' }],
         },
       ]),
     });
 
-    // product=jamf-pro matches, but docType=release-notes does not
+    // product=jamf-pro matches, but docType=release-notes does not (result has content-techdocs)
     const result = await searchDocumentation({
       query: 'enrollment',
       product: 'jamf-pro',
@@ -126,6 +128,7 @@ describe('Search filter fallback', () => {
           url: 'https://learn-be.jamf.com/gen.html',
           snippet: 'Some generic content about various topics in device management',
           bundle_id: 'jamf-school-documentation',
+          labels: [{ key: 'content-techdocs' }],
         },
       ]),
     });

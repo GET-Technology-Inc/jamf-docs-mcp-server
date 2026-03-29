@@ -374,7 +374,9 @@ describe('Jamf Docs MCP Server', () => {
       const json = JSON.parse(text);
 
       expect(json.products).toBeDefined();
-      expect(json.products.length).toBe(12);
+      // Products with no TOC content are filtered out; count may vary
+      expect(json.products.length).toBeGreaterThanOrEqual(8);
+      expect(json.products.length).toBeLessThanOrEqual(12);
       expect(json.topics).toBeDefined();
       expect(json.topics.length).toBeGreaterThan(30);
       expect(json.tokenInfo).toBeDefined();

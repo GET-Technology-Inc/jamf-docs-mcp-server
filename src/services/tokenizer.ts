@@ -114,8 +114,11 @@ export function extractSections(content: string): ArticleSection[] {
 
     if (headingMatch !== null) {
       saveCurrentSection();
+      // Turndown converts HTML anchors inside headings to markdown links — strip them for clean titles
+      const rawTitle = headingMatch[2]?.trim() ?? '';
+      const cleanTitle = rawTitle.replace(/\[([^\]]*)\]\(#[^)]*\)/g, '$1').trim();
       currentSection = {
-        title: headingMatch[2]?.trim() ?? '',
+        title: cleanTitle,
         level: headingMatch[1]?.length ?? 1
       };
       sectionContent = `${line}\n`;
@@ -223,6 +226,7 @@ export function truncateToTokenLimit(
   const truncatedLines: string[] = [];
   let runningTokens = 0;
   let inCodeBlock = false;
+  let includedSectionCount = 0;
 
   // Reserve tokens for truncation notice and remaining sections list
   const reservedTokens = Math.min(500, Math.floor(maxTokens * 0.1));
@@ -246,14 +250,17 @@ export function truncateToTokenLimit(
 
     truncatedLines.push(line);
     runningTokens += lineTokens;
+
+    // Count headings to track which sections were included
+    if (/^#{1,6}\s+/.test(line)) {
+      includedSectionCount++;
+    }
   }
 
-  // Find remaining sections (sections not fully included)
   const truncatedContent = truncatedLines.join('\n');
-  const includedSections = extractSections(truncatedContent);
-  const includedIds = new Set(includedSections.map(s => s.id));
 
-  const remainingSections = allSections.filter(s => !includedIds.has(s.id));
+  // Sections are ordered linearly — headings seen in truncated content map 1:1
+  const remainingSections = allSections.slice(includedSectionCount);
 
   // Build truncation notice
   let notice = '\n\n---\n\n*[Content truncated due to token limit]*\n';

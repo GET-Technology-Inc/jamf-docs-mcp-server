@@ -1,61 +1,78 @@
 /**
- * Unit tests for inferDocType function
+ * Unit tests for docTypeFromLabels function
  */
 
 import { describe, it, expect } from 'vitest';
-import { inferDocType } from '../../src/utils/doc-type.js';
+import { docTypeFromLabels } from '../../src/utils/doc-type.js';
 
-describe('inferDocType', () => {
-  it('should return "documentation" for standard product bundles', () => {
-    expect(inferDocType('jamf-pro-documentation')).toBe('documentation');
-    expect(inferDocType('jamf-pro-documentation-11.25.0')).toBe('documentation');
-    expect(inferDocType('jamf-connect-documentation-current')).toBe('documentation');
-    expect(inferDocType('jamf-school-documentation')).toBe('documentation');
+describe('docTypeFromLabels', () => {
+  it('should return "documentation" for content-techdocs label', () => {
+    expect(docTypeFromLabels([{ key: 'content-techdocs' }])).toBe('documentation');
   });
 
-  it('should return "release-notes" for release notes bundles', () => {
-    expect(inferDocType('jamf-pro-release-notes-11.25.0')).toBe('release-notes');
-    expect(inferDocType('jamf-pro-release-notes-11.25.1')).toBe('release-notes');
-    expect(inferDocType('jamf-connect-release-notes')).toBe('release-notes');
-    expect(inferDocType('jamf-protect-release-notes')).toBe('release-notes');
-    expect(inferDocType('jamf-school-release-notes')).toBe('release-notes');
+  it('should return "release-notes" for content-releasenotes label', () => {
+    expect(docTypeFromLabels([{ key: 'content-releasenotes' }])).toBe('release-notes');
   });
 
-  it('should return "install-guide" for installation guide bundles', () => {
-    expect(inferDocType('jamf-pro-install-guide-windows-11.25.0')).toBe('install-guide');
-    expect(inferDocType('jamf-pro-install-guide-linux-11.25.0')).toBe('install-guide');
-    expect(inferDocType('jamf-pro-install-guide-windows-current')).toBe('install-guide');
+  it('should return "training" for content-training label', () => {
+    expect(docTypeFromLabels([{ key: 'content-training' }])).toBe('training');
   });
 
-  it('should return "technical-paper" for technical paper bundles', () => {
-    expect(inferDocType('technical-paper-deploying-macos-upgrades-current')).toBe('technical-paper');
-    expect(inferDocType('technical-paper-splunk-current')).toBe('technical-paper');
-    expect(inferDocType('technical-paper-microsoft-intune-current')).toBe('technical-paper');
-    expect(inferDocType('technical-paper-aws-verified-access')).toBe('technical-paper');
+  it('should return "solution-guide" for content-solutionguide label', () => {
+    expect(docTypeFromLabels([{ key: 'content-solutionguide' }])).toBe('solution-guide');
   });
 
-  it('should return "configuration-guide" for config guide bundles', () => {
-    expect(inferDocType('jamf-pro-blueprints-configuration-guide')).toBe('configuration-guide');
-    expect(inferDocType('jamf-compliance-benchmarks-configuration-guide')).toBe('configuration-guide');
-    expect(inferDocType('jamf-teacher-configuration-guide')).toBe('configuration-guide');
+  it('should return "glossary" for content-glossary label', () => {
+    expect(docTypeFromLabels([{ key: 'content-glossary' }])).toBe('glossary');
   });
 
-  it('should return "training" for training content bundles', () => {
-    expect(inferDocType('training-video-shorts-jamf-pro')).toBe('training');
-    expect(inferDocType('training-video-shorts-jamf-school')).toBe('training');
-    expect(inferDocType('jamf-100-course-current')).toBe('training');
-    expect(inferDocType('jamf-170-course-current')).toBe('training');
+  it('should return "getting-started" for content-gettingstarted label', () => {
+    expect(docTypeFromLabels([{ key: 'content-gettingstarted' }])).toBe('getting-started');
   });
 
-  it('should return "technical-article" for technical article bundles', () => {
-    expect(inferDocType('technical-article-device-compliance')).toBe('technical-article');
-    expect(inferDocType('technical-article-macos-security-compliance')).toBe('technical-article');
-    expect(inferDocType('technical-article-byod-current')).toBe('technical-article');
+  it('should return "archive" for content-archive label', () => {
+    expect(docTypeFromLabels([{ key: 'content-archive' }])).toBe('archive');
   });
 
-  it('should return "documentation" for unknown bundle patterns', () => {
-    expect(inferDocType('unknown-bundle')).toBe('documentation');
-    expect(inferDocType('')).toBe('documentation');
-    expect(inferDocType('jamf-technical-glossary')).toBe('documentation');
+  it('should use first content-* match when multiple labels present', () => {
+    const labels = [
+      { key: 'product-pro' },
+      { key: 'content-releasenotes' },
+      { key: 'content-techdocs' },
+    ];
+    expect(docTypeFromLabels(labels)).toBe('release-notes');
+  });
+
+  it('should skip non-content labels', () => {
+    const labels = [
+      { key: 'product-pro' },
+      { key: 'product-pro-11.25.0' },
+      { key: 'content-techdocs' },
+    ];
+    expect(docTypeFromLabels(labels)).toBe('documentation');
+  });
+
+  it('should return "documentation" for undefined labels', () => {
+    expect(docTypeFromLabels(undefined)).toBe('documentation');
+  });
+
+  it('should return "documentation" for null labels', () => {
+    expect(docTypeFromLabels(null)).toBe('documentation');
+  });
+
+  it('should return "documentation" for empty labels array', () => {
+    expect(docTypeFromLabels([])).toBe('documentation');
+  });
+
+  it('should return "documentation" for unknown content-* label', () => {
+    expect(docTypeFromLabels([{ key: 'content-unknown' }])).toBe('documentation');
+  });
+
+  it('should return "documentation" for labels with no content-* keys', () => {
+    const labels = [
+      { key: 'product-pro' },
+      { key: 'product-pro-11.25.0' },
+    ];
+    expect(docTypeFromLabels(labels)).toBe('documentation');
   });
 });
