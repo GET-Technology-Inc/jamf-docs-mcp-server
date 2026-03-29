@@ -236,13 +236,9 @@ describe('GetArticleInputSchema', () => {
   });
 
   it('should reject http: protocol URL (non-https jamf domain)', () => {
-    // Even a jamf domain URL with http should fail the .url() + domain check
-    // Note: the refine check looks for 'docs.jamf.com' or 'learn.jamf.com' in the URL
-    // An http URL still passes refine but may be tested differently
-    // The schema only enforces domain, not protocol in refine, but .url() accepts http
+    // isAllowedHostname now enforces https: protocol in addition to hostname
     const result = GetArticleInputSchema.safeParse({ url: 'http://learn.jamf.com/page.html' });
-    // http: is a valid URL format, and learn.jamf.com passes the domain check, so it succeeds
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 });
 

@@ -23,8 +23,10 @@ import {
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
+  DEFAULT_LOCALE,
   type ProductId,
-  type TopicId
+  type TopicId,
+  type LocaleId
 } from '../constants.js';
 import {
   JamfDocsError,
@@ -200,9 +202,19 @@ function handleAxiosError(error: AxiosError, url: string, resourceType: string):
 }
 
 /**
+ * Build Accept-Language header value for a given locale
+ */
+function buildAcceptLanguage(locale: string): string {
+  if (locale === 'en-US') {
+    return 'en-US,en;q=0.9';
+  }
+  return `${locale},en;q=0.5`;
+}
+
+/**
  * Fetch data from a URL with error handling
  */
-async function fetchUrl<T>(url: string, accept: string, resourceType: string): Promise<T> {
+async function fetchUrl<T>(url: string, accept: string, resourceType: string, locale?: string): Promise<T> {
   await throttle();
 
   try {
@@ -211,7 +223,7 @@ async function fetchUrl<T>(url: string, accept: string, resourceType: string): P
       headers: {
         'User-Agent': REQUEST_CONFIG.USER_AGENT,
         'Accept': accept,
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': buildAcceptLanguage(locale ?? DEFAULT_LOCALE)
       }
     });
     return response.data;
@@ -223,8 +235,10 @@ async function fetchUrl<T>(url: string, accept: string, resourceType: string): P
   }
 }
 
-const fetchJson = async <T>(url: string): Promise<T> => await fetchUrl<T>(url, 'application/json', 'Resource');
-const fetchHtml = async (url: string): Promise<string> => await fetchUrl<string>(url, 'text/html,application/xhtml+xml', 'Article');
+const fetchJson = async <T>(url: string, locale?: string): Promise<T> =>
+  await fetchUrl<T>(url, 'application/json', 'Resource', locale);
+const fetchHtml = async (url: string, locale?: string): Promise<string> =>
+  await fetchUrl<string>(url, 'text/html,application/xhtml+xml', 'Article', locale);
 
 /**
  * Clean HTML content by removing unwanted elements
@@ -254,7 +268,7 @@ function cleanHtml($: cheerio.CheerioAPI): void {
  * Supports both old docs.jamf.com and new learn.jamf.com URL structures
  */
 function extractProductInfo(url: string): { product: string | undefined; version: string | undefined } {
-  // learn.jamf.com structure: /en-US/bundle/{product}-documentation/page/{page}.html
+  // learn.jamf.com structure: /{locale}/bundle/{product}-documentation/page/{page}.html
   const bundleMatch = /\/bundle\/([^/]+)-documentation\//.exec(url);
   if (bundleMatch !== null) {
     const product = Object.values(JAMF_PRODUCTS).find(p => p.bundleId.includes(bundleMatch[1] ?? ''));
@@ -417,7 +431,12 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
   const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const cacheKey = `search:${JSON.stringify({ ...params, page: 1 })}`; // Cache without page for full results
+  const locale = params.language ?? DEFAULT_LOCALE;
+  const cacheKey = `${locale}:search:${JSON.stringify({
+    query: params.query, product: params.product, topic: params.topic,
+    docType: params.docType, version: params.version, limit: params.limit,
+    maxTokens: params.maxTokens, page: 1
+  })}`;
 
   // Check cache for full results
   let allResults: SearchResultWithMeta[] | null = await cache.get<SearchResultWithMeta[]>(cacheKey);
@@ -433,11 +452,14 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
     apiUrl.searchParams.set('q', params.query);
     apiUrl.searchParams.set('rpp', fetchLimit.toString());
+    if (locale !== DEFAULT_LOCALE) {
+      apiUrl.searchParams.set('lang', locale);
+    }
 
-    console.error(`[SEARCH] Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, URL: ${apiUrl.toString()}`);
+    console.error(`[SEARCH] Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
 
     try {
-      const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString());
+      const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString(), locale);
 
       // Transform Zoomin results to SearchResult format with metadata
       allResults = response.Results
@@ -651,6 +673,7 @@ export interface FetchArticleOptions {
   section?: string;
   summaryOnly?: boolean;
   maxTokens?: number;
+  locale?: LocaleId | undefined;
 }
 
 /**
@@ -670,18 +693,19 @@ export async function fetchArticle(
   options: FetchArticleOptions = {}
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+  const locale = options.locale ?? DEFAULT_LOCALE;
 
   // Store original URL for display, use backend URL for fetching
   const displayUrl = transformToFrontendUrl(url);
   const articleFetchUrl = transformToBackendUrl(url);
-  const cacheKey = `article:${displayUrl}`;
+  const cacheKey = `${locale}:article:${displayUrl}`;
 
   // Check cache for raw article (without section/token processing)
   let rawArticle = await cache.get<ParsedArticle>(cacheKey);
 
   if (rawArticle === null) {
     // Fetch HTML from backend URL (pre-rendered content, not SPA shell)
-    const html = await fetchHtml(articleFetchUrl);
+    const html = await fetchHtml(articleFetchUrl, locale);
     const $ = cheerio.load(html);
 
     // Clean content
@@ -872,6 +896,7 @@ function parseTocEntry($: cheerio.CheerioAPI, el: Element): TocEntry | null {
 export interface FetchTocOptions {
   page?: number;
   maxTokens?: number;
+  locale?: LocaleId | undefined;
 }
 
 /**
@@ -910,7 +935,8 @@ export async function fetchTableOfContents(
 ): Promise<FetchTocResult> {
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const cacheKey = `toc:${product}:${version}`;
+  const locale = options.locale ?? DEFAULT_LOCALE;
+  const cacheKey = `${locale}:toc:${product}:${version}`;
 
   // Check cache
   let allToc = await cache.get<TocEntry[]>(cacheKey);
@@ -931,9 +957,9 @@ export async function fetchTableOfContents(
 
     // Fetch TOC from backend
     const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
-    console.error(`[TOC] Fetching TOC from: ${tocUrl}`);
+    console.error(`[TOC] Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
 
-    const tocJson = await fetchJson<Record<string, string>>(tocUrl);
+    const tocJson = await fetchJson<Record<string, string>>(tocUrl, locale);
 
     // Parse TOC
     allToc = [];

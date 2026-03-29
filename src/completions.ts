@@ -2,7 +2,7 @@
  * Completion utilities for argument autocompletion
  */
 
-import { JAMF_PRODUCTS, PRODUCT_IDS, TOPIC_IDS, type ProductId } from './constants.js';
+import { JAMF_PRODUCTS, PRODUCT_IDS, TOPIC_IDS, SUPPORTED_LOCALE_IDS, type ProductId } from './constants.js';
 import { getAvailableVersions } from './services/metadata.js';
 
 /**
@@ -27,6 +27,12 @@ export function completeTopic(
   value: string | undefined
 ): string[] {
   return filterMatches(TOPIC_IDS, value ?? '');
+}
+
+export function completeLanguage(
+  value: string | undefined
+): string[] {
+  return filterMatches(SUPPORTED_LOCALE_IDS, value ?? '');
 }
 
 export async function completeVersion(
