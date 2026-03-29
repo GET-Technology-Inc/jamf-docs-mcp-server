@@ -17,6 +17,9 @@ import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
 import { SERVER_ICON, SERVER_VERSION } from './constants.js';
 import { parseCliArgs } from './transport/index.js';
+import { createLogger, setServer } from './services/logging.js';
+
+const log = createLogger('server');
 
 // Server instructions for AI clients
 const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect.
@@ -49,8 +52,13 @@ const server = new McpServer(
   },
   {
     instructions: SERVER_INSTRUCTIONS,
+    capabilities: {
+      logging: {},
+    },
   },
 );
+
+setServer(server);
 
 // Register all tools
 registerListProductsTool(server);
@@ -75,14 +83,15 @@ async function main(): Promise<void> {
     const transport = new StdioServerTransport();
     await server.connect(transport);
 
-    console.error('Jamf Docs MCP Server running on stdio');
-    console.error('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc');
-    console.error('Available resources: jamf://products, jamf://topics');
-    console.error('Available prompts: jamf_troubleshoot, jamf_setup_guide, jamf_compare_versions');
+    log.info('Jamf Docs MCP Server running on stdio');
+    log.info('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc');
+    log.info('Available resources: jamf://products, jamf://topics');
+    log.info('Available prompts: jamf_troubleshoot, jamf_setup_guide, jamf_compare_versions');
   }
 }
 
 main().catch((error: unknown) => {
-  console.error('Fatal error:', error);
+  const message = error instanceof Error ? error.stack ?? String(error) : String(error);
+  log.emergency(`Fatal error: ${message}`);
   process.exit(1);
 });

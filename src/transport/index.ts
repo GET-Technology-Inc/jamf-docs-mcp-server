@@ -2,6 +2,10 @@
  * Transport configuration and CLI argument parsing
  */
 
+import { createLogger } from '../services/logging.js';
+
+const log = createLogger('transport');
+
 export interface TransportArgs {
   transport: 'stdio' | 'http';
   port: number;
@@ -23,7 +27,7 @@ export function parseCliArgs(argv: string[]): TransportArgs {
     const next = argv[i + 1];
     if (arg === '--transport' && next !== undefined) {
       if (next !== 'stdio' && next !== 'http') {
-        console.error(`Invalid transport: "${next}". Must be "stdio" or "http".`);
+        log.error(`Invalid transport: "${next}". Must be "stdio" or "http".`);
         process.exit(1);
       }
       args.transport = next;
@@ -31,7 +35,7 @@ export function parseCliArgs(argv: string[]): TransportArgs {
     } else if (arg === '--port' && next !== undefined) {
       const port = parseInt(next, 10);
       if (isNaN(port) || port < 1 || port > 65535) {
-        console.error(`Invalid port: "${next}". Must be 1-65535.`);
+        log.error(`Invalid port: "${next}". Must be 1-65535.`);
         process.exit(1);
       }
       args.port = port;

@@ -187,7 +187,7 @@ describe('startHttpServer', () => {
     await startHttpServer(mockMcpServer as any, 3000, '0.0.0.0');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
-      String(args[0]).includes('SECURITY WARNING')
+      String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
     );
     expect(warningLogged).toBe(true);
     consoleSpy.mockRestore();
@@ -198,7 +198,7 @@ describe('startHttpServer', () => {
     await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
-      String(args[0]).includes('SECURITY WARNING')
+      String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
     );
     expect(warningLogged).toBe(false);
     consoleSpy.mockRestore();
@@ -209,7 +209,7 @@ describe('startHttpServer', () => {
     await startHttpServer(mockMcpServer as any, 3000, '::1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
-      String(args[0]).includes('SECURITY WARNING')
+      String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
     );
     expect(warningLogged).toBe(false);
     consoleSpy.mockRestore();

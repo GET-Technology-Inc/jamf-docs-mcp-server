@@ -9,6 +9,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { SERVER_VERSION, getEnvNumber } from '../constants.js';
+import { createLogger } from '../services/logging.js';
+
+const log = createLogger('http');
 
 const SHUTDOWN_TIMEOUT = 10_000;
 const MAX_BODY_SIZE = 1_048_576; // 1MB
@@ -241,16 +244,16 @@ export async function startHttpServer(
       return;
     }
     shuttingDown = true;
-    console.error(`\n${signal} received, shutting down...`);
+    log.info(`${signal} received, shutting down...`);
 
     httpServer.close(() => {
-      console.error('HTTP server closed');
+      log.info('HTTP server closed');
       process.exit(0);
     });
 
     // Force exit after timeout
     setTimeout(() => {
-      console.error('Shutdown timeout, forcing exit');
+      log.warning('Shutdown timeout, forcing exit');
       process.exit(1);
     }, SHUTDOWN_TIMEOUT);
   }
@@ -262,7 +265,7 @@ export async function startHttpServer(
   await new Promise<void>((resolve, reject) => {
     httpServer.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${port} is already in use`);
+        log.error(`Port ${port} is already in use`);
         process.exit(1);
       }
       reject(error);
@@ -270,11 +273,11 @@ export async function startHttpServer(
 
     httpServer.listen(port, host, () => {
       if (host !== '127.0.0.1' && host !== '::1') {
-        console.error(`[SECURITY WARNING] Server is binding to ${host}, which exposes it to the network. Use 127.0.0.1 for local-only access.`);
+        log.warning(`Server is binding to ${host}, which exposes it to the network. Use 127.0.0.1 for local-only access.`);
       }
-      console.error(`Jamf Docs MCP Server running on http://${host}:${port}`);
-      console.error(`MCP endpoint: http://${host}:${port}/mcp`);
-      console.error(`Health check: http://${host}:${port}/health`);
+      log.info(`Jamf Docs MCP Server running on http://${host}:${port}`);
+      log.info(`MCP endpoint: http://${host}:${port}/mcp`);
+      log.info(`Health check: http://${host}:${port}/health`);
       resolve();
     });
   });

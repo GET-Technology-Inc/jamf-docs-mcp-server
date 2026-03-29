@@ -46,6 +46,7 @@ import {
 import { extractVersionFromBundleId, extractProductSlug } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
 import { cache } from './cache.js';
+import { createLogger } from './logging.js';
 import {
   estimateTokens,
   createTokenInfo,
@@ -56,6 +57,8 @@ import {
   calculatePagination
 } from './tokenizer.js';
 import { getBundleIdForVersion } from './metadata.js';
+
+const log = createLogger('scraper');
 
 // Initialize Turndown for HTML to Markdown conversion
 const turndown = new TurndownService({
@@ -456,7 +459,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       apiUrl.searchParams.set('lang', locale);
     }
 
-    console.error(`[SEARCH] Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
+    log.debug(`Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
 
     try {
       const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString(), locale);
@@ -470,7 +473,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
           // Validate URL hostname from external API
           const resultUrl = wrapper.leading_result.url;
           if (resultUrl !== '' && !isAllowedHostname(resultUrl)) {
-            console.error(`[SEARCH] Skipping result with unexpected hostname: ${resultUrl}`);
+            log.warning(`Skipping result with unexpected hostname: ${resultUrl}`);
             return false;
           }
           return true;
@@ -525,7 +528,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       // Cache full results
       await cache.set(cacheKey, allResults);
     } catch (error) {
-      console.error('[SEARCH] Error:', error);
+      log.error(`Search error: ${String(error)}`);
 
       if (error instanceof JamfDocsError) {
         throw error;
@@ -836,7 +839,7 @@ async function discoverLatestBundleId(product: ProductId): Promise<string | null
       }
     }
   } catch (error) {
-    console.error(`[TOC] Error discovering bundle version for ${product}:`, error);
+    log.error(`Error discovering bundle version for ${product}: ${String(error)}`);
   }
 
   return null;
@@ -961,11 +964,11 @@ async function buildTocFromSearch(product: ProductId, locale: string): Promise<T
     }
 
     if (entries.length > 0) {
-      console.error(`[TOC] Built fallback TOC with ${entries.length} entries from search for ${product}`);
+      log.info(`Built fallback TOC with ${entries.length} entries from search for ${product}`);
     }
     return entries;
   } catch (error) {
-    console.error(`[TOC] Failed to build TOC from search for ${product}:`, error);
+    log.error(`Failed to build TOC from search for ${product}: ${String(error)}`);
     return [];
   }
 }
@@ -1003,7 +1006,7 @@ export async function fetchTableOfContents(
 
     // Fetch TOC from backend (may 404 for some products)
     const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
-    console.error(`[TOC] Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
+    log.debug(`Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
 
     allToc = [];
     try {
@@ -1018,12 +1021,12 @@ export async function fetchTableOfContents(
       }
     } catch (error) {
       // TOC endpoint may 404 or fail for some products — fall through to search fallback
-      console.error(`[TOC] Backend TOC request failed for ${product}: ${error instanceof Error ? error.message : String(error)}`);
+      log.error(`Backend TOC request failed for ${product}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Fallback: build TOC from search results when backend returns empty or fails
     if (allToc.length === 0) {
-      console.error(`[TOC] No TOC entries for ${product}, falling back to search-based discovery`);
+      log.info(`No TOC entries for ${product}, falling back to search-based discovery`);
       allToc = await buildTocFromSearch(product, locale);
     }
 

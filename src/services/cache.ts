@@ -11,6 +11,9 @@ import * as crypto from 'crypto';
 import { z } from 'zod';
 import { CACHE_TTL, CACHE_DIR, CACHE_MAX_ENTRIES } from '../constants.js';
 import type { CacheEntry } from '../types.js';
+import { createLogger } from './logging.js';
+
+const log = createLogger('cache');
 
 /**
  * Zod schema for validating cache entries read from disk
@@ -195,7 +198,7 @@ class FileCache {
       await fs.rename(tmpPath, cachePath);
     } catch (error) {
       // Log but don't fail
-      console.error(`[CACHE] Failed to write cache: ${String(error)}`);
+      log.error(`Failed to write cache: ${String(error)}`);
     }
   }
 

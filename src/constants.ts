@@ -7,6 +7,9 @@
 
 import * as path from 'path';
 import { createRequire } from 'module';
+import { createLogger } from './services/logging.js';
+
+const log = createLogger('config');
 
 // Environment variable helpers
 export function getEnvNumber(
@@ -24,11 +27,11 @@ export function getEnvNumber(
     return defaultValue;
   }
   if (min !== undefined && parsed < min) {
-    console.error(`[WARNING] ${key}=${parsed} is below minimum ${min}. Using default ${defaultValue}.`);
+    log.warning(`${key}=${parsed} is below minimum ${min}. Using default ${defaultValue}.`);
     return defaultValue;
   }
   if (max !== undefined && parsed > max) {
-    console.error(`[WARNING] ${key}=${parsed} exceeds maximum ${max}. Using default ${defaultValue}.`);
+    log.warning(`${key}=${parsed} exceeds maximum ${max}. Using default ${defaultValue}.`);
     return defaultValue;
   }
   return parsed;
@@ -252,14 +255,14 @@ function getValidatedCacheDir(): string {
     const normalizedResolved = resolved.toLowerCase();
     for (const prefix of SENSITIVE_DIR_PREFIXES) {
       if (normalizedResolved === prefix || normalizedResolved.startsWith(`${prefix}/`)) {
-        console.error(`[SECURITY WARNING] CACHE_DIR "${raw}" points to a sensitive system directory. Using default "${DEFAULT_CACHE_DIR}".`);
+        log.warning(`CACHE_DIR "${raw}" points to a sensitive system directory. Using default "${DEFAULT_CACHE_DIR}".`);
         return DEFAULT_CACHE_DIR;
       }
     }
   } else {
     // Relative paths must resolve within cwd
     if (!resolved.startsWith(cwd)) {
-      console.error(`[SECURITY WARNING] CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
+      log.warning(`CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
       return DEFAULT_CACHE_DIR;
     }
   }
