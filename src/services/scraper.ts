@@ -43,7 +43,7 @@ import {
   type FilterRelaxation,
   type TruncatedContentInfo
 } from '../types.js';
-import { extractVersionFromBundleId } from '../utils/bundle.js';
+import { extractVersionFromBundleId, extractProductSlug } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
 import { cache } from './cache.js';
 import {
@@ -483,10 +483,9 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
             leading, wrapper.follower_result, params.version
           );
 
-          // Extract product from bundle_id
+          // Extract product from bundle_id (works for all bundle types: documentation, release-notes, etc.)
           const { bundleId } = versioned;
-          const bundleMatch = /^(jamf-[a-z]+)-documentation/.exec(bundleId);
-          const bundleSlug: string | null = bundleMatch?.[1] ?? null;
+          const bundleSlug = extractProductSlug(bundleId);
           const productEntry = bundleSlug !== null
             ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
             : null;
@@ -568,16 +567,19 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   }
   if (params.docType !== undefined) {
     const docTypeFilter = params.docType;
-    const targetLabelKey = DOC_TYPE_LABEL_MAP[docTypeFilter];
-    activeFilters.push({
-      name: 'docType',
-      value: docTypeFilter,
-      apply: (results) => results.filter(r => {
-        // If result has no labels, include it (don't filter out)
-        if (r.labelKeys.length === 0) {return true;}
-        return r.labelKeys.includes(targetLabelKey);
-      })
-    });
+    const targetLabelKey = DOC_TYPE_LABEL_MAP[docTypeFilter] as string | undefined;
+    // Only apply filter if the docType maps to a known label key
+    if (targetLabelKey !== undefined) {
+      activeFilters.push({
+        name: 'docType',
+        value: docTypeFilter,
+        apply: (results) => results.filter(r => {
+          // If result has no labels, include it (don't filter out)
+          if (r.labelKeys.length === 0) {return true;}
+          return r.labelKeys.includes(targetLabelKey);
+        })
+      });
+    }
   }
 
   // Apply filters with progressive relaxation
@@ -716,8 +718,10 @@ export async function fetchArticle(
     const extractedTitle = $(SELECTORS.TITLE).first().text().trim();
     const title = extractedTitle !== '' ? extractedTitle : 'Untitled';
 
-    // Convert to Markdown
-    const content = turndown.turndown(contentHtml);
+    // Convert to Markdown and strip Turndown anchor artifacts from headings
+    // Turndown converts HTML anchors like <a href="#">...</a> inside headings to [](#)
+    const content = turndown.turndown(contentHtml)
+      .replace(/^(#{1,6}\s+)\[([^\]]*)\]\(#[^)]*\)/gm, '$1$2');
 
     // Extract breadcrumb
     const breadcrumb = $(SELECTORS.BREADCRUMB)
@@ -925,6 +929,48 @@ function countTocEntries(entries: TocEntry[]): number {
 }
 
 /**
+ * Build a flat TOC from search results when backend TOC endpoint returns empty.
+ * Searches for all articles under the given product and constructs TocEntry list.
+ */
+async function buildTocFromSearch(product: ProductId, locale: string): Promise<TocEntry[]> {
+  try {
+    const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
+    apiUrl.searchParams.set('q', JAMF_PRODUCTS[product].name);
+    apiUrl.searchParams.set('rpp', CONTENT_LIMITS.MAX_SEARCH_RESULTS.toString());
+    if (locale !== DEFAULT_LOCALE) {
+      apiUrl.searchParams.set('lang', locale);
+    }
+
+    const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString(), locale);
+    const seen = new Set<string>();
+    const entries: TocEntry[] = [];
+
+    for (const wrapper of response.Results) {
+      const leading = wrapper.leading_result;
+      if (leading === null || leading === undefined) { continue; }
+
+      const bundleSlug = extractProductSlug(leading.bundle_id);
+      if (bundleSlug !== product) { continue; }
+
+      const url = transformToFrontendUrl(leading.url);
+      if (seen.has(url)) { continue; }
+      seen.add(url);
+
+      const title = leading.title !== '' ? leading.title : 'Untitled';
+      entries.push({ title, url });
+    }
+
+    if (entries.length > 0) {
+      console.error(`[TOC] Built fallback TOC with ${entries.length} entries from search for ${product}`);
+    }
+    return entries;
+  } catch (error) {
+    console.error(`[TOC] Failed to build TOC from search for ${product}:`, error);
+    return [];
+  }
+}
+
+/**
  * Fetch table of contents for a product
  * Uses backend TOC endpoint (learn-be.jamf.com/bundle/{bundleId}/toc)
  */
@@ -955,19 +1001,30 @@ export async function fetchTableOfContents(
       );
     }
 
-    // Fetch TOC from backend
+    // Fetch TOC from backend (may 404 for some products)
     const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
     console.error(`[TOC] Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
 
-    const tocJson = await fetchJson<Record<string, string>>(tocUrl, locale);
-
-    // Parse TOC
     allToc = [];
-    for (const [, html] of Object.entries(tocJson)) {
-      if (typeof html === 'string' && html.includes('<ul')) {
-        const entries = parseTocHtml(html);
-        allToc.push(...entries);
+    try {
+      const tocJson = await fetchJson<Record<string, string>>(tocUrl, locale);
+
+      // Parse TOC
+      for (const [, html] of Object.entries(tocJson)) {
+        if (typeof html === 'string' && html.includes('<ul')) {
+          const entries = parseTocHtml(html);
+          allToc.push(...entries);
+        }
       }
+    } catch (error) {
+      // TOC endpoint may 404 or fail for some products — fall through to search fallback
+      console.error(`[TOC] Backend TOC request failed for ${product}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Fallback: build TOC from search results when backend returns empty or fails
+    if (allToc.length === 0) {
+      console.error(`[TOC] No TOC entries for ${product}, falling back to search-based discovery`);
+      allToc = await buildTocFromSearch(product, locale);
     }
 
     // Cache result

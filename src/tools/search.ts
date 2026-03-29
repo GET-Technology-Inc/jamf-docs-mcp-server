@@ -136,7 +136,7 @@ Args:
   - query (string, required): Search keywords (2-200 characters)
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): Filter by topic (enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network)
-  - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started, archive
+  - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
   - limit (number, optional): Maximum results per page 1-50 (default: 10)
   - page (number, optional): Page number for pagination 1-100 (default: 1)
