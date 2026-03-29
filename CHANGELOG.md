@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.4.1...v1.5.0) (2026-03-29)
+
+### Features
+
+* MCP server enhancements — logging, llms.txt, glossary, batch articles, progress notifications ([#58](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/58)) ([88d59c6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/88d59c681d7f15b39defd615ddd8883134958a7d))
+
 ## [1.4.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.4.0...v1.4.1) (2026-03-29)
 
 ### Refactoring
