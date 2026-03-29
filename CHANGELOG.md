@@ -1,3 +1,9 @@
+## [1.4.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.4.0...v1.4.1) (2026-03-29)
+
+### Refactoring
+
+* extract product slug utility, TOC search fallback, and cleanup ([#56](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/56)) ([f434077](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/f43407778d0c7c257de22d51f29c601a6c79b0a0))
+
 ## [1.4.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.3.1...v1.4.0) (2026-03-29)
 
 ### Features
