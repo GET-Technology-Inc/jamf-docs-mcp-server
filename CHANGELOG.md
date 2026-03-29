@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.3.0...v1.3.1) (2026-03-29)
+
+### Dependencies
+
+* bump path-to-regexp from 8.3.0 to 8.4.0 ([#53](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/53)) ([b1a348c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b1a348c9f53662c4237b4be07388cf995db2aa2d))
+
 ## [1.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.2.0...v1.3.0) (2026-03-27)
 
 ### Features
