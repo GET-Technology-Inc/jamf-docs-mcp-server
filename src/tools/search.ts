@@ -180,6 +180,107 @@ Errors:
 
 Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.`;
 
+/**
+ * Build structured content for a search result set
+ */
+function buildSearchStructuredContent(
+  query: string,
+  results: SearchResult[],
+  pagination: PaginationInfo,
+  extras?: {
+    filterRelaxation?: { removed: string[]; original: Record<string, string>; message: string } | undefined;
+    truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
+  }
+): Record<string, unknown> {
+  return {
+    query,
+    totalResults: pagination.totalItems,
+    page: pagination.page,
+    totalPages: pagination.totalPages,
+    hasMore: pagination.hasNext,
+    results: results.map(r => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.snippet,
+      product: r.product ?? '',
+      ...(r.version !== undefined ? { version: r.version } : {}),
+      ...(r.docType !== undefined ? { docType: r.docType } : {})
+    })),
+    ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
+    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {})
+  };
+}
+
+/**
+ * Build no-results response with suggestions
+ */
+function buildNoResultsResponse(
+  query: string,
+  hasProductFilter: boolean,
+  hasTopicFilter: boolean,
+  locale: LocaleId | undefined
+): ToolResult {
+  const suggestions = generateSearchSuggestions(query, hasProductFilter, hasTopicFilter);
+
+  const suggestionTexts = [
+    ...(locale !== undefined && locale !== DEFAULT_LOCALE
+      ? [`Not all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`]
+      : []),
+    ...(suggestions.simplifiedQuery !== null ? [`Try: ${suggestions.simplifiedQuery}`] : []),
+    ...suggestions.alternativeKeywords,
+    ...suggestions.tips
+  ];
+
+  return {
+    content: [{
+      type: 'text',
+      text: formatSearchSuggestions(query, suggestions)
+    }],
+    structuredContent: {
+      query,
+      totalResults: 0,
+      page: 1,
+      totalPages: 0,
+      hasMore: false,
+      results: [],
+      suggestions: suggestionTexts
+    }
+  };
+}
+
+/**
+ * Append filter/version/truncation notices to markdown output
+ */
+function appendMarkdownNotices(
+  markdown: string,
+  filterRelaxation?: { message: string },
+  versionNote?: string,
+  truncatedContent?: { omittedCount: number }
+): string {
+  let result = markdown;
+  if (filterRelaxation !== undefined) {
+    result += `\n> **Note:** ${filterRelaxation.message}\n`;
+  }
+  if (versionNote !== undefined) {
+    result += `\n> **Version Note:** ${versionNote}\n`;
+  }
+  if (truncatedContent !== undefined && truncatedContent.omittedCount > 0) {
+    result += `\n*${truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
+  }
+  return result;
+}
+
+/**
+ * Build search filters from params
+ */
+function buildSearchFilters(params: { product?: string | undefined; version?: string | undefined; topic?: string | undefined }): SearchFilters {
+  return {
+    ...(params.product !== undefined ? { product: params.product } : {}),
+    ...(params.version !== undefined ? { version: params.version } : {}),
+    ...(params.topic !== undefined ? { topic: params.topic } : {})
+  };
+}
+
 export function registerSearchTool(server: McpServer): void {
   server.registerTool(
     TOOL_NAME,
@@ -243,15 +344,12 @@ export function registerSearchTool(server: McpServer): void {
         const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
 
         // Build response
+        const filters = buildSearchFilters(params);
         const response: SearchResponse = {
           total: pagination.totalItems,
           query: params.query,
           results,
-          filters: {
-            ...(params.product !== undefined ? { product: params.product } : {}),
-            ...(params.version !== undefined ? { version: params.version } : {}),
-            ...(params.topic !== undefined ? { topic: params.topic } : {})
-          },
+          filters,
           tokenInfo,
           pagination,
           ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
@@ -261,58 +359,18 @@ export function registerSearchTool(server: McpServer): void {
 
         // Handle no results with suggestions
         if (results.length === 0 && pagination.totalItems === 0) {
-          const locale = params.language as LocaleId | undefined;
-          const suggestions = generateSearchSuggestions(
+          return buildNoResultsResponse(
             params.query,
             params.product !== undefined,
-            params.topic !== undefined
+            params.topic !== undefined,
+            params.language as LocaleId | undefined
           );
-
-          const suggestionTexts = [
-            ...(locale !== undefined && locale !== DEFAULT_LOCALE
-              ? [`Not all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`]
-              : []),
-            ...(suggestions.simplifiedQuery !== null ? [`Try: ${suggestions.simplifiedQuery}`] : []),
-            ...suggestions.alternativeKeywords,
-            ...suggestions.tips
-          ];
-
-          const structuredContent = {
-            query: params.query,
-            totalResults: 0,
-            page: 1,
-            totalPages: 0,
-            hasMore: false,
-            results: [],
-            suggestions: suggestionTexts
-          };
-
-          return {
-            content: [{
-              type: 'text',
-              text: formatSearchSuggestions(params.query, suggestions)
-            }],
-            structuredContent
-          };
         }
 
-        const structuredContent = {
-          query: params.query,
-          totalResults: pagination.totalItems,
-          page: pagination.page,
-          totalPages: pagination.totalPages,
-          hasMore: pagination.hasNext,
-          results: results.map(r => ({
-            title: r.title,
-            url: r.url,
-            snippet: r.snippet,
-            product: r.product ?? '',
-            ...(r.version !== undefined ? { version: r.version } : {}),
-            ...(r.docType !== undefined ? { docType: r.docType } : {})
-          })),
-          ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
-          ...(truncatedContent !== undefined ? { truncatedContent } : {})
-        };
+        const structuredContent = buildSearchStructuredContent(
+          params.query, results, pagination,
+          { filterRelaxation, truncatedContent }
+        );
 
         if (params.responseFormat === ResponseFormat.JSON) {
           // Add relevance note only in JSON format
@@ -333,32 +391,13 @@ export function registerSearchTool(server: McpServer): void {
         }
 
         // Markdown format (full or compact)
-        let markdown = params.outputMode === OutputMode.COMPACT
-          ? formatSearchResultsAsCompact(
-              params.query,
-              results,
-              response.filters ?? {},
-              pagination,
-              tokenInfo
-            )
-          : formatSearchResultsAsMarkdown(
-              params.query,
-              results,
-              response.filters ?? {},
-              pagination,
-              tokenInfo
-            );
-
-        // Append notices for markdown
-        if (filterRelaxation !== undefined) {
-          markdown += `\n> **Note:** ${filterRelaxation.message}\n`;
-        }
-        if (versionNote !== undefined) {
-          markdown += `\n> **Version Note:** ${versionNote}\n`;
-        }
-        if (truncatedContent !== undefined && truncatedContent.omittedCount > 0) {
-          markdown += `\n*${truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
-        }
+        const formatFn = params.outputMode === OutputMode.COMPACT
+          ? formatSearchResultsAsCompact
+          : formatSearchResultsAsMarkdown;
+        const markdown = appendMarkdownNotices(
+          formatFn(params.query, results, filters, pagination, tokenInfo),
+          filterRelaxation, versionNote, truncatedContent
+        );
 
         return {
           content: [{

@@ -14,6 +14,7 @@ import { registerGetArticleTool } from './tools/get-article.js';
 import { registerListProductsTool } from './tools/list-products.js';
 import { registerGetTocTool } from './tools/get-toc.js';
 import { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
+import { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
 import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
 import { SERVER_ICON, SERVER_VERSION } from './constants.js';
@@ -68,6 +69,7 @@ registerSearchTool(server);
 registerGetArticleTool(server);
 registerGetTocTool(server);
 registerGlossaryLookupTool(server);
+registerBatchGetArticlesTool(server);
 
 // Register resources
 registerResources(server);
@@ -87,7 +89,7 @@ async function main(): Promise<void> {
     await server.connect(transport);
 
     log.info('Jamf Docs MCP Server running on stdio');
-    log.info('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc, jamf_docs_glossary_lookup');
+    log.info('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc, jamf_docs_glossary_lookup, jamf_docs_batch_get_articles');
     log.info('Available resources: jamf://products, jamf://topics');
     log.info('Available prompts: jamf_troubleshoot, jamf_setup_guide, jamf_compare_versions');
   }

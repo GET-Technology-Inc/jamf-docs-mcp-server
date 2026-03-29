@@ -324,16 +324,18 @@ describe('Jamf Docs MCP Server', () => {
   });
 
   describe('tools/list', () => {
-    it('should list all 4 tools', async () => {
+    it('should list all registered tools', async () => {
       const result = await client.listTools();
 
-      expect(result.tools).toHaveLength(4);
+      expect(result.tools).toHaveLength(6);
 
       const toolNames = result.tools.map(t => t.name);
       expect(toolNames).toContain('jamf_docs_list_products');
       expect(toolNames).toContain('jamf_docs_search');
       expect(toolNames).toContain('jamf_docs_get_article');
       expect(toolNames).toContain('jamf_docs_get_toc');
+      expect(toolNames).toContain('jamf_docs_glossary_lookup');
+      expect(toolNames).toContain('jamf_docs_batch_get_articles');
     });
 
     it('should have proper tool descriptions', async () => {
@@ -409,7 +411,8 @@ describe('Jamf Docs MCP Server', () => {
       // Compact mode should be shorter and simpler
       expect(text).toContain('## Products');
       expect(text).toContain('## Topics');
-      expect(text).toContain('`jamf-pro`');
+      // Should contain at least one product in backtick format (availability may filter some)
+      expect(text).toMatch(/`jamf-\w+`/);
       // Should NOT have detailed descriptions
       expect(text).not.toContain('Apple device management for enterprise');
     });

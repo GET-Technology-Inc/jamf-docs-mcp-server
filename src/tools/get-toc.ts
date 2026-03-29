@@ -150,6 +150,26 @@ Errors:
 Note: Use this to discover what topics are available before searching
 or retrieving specific articles. Large TOCs are paginated.`;
 
+/**
+ * Determine the version transparency note if a specific version was requested
+ */
+function getVersionNote(requestedVersion: string | undefined): string | undefined {
+  if (requestedVersion !== undefined && requestedVersion !== '' && requestedVersion !== 'current') {
+    return 'The Jamf documentation API only provides current version content. Results shown are from the latest version.';
+  }
+  return undefined;
+}
+
+/**
+ * Attach versionNote to structured content if present
+ */
+function withVersionNote<T extends object>(content: T, versionNote: string | undefined): T & { versionNote?: string } {
+  if (versionNote !== undefined) {
+    return { ...content, versionNote };
+  }
+  return content as T & { versionNote?: string };
+}
+
 export function registerGetTocTool(server: McpServer): void {
   server.registerTool(
     TOOL_NAME,
@@ -239,24 +259,16 @@ export function registerGetTocTool(server: McpServer): void {
           entries: flattenTocEntries(toc)
         };
 
-        // Version transparency note
-        const versionNote = (params.version !== undefined && params.version !== '' && params.version !== 'current')
-          ? 'The Jamf documentation API only provides current version content. Results shown are from the latest version.'
-          : undefined;
+        const versionNote = getVersionNote(params.version);
 
         if (params.responseFormat === ResponseFormat.JSON) {
           await reportProgress(extra, 100, 100);
-          const jsonResponse = versionNote !== undefined
-            ? { ...response, versionNote }
-            : response;
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(jsonResponse, null, 2)
+              text: JSON.stringify(withVersionNote(response, versionNote), null, 2)
             }],
-            structuredContent: versionNote !== undefined
-              ? { ...structuredContent, versionNote }
-              : structuredContent
+            structuredContent: withVersionNote(structuredContent, versionNote)
           };
         }
 
@@ -275,9 +287,7 @@ export function registerGetTocTool(server: McpServer): void {
             type: 'text',
             text: markdown
           }],
-          structuredContent: versionNote !== undefined
-            ? { ...structuredContent, versionNote }
-            : structuredContent
+          structuredContent: withVersionNote(structuredContent, versionNote)
         };
       } catch (error) {
         return {
