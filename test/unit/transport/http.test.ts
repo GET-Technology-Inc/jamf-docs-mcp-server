@@ -258,6 +258,71 @@ describe('/health endpoint', () => {
 });
 
 // ============================================================================
+// /llms.txt endpoint
+// ============================================================================
+
+describe('/llms.txt endpoint', () => {
+  let mockMcpServer: { connect: ReturnType<typeof vi.fn> };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
+    shared.httpServer.listen.mockImplementation(
+      (_port: number, _host: string, cb: () => void) => cb()
+    );
+    shared.httpServer.on.mockImplementation(() => {});
+    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+  });
+
+  it('should return 200 with text/plain content type for GET /llms.txt', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    expect(result.statusCode).toBe(200);
+    expect(result.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+  });
+
+  it('should start with the server title heading', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    expect(result.body).toMatch(/^# Jamf Docs MCP Server/);
+  });
+
+  it('should include all product names', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    for (const product of ['Jamf Pro', 'Jamf School', 'Jamf Connect', 'Jamf Protect', 'Jamf Now', 'Jamf Safe Internet', 'Jamf Insights', 'RapidIdentity']) {
+      expect(result.body).toContain(product);
+    }
+  });
+
+  it('should include all tool names', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    for (const tool of ['jamf_docs_list_products', 'jamf_docs_search', 'jamf_docs_get_article', 'jamf_docs_get_toc']) {
+      expect(result.body).toContain(tool);
+    }
+  });
+
+  it('should include resource URIs', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    expect(result.body).toContain('jamf://products');
+    expect(result.body).toContain('jamf://topics');
+    expect(result.body).toContain('jamf://products/{productId}/toc');
+    expect(result.body).toContain('jamf://products/{productId}/versions');
+  });
+
+  it('should include prompt names', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    for (const prompt of ['jamf_troubleshoot', 'jamf_setup_guide', 'jamf_compare_versions']) {
+      expect(result.body).toContain(prompt);
+    }
+  });
+
+  it('should include supported locales', async () => {
+    const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
+    for (const locale of ['en-US', 'ja-JP', 'zh-TW', 'de-DE', 'es-ES', 'fr-FR', 'nl-NL', 'th-TH']) {
+      expect(result.body).toContain(locale);
+    }
+  });
+});
+
+// ============================================================================
 // 404 for unknown paths
 // ============================================================================
 

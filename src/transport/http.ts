@@ -16,6 +16,45 @@ const log = createLogger('http');
 const SHUTDOWN_TIMEOUT = 10_000;
 const MAX_BODY_SIZE = 1_048_576; // 1MB
 
+const LLMS_TXT = `# Jamf Docs MCP Server
+
+> MCP server providing access to official Jamf documentation from learn.jamf.com
+
+## Products
+- Jamf Pro — Apple device management for enterprise
+- Jamf School — Apple device management for education
+- Jamf Connect — identity and access management
+- Jamf Protect — endpoint security for Apple
+- Jamf Now — simple device management for small businesses
+- Jamf Safe Internet — content filtering and web security
+- Jamf Insights — analytics and reporting for Apple fleet
+- RapidIdentity — identity and access management platform
+
+## Tools
+- jamf_docs_list_products: discover available products and versions
+- jamf_docs_search: search documentation by keyword with product/topic filters
+- jamf_docs_get_article: retrieve full article content in markdown
+- jamf_docs_get_toc: browse table of contents for a product
+
+## Resources
+- jamf://products — product list with metadata and versions
+- jamf://topics — topic categories per product
+- jamf://products/{productId}/toc — table of contents for a specific product
+- jamf://products/{productId}/versions — available documentation versions
+
+## Prompts
+- jamf_troubleshoot: guided troubleshooting workflow
+- jamf_setup_guide: step-by-step setup instructions
+- jamf_compare_versions: compare features across versions
+
+## Supported Locales
+en-US, ja-JP, zh-TW, de-DE, es-ES, fr-FR, nl-NL, th-TH
+
+## Limitations
+- Documentation content only — no Jamf REST API reference
+- Content is sourced from learn.jamf.com and cached; not real-time
+`;
+
 class PayloadTooLargeError extends Error {
   constructor() {
     super('Payload too large');
@@ -278,6 +317,7 @@ export async function startHttpServer(
       log.info(`Jamf Docs MCP Server running on http://${host}:${port}`);
       log.info(`MCP endpoint: http://${host}:${port}/mcp`);
       log.info(`Health check: http://${host}:${port}/health`);
+      log.info(`LLMs info:   http://${host}:${port}/llms.txt`);
       resolve();
     });
   });
@@ -317,6 +357,13 @@ async function handleHttpRequest(
   if (pathname === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
     res.end(JSON.stringify({ status: 'ok', version: SERVER_VERSION }));
+    return;
+  }
+
+  // llms.txt endpoint
+  if (pathname === '/llms.txt' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', ...corsHeaders });
+    res.end(LLMS_TXT);
     return;
   }
 
