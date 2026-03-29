@@ -150,6 +150,26 @@ Errors:
 Note: Use this to discover what topics are available before searching
 or retrieving specific articles. Large TOCs are paginated.`;
 
+/**
+ * Determine the version transparency note if a specific version was requested
+ */
+function getVersionNote(requestedVersion: string | undefined): string | undefined {
+  if (requestedVersion !== undefined && requestedVersion !== '' && requestedVersion !== 'current') {
+    return 'The Jamf documentation API only provides current version content. Results shown are from the latest version.';
+  }
+  return undefined;
+}
+
+/**
+ * Attach versionNote to structured content if present
+ */
+function withVersionNote<T extends object>(content: T, versionNote: string | undefined): T & { versionNote?: string } {
+  if (versionNote !== undefined) {
+    return { ...content, versionNote };
+  }
+  return content as T & { versionNote?: string };
+}
+
 export function registerGetTocTool(server: McpServer): void {
   server.registerTool(
     TOOL_NAME,
@@ -208,7 +228,7 @@ export function registerGetTocTool(server: McpServer): void {
           }
         }
 
-        await reportProgress(extra, 0, 100);
+        await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
         const tocResult = await fetchTableOfContents(productId, version, {
           ...(params.page !== undefined && { page: params.page }),
@@ -216,7 +236,7 @@ export function registerGetTocTool(server: McpServer): void {
           locale: params.language as LocaleId | undefined
         });
 
-        await reportProgress(extra, 50, 100);
+        await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
         const { toc, pagination, tokenInfo } = tocResult;
 
@@ -239,24 +259,18 @@ export function registerGetTocTool(server: McpServer): void {
           entries: flattenTocEntries(toc)
         };
 
-        // Version transparency note
-        const versionNote = (params.version !== undefined && params.version !== '' && params.version !== 'current')
-          ? 'The Jamf documentation API only provides current version content. Results shown are from the latest version.'
-          : undefined;
+        const versionNote = getVersionNote(params.version);
+
+        await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
         if (params.responseFormat === ResponseFormat.JSON) {
-          await reportProgress(extra, 100, 100);
-          const jsonResponse = versionNote !== undefined
-            ? { ...response, versionNote }
-            : response;
+          await reportProgress(extra, { progress: 4, total: 4 });
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(jsonResponse, null, 2)
+              text: JSON.stringify(withVersionNote(response, versionNote), null, 2)
             }],
-            structuredContent: versionNote !== undefined
-              ? { ...structuredContent, versionNote }
-              : structuredContent
+            structuredContent: withVersionNote(structuredContent, versionNote)
           };
         }
 
@@ -269,15 +283,13 @@ export function registerGetTocTool(server: McpServer): void {
           markdown += `\n> **Version Note:** ${versionNote}\n`;
         }
 
-        await reportProgress(extra, 100, 100);
+        await reportProgress(extra, { progress: 4, total: 4 });
         return {
           content: [{
             type: 'text',
             text: markdown
           }],
-          structuredContent: versionNote !== undefined
-            ? { ...structuredContent, versionNote }
-            : structuredContent
+          structuredContent: withVersionNote(structuredContent, versionNote)
         };
       } catch (error) {
         return {

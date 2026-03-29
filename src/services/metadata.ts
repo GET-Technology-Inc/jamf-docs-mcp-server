@@ -18,6 +18,9 @@ import {
 } from '../constants.js';
 import { extractVersionFromBundleId } from '../utils/bundle.js';
 import { cache } from './cache.js';
+import { createLogger } from './logging.js';
+
+const log = createLogger('metadata');
 
 // ============================================================================
 // Types
@@ -109,7 +112,7 @@ async function discoverProductVersions(productId: ProductId): Promise<string[]> 
       }
     }
   } catch (error) {
-    console.error(`[METADATA] Error discovering versions for ${productId}:`, error);
+    log.error(`Error discovering versions for ${productId}: ${String(error)}`);
   }
 
   // Sort versions in descending order (newest first)
@@ -166,7 +169,7 @@ async function fetchProductMetadata(productId: ProductId): Promise<ProductMetada
       };
     }
   } catch (error) {
-    console.error(`[METADATA] Error fetching metadata for ${productId}:`, error);
+    log.error(`Error fetching metadata for ${productId}: ${String(error)}`);
   }
 
   return null;
@@ -193,7 +196,7 @@ export async function getProductsMetadata(): Promise<ProductMetadata[]> {
         const metadata = await fetchProductMetadata(productId);
         return { productId, metadata };
       } catch (error: unknown) {
-        console.error(`[METADATA] Failed to fetch metadata for ${productId}:`, error);
+        log.error(`Failed to fetch metadata for ${productId}: ${String(error)}`);
         return { productId, metadata: null };
       }
     })
@@ -247,7 +250,7 @@ export async function getBundleIdForVersion(
 
   // Check if requested version is available
   if (!product.availableVersions.includes(version)) {
-    console.error(`[METADATA] Version ${version} not available for ${productId}. Available: ${product.availableVersions.join(', ')}`);
+    log.warning(`Version ${version} not available for ${productId}. Available: ${product.availableVersions.join(', ')}`);
     return null;
   }
 
@@ -347,7 +350,7 @@ async function fetchTopicCategories(productId: ProductId): Promise<TocCategory[]
 
     return parseTocCategories(tocData);
   } catch (error) {
-    console.error(`[METADATA] Error fetching TOC categories for ${productId}:`, error);
+    log.error(`Error fetching TOC categories for ${productId}: ${String(error)}`);
     return [];
   }
 }
@@ -409,7 +412,7 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
         const categories = await fetchTopicCategories(productId);
         return { productId, categories };
       } catch (error: unknown) {
-        console.error(`[METADATA] Error fetching TOC for ${productId}:`, error);
+        log.error(`Error fetching TOC for ${productId}: ${String(error)}`);
         return { productId, categories: [] as TocCategory[] };
       }
     })

@@ -68,6 +68,35 @@ export const ArticleOutputSchema = z.object({
   truncated: z.boolean(),
 });
 
+export const GlossaryLookupOutputSchema = z.object({
+  term: z.string(),
+  totalMatches: z.number(),
+  entries: z.array(z.object({
+    term: z.string(),
+    definition: z.string(),
+    product: z.string().optional(),
+    url: z.string(),
+  })),
+  truncated: z.boolean(),
+});
+
+export const BatchArticlesOutputSchema = z.object({
+  results: z.array(z.object({
+    url: z.string(),
+    status: z.enum(['success', 'error']),
+    title: z.string().optional(),
+    content: z.string().optional(),
+    error: z.string().optional(),
+    tokenCount: z.number().optional(),
+    truncated: z.boolean().optional(),
+  })),
+  summary: z.object({
+    total: z.number(),
+    succeeded: z.number(),
+    failed: z.number(),
+  }),
+});
+
 export const TocOutputSchema = z.object({
   product: z.string(),
   version: z.string(),

@@ -11,6 +11,7 @@ import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo } from '../services/tokenizer.js';
 import { getProductAvailability } from '../services/metadata.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { reportProgress } from '../utils/progress.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
 
@@ -62,7 +63,7 @@ export function registerListProductsTool(server: McpServer): void {
         openWorldHint: false
       }
     },
-    async (args): Promise<ToolResult> => {
+    async (args, extra): Promise<ToolResult> => {
       // Parse and validate input
       const parseResult = ListProductsInputSchema.safeParse(args);
       if (!parseResult.success) {
@@ -75,8 +76,12 @@ export function registerListProductsTool(server: McpServer): void {
       const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
       try {
+        await reportProgress(extra, { progress: 0, total: 3, message: 'Fetching product info...' });
+
         // Fetch product availability (cached)
         const availability = await getProductAvailability();
+
+        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
 
         // Build product list, filtering out products with no TOC content
         const products = Object.values(JAMF_PRODUCTS)
@@ -99,12 +104,16 @@ export function registerListProductsTool(server: McpServer): void {
 
         const structuredContent = { products, topics };
 
+        await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
+
         if (params.responseFormat === ResponseFormat.JSON) {
           const jsonData = JSON.stringify(structuredContent);
           const jsonOutput = JSON.stringify({
             ...structuredContent,
             tokenInfo: createTokenInfo(jsonData, maxTokens)
           }, null, 2);
+
+          await reportProgress(extra, { progress: 3, total: 3 });
 
           return {
             content: [{
@@ -125,6 +134,8 @@ export function registerListProductsTool(server: McpServer): void {
           for (const topic of topics) {
             markdown += `- \`${topic.id}\`: ${topic.name}\n`;
           }
+          await reportProgress(extra, { progress: 3, total: 3 });
+
           return {
             content: [{
               type: 'text',
@@ -173,6 +184,8 @@ export function registerListProductsTool(server: McpServer): void {
 
         markdown += '*Use `jamf_docs_search` to search within these products, ';
         markdown += 'or `jamf_docs_get_toc` to browse the table of contents.*\n';
+
+        await reportProgress(extra, { progress: 3, total: 3 });
 
         return {
           content: [{

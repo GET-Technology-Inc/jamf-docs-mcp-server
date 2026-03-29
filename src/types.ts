@@ -146,6 +146,20 @@ export interface ArticleResponse extends ParsedArticle {
   sections: ArticleSection[];
 }
 
+// Glossary types
+export interface GlossaryEntry {
+  term: string;
+  definition: string;
+  url: string;
+  product?: string | undefined;
+}
+
+export interface GlossaryLookupResult {
+  entries: GlossaryEntry[];
+  totalMatches: number;
+  tokenInfo: TokenInfo;
+}
+
 // TOC types
 export interface GetTocParams {
   product: ProductId;

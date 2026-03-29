@@ -8,6 +8,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createLogger } from '../services/logging.js';
 import { JAMF_PRODUCTS, type ProductId } from '../constants.js';
 import {
   getProductsResourceData,
@@ -16,6 +17,8 @@ import {
 } from '../services/metadata.js';
 import { fetchTableOfContents } from '../services/scraper.js';
 import { completeProduct } from '../completions.js';
+
+const log = createLogger('resources');
 
 function validateProductId(
   productId: string | string[] | number | undefined,
@@ -153,8 +156,5 @@ export function registerResources(server: McpServer): void {
     }
   );
 
-  console.error(
-    'Registered resources: jamf://products, jamf://topics,',
-    'jamf://products/{productId}/toc, jamf://products/{productId}/versions'
-  );
+  log.info('Registered resources: jamf://products, jamf://topics, jamf://products/{productId}/toc, jamf://products/{productId}/versions');
 }

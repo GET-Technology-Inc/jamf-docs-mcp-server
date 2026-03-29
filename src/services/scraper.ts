@@ -46,6 +46,7 @@ import {
 import { extractVersionFromBundleId, extractProductSlug } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
 import { cache } from './cache.js';
+import { createLogger } from './logging.js';
 import {
   estimateTokens,
   createTokenInfo,
@@ -56,6 +57,8 @@ import {
   calculatePagination
 } from './tokenizer.js';
 import { getBundleIdForVersion } from './metadata.js';
+
+const log = createLogger('scraper');
 
 // Initialize Turndown for HTML to Markdown conversion
 const turndown = new TurndownService({
@@ -98,7 +101,7 @@ async function throttle(): Promise<void> {
 export { ALLOWED_HOSTNAMES, isAllowedHostname } from '../utils/url.js';
 
 // URL transformation between frontend (learn.jamf.com) and backend (learn-be.jamf.com)
-function transformToBackendUrl(urlStr: string): string {
+export function transformToBackendUrl(urlStr: string): string {
   const url = new URL(urlStr);
   if (url.hostname === 'learn.jamf.com') {
     url.hostname = 'learn-be.jamf.com';
@@ -106,7 +109,7 @@ function transformToBackendUrl(urlStr: string): string {
   return url.toString();
 }
 
-function transformToFrontendUrl(urlStr: string): string {
+export function transformToFrontendUrl(urlStr: string): string {
   const url = new URL(urlStr);
   if (url.hostname === 'learn-be.jamf.com') {
     url.hostname = 'learn.jamf.com';
@@ -204,7 +207,7 @@ function handleAxiosError(error: AxiosError, url: string, resourceType: string):
 /**
  * Build Accept-Language header value for a given locale
  */
-function buildAcceptLanguage(locale: string): string {
+export function buildAcceptLanguage(locale: string): string {
   if (locale === 'en-US') {
     return 'en-US,en;q=0.9';
   }
@@ -237,7 +240,7 @@ async function fetchUrl<T>(url: string, accept: string, resourceType: string, lo
 
 const fetchJson = async <T>(url: string, locale?: string): Promise<T> =>
   await fetchUrl<T>(url, 'application/json', 'Resource', locale);
-const fetchHtml = async (url: string, locale?: string): Promise<string> =>
+export const fetchHtml = async (url: string, locale?: string): Promise<string> =>
   await fetchUrl<string>(url, 'text/html,application/xhtml+xml', 'Article', locale);
 
 /**
@@ -413,141 +416,57 @@ function selectVersionedEntry(
 }
 
 /**
- * Search response with token and pagination info
+ * Transform a Zoomin leading result into a SearchResultWithMeta
  */
-export interface SearchDocumentationResult {
-  results: SearchResult[];
-  pagination: PaginationInfo;
-  tokenInfo: TokenInfo;
-  filterRelaxation?: FilterRelaxation;
-  versionNote?: string;
-  truncatedContent?: TruncatedContentInfo;
+function transformZoominResult(
+  wrapper: { leading_result: ZoominLeadingResult; follower_result?: ZoominLeadingResult[] },
+  requestedVersion: string | undefined
+): SearchResultWithMeta {
+  const leading = wrapper.leading_result;
+  const versioned = selectVersionedEntry(leading, wrapper.follower_result, requestedVersion);
+
+  const { bundleId } = versioned;
+  const bundleSlug = extractProductSlug(bundleId);
+  const productEntry = bundleSlug !== null
+    ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
+    : null;
+
+  const resultTitle = leading.title !== '' ? leading.title : 'Untitled';
+  const resultProduct = productEntry !== null && productEntry !== undefined
+    ? productEntry[1].name
+    : (leading.publication_title !== '' ? leading.publication_title : 'Jamf');
+  const rawSnippet = stripHtml(leading.snippet !== '' ? leading.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH);
+
+  const { labels } = leading;
+  const labelKeys = (labels ?? []).map(l => l.key);
+
+  const searchResult: SearchResult = {
+    title: resultTitle,
+    url: transformToFrontendUrl(versioned.url !== '' ? versioned.url : ''),
+    snippet: cleanSnippet(rawSnippet, resultTitle, resultProduct),
+    product: resultProduct,
+    version: versioned.version,
+    docType: docTypeFromLabels(labels)
+  };
+
+  if (leading.score !== undefined) {
+    searchResult.relevance = leading.score;
+  }
+
+  const searchText = `${searchResult.title} ${searchResult.snippet}`.toLowerCase();
+  const matchedTopics: TopicId[] = ALL_TOPIC_IDS
+    .filter(topicId => TOPIC_KEYWORDS_LOWER[topicId].some(kw => searchText.includes(kw)));
+
+  return {
+    result: searchResult, bundleSlug, bundleId, matchedTopics, labelKeys,
+    versionMatched: versioned.versionMatched
+  };
 }
 
 /**
- * Search Jamf documentation using Zoomin Search API
+ * Build active filters from search params for progressive relaxation
  */
-export async function searchDocumentation(params: SearchParams): Promise<SearchDocumentationResult> {
-  const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
-  const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
-  const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const locale = params.language ?? DEFAULT_LOCALE;
-  const cacheKey = `${locale}:search:${JSON.stringify({
-    query: params.query, product: params.product, topic: params.topic,
-    docType: params.docType, version: params.version, limit: params.limit,
-    maxTokens: params.maxTokens, page: 1
-  })}`;
-
-  // Check cache for full results
-  let allResults: SearchResultWithMeta[] | null = await cache.get<SearchResultWithMeta[]>(cacheKey);
-
-  if (allResults === null) {
-    // Over-fetch when client-side filters (docType/version) are active
-    const hasClientFilter = params.docType !== undefined || (params.version !== undefined && params.version !== 'current');
-    const fetchLimit = hasClientFilter
-      ? Math.min(CONTENT_LIMITS.MAX_SEARCH_RESULTS * CONTENT_LIMITS.FILTER_OVERFETCH_MULTIPLIER, CONTENT_LIMITS.FILTER_OVERFETCH_CAP)
-      : CONTENT_LIMITS.MAX_SEARCH_RESULTS;
-
-    // Build API URL with query params
-    const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
-    apiUrl.searchParams.set('q', params.query);
-    apiUrl.searchParams.set('rpp', fetchLimit.toString());
-    if (locale !== DEFAULT_LOCALE) {
-      apiUrl.searchParams.set('lang', locale);
-    }
-
-    console.error(`[SEARCH] Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
-
-    try {
-      const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString(), locale);
-
-      // Transform Zoomin results to SearchResult format with metadata
-      allResults = response.Results
-        .filter((wrapper): wrapper is typeof wrapper & { leading_result: NonNullable<typeof wrapper.leading_result> } =>
-          wrapper.leading_result !== null && wrapper.leading_result !== undefined
-        )
-        .filter(wrapper => {
-          // Validate URL hostname from external API
-          const resultUrl = wrapper.leading_result.url;
-          if (resultUrl !== '' && !isAllowedHostname(resultUrl)) {
-            console.error(`[SEARCH] Skipping result with unexpected hostname: ${resultUrl}`);
-            return false;
-          }
-          return true;
-        })
-        .map(wrapper => {
-          const leading = wrapper.leading_result;
-
-          // Select versioned entry (leading or matching follower)
-          const versioned = selectVersionedEntry(
-            leading, wrapper.follower_result, params.version
-          );
-
-          // Extract product from bundle_id (works for all bundle types: documentation, release-notes, etc.)
-          const { bundleId } = versioned;
-          const bundleSlug = extractProductSlug(bundleId);
-          const productEntry = bundleSlug !== null
-            ? Object.entries(JAMF_PRODUCTS).find(([id]) => id === bundleSlug)
-            : null;
-
-          const resultTitle = leading.title !== '' ? leading.title : 'Untitled';
-          const resultProduct = productEntry !== null && productEntry !== undefined ? productEntry[1].name : (leading.publication_title !== '' ? leading.publication_title : 'Jamf');
-          const rawSnippet = stripHtml(leading.snippet !== '' ? leading.snippet : '').slice(0, CONTENT_LIMITS.MAX_SNIPPET_LENGTH);
-
-          // Derive docType from labels instead of bundle_id regex
-          const { labels } = leading;
-          const labelKeys = (labels ?? []).map(l => l.key);
-
-          const searchResult: SearchResult = {
-            title: resultTitle,
-            url: transformToFrontendUrl(versioned.url !== '' ? versioned.url : ''),
-            snippet: cleanSnippet(rawSnippet, resultTitle, resultProduct),
-            product: resultProduct,
-            version: versioned.version,
-            docType: docTypeFromLabels(labels)
-          };
-
-          if (leading.score !== undefined) {
-            searchResult.relevance = leading.score;
-          }
-
-          // Find matched topics (searchText lowercased once, keywords pre-computed)
-          const searchText = `${searchResult.title} ${searchResult.snippet}`.toLowerCase();
-          const matchedTopics: TopicId[] = ALL_TOPIC_IDS
-            .filter(topicId => TOPIC_KEYWORDS_LOWER[topicId].some(kw => searchText.includes(kw)));
-
-          return {
-            result: searchResult, bundleSlug, bundleId, matchedTopics, labelKeys,
-            versionMatched: versioned.versionMatched
-          };
-        });
-
-      // Cache full results
-      await cache.set(cacheKey, allResults);
-    } catch (error) {
-      console.error('[SEARCH] Error:', error);
-
-      if (error instanceof JamfDocsError) {
-        throw error;
-      }
-
-      // Return empty results on error
-      return {
-        results: [],
-        pagination: {
-          page: 1,
-          pageSize,
-          totalPages: 0,
-          totalItems: 0,
-          hasNext: false,
-          hasPrev: false
-        },
-        tokenInfo: createTokenInfo('', maxTokens)
-      };
-    }
-  }
-
-  // Build active filters
+function buildActiveFilters(params: SearchParams): ActiveFilter[] {
   const activeFilters: ActiveFilter[] = [];
 
   if (params.product !== undefined) {
@@ -568,21 +487,160 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   if (params.docType !== undefined) {
     const docTypeFilter = params.docType;
     const targetLabelKey = DOC_TYPE_LABEL_MAP[docTypeFilter] as string | undefined;
-    // Only apply filter if the docType maps to a known label key
     if (targetLabelKey !== undefined) {
       activeFilters.push({
         name: 'docType',
         value: docTypeFilter,
         apply: (results) => results.filter(r => {
-          // If result has no labels, include it (don't filter out)
-          if (r.labelKeys.length === 0) {return true;}
+          if (r.labelKeys.length === 0) { return true; }
           return r.labelKeys.includes(targetLabelKey);
         })
       });
     }
   }
 
-  // Apply filters with progressive relaxation
+  return activeFilters;
+}
+
+/**
+ * Truncate search results to fit within token budget.
+ * Returns the truncated results and info about omitted items.
+ */
+function truncateSearchResults(
+  paginatedResults: SearchResult[],
+  maxTokens: number
+): { finalResults: SearchResult[]; truncated: boolean; truncatedContent?: TruncatedContentInfo } {
+  const tokenCount = estimateTokens(
+    paginatedResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')
+  );
+
+  if (tokenCount <= maxTokens) {
+    return { finalResults: paginatedResults, truncated: false };
+  }
+
+  let runningTokens = 0;
+  const finalResults: SearchResult[] = [];
+
+  for (const result of paginatedResults) {
+    const resultTokens = estimateTokens(`${result.title}\n${result.snippet}\n${result.url}`);
+    if (runningTokens + resultTokens > maxTokens) {
+      break;
+    }
+    finalResults.push(result);
+    runningTokens += resultTokens;
+  }
+
+  const omittedResults = paginatedResults.slice(finalResults.length);
+  const truncatedContent: TruncatedContentInfo = {
+    omittedCount: omittedResults.length,
+    omittedItems: omittedResults.map(r => ({
+      title: r.title,
+      estimatedTokens: estimateTokens(`${r.title}\n${r.snippet}\n${r.url}`)
+    }))
+  };
+
+  return { finalResults, truncated: true, truncatedContent };
+}
+
+/**
+ * Search response with token and pagination info
+ */
+export interface SearchDocumentationResult {
+  results: SearchResult[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+  filterRelaxation?: FilterRelaxation;
+  versionNote?: string;
+  truncatedContent?: TruncatedContentInfo;
+}
+
+/**
+ * Fetch search results from API or cache
+ */
+async function fetchSearchResults(
+  params: SearchParams,
+  locale: string,
+  cacheKey: string
+): Promise<SearchResultWithMeta[]> {
+  const cached = await cache.get<SearchResultWithMeta[]>(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const hasClientFilter = params.docType !== undefined || (params.version !== undefined && params.version !== 'current');
+  const fetchLimit = hasClientFilter
+    ? Math.min(CONTENT_LIMITS.MAX_SEARCH_RESULTS * CONTENT_LIMITS.FILTER_OVERFETCH_MULTIPLIER, CONTENT_LIMITS.FILTER_OVERFETCH_CAP)
+    : CONTENT_LIMITS.MAX_SEARCH_RESULTS;
+
+  const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
+  apiUrl.searchParams.set('q', params.query);
+  apiUrl.searchParams.set('rpp', fetchLimit.toString());
+  if (locale !== DEFAULT_LOCALE) {
+    apiUrl.searchParams.set('lang', locale);
+  }
+
+  log.debug(`Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
+
+  const response = await fetchJson<ZoominSearchResponse>(apiUrl.toString(), locale);
+
+  const results = response.Results
+    .filter((wrapper): wrapper is typeof wrapper & { leading_result: NonNullable<typeof wrapper.leading_result> } =>
+      wrapper.leading_result !== null && wrapper.leading_result !== undefined
+    )
+    .filter(wrapper => {
+      const resultUrl = wrapper.leading_result.url;
+      if (resultUrl !== '' && !isAllowedHostname(resultUrl)) {
+        log.warning(`Skipping result with unexpected hostname: ${resultUrl}`);
+        return false;
+      }
+      return true;
+    })
+    .map(wrapper => transformZoominResult(wrapper, params.version));
+
+  await cache.set(cacheKey, results);
+  return results;
+}
+
+/**
+ * Search Jamf documentation using Zoomin Search API
+ */
+export async function searchDocumentation(params: SearchParams): Promise<SearchDocumentationResult> {
+  const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
+  const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
+  const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+  const locale = params.language ?? DEFAULT_LOCALE;
+  const cacheKey = `${locale}:search:${JSON.stringify({
+    query: params.query, product: params.product, topic: params.topic,
+    docType: params.docType, version: params.version, limit: params.limit,
+    maxTokens: params.maxTokens, page: 1
+  })}`;
+
+  let allResults: SearchResultWithMeta[];
+  try {
+    allResults = await fetchSearchResults(params, locale, cacheKey);
+  } catch (error) {
+    log.error(`Search error: ${String(error)}`);
+
+    if (error instanceof JamfDocsError) {
+      throw error;
+    }
+
+    return {
+      results: [],
+      pagination: {
+        page: 1,
+        pageSize,
+        totalPages: 0,
+        totalItems: 0,
+        hasNext: false,
+        hasPrev: false
+      },
+      tokenInfo: createTokenInfo('', maxTokens)
+    };
+  }
+
+  // Build and apply filters with progressive relaxation
+  const activeFilters = buildActiveFilters(params);
   const { filtered: filteredResults, relaxation: filterRelaxation } =
     applyFiltersWithFallback(allResults, activeFilters);
 
@@ -594,47 +652,11 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
     .slice(paginationInfo.startIndex, paginationInfo.endIndex)
     .map(r => r.result);
 
-  // Calculate token info
-  const resultText = paginatedResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n');
-  const tokenCount = estimateTokens(resultText);
-
-  // Check if we need to truncate
-  let finalResults = paginatedResults;
-  let truncated = false;
-
-  if (tokenCount > maxTokens) {
-    // Truncate results to fit token limit
-    let runningTokens = 0;
-    finalResults = [];
-
-    for (const result of paginatedResults) {
-      const resultTokens = estimateTokens(`${result.title}\n${result.snippet}\n${result.url}`);
-      if (runningTokens + resultTokens > maxTokens) {
-        truncated = true;
-        break;
-      }
-      finalResults.push(result);
-      runningTokens += resultTokens;
-    }
-  }
-
-  // Reuse already-computed token count when no truncation occurred
-  const finalTokenCount = truncated
-    ? estimateTokens(finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n'))
-    : tokenCount;
-
-  // Build truncated content info
-  let truncatedContent: TruncatedContentInfo | undefined;
-  if (truncated) {
-    const omittedResults = paginatedResults.slice(finalResults.length);
-    truncatedContent = {
-      omittedCount: omittedResults.length,
-      omittedItems: omittedResults.map(r => ({
-        title: r.title,
-        estimatedTokens: estimateTokens(`${r.title}\n${r.snippet}\n${r.url}`)
-      }))
-    };
-  }
+  // Truncate results to fit within token budget
+  const { finalResults, truncated, truncatedContent } = truncateSearchResults(paginatedResults, maxTokens);
+  const finalTokenCount = estimateTokens(
+    finalResults.map(r => `${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')
+  );
 
   // Generate versionNote only when version was requested but not found in some results
   const requestedVersion = params.version;
@@ -836,7 +858,7 @@ async function discoverLatestBundleId(product: ProductId): Promise<string | null
       }
     }
   } catch (error) {
-    console.error(`[TOC] Error discovering bundle version for ${product}:`, error);
+    log.error(`Error discovering bundle version for ${product}: ${String(error)}`);
   }
 
   return null;
@@ -961,11 +983,11 @@ async function buildTocFromSearch(product: ProductId, locale: string): Promise<T
     }
 
     if (entries.length > 0) {
-      console.error(`[TOC] Built fallback TOC with ${entries.length} entries from search for ${product}`);
+      log.info(`Built fallback TOC with ${entries.length} entries from search for ${product}`);
     }
     return entries;
   } catch (error) {
-    console.error(`[TOC] Failed to build TOC from search for ${product}:`, error);
+    log.error(`Failed to build TOC from search for ${product}: ${String(error)}`);
     return [];
   }
 }
@@ -1003,7 +1025,7 @@ export async function fetchTableOfContents(
 
     // Fetch TOC from backend (may 404 for some products)
     const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
-    console.error(`[TOC] Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
+    log.debug(`Fetching TOC from: ${tocUrl}, Locale: ${locale}`);
 
     allToc = [];
     try {
@@ -1018,12 +1040,12 @@ export async function fetchTableOfContents(
       }
     } catch (error) {
       // TOC endpoint may 404 or fail for some products — fall through to search fallback
-      console.error(`[TOC] Backend TOC request failed for ${product}: ${error instanceof Error ? error.message : String(error)}`);
+      log.error(`Backend TOC request failed for ${product}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Fallback: build TOC from search results when backend returns empty or fails
     if (allToc.length === 0) {
-      console.error(`[TOC] No TOC entries for ${product}, falling back to search-based discovery`);
+      log.info(`No TOC entries for ${product}, falling back to search-based discovery`);
       allToc = await buildTocFromSearch(product, locale);
     }
 

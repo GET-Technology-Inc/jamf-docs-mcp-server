@@ -13,10 +13,15 @@ import { registerSearchTool } from './tools/search.js';
 import { registerGetArticleTool } from './tools/get-article.js';
 import { registerListProductsTool } from './tools/list-products.js';
 import { registerGetTocTool } from './tools/get-toc.js';
+import { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
+import { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
 import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
 import { SERVER_ICON, SERVER_VERSION } from './constants.js';
 import { parseCliArgs } from './transport/index.js';
+import { createLogger, setServer } from './services/logging.js';
+
+const log = createLogger('server');
 
 // Server instructions for AI clients
 const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect.
@@ -26,6 +31,7 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
 2. Use jamf_docs_search to find relevant articles by keyword. Always search before fetching a full article.
 3. Use jamf_docs_get_article to retrieve full content of a specific article found via search.
 4. Use jamf_docs_get_toc to browse the table of contents for a product.
+5. Use jamf_docs_glossary_lookup to quickly look up Jamf terminology and definitions.
 
 ## Output Modes
 - Use outputMode: "compact" when browsing or listing results to save tokens.
@@ -49,14 +55,21 @@ const server = new McpServer(
   },
   {
     instructions: SERVER_INSTRUCTIONS,
+    capabilities: {
+      logging: {},
+    },
   },
 );
+
+setServer(server);
 
 // Register all tools
 registerListProductsTool(server);
 registerSearchTool(server);
 registerGetArticleTool(server);
 registerGetTocTool(server);
+registerGlossaryLookupTool(server);
+registerBatchGetArticlesTool(server);
 
 // Register resources
 registerResources(server);
@@ -75,14 +88,15 @@ async function main(): Promise<void> {
     const transport = new StdioServerTransport();
     await server.connect(transport);
 
-    console.error('Jamf Docs MCP Server running on stdio');
-    console.error('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc');
-    console.error('Available resources: jamf://products, jamf://topics');
-    console.error('Available prompts: jamf_troubleshoot, jamf_setup_guide, jamf_compare_versions');
+    log.info('Jamf Docs MCP Server running on stdio');
+    log.info('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc, jamf_docs_glossary_lookup, jamf_docs_batch_get_articles');
+    log.info('Available resources: jamf://products, jamf://topics');
+    log.info('Available prompts: jamf_troubleshoot, jamf_setup_guide, jamf_compare_versions');
   }
 }
 
 main().catch((error: unknown) => {
-  console.error('Fatal error:', error);
+  const message = error instanceof Error ? error.stack ?? String(error) : String(error);
+  log.emergency(`Fatal error: ${message}`);
   process.exit(1);
 });
