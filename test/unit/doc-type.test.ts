@@ -30,8 +30,8 @@ describe('docTypeFromLabels', () => {
     expect(docTypeFromLabels([{ key: 'content-gettingstarted' }])).toBe('getting-started');
   });
 
-  it('should return "archive" for content-archive label', () => {
-    expect(docTypeFromLabels([{ key: 'content-archive' }])).toBe('archive');
+  it('should return "documentation" for content-archive label (archive type removed)', () => {
+    expect(docTypeFromLabels([{ key: 'content-archive' }])).toBe('documentation');
   });
 
   it('should use first content-* match when multiple labels present', () => {

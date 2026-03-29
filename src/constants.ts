@@ -536,11 +536,6 @@ export const DOC_TYPES = {
     description: 'Getting started guides and quickstart content',
     labelKey: 'content-gettingstarted',
   },
-  'archive': {
-    name: 'Archive',
-    description: 'Archived documentation from previous versions',
-    labelKey: 'content-archive',
-  },
 } as const;
 
 // Forward mapping: docType enum value → API label key
