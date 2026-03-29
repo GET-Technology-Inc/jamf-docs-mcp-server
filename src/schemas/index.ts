@@ -212,3 +212,39 @@ export const GetTocInputSchema = z.object({
 }).strict();
 
 export type GetTocInput = z.infer<typeof GetTocInputSchema>;
+
+/**
+ * Schema for jamf_docs_glossary_lookup
+ */
+export const GlossaryLookupInputSchema = z.object({
+  term: z.string()
+    .min(2, 'Term must be at least 2 characters')
+    .max(100, 'Term must not exceed 100 characters')
+    .describe('Glossary term to look up (e.g., "MDM", "Configuration Profile", "Smart Group")'),
+
+  product: completable(
+    z.enum(PRODUCT_IDS)
+      .optional()
+      .describe('Filter by product: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+    completeProduct
+  ),
+
+  language: completable(
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    completeLanguage
+  ),
+
+  maxTokens: MaxTokensSchema
+    .optional()
+    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+
+  outputMode: OutputModeSchema
+    .default(OutputMode.FULL)
+    .describe('Output detail level: "full" for detailed output or "compact" for brief output'),
+
+  responseFormat: ResponseFormatSchema
+    .default(ResponseFormat.MARKDOWN)
+    .describe('Output format: "markdown" for human-readable or "json" for machine-readable')
+}).strict();
+
+export type GlossaryLookupInput = z.infer<typeof GlossaryLookupInputSchema>;

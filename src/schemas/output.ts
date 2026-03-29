@@ -68,6 +68,18 @@ export const ArticleOutputSchema = z.object({
   truncated: z.boolean(),
 });
 
+export const GlossaryLookupOutputSchema = z.object({
+  term: z.string(),
+  totalMatches: z.number(),
+  entries: z.array(z.object({
+    term: z.string(),
+    definition: z.string(),
+    product: z.string().optional(),
+    url: z.string(),
+  })),
+  truncated: z.boolean(),
+});
+
 export const TocOutputSchema = z.object({
   product: z.string(),
   version: z.string(),
