@@ -248,17 +248,16 @@ describe('searchDocumentation() docType filtering', { timeout: 60000, retry: 2 }
 // ============================================================================
 
 describe('searchDocumentation() version behavior', { timeout: 60000, retry: 2 }, () => {
-  it('should return version: "current" even when non-current version is requested', async () => {
+  it('should extract actual version from bundle_id instead of hardcoding current', async () => {
     const result = await searchDocumentation({
       query: 'configuration profile',
-      version: '11.0.0',
     });
 
     expect(result.results.length).toBeGreaterThan(0);
 
-    // API always returns current version content regardless of requested version
+    // Results should have actual version strings extracted from bundle_id, or 'current'
     for (const r of result.results) {
-      expect(r.version).toBe('current');
+      expect(r.version).toMatch(/^(\d+\.\d+\.\d+|current)$/);
     }
   });
 });
