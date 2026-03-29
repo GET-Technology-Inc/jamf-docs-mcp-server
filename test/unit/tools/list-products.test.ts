@@ -11,8 +11,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
+const mockGetProductAvailability = vi.fn().mockResolvedValue({});
+
 vi.mock('../../../src/services/metadata.js', () => ({
-  getProductAvailability: vi.fn().mockResolvedValue({}),
+  getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
 }));
 
 import { registerListProductsTool } from '../../../src/tools/list-products.js';
@@ -418,6 +420,62 @@ describe('jamf_docs_list_products tool', () => {
 
       const sc = result.structuredContent as Record<string, unknown>;
       expect((sc.topics as unknown[]).length).toBeGreaterThan(0);
+    });
+  });
+
+  // --- Product availability filtering ---------------------------------------
+
+  describe('product availability filtering', () => {
+    it('should exclude products with empty TOC (hasContent: false)', async () => {
+      mockGetProductAvailability.mockResolvedValueOnce({
+        'jamf-pro': true,
+        'jamf-school': true,
+        'jamf-connect': true,
+        'jamf-protect': true,
+        'jamf-routines': false,
+        'jamf-now': true,
+        'jamf-safe-internet': true,
+        'jamf-insights': true,
+        'jamf-rapididentity': true,
+        'jamf-trust': true,
+        'self-service-plus': true,
+        'jamf-app-catalog': true,
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { responseFormat: 'json' },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      const ids = json.products.map((p: { id: string }) => p.id);
+      expect(ids).not.toContain('jamf-routines');
+      expect(ids).toContain('jamf-pro');
+    });
+
+    it('should show all products when all have content', async () => {
+      mockGetProductAvailability.mockResolvedValueOnce({
+        'jamf-pro': true,
+        'jamf-school': true,
+        'jamf-connect': true,
+        'jamf-protect': true,
+        'jamf-routines': true,
+        'jamf-now': true,
+        'jamf-safe-internet': true,
+        'jamf-insights': true,
+        'jamf-rapididentity': true,
+        'jamf-trust': true,
+        'self-service-plus': true,
+        'jamf-app-catalog': true,
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { responseFormat: 'json' },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      expect(json.products).toHaveLength(12);
     });
   });
 });

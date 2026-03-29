@@ -60,7 +60,16 @@ function makeAxiosError(status?: number, code?: string, message = 'network error
   return error;
 }
 
-function makeSearchResponse(results: { title: string; url: string; snippet: string; bundle_id: string; publication_title?: string; score?: number }[]) {
+function makeSearchResponse(results: {
+  title: string;
+  url: string;
+  snippet: string;
+  bundle_id: string;
+  publication_title?: string;
+  score?: number;
+  labels?: { key: string; navtitle?: string }[];
+  follower_result?: { title: string; url: string; snippet: string; bundle_id: string; page_id: string; publication_title: string; labels?: { key: string; navtitle?: string }[] }[];
+}[]) {
   return {
     status: 'ok',
     Results: results.map(r => ({
@@ -71,8 +80,10 @@ function makeSearchResponse(results: { title: string; url: string; snippet: stri
         bundle_id: r.bundle_id,
         page_id: 'p1',
         publication_title: r.publication_title ?? 'Jamf',
-        score: r.score
-      }
+        score: r.score,
+        labels: r.labels
+      },
+      follower_result: r.follower_result
     }))
   };
 }

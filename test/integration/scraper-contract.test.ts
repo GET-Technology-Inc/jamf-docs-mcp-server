@@ -332,10 +332,10 @@ describe('searchDocumentation() multi-filter', { timeout: 60000, retry: 2 }, () 
 });
 
 // ============================================================================
-// technical-article bundle contract tests
+// label-based docType contract tests
 // ============================================================================
 
-describe('searchDocumentation() technical-article bundle', { timeout: 60000, retry: 2 }, () => {
+describe('searchDocumentation() label-based docType', { timeout: 60000, retry: 2 }, () => {
   it('should include diverse docType values in broad search results', async () => {
     const result = await searchDocumentation({ query: 'jamf pro', limit: 50 });
 

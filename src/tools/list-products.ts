@@ -78,15 +78,17 @@ export function registerListProductsTool(server: McpServer): void {
         // Fetch product availability (cached)
         const availability = await getProductAvailability();
 
-        // Build product list
-        const products = Object.values(JAMF_PRODUCTS).map(product => ({
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          currentVersion: product.latestVersion,
-          availableVersions: [...product.versions],
-          hasContent: availability[product.id] ?? true
-        }));
+        // Build product list, filtering out products with no TOC content
+        const products = Object.values(JAMF_PRODUCTS)
+          .map(product => ({
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            currentVersion: product.latestVersion,
+            availableVersions: [...product.versions],
+            hasContent: availability[product.id] ?? true
+          }))
+          .filter(product => product.hasContent);
 
         // Build topics list
         const topics = Object.entries(JAMF_TOPICS).map(([id, topic]) => ({

@@ -136,7 +136,7 @@ Args:
   - query (string, required): Search keywords (2-200 characters)
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): Filter by topic (enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network)
-  - docType (string, optional): Filter by document type: documentation, release-notes, install-guide, technical-paper, configuration-guide, training
+  - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started, archive
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
   - limit (number, optional): Maximum results per page 1-50 (default: 10)
   - page (number, optional): Page number for pagination 1-100 (default: 1)
@@ -239,12 +239,7 @@ export function registerSearchTool(server: McpServer): void {
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
 
-        const { results, pagination, tokenInfo, filterRelaxation, truncatedContent } = searchResult;
-
-        // Version transparency
-        const versionNote = (params.version !== undefined && params.version !== 'current')
-          ? 'The Jamf documentation API only provides current version content. Results shown are from the latest version.'
-          : undefined;
+        const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
 
         // Build response
         const response: SearchResponse = {
@@ -311,7 +306,6 @@ export function registerSearchTool(server: McpServer): void {
             ...(r.docType !== undefined ? { docType: r.docType } : {})
           })),
           ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
-          ...(versionNote !== undefined ? { versionNote } : {}),
           ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
