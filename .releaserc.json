@@ -8,7 +8,12 @@
         { "type": "feat", "release": "minor" },
         { "type": "fix", "release": "patch" },
         { "type": "perf", "release": "patch" },
-        { "type": "deps", "release": "patch" }
+        { "type": "deps", "release": "patch" },
+        { "type": "refactor", "release": "patch" },
+        { "type": "style", "release": "patch" },
+        { "type": "build", "release": "patch" },
+        { "type": "revert", "release": "patch" },
+        { "breaking": true, "release": "major" }
       ]
     }],
     ["@semantic-release/release-notes-generator", {
@@ -19,10 +24,13 @@
           { "type": "fix", "section": "Bug Fixes" },
           { "type": "perf", "section": "Performance" },
           { "type": "deps", "section": "Dependencies" },
+          { "type": "refactor", "section": "Refactoring" },
+          { "type": "style", "section": "Style" },
+          { "type": "build", "section": "Build" },
+          { "type": "revert", "section": "Reverts" },
           { "type": "docs", "hidden": true },
           { "type": "ci", "hidden": true },
           { "type": "test", "hidden": true },
-          { "type": "refactor", "hidden": true },
           { "type": "chore", "hidden": true }
         ]
       }
