@@ -6,8 +6,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
-import type { ProductId, TopicId, DocTypeId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, TOKEN_CONFIG } from '../constants.js';
+import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/scraper.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
@@ -233,6 +233,7 @@ export function registerSearchTool(server: McpServer): void {
           product: params.product as ProductId | undefined,
           topic: params.topic as TopicId | undefined,
           docType: params.docType as DocTypeId | undefined,
+          language: params.language as LocaleId | undefined,
           version: params.version,
           limit: params.limit,
           page: params.page,
@@ -260,6 +261,7 @@ export function registerSearchTool(server: McpServer): void {
 
         // Handle no results with suggestions
         if (results.length === 0 && pagination.totalItems === 0) {
+          const locale = params.language as LocaleId | undefined;
           const suggestions = generateSearchSuggestions(
             params.query,
             params.product !== undefined,
@@ -267,6 +269,9 @@ export function registerSearchTool(server: McpServer): void {
           );
 
           const suggestionTexts = [
+            ...(locale !== undefined && locale !== DEFAULT_LOCALE
+              ? [`Not all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`]
+              : []),
             ...(suggestions.simplifiedQuery !== null ? [`Try: ${suggestions.simplifiedQuery}`] : []),
             ...suggestions.alternativeKeywords,
             ...suggestions.tips

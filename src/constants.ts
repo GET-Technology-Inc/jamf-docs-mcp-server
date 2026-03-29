@@ -2,7 +2,7 @@
  * Constants for Jamf Docs MCP Server
  *
  * Note: Jamf documentation has moved from docs.jamf.com to learn.jamf.com
- * The new URL structure is: learn.jamf.com/en-US/bundle/{product}-documentation/page/{page}.html
+ * The new URL structure is: learn.jamf.com/{locale}/bundle/{product}-documentation/page/{page}.html
  */
 
 import * as path from 'path';
@@ -52,13 +52,44 @@ export const SERVER_VERSION = pkg.version;
 export const DOCS_BASE_URL = 'https://learn.jamf.com';
 export const DOCS_API_URL = 'https://learn-be.jamf.com';
 
+// Supported locales for Jamf documentation (learn.jamf.com)
+export const DEFAULT_LOCALE = 'en-US';
+
+export const SUPPORTED_LOCALES = {
+  'en-US': { name: 'English' },
+  'ja-JP': { name: '日本語' },
+  'zh-TW': { name: '繁體中文' },
+  'de-DE': { name: 'Deutsch' },
+  'es-ES': { name: 'Español' },
+  'fr-FR': { name: 'Français' },
+  'nl-NL': { name: 'Nederlands' },
+  'th-TH': { name: 'ไทย' },
+} as const;
+
+export type LocaleId = keyof typeof SUPPORTED_LOCALES;
+export const SUPPORTED_LOCALE_IDS = Object.keys(SUPPORTED_LOCALES) as [string, ...string[]];
+
+/**
+ * Build a full documentation URL with locale
+ */
+export function buildDocUrl(locale: string, bundleId: string, page: string): string {
+  return `${DOCS_BASE_URL}/${locale}/bundle/${bundleId}/page/${page}`;
+}
+
+/**
+ * Build a URL pattern path (without base URL) for a given locale and bundleId
+ */
+export function buildUrlPattern(locale: string, bundleId: string): string {
+  return `${locale}/bundle/${bundleId}/page`;
+}
+
 // Supported products - updated URL patterns for learn.jamf.com
 export const JAMF_PRODUCTS = {
   'jamf-pro': {
     id: 'jamf-pro',
     name: 'Jamf Pro',
     description: 'Apple device management for enterprise',
-    urlPattern: 'en-US/bundle/jamf-pro-documentation/page',
+    urlPattern: 'bundle/jamf-pro-documentation/page',
     bundleId: 'jamf-pro-documentation',
     searchLabel: 'product-pro',  // Label used in Zoomin search API
     latestVersion: 'current',
@@ -68,7 +99,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-school',
     name: 'Jamf School',
     description: 'Apple device management for education',
-    urlPattern: 'en-US/bundle/jamf-school-documentation/page',
+    urlPattern: 'bundle/jamf-school-documentation/page',
     bundleId: 'jamf-school-documentation',
     searchLabel: 'product-school',
     latestVersion: 'current',
@@ -78,7 +109,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-connect',
     name: 'Jamf Connect',
     description: 'Identity and access management',
-    urlPattern: 'en-US/bundle/jamf-connect-documentation/page',
+    urlPattern: 'bundle/jamf-connect-documentation/page',
     bundleId: 'jamf-connect-documentation',
     searchLabel: 'product-connect',
     latestVersion: 'current',
@@ -88,7 +119,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-protect',
     name: 'Jamf Protect',
     description: 'Endpoint security for Apple',
-    urlPattern: 'en-US/bundle/jamf-protect-documentation/page',
+    urlPattern: 'bundle/jamf-protect-documentation/page',
     bundleId: 'jamf-protect-documentation',
     searchLabel: 'product-protect',
     latestVersion: 'current',
@@ -98,7 +129,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-now',
     name: 'Jamf Now',
     description: 'Simple Apple device management for small businesses',
-    urlPattern: 'en-US/bundle/jamf-now-documentation/page',
+    urlPattern: 'bundle/jamf-now-documentation/page',
     bundleId: 'jamf-now-documentation',
     searchLabel: 'product-now',
     latestVersion: 'current',
@@ -108,7 +139,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-safe-internet',
     name: 'Jamf Safe Internet',
     description: 'Content filtering and web security for education and business',
-    urlPattern: 'en-US/bundle/jamf-safe-internet-documentation/page',
+    urlPattern: 'bundle/jamf-safe-internet-documentation/page',
     bundleId: 'jamf-safe-internet-documentation',
     searchLabel: 'product-safeinternet',
     latestVersion: 'current',
@@ -118,7 +149,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-insights',
     name: 'Jamf Insights',
     description: 'Analytics and reporting platform for Apple fleet',
-    urlPattern: 'en-US/bundle/jamf-insights-documentation/page',
+    urlPattern: 'bundle/jamf-insights-documentation/page',
     bundleId: 'jamf-insights-documentation',
     searchLabel: 'product-insights',
     latestVersion: 'current',
@@ -128,7 +159,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-rapididentity',
     name: 'RapidIdentity',
     description: 'Identity and access management platform',
-    urlPattern: 'en-US/bundle/jamf-rapididentity-documentation/page',
+    urlPattern: 'bundle/jamf-rapididentity-documentation/page',
     bundleId: 'jamf-rapididentity-documentation',
     searchLabel: 'product-rapididentity',
     latestVersion: 'current',
@@ -138,7 +169,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-trust',
     name: 'Jamf Trust',
     description: 'Zero-trust network access for Apple devices',
-    urlPattern: 'en-US/bundle/jamf-trust-documentation/page',
+    urlPattern: 'bundle/jamf-trust-documentation/page',
     bundleId: 'jamf-trust-documentation',
     searchLabel: 'product-trust',
     latestVersion: 'current',
@@ -148,7 +179,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-routines',
     name: 'Jamf Routines',
     description: 'Automated workflow orchestration for device management',
-    urlPattern: 'en-US/bundle/jamf-routines-documentation/page',
+    urlPattern: 'bundle/jamf-routines-documentation/page',
     bundleId: 'jamf-routines-documentation',
     searchLabel: 'product-routines',
     latestVersion: 'current',
@@ -158,7 +189,7 @@ export const JAMF_PRODUCTS = {
     id: 'self-service-plus',
     name: 'Self Service+',
     description: 'Next-generation self-service portal for macOS',
-    urlPattern: 'en-US/bundle/self-service-plus-documentation/page',
+    urlPattern: 'bundle/self-service-plus-documentation/page',
     bundleId: 'self-service-plus-documentation',
     searchLabel: 'product-self-service',
     latestVersion: 'current',
@@ -168,7 +199,7 @@ export const JAMF_PRODUCTS = {
     id: 'jamf-app-catalog',
     name: 'Jamf App Catalog',
     description: 'Curated application catalog for managed deployments',
-    urlPattern: 'en-US/bundle/jamf-app-catalog/page',
+    urlPattern: 'bundle/jamf-app-catalog/page',
     bundleId: 'jamf-app-catalog',
     searchLabel: 'product-appcatalog',
     latestVersion: 'current',

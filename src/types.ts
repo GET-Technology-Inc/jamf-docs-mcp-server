@@ -2,7 +2,7 @@
  * Type definitions for Jamf Docs MCP Server
  */
 
-import type { ResponseFormat, ProductId, TopicId, DocTypeId } from './constants.js';
+import type { ResponseFormat, ProductId, TopicId, DocTypeId, LocaleId } from './constants.js';
 
 // ============================================================================
 // Context7-style Token and Pagination Types
@@ -71,6 +71,7 @@ export interface SearchParams {
   version?: string | undefined;
   topic?: TopicId | undefined;
   docType?: DocTypeId | undefined;
+  language?: LocaleId | undefined;
   limit?: number | undefined;
   page?: number | undefined;
   maxTokens?: number | undefined;
@@ -118,6 +119,7 @@ export interface SearchResponse {
 // Article types
 export interface GetArticleParams {
   url: string;
+  language?: LocaleId | undefined;
   includeRelated?: boolean;
   section?: string | undefined;
   maxTokens?: number | undefined;
@@ -147,6 +149,7 @@ export interface ArticleResponse extends ParsedArticle {
 // TOC types
 export interface GetTocParams {
   product: ProductId;
+  language?: LocaleId | undefined;
   version?: string;
   page?: number | undefined;
   maxTokens?: number | undefined;

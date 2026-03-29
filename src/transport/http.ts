@@ -23,6 +23,12 @@ class PayloadTooLargeError extends Error {
 // CORS configuration
 const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
 
+// Trust reverse proxy headers (X-Forwarded-For) only when explicitly enabled
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1';
+
+// Maximum unique IPs tracked by rate limiter to prevent memory exhaustion
+const MAX_RATE_LIMIT_BUCKETS = 10_000;
+
 /**
  * Token bucket rate limiter (per-IP)
  */
@@ -30,10 +36,12 @@ class RateLimiter {
   private readonly buckets = new Map<string, { tokens: number; lastRefill: number }>();
   private readonly maxTokens: number;
   private readonly windowMs: number;
+  private readonly maxBuckets: number;
 
-  constructor(maxTokens: number, windowMs: number) {
+  constructor(maxTokens: number, windowMs: number, maxBuckets: number = MAX_RATE_LIMIT_BUCKETS) {
     this.maxTokens = maxTokens;
     this.windowMs = windowMs;
+    this.maxBuckets = maxBuckets;
   }
 
   isAllowed(ip: string): boolean {
@@ -41,6 +49,10 @@ class RateLimiter {
     let bucket = this.buckets.get(ip);
 
     if (bucket === undefined) {
+      // Evict oldest entry if at capacity to prevent memory exhaustion
+      if (this.buckets.size >= this.maxBuckets) {
+        this.evictOldest();
+      }
       bucket = { tokens: this.maxTokens, lastRefill: now };
       this.buckets.set(ip, bucket);
     }
@@ -58,6 +70,21 @@ class RateLimiter {
     return false;
   }
 
+  // Evict the oldest (least recently seen) bucket entry
+  private evictOldest(): void {
+    let oldestKey: string | undefined;
+    let oldestTime = Infinity;
+    for (const [key, bucket] of this.buckets.entries()) {
+      if (bucket.lastRefill < oldestTime) {
+        oldestTime = bucket.lastRefill;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey !== undefined) {
+      this.buckets.delete(oldestKey);
+    }
+  }
+
   // Periodically clean up old entries to prevent memory leak
   cleanup(): void {
     const now = Date.now();
@@ -69,11 +96,18 @@ class RateLimiter {
   }
 }
 
+/** Security headers applied to all responses (defense-in-depth) */
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Cache-Control': 'no-store',
+};
+
 /**
  * Get CORS headers for a given origin
  */
 function getCorsHeaders(origin: string | string[] | undefined): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...SECURITY_HEADERS };
 
   if (CORS_ALLOWED_ORIGINS.length === 0) {
     // No origins configured — deny cross-origin by not setting Access-Control-Allow-Origin
@@ -93,12 +127,15 @@ function getCorsHeaders(origin: string | string[] | undefined): Record<string, s
 }
 
 /**
- * Get client IP from request
+ * Get client IP from request.
+ * Only trusts X-Forwarded-For when TRUST_PROXY is enabled.
  */
 function getClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0]?.trim() ?? 'unknown';
+  if (TRUST_PROXY) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') {
+      return forwarded.split(',')[0]?.trim() ?? 'unknown';
+    }
   }
   // socket may be undefined in test environments
   const socket = req.socket as { remoteAddress?: string } | undefined;

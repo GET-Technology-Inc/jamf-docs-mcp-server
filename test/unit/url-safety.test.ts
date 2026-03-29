@@ -188,11 +188,8 @@ describe('isAllowedHostname — search result filtering', () => {
   });
 
   it('should filter out results with an http (non-https) URL on an allowed hostname', async () => {
-    // Hostname check accepts the hostname regardless of scheme, but this
-    // verifies the allowlist only matches the hostname portion of the URL.
-    // http://learn-be.jamf.com has hostname "learn-be.jamf.com" which IS
-    // in the allowlist — so the result should pass the filter. This test
-    // documents the current behavior explicitly.
+    // isAllowedHostname now enforces https: protocol — http URLs are rejected
+    // even when the hostname is in the allowlist.
     vi.mocked(axios.get).mockResolvedValue({
       data: makeSearchResponse([
         validRow({ url: 'http://learn-be.jamf.com/page.html' })
@@ -201,8 +198,8 @@ describe('isAllowedHostname — search result filtering', () => {
 
     const { results } = await searchDocumentation({ query: 'test' });
 
-    // Hostname is in allowlist regardless of scheme — result is kept
-    expect(results).toHaveLength(1);
+    // http: protocol is rejected — result is filtered out
+    expect(results).toHaveLength(0);
   });
 
   it('should pass through allowed results and drop disallowed ones in the same response', async () => {

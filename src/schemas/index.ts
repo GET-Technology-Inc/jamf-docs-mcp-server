@@ -12,9 +12,11 @@ import {
   PAGINATION_CONFIG,
   PRODUCT_IDS,
   TOPIC_IDS,
-  DOC_TYPE_IDS
+  DOC_TYPE_IDS,
+  SUPPORTED_LOCALE_IDS,
+  DEFAULT_LOCALE
 } from '../constants.js';
-import { completeProduct, completeTopic, completeVersion } from '../completions.js';
+import { completeProduct, completeTopic, completeVersion, completeLanguage } from '../completions.js';
 import { isAllowedHostname } from '../utils/url.js';
 
 // Response format enum
@@ -30,6 +32,9 @@ const MaxTokensSchema = z.number()
   .max(TOKEN_CONFIG.MAX_TOKENS_LIMIT)
   .default(TOKEN_CONFIG.DEFAULT_MAX_TOKENS)
   .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`);
+
+// Common language/locale parameter (completable() mutates in place, so each call needs a fresh schema)
+const LANGUAGE_DESCRIPTION = `Documentation language/locale (default: ${DEFAULT_LOCALE}). Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
 
 // Common page parameter schema
 const PageSchema = z.number()
@@ -88,6 +93,11 @@ export const SearchInputSchema = z.object({
     completeVersion
   ),
 
+  language: completable(
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    completeLanguage
+  ),
+
   docType: z.enum(DOC_TYPE_IDS)
     .optional()
     .describe('Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started, archive'),
@@ -130,6 +140,11 @@ export const GetArticleInputSchema = z.object({
     )
     .describe('Full URL of the Jamf documentation article'),
 
+  language: completable(
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    completeLanguage
+  ),
+
   section: z.string()
     .optional()
     .describe('Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")'),
@@ -165,6 +180,11 @@ export const GetTocInputSchema = z.object({
     z.enum(PRODUCT_IDS)
       .describe('Product ID: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
     completeProduct
+  ),
+
+  language: completable(
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    completeLanguage
   ),
 
   version: completable(

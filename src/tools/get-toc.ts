@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GetTocInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
-import type { ProductId } from '../constants.js';
+import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
 import { fetchTableOfContents } from '../services/scraper.js';
@@ -212,7 +212,8 @@ export function registerGetTocTool(server: McpServer): void {
 
         const tocResult = await fetchTableOfContents(productId, version, {
           ...(params.page !== undefined && { page: params.page }),
-          maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
+          maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
+          locale: params.language as LocaleId | undefined
         });
 
         await reportProgress(extra, 50, 100);

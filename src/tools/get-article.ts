@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema } from '../schemas/output.js';
-import { ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
+import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type { ToolResult, ArticleResponse, ArticleSection, TokenInfo } from '../types.js';
 import { fetchArticle, type FetchArticleResult } from '../services/scraper.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
@@ -250,7 +250,8 @@ export function registerGetArticleTool(server: McpServer): void {
           includeRelated: params.includeRelated,
           summaryOnly: params.summaryOnly,
           ...(params.section !== undefined && { section: params.section }),
-          maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
+          maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
+          locale: params.language as LocaleId | undefined
         });
 
         await reportProgress(extra, 70, 100);
