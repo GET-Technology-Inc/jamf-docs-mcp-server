@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.3.1...v1.4.0) (2026-03-29)
+
+### Features
+
+* add multi-locale support and security hardening ([#55](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/55)) ([ba76f50](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ba76f507e6b89770d6a63e05f792e5aeeb096328))
+
 ## [1.3.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.3.0...v1.3.1) (2026-03-29)
 
 ### Dependencies
