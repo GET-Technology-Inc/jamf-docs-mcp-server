@@ -1,3 +1,72 @@
+## [3.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v2.0.0...v3.0.0) (2026-03-30)
+
+### ⚠ BREAKING CHANGES
+
+* Tool registration and service function signatures now
+require a ServerContext parameter for dependency injection.
+
+Core changes:
+- Define platform interfaces: CacheProvider, MetadataStore, LoggerFactory
+- Add ServerContext DI container and createMcpServer() factory function
+- Replace axios with native fetch (httpGetText/httpGetJson/HttpError)
+- Remove all process.env access from core — moved to platforms/node
+- Add package.json exports for ./core and ./platforms/node sub-paths
+- Add TypeScript declarations for all export paths
+
+Platform Node.js:
+- FileCache implements CacheProvider (fs/path/crypto)
+- NodeMetadataStore implements MetadataStore
+- NodeLoggerFactory implements LoggerFactory (stderr + MCP notifications)
+- createNodeConfig() reads process.env with validation
+
+Dependencies:
+- Remove axios (replaced by global fetch)
+- Update @modelcontextprotocol/sdk to 1.28.0
+- Set engines.node >= 18.11
+
+The public API (bin entry, MCP tools, resources, prompts) is unchanged.
+All 1116 tests pass across unit, integration, and E2E suites.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+* fix: resolve search product filter regression, list_products gap, and dedup residuals
+
+- list_products: stop filtering out products with unavailable TOC — all 12
+  products now always appear, with hasContent marking availability status
+- search: send product searchLabel as API `label` param to Zoomin so
+  server-side filtering works for jamf-routines, jamf-trust, etc.
+- dedup: add title-based fallback key in deduplicateByLatestVersion() to
+  catch cross-version duplicates when page slugs differ but titles match
+
+Verified via E2E: jamf-routines search returns 5 Routines articles (no
+relaxation), jamf-trust returns 5 Trust articles, FileVault shows 0
+cross-version duplicates.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+* feat: add provider injection interfaces and selective tool registration
+
+Add optional data-source provider interfaces (SearchProvider, ArticleProvider,
+GlossaryProvider, TocProvider) to ServerContext, enabling external projects to
+inject custom backends (e.g., Vectorize, R2, D1) without modifying core code.
+Each provider uses null-fallthrough pattern — return null to use default impl.
+
+Also add CreateServerOptions with tools whitelist to createMcpServer(), allowing
+selective tool registration. Refactor interfaces.ts into interfaces/ directory
+with domain-specific files (cache, metadata, logger, providers).
+
+Remove 2 stale integration tests for jamf-routines (now has content upstream).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+* fix: use explicit undefined check to satisfy strict-boolean-expressions lint
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+### Features
+
+* provider injection interfaces & selective tool registration ([#61](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/61)) ([db01a30](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/db01a30eed38752afad0ea305b24b7555c5859ec))
+
 ## [2.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.5.1...v2.0.0) (2026-03-30)
 
 ### ⚠ BREAKING CHANGES
