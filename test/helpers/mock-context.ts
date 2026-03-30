@@ -12,7 +12,7 @@ import type {
   MetadataStore,
   LoggerFactory,
   Logger,
-} from '../../src/core/services/interfaces.js';
+} from '../../src/core/services/interfaces/index.js';
 import { createDefaultConfig } from '../../src/core/config.js';
 
 export function createMockLogger(): Logger {

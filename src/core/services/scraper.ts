@@ -46,8 +46,8 @@ import {
 import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
 import type { ServerContext } from '../types/context.js';
-import type { CacheProvider } from './interfaces.js';
-import type { Logger } from './interfaces.js';
+import type { CacheProvider } from './interfaces/index.js';
+import type { Logger } from './interfaces/index.js';
 import type { RequestConfig } from '../config.js';
 import {
   estimateTokens,
@@ -711,6 +711,10 @@ export async function searchDocumentation(
   ctx: ServerContext,
   params: SearchParams
 ): Promise<SearchDocumentationResult> {
+  if (ctx.searchProvider) {
+    const provided = await ctx.searchProvider.search(params);
+    if (provided !== null) return provided;
+  }
   const log = ctx.logger.createLogger('scraper');
   const fetchJson = makeFetchJson(ctx.config.request);
   const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
@@ -830,6 +834,10 @@ export async function fetchArticle(
   url: string,
   options: FetchArticleOptions = {}
 ): Promise<FetchArticleResult> {
+  if (ctx.articleProvider) {
+    const provided = await ctx.articleProvider.getArticle(url, options);
+    if (provided !== null) return provided;
+  }
   const fetchHtmlInner = makeFetchHtml(ctx.config.request);
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
@@ -1143,6 +1151,10 @@ export async function fetchTableOfContents(
   version = 'current',
   options: FetchTocOptions = {}
 ): Promise<FetchTocResult> {
+  if (ctx.tocProvider) {
+    const provided = await ctx.tocProvider.getTableOfContents(product, version, options);
+    if (provided !== null) return provided;
+  }
   const log = ctx.logger.createLogger('scraper');
   const fetchJson = makeFetchJson(ctx.config.request);
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;

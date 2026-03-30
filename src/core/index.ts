@@ -8,6 +8,7 @@
 
 // Factory
 export { createMcpServer } from './create-server.js';
+export type { CreateServerOptions } from './create-server.js';
 
 // ============================================================================
 // Interfaces (platform adapters implement these)
@@ -23,7 +24,11 @@ export type {
   TocData,
   Logger,
   LoggerFactory,
-} from './services/interfaces.js';
+  SearchProvider,
+  ArticleProvider,
+  GlossaryProvider,
+  TocProvider,
+} from './services/interfaces/index.js';
 
 // ============================================================================
 // Configuration
@@ -94,6 +99,18 @@ export { registerListProductsTool } from './tools/list-products.js';
 export { registerGetTocTool } from './tools/get-toc.js';
 export { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
 export { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
+
+// ============================================================================
+// Service result / option types (for provider implementations)
+// ============================================================================
+
+export type {
+  SearchDocumentationResult,
+  FetchArticleResult,
+  FetchArticleOptions,
+  FetchTocResult,
+  FetchTocOptions,
+} from './services/scraper.js';
 
 // ============================================================================
 // Domain types (for consumers that need response / param shapes)

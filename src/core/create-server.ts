@@ -19,6 +19,27 @@ import { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
 import { registerResources } from './resources/index.js';
 import { registerPrompts } from './prompts/index.js';
 
+/**
+ * Options for createMcpServer
+ */
+export interface CreateServerOptions {
+  /** Tool name whitelist. When provided, only listed tools are registered. */
+  tools?: string[];
+}
+
+/** Tool name → registration function mapping */
+const TOOL_REGISTRY: Record<
+  string,
+  (server: McpServer, ctx: ServerContext) => void
+> = {
+  jamf_docs_list_products: registerListProductsTool,
+  jamf_docs_search: registerSearchTool,
+  jamf_docs_get_article: registerGetArticleTool,
+  jamf_docs_get_toc: registerGetTocTool,
+  jamf_docs_glossary_lookup: registerGlossaryLookupTool,
+  jamf_docs_batch_get_articles: registerBatchGetArticlesTool,
+};
+
 const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect.
 
 ## Tool Usage Order
@@ -45,9 +66,10 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
  * Create a fully-configured MCP server with all tools, resources, and prompts.
  *
  * @param ctx - Platform-specific server context (cache, metadata, logger, config)
+ * @param options - Optional configuration (e.g., tool whitelist)
  * @returns An McpServer ready to be connected to a transport
  */
-export function createMcpServer(ctx: ServerContext): McpServer {
+export function createMcpServer(ctx: ServerContext, options?: CreateServerOptions): McpServer {
   const server = new McpServer(
     {
       name: 'jamf-docs-mcp-server',
@@ -64,13 +86,13 @@ export function createMcpServer(ctx: ServerContext): McpServer {
 
   ctx.logger.setServer(server);
 
-  // Register all tools
-  registerListProductsTool(server, ctx);
-  registerSearchTool(server, ctx);
-  registerGetArticleTool(server, ctx);
-  registerGetTocTool(server, ctx);
-  registerGlossaryLookupTool(server, ctx);
-  registerBatchGetArticlesTool(server, ctx);
+  // Register tools (all by default, or filtered by whitelist)
+  const toolWhitelist = options?.tools;
+  for (const [name, register] of Object.entries(TOOL_REGISTRY)) {
+    if (!toolWhitelist || toolWhitelist.includes(name)) {
+      register(server, ctx);
+    }
+  }
 
   // Register resources
   registerResources(server, ctx);

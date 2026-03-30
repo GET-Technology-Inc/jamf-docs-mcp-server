@@ -5,7 +5,7 @@
  * Requires a ServerContext to be provided at construction time.
  */
 
-import type { MetadataStore, ProductMetadata, TopicMetadata, TocData } from '../../core/services/interfaces.js';
+import type { MetadataStore, ProductMetadata, TopicMetadata, TocData } from '../../core/services/interfaces/index.js';
 import type { ServerContext } from '../../core/types/context.js';
 import {
   getProductsMetadata,

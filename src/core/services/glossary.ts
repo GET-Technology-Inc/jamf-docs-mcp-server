@@ -260,6 +260,10 @@ export async function lookupGlossaryTerm(
     maxTokens?: number | undefined;
   }
 ): Promise<GlossaryLookupResult> {
+  if (ctx.glossaryProvider) {
+    const provided = await ctx.glossaryProvider.lookup(params);
+    if (provided !== null) return provided;
+  }
   const log = ctx.logger.createLogger('glossary');
   const { term, product, language, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
   const locale = language ?? DEFAULT_LOCALE;
