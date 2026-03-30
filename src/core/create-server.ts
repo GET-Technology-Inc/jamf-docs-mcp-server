@@ -89,7 +89,7 @@ export function createMcpServer(ctx: ServerContext, options?: CreateServerOption
   // Register tools (all by default, or filtered by whitelist)
   const toolWhitelist = options?.tools;
   for (const [name, register] of Object.entries(TOOL_REGISTRY)) {
-    if (!toolWhitelist || toolWhitelist.includes(name)) {
+    if (toolWhitelist === undefined || toolWhitelist.includes(name)) {
       register(server, ctx);
     }
   }
