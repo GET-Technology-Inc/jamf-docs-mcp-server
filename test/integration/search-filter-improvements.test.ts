@@ -313,17 +313,6 @@ describe('Integration: list_products with hasContent', () => {
     }
   });
 
-  it('should exclude jamf-routines (hasContent=false) from product list', async () => {
-    const result = await client.callTool({
-      name: 'jamf_docs_list_products',
-      arguments: { responseFormat: 'json' },
-    });
-
-    const json = JSON.parse(getText(result));
-    const routines = json.products.find((p: { id: string }) => p.id === 'jamf-routines');
-    expect(routines).toBeUndefined();
-  });
-
   it('should include jamf-pro (hasContent=true) in product list', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
@@ -334,16 +323,6 @@ describe('Integration: list_products with hasContent', () => {
     const pro = json.products.find((p: { id: string }) => p.id === 'jamf-pro');
     expect(pro).toBeDefined();
     expect(pro.hasContent).toBe(true);
-  });
-
-  it('should not show empty products in markdown output', async () => {
-    const result = await client.callTool({
-      name: 'jamf_docs_list_products',
-      arguments: {},
-    });
-
-    const text = getText(result);
-    expect(text).not.toContain('Jamf Routines');
   });
 
   it('should include solution-guide in docType list', async () => {

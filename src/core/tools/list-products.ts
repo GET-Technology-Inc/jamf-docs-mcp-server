@@ -84,7 +84,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
 
-        // Build product list, filtering out products with no TOC content
+        // Build product list — always include all known products
         const products = Object.values(JAMF_PRODUCTS)
           .map(product => ({
             id: product.id,
@@ -93,8 +93,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
             currentVersion: product.latestVersion,
             availableVersions: [...product.versions],
             hasContent: availability[product.id] ?? true
-          }))
-          .filter(product => product.hasContent);
+          }));
 
         // Build topics list
         const topics = Object.entries(JAMF_TOPICS).map(([id, topic]) => ({
@@ -156,7 +155,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           markdown += `- **Current Version**: ${product.currentVersion}\n`;
           markdown += `- **Available Versions**: ${product.availableVersions.join(', ')}\n`;
           if (!product.hasContent) {
-            markdown += '- **Status**: No documentation content available\n';
+            markdown += '- **Status**: TOC unavailable (search and articles still work)\n';
           }
           markdown += '\n';
         }

@@ -10,9 +10,8 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 import { z } from 'zod';
-import type { CacheProvider, CacheStats } from '../../core/services/interfaces.js';
+import type { CacheProvider, CacheStats, Logger } from '../../core/services/interfaces/index.js';
 import type { CacheEntry } from '../../core/types.js';
-import type { Logger } from '../../core/services/interfaces.js';
 
 /**
  * Zod schema for validating cache entries read from disk

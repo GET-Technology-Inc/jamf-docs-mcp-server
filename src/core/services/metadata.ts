@@ -16,7 +16,7 @@ import {
 } from '../constants.js';
 import { extractVersionFromBundleId } from '../utils/bundle.js';
 import type { ServerContext } from '../types/context.js';
-import type { Logger } from './interfaces.js';
+import type { Logger } from './interfaces/index.js';
 import type { RequestConfig } from '../config.js';
 
 // ============================================================================
