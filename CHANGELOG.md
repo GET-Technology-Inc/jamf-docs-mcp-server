@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.5.0...v1.5.1) (2026-03-30)
+
+### Bug Fixes
+
+* resolve 5 verified issues with section IDs, search dedup, pagination, related URLs, and locale handling ([819ec0f](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/819ec0f83df97e03c850dd851de3a3180c9ceda7)), closes [#section](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/section)
+
 ## [1.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.4.1...v1.5.0) (2026-03-29)
 
 ### Features
