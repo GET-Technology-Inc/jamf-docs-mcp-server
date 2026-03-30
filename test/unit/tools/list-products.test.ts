@@ -426,7 +426,7 @@ describe('jamf_docs_list_products tool', () => {
   // --- Product availability filtering ---------------------------------------
 
   describe('product availability filtering', () => {
-    it('should exclude products with empty TOC (hasContent: false)', async () => {
+    it('should include products with empty TOC but mark hasContent: false', async () => {
       mockGetProductAvailability.mockResolvedValueOnce({
         'jamf-pro': true,
         'jamf-school': true,
@@ -448,9 +448,12 @@ describe('jamf_docs_list_products tool', () => {
       });
 
       const json = JSON.parse(getTextContent(result));
-      const ids = json.products.map((p: { id: string }) => p.id);
-      expect(ids).not.toContain('jamf-routines');
-      expect(ids).toContain('jamf-pro');
+      expect(json.products).toHaveLength(12);
+      const routines = json.products.find((p: { id: string }) => p.id === 'jamf-routines');
+      expect(routines).toBeDefined();
+      expect(routines.hasContent).toBe(false);
+      const pro = json.products.find((p: { id: string }) => p.id === 'jamf-pro');
+      expect(pro.hasContent).toBe(true);
     });
 
     it('should show all products when all have content', async () => {

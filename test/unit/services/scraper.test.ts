@@ -138,6 +138,32 @@ describe('searchDocumentation - filtering', () => {
     expect(result.results.every(r => r.product === 'Jamf Pro')).toBe(true);
   });
 
+  it('should pass product searchLabel to API URL when product is specified', async () => {
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
+        { title: 'Routines Article', url: 'https://learn-be.jamf.com/page/routines.html', snippet: 'routines content', bundle_id: 'jamf-routines-documentation' }
+      ])
+    );
+
+    await searchDocumentation(ctx, { query: 'test', product: 'jamf-routines' });
+    const calls = mockedHttpGetJson.mock.calls;
+    const calledUrl = calls[calls.length - 1]?.[0] as string;
+    expect(calledUrl).toContain('label=product-routines');
+  });
+
+  it('should not add label param to API URL when no product is specified', async () => {
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
+        { title: 'Article', url: 'https://learn-be.jamf.com/page/test.html', snippet: 'content', bundle_id: 'jamf-pro-documentation' }
+      ])
+    );
+
+    await searchDocumentation(ctx, { query: 'test' });
+    const calls = mockedHttpGetJson.mock.calls;
+    const calledUrl = calls[calls.length - 1]?.[0] as string;
+    expect(calledUrl).not.toContain('label=');
+  });
+
   it('should relax filter and return results with filterRelaxation when filter matches nothing', async () => {
     mockedHttpGetJson.mockResolvedValue(
       makeSearchResponse([
@@ -537,6 +563,84 @@ describe('fetchTableOfContents - TOC token truncation', () => {
     const result = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { maxTokens: 20000 });
 
     expect(result.tokenInfo.truncated).toBe(false);
+  });
+});
+
+// ============================================================================
+// Search deduplication tests
+// ============================================================================
+
+describe('searchDocumentation - cross-version deduplication', () => {
+  beforeEach(() => {
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
+  });
+
+  it('should deduplicate articles with same title but different page slugs across versions', async () => {
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
+        {
+          title: 'FileVault Recovery Key Escrow',
+          url: 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/FileVault_Recovery_Key_Escrow.html',
+          snippet: 'FileVault content',
+          bundle_id: 'jamf-pro-documentation-11.25.0'
+        },
+        {
+          title: 'FileVault Recovery Key Escrow',
+          url: 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.0.0/page/FileVault-Escrow.html',
+          snippet: 'FileVault content old',
+          bundle_id: 'jamf-pro-documentation-11.0.0'
+        }
+      ])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'FileVault' });
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.version).toBe('11.25.0');
+  });
+
+  it('should NOT deduplicate articles with different titles in same product', async () => {
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
+        {
+          title: 'FileVault Recovery Key Escrow',
+          url: 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/FileVault_Recovery.html',
+          snippet: 'escrow content',
+          bundle_id: 'jamf-pro-documentation-11.25.0'
+        },
+        {
+          title: 'FileVault Disk Encryption',
+          url: 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/FileVault_Encryption.html',
+          snippet: 'encryption content',
+          bundle_id: 'jamf-pro-documentation-11.25.0'
+        }
+      ])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'FileVault' });
+    expect(result.results).toHaveLength(2);
+  });
+
+  it('should NOT deduplicate articles with same title across different products', async () => {
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
+        {
+          title: 'FileVault Recovery Key',
+          url: 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/FileVault.html',
+          snippet: 'pro content',
+          bundle_id: 'jamf-pro-documentation'
+        },
+        {
+          title: 'FileVault Recovery Key',
+          url: 'https://learn-be.jamf.com/bundle/jamf-school-documentation/page/FileVault.html',
+          snippet: 'school content',
+          bundle_id: 'jamf-school-documentation'
+        }
+      ])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'FileVault' });
+    expect(result.results).toHaveLength(2);
   });
 });
 

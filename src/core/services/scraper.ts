@@ -623,6 +623,10 @@ async function fetchSearchResults(
   if (locale !== DEFAULT_LOCALE) {
     apiUrl.searchParams.set('lang', locale);
   }
+  if (params.product !== undefined) {
+    const productDef = JAMF_PRODUCTS[params.product];
+    apiUrl.searchParams.set('label', productDef.searchLabel);
+  }
 
   log.debug(`Query: "${params.query}", Product: ${params.product ?? 'all'}, Topic: ${params.topic ?? 'all'}, Locale: ${locale}, URL: ${apiUrl.toString()}`);
 
@@ -647,11 +651,24 @@ async function fetchSearchResults(
 }
 
 /**
+ * Normalize a title for deduplication: lowercase, strip special chars, collapse whitespace.
+ */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Deduplicate search results by product + page slug, keeping the latest version.
+ * Falls back to title-based dedup when page slugs differ but titles match.
  * Only applied when no version filter is specified.
  */
 function deduplicateByLatestVersion(results: SearchResultWithMeta[]): SearchResultWithMeta[] {
   const seen = new Map<string, SearchResultWithMeta>();
+  const titleIndex = new Map<string, string>(); // titleKey → slug key
 
   for (const item of results) {
     const pageMatch = /\/page\/([^?#]+)/.exec(item.result.url);
@@ -662,16 +679,23 @@ function deduplicateByLatestVersion(results: SearchResultWithMeta[]): SearchResu
 
     const pageSlug = pageMatch[1] ?? '';
     const productSlug = item.bundleSlug ?? '_unknown';
-    const key = `${productSlug}:${pageSlug}`;
+    const slugKey = `${productSlug}:${pageSlug}`;
+    const titleKey = `${productSlug}:title:${normalizeTitle(item.result.title)}`;
 
-    const existing = seen.get(key);
-    if (existing === undefined) {
-      seen.set(key, item);
+    // Check slug key first, then fall back to title key
+    const existingSlugKey = seen.has(slugKey) ? slugKey : null;
+    const existingTitleRef = titleIndex.get(titleKey);
+    const matchKey = existingSlugKey ?? (existingTitleRef !== undefined && seen.has(existingTitleRef) ? existingTitleRef : null);
+
+    if (matchKey === null) {
+      seen.set(slugKey, item);
+      titleIndex.set(titleKey, slugKey);
     } else {
+      const existing = seen.get(matchKey)!;
       const existingVersion = existing.result.version ?? '';
       const newVersion = item.result.version ?? '';
       if (compareVersions(newVersion, existingVersion) > 0) {
-        seen.set(key, item);
+        seen.set(matchKey, item);
       }
     }
   }
