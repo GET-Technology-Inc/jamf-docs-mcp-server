@@ -36,7 +36,8 @@ import { cache } from '../../../src/services/cache.js';
 import {
   searchDocumentation,
   fetchArticle,
-  fetchTableOfContents
+  fetchTableOfContents,
+  stripLocalePrefix
 } from '../../../src/services/scraper.js';
 import { JamfDocsErrorCode } from '../../../src/types.js';
 
@@ -207,7 +208,7 @@ describe('URL transformation', () => {
 
   it('should transform frontend URL to backend URL when fetching articles', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
-    const expectedBackendUrl = frontendUrl.replace('learn.jamf.com', 'learn-be.jamf.com');
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html';
 
     vi.mocked(axios.get).mockImplementation((url: string) => {
       if (url === expectedBackendUrl) {
@@ -219,7 +220,7 @@ describe('URL transformation', () => {
     });
 
     const result = await fetchArticle(frontendUrl);
-    expect(result.url).toBe(frontendUrl);
+    expect(result.url).toBe('https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html');
     // axios.get should have been called with backend URL
     expect(vi.mocked(axios.get)).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
   });
@@ -232,8 +233,11 @@ describe('URL transformation', () => {
     });
 
     await fetchArticle(backendUrl);
-    // Should still call with backend URL (transformToBackendUrl on already-backend URL is a no-op)
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(backendUrl, expect.any(Object));
+    // Should call with locale-stripped backend URL
+    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(
+      'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html',
+      expect.any(Object)
+    );
   });
 });
 
@@ -581,5 +585,56 @@ describe('fetchTableOfContents - TOC token truncation', () => {
     const result = await fetchTableOfContents('jamf-pro', 'current', { maxTokens: 20000 });
 
     expect(result.tokenInfo.truncated).toBe(false);
+  });
+});
+
+describe('related article URL resolution', () => {
+  it('should resolve relative URLs against base', () => {
+    const base = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/Policies.html';
+    const relative = 'Log_Flushing.html#ID-00007b1e';
+    const resolved = new URL(relative, base).toString();
+    expect(resolved).toBe('https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/Log_Flushing.html#ID-00007b1e');
+  });
+
+  it('should keep absolute URLs as-is', () => {
+    const base = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/Policies.html';
+    const absolute = 'https://support.apple.com/guide/deployment/dep1234';
+    const resolved = new URL(absolute, base).toString();
+    expect(resolved).toBe('https://support.apple.com/guide/deployment/dep1234');
+  });
+
+  it('should identify hash-only URLs for filtering', () => {
+    const hashOnly = ['#', '#section-name', '#ID-00007b1e'];
+    for (const h of hashOnly) {
+      expect(h.startsWith('#')).toBe(true);
+    }
+    expect('page.html#anchor'.startsWith('#')).toBe(false);
+  });
+});
+
+describe('stripLocalePrefix', () => {
+  it('should strip /en-US/ locale prefix', () => {
+    expect(stripLocalePrefix('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-11.25.0/page/Smart_Groups.html'))
+      .toBe('https://learn.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/Smart_Groups.html');
+  });
+
+  it('should strip /ja-JP/ locale prefix', () => {
+    expect(stripLocalePrefix('https://learn.jamf.com/ja-JP/bundle/jamf-pro-documentation/page/Test.html'))
+      .toBe('https://learn.jamf.com/bundle/jamf-pro-documentation/page/Test.html');
+  });
+
+  it('should not modify URL without locale prefix', () => {
+    const url = 'https://learn.jamf.com/bundle/jamf-pro-documentation-11.25.0/page/Smart_Groups.html';
+    expect(stripLocalePrefix(url)).toBe(url);
+  });
+
+  it('should not strip non-locale path segments', () => {
+    const url = 'https://learn.jamf.com/bundle/jamf-pro-documentation/page/Test.html';
+    expect(stripLocalePrefix(url)).toBe(url);
+  });
+
+  it('should handle backend URLs', () => {
+    expect(stripLocalePrefix('https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/Test.html'))
+      .toBe('https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/Test.html');
   });
 });

@@ -359,7 +359,7 @@ describe('transformToBackendUrl — HTTP fetch target for fetchArticle', () => {
 
   it('should fetch from learn-be.jamf.com when given a learn.jamf.com URL', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
-    const expectedBackendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html';
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
 
@@ -368,31 +368,33 @@ describe('transformToBackendUrl — HTTP fetch target for fetchArticle', () => {
     expect(vi.mocked(axios.get)).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
   });
 
-  it('should expose the original learn.jamf.com URL in the returned article', async () => {
+  it('should expose the locale-stripped learn.jamf.com URL in the returned article', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
+    const expectedDisplayUrl = 'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html';
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
 
     const article = await fetchArticle(frontendUrl);
 
-    expect(article.url).toBe(frontendUrl);
+    expect(article.url).toBe(expectedDisplayUrl);
     expect(article.url).not.toContain('learn-be.jamf.com');
   });
 
   it('should not double-transform a URL that is already on learn-be.jamf.com', async () => {
     const backendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html';
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
 
     await fetchArticle(backendUrl);
 
-    // transformToBackendUrl on an already-backend URL is a no-op
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(backendUrl, expect.any(Object));
+    // locale prefix should be stripped
+    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
   });
 
   it('should preserve query parameters when transforming to backend URL', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html?version=11';
-    const expectedBackendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html?version=11';
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html?version=11';
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
 
@@ -403,7 +405,7 @@ describe('transformToBackendUrl — HTTP fetch target for fetchArticle', () => {
 
   it('should preserve URL fragments when transforming to backend URL', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html#section-1';
-    const expectedBackendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html#section-1';
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html#section-1';
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
 
@@ -414,6 +416,7 @@ describe('transformToBackendUrl — HTTP fetch target for fetchArticle', () => {
 
   it('should only replace the hostname and leave the path intact', async () => {
     const deepPath = '/en-US/bundle/jamf-pro-documentation/page/sub/dir/article.html';
+    const expectedDeepPath = '/bundle/jamf-pro-documentation/page/sub/dir/article.html';
     const frontendUrl = `https://learn.jamf.com${deepPath}`;
 
     vi.mocked(axios.get).mockResolvedValue({ data: minimalHtml() });
@@ -421,7 +424,7 @@ describe('transformToBackendUrl — HTTP fetch target for fetchArticle', () => {
     await fetchArticle(frontendUrl);
 
     expect(vi.mocked(axios.get)).toHaveBeenCalledWith(
-      `https://learn-be.jamf.com${deepPath}`,
+      `https://learn-be.jamf.com${expectedDeepPath}`,
       expect.any(Object)
     );
   });
@@ -686,7 +689,8 @@ describe('combined security — hostname filter + URL rewrite together', () => {
 
   it('should rewrite the URL in the returned article.url but use backend for the HTTP call', async () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/combo.html';
-    const backendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/combo.html';
+    const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/combo.html';
+    const expectedDisplayUrl = 'https://learn.jamf.com/bundle/jamf-pro-documentation/page/combo.html';
 
     vi.mocked(axios.get).mockResolvedValue({
       data: '<html><body><article><h1>Combo Test</h1><p>Content</p></article></body></html>'
@@ -694,10 +698,10 @@ describe('combined security — hostname filter + URL rewrite together', () => {
 
     const article = await fetchArticle(frontendUrl);
 
-    // HTTP fetch goes to the backend
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(backendUrl, expect.any(Object));
-    // The caller sees the frontend URL
-    expect(article.url).toBe(frontendUrl);
+    // HTTP fetch goes to the backend (locale stripped)
+    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
+    // The caller sees the frontend URL (locale stripped)
+    expect(article.url).toBe(expectedDisplayUrl);
     expect(article.url).not.toContain('learn-be.jamf.com');
   });
 });

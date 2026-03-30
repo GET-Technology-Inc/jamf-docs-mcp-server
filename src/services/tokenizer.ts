@@ -76,6 +76,24 @@ export function createTokenInfo(
 }
 
 /**
+ * Generate a unique section ID with duplicate suffix handling
+ * Shared between extractSections() and extractSection() for consistency
+ */
+export function generateSectionId(
+  title: string,
+  index: number,
+  idCounts: Map<string, number>
+): string {
+  let baseId = slugify(title);
+  if (baseId === '') {
+    baseId = `section-${index}`;
+  }
+  const count = idCounts.get(baseId) ?? 0;
+  idCounts.set(baseId, count + 1);
+  return count === 0 ? baseId : `${baseId}-${count}`;
+}
+
+/**
  * Extract sections (headings) from Markdown content
  * Generates unique slugified IDs with duplicate suffix handling
  */
@@ -90,15 +108,7 @@ export function extractSections(content: string): ArticleSection[] {
   function saveCurrentSection(): void {
     if (currentSection !== null) {
       sectionIndex++;
-      let baseId = slugify(currentSection.title);
-      if (baseId === '') {
-        baseId = `section-${sectionIndex}`;
-      }
-
-      // Handle duplicate IDs
-      const count = idCounts.get(baseId) ?? 0;
-      idCounts.set(baseId, count + 1);
-      const id = count === 0 ? baseId : `${baseId}-${count}`;
+      const id = generateSectionId(currentSection.title, sectionIndex, idCounts);
 
       sections.push({
         id,
@@ -140,7 +150,7 @@ export function slugify(title: string): string {
   }
   return title
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-|-$/g, '');
 }
 
@@ -157,20 +167,31 @@ export function extractSection(
   const sectionLines: string[] = [];
   let foundSection: ArticleSection | null = null;
   let targetLevel = 0;
+  const idCounts = new Map<string, number>();
+  let sectionIndex = 0;
 
   for (const line of lines) {
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
 
     if (headingMatch !== null) {
       const level = headingMatch[1]?.length ?? 1;
-      const title = headingMatch[2]?.trim() ?? '';
-      const id = slugify(title);
+      const rawTitle = headingMatch[2]?.trim() ?? '';
+      const title = rawTitle.replace(/\[([^\]]*)\]\(#[^)]*\)/g, '$1').trim();
+
+      // Generate ID with duplicate handling (matching extractSections)
+      sectionIndex++;
+      const id = generateSectionId(title, sectionIndex, idCounts);
 
       // End section if we hit same or higher level heading
-      if (foundSection !== null && level <= targetLevel) {break;}
+      if (foundSection !== null && level <= targetLevel) { break; }
 
-      // Check if this is the target section
-      if (foundSection === null && (id === normalizedId || title.toLowerCase().includes(sectionIdentifier.toLowerCase()))) {
+      // Check if this is the target section (ID match, or substantial title substring match)
+      const lowerTitle = title.toLowerCase();
+      const lowerIdent = sectionIdentifier.toLowerCase();
+      const isTitleMatch = lowerIdent.length >= 3
+        && lowerTitle.includes(lowerIdent)
+        && lowerIdent.length >= lowerTitle.length * 0.3;
+      if (foundSection === null && (id === normalizedId || isTitleMatch)) {
         targetLevel = level;
         foundSection = { id, title, level, tokenCount: 0 };
       }
@@ -475,7 +496,7 @@ export function truncateItemsToTokenLimit<T>(
       pageSize: pagination.pageSize,
       totalPages: pagination.totalPages,
       totalItems: pagination.totalItems,
-      hasNext: pagination.hasNext || truncated,
+      hasNext: pagination.hasNext,
       hasPrev: pagination.hasPrev
     }
   };

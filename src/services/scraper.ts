@@ -9,7 +9,7 @@ import axios, { type AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { sanitizeErrorMessage } from '../utils/sanitize.js';
-import { isAllowedHostname } from '../utils/url.js';
+import { isAllowedHostname, extractLocaleFromUrl } from '../utils/url.js';
 import TurndownService from 'turndown';
 
 import {
@@ -24,6 +24,7 @@ import {
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
   DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
   type ProductId,
   type TopicId,
   type LocaleId
@@ -43,7 +44,7 @@ import {
   type FilterRelaxation,
   type TruncatedContentInfo
 } from '../types.js';
-import { extractVersionFromBundleId, extractProductSlug } from '../utils/bundle.js';
+import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
 import { cache } from './cache.js';
 import { createLogger } from './logging.js';
@@ -99,6 +100,25 @@ async function throttle(): Promise<void> {
 
 // Re-export URL utilities for backward compatibility
 export { ALLOWED_HOSTNAMES, isAllowedHostname } from '../utils/url.js';
+
+/**
+ * Strip locale prefix (e.g. /en-US/, /ja-JP/) from URL path.
+ * Frontend URLs include locale in path but backend doesn't accept it.
+ */
+export function stripLocalePrefix(urlStr: string): string {
+  try {
+    const url = new URL(urlStr);
+    const segments = url.pathname.split('/').filter(Boolean);
+    const firstSegment = segments[0];
+    if (firstSegment !== undefined && firstSegment in SUPPORTED_LOCALES) {
+      url.pathname = `/${segments.slice(1).join('/')}`;
+      return url.toString();
+    }
+  } catch {
+    // Invalid URL, return as-is
+  }
+  return urlStr;
+}
 
 // URL transformation between frontend (learn.jamf.com) and backend (learn-be.jamf.com)
 export function transformToBackendUrl(urlStr: string): string {
@@ -602,6 +622,40 @@ async function fetchSearchResults(
 }
 
 /**
+ * Deduplicate search results by product + page slug, keeping the latest version.
+ * Only applied when no version filter is specified.
+ */
+function deduplicateByLatestVersion(results: SearchResultWithMeta[]): SearchResultWithMeta[] {
+  const seen = new Map<string, SearchResultWithMeta>();
+
+  for (const item of results) {
+    const pageMatch = /\/page\/([^?#]+)/.exec(item.result.url);
+    if (pageMatch === null) {
+      seen.set(`_no_page_${seen.size}`, item);
+      continue;
+    }
+
+    const pageSlug = pageMatch[1] ?? '';
+    const productSlug = item.bundleSlug ?? '_unknown';
+    const key = `${productSlug}:${pageSlug}`;
+
+    const existing = seen.get(key);
+    if (existing === undefined) {
+      seen.set(key, item);
+    } else {
+      const existingVersion = existing.result.version ?? '';
+      const newVersion = item.result.version ?? '';
+      if (compareVersions(newVersion, existingVersion) > 0) {
+        seen.set(key, item);
+      }
+    }
+  }
+
+  const kept = new Set(seen.values());
+  return results.filter(r => kept.has(r));
+}
+
+/**
  * Search Jamf documentation using Zoomin Search API
  */
 export async function searchDocumentation(params: SearchParams): Promise<SearchDocumentationResult> {
@@ -644,11 +698,16 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   const { filtered: filteredResults, relaxation: filterRelaxation } =
     applyFiltersWithFallback(allResults, activeFilters);
 
+  // Deduplicate cross-version results when no version filter
+  const dedupedResults = params.version === undefined || params.version === ''
+    ? deduplicateByLatestVersion(filteredResults)
+    : filteredResults;
+
   // Calculate pagination
-  const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
+  const paginationInfo = calculatePagination(dedupedResults.length, page, pageSize);
 
   // Get paginated results
-  const paginatedResults = filteredResults
+  const paginatedResults = dedupedResults
     .slice(paginationInfo.startIndex, paginationInfo.endIndex)
     .map(r => r.result);
 
@@ -663,7 +722,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
   const hasVersionMismatch = requestedVersion !== undefined
     && requestedVersion !== 'current'
     && requestedVersion !== ''
-    && filteredResults.some(r => !r.versionMatched);
+    && dedupedResults.some(r => !r.versionMatched);
   const versionNote = hasVersionMismatch
     ? `Version "${requestedVersion}" was not available for some results. Showing the latest version instead.`
     : undefined;
@@ -674,8 +733,8 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
       page: paginationInfo.page,
       pageSize: paginationInfo.pageSize,
       totalPages: paginationInfo.totalPages,
-      totalItems: filteredResults.length,
-      hasNext: paginationInfo.hasNext || truncated,
+      totalItems: dedupedResults.length,
+      hasNext: paginationInfo.hasNext,
       hasPrev: paginationInfo.hasPrev
     },
     tokenInfo: {
@@ -717,11 +776,14 @@ export async function fetchArticle(
   options: FetchArticleOptions = {}
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const locale = options.locale ?? DEFAULT_LOCALE;
 
-  // Store original URL for display, use backend URL for fetching
-  const displayUrl = transformToFrontendUrl(url);
-  const articleFetchUrl = transformToBackendUrl(url);
+  // Infer locale from URL if not explicitly provided (e.g., /ja-JP/bundle/...)
+  const locale = options.locale ?? extractLocaleFromUrl(url);
+
+  // Strip locale prefix before transforming — backend doesn't accept /en-US/ etc. in path
+  const cleanUrl = stripLocalePrefix(url);
+  const displayUrl = transformToFrontendUrl(cleanUrl);
+  const articleFetchUrl = transformToBackendUrl(cleanUrl);
   const cacheKey = `${locale}:article:${displayUrl}`;
 
   // Check cache for raw article (without section/token processing)
@@ -753,10 +815,24 @@ export async function fetchArticle(
 
     // Extract related articles
     const relatedArticles = options.includeRelated === true
-      ? $(SELECTORS.RELATED).map((_, el) => ({
-          title: $(el).text().trim(),
-          url: $(el).attr('href') ?? ''
-        })).get().filter(r => r.title !== '' && r.url !== '')
+      ? $(SELECTORS.RELATED).map((_, el) => {
+          const rawHref = $(el).attr('href') ?? '';
+          // Skip empty or hash-only URLs (same-page anchors)
+          if (rawHref === '' || rawHref.startsWith('#')) {
+            return { title: '', url: '' };
+          }
+          // Resolve relative URLs against the article's fetch URL
+          let resolvedUrl: string;
+          try {
+            resolvedUrl = new URL(rawHref, articleFetchUrl).toString();
+          } catch {
+            resolvedUrl = rawHref;
+          }
+          return {
+            title: $(el).text().trim(),
+            url: transformToFrontendUrl(resolvedUrl)
+          };
+        }).get().filter(r => r.title !== '' && r.url !== '')
       : undefined;
 
     // Extract product info from URL
@@ -1098,7 +1174,7 @@ export async function fetchTableOfContents(
       pageSize: paginationInfo.pageSize,
       totalPages: paginationInfo.totalPages,
       totalItems,
-      hasNext: paginationInfo.hasNext || truncated,
+      hasNext: paginationInfo.hasNext,
       hasPrev: paginationInfo.hasPrev
     },
     tokenInfo: {

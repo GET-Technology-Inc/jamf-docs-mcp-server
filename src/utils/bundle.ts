@@ -7,6 +7,30 @@ import { JAMF_PRODUCTS, type ProductId } from '../constants.js';
 const BUNDLE_VERSION_REGEX = /-(\d+\.\d+\.\d+)$/;
 
 /**
+ * Compare two version strings. Returns positive if a > b, negative if a < b, 0 if equal.
+ * "current" is always treated as the maximum value.
+ */
+export function compareVersions(a: string, b: string): number {
+  if (a === b) { return 0; }
+  if (a === 'current') { return 1; }
+  if (b === 'current') { return -1; }
+
+  const partsA = a.split('.').map(Number);
+  const partsB = b.split('.').map(Number);
+  const len = Math.max(partsA.length, partsB.length);
+
+  for (let i = 0; i < len; i++) {
+    const numA = partsA[i] ?? 0;
+    const numB = partsB[i] ?? 0;
+    if (isNaN(numA) || isNaN(numB)) {
+      return a.localeCompare(b);
+    }
+    if (numA !== numB) { return numA - numB; }
+  }
+  return 0;
+}
+
+/**
  * Extract version number from a bundle_id
  * e.g., "jamf-pro-documentation-11.25.0" -> "11.25.0"
  */
