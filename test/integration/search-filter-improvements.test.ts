@@ -11,10 +11,10 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { SearchResult, PaginationInfo, TokenInfo, FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/types.js';
+import type { SearchResult, PaginationInfo, TokenInfo, FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
 
 // Mock services
-vi.mock('../../src/services/scraper.js', () => ({
+vi.mock('../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -25,14 +25,14 @@ vi.mock('../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../src/services/cache.js', () => ({
+vi.mock('../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-vi.mock('../../src/services/metadata.js', () => ({
+vi.mock('../../src/core/services/metadata.js', () => ({
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
   getProductsMetadata: vi.fn().mockResolvedValue([]),
@@ -47,10 +47,13 @@ vi.mock('../../src/services/metadata.js', () => ({
   getTopicsResourceData: vi.fn(),
 }));
 
-import { searchDocumentation, fetchArticle } from '../../src/services/scraper.js';
-import { registerSearchTool } from '../../src/tools/search.js';
-import { registerGetArticleTool } from '../../src/tools/get-article.js';
-import { registerListProductsTool } from '../../src/tools/list-products.js';
+import { searchDocumentation, fetchArticle } from '../../src/core/services/scraper.js';
+import { registerSearchTool } from '../../src/core/tools/search.js';
+import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
+import { registerListProductsTool } from '../../src/core/tools/list-products.js';
+import { createMockContext } from '../helpers/mock-context.js';
+
+const ctx = createMockContext();
 
 type TextContent = { type: 'text'; text: string };
 
@@ -68,7 +71,7 @@ describe('Integration: Search filter fallback flow', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerSearchTool(server);
+    registerSearchTool(server, ctx);
     const [ct, st] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await server.connect(st);
@@ -208,7 +211,7 @@ describe('Integration: get_article section ID matching', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerGetArticleTool(server);
+    registerGetArticleTool(server, ctx);
     const [ct, st] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await server.connect(st);
@@ -284,7 +287,7 @@ describe('Integration: list_products with hasContent', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerListProductsTool(server);
+    registerListProductsTool(server, ctx);
     const [ct, st] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await server.connect(st);

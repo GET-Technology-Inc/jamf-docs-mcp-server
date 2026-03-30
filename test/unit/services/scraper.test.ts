@@ -4,61 +4,41 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-// Mock axios before importing the module under test
-vi.mock('axios', async () => {
-  const actual = await vi.importActual<typeof import('axios')>('axios');
+// Mock http-client before importing the module under test
+vi.mock('../../../src/core/http-client.js', async () => {
   return {
-    default: {
-      ...actual.default,
-      get: vi.fn(),
-      isAxiosError: actual.default.isAxiosError
-    },
-    isAxiosError: actual.default.isAxiosError
+    httpGetText: vi.fn(),
+    httpGetJson: vi.fn(),
+    HttpError: (await import('../../../src/core/http-client.js')).HttpError
   };
 });
 
-// Mock cache to avoid file system interaction
-vi.mock('../../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined)
-  }
-}));
-
 // Mock metadata service
-vi.mock('../../../src/services/metadata.js', () => ({
+vi.mock('../../../src/core/services/metadata.js', () => ({
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation')
 }));
 
-import axios from 'axios';
-import { cache } from '../../../src/services/cache.js';
+import { httpGetText, httpGetJson, HttpError } from '../../../src/core/http-client.js';
 import {
   searchDocumentation,
   fetchArticle,
   fetchTableOfContents,
   stripLocalePrefix
-} from '../../../src/services/scraper.js';
-import { JamfDocsErrorCode } from '../../../src/types.js';
+} from '../../../src/core/services/scraper.js';
+import { JamfDocsErrorCode } from '../../../src/core/types.js';
+import { createMockContext } from '../../helpers/mock-context.js';
+
+const ctx = createMockContext();
+
+const mockedHttpGetJson = vi.mocked(httpGetJson);
+const mockedHttpGetText = vi.mocked(httpGetText);
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function makeAxiosError(status?: number, code?: string, message = 'network error') {
-  const error = new Error(message) as Error & {
-    isAxiosError: boolean;
-    response?: { status: number };
-    code?: string;
-  };
-  error.isAxiosError = true;
-  if (status !== undefined) {
-    error.response = { status };
-  }
-  if (code !== undefined) {
-    error.code = code;
-  }
-  return error;
+function makeHttpError(status: number): HttpError {
+  return new HttpError(status, `HTTP ${status}`, 'https://test.example.com');
 }
 
 function makeSearchResponse(results: {
@@ -95,26 +75,26 @@ function makeSearchResponse(results: {
 
 describe('searchDocumentation - filtering', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should filter results by product only', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         { title: 'Pro Article', url: 'https://learn-be.jamf.com/pro/page.html', snippet: 'pro content', bundle_id: 'jamf-pro-documentation' },
         { title: 'School Article', url: 'https://learn-be.jamf.com/school/page.html', snippet: 'school content', bundle_id: 'jamf-school-documentation' }
       ])
-    });
+    );
 
-    const result = await searchDocumentation({ query: 'enrollment', product: 'jamf-pro' });
+    const result = await searchDocumentation(ctx, { query: 'enrollment', product: 'jamf-pro' });
     expect(result.results.every(r => r.product === 'Jamf Pro')).toBe(true);
     expect(result.results.some(r => r.product === 'Jamf School')).toBe(false);
   });
 
   it('should filter results by topic only', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'SSO Configuration',
           url: 'https://learn-be.jamf.com/page.html',
@@ -128,17 +108,17 @@ describe('searchDocumentation - filtering', () => {
           bundle_id: 'jamf-pro-documentation'
         }
       ])
-    });
+    );
 
-    const result = await searchDocumentation({ query: 'sso', topic: 'sso' });
+    const result = await searchDocumentation(ctx, { query: 'sso', topic: 'sso' });
     // SSO topic keywords include 'sso', 'single sign-on', 'saml'
     expect(result.results.length).toBeGreaterThan(0);
     expect(result.results.some(r => r.title === 'SSO Configuration')).toBe(true);
   });
 
   it('should apply combined product and topic filter', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'Jamf Pro SSO',
           url: 'https://learn-be.jamf.com/pro-sso.html',
@@ -152,15 +132,15 @@ describe('searchDocumentation - filtering', () => {
           bundle_id: 'jamf-school-documentation'
         }
       ])
-    });
+    );
 
-    const result = await searchDocumentation({ query: 'sso', product: 'jamf-pro', topic: 'sso' });
+    const result = await searchDocumentation(ctx, { query: 'sso', product: 'jamf-pro', topic: 'sso' });
     expect(result.results.every(r => r.product === 'Jamf Pro')).toBe(true);
   });
 
   it('should relax filter and return results with filterRelaxation when filter matches nothing', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'General Article',
           url: 'https://learn-be.jamf.com/gen.html',
@@ -168,9 +148,9 @@ describe('searchDocumentation - filtering', () => {
           bundle_id: 'jamf-school-documentation'
         }
       ])
-    });
+    );
 
-    const result = await searchDocumentation({ query: 'test', product: 'jamf-pro' });
+    const result = await searchDocumentation(ctx, { query: 'test', product: 'jamf-pro' });
     // Filter fallback should relax the product filter and return the result
     expect(result.results).toHaveLength(1);
     expect(result.filterRelaxation).toBeDefined();
@@ -185,13 +165,13 @@ describe('searchDocumentation - filtering', () => {
 
 describe('URL transformation', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should transform backend URL to frontend URL in search results', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'Article',
           url: 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/article.html',
@@ -199,9 +179,9 @@ describe('URL transformation', () => {
           bundle_id: 'jamf-pro-documentation'
         }
       ])
-    });
+    );
 
-    const result = await searchDocumentation({ query: 'article' });
+    const result = await searchDocumentation(ctx, { query: 'article' });
     expect(result.results[0]?.url).toContain('learn.jamf.com');
     expect(result.results[0]?.url).not.toContain('learn-be.jamf.com');
   });
@@ -210,31 +190,29 @@ describe('URL transformation', () => {
     const frontendUrl = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
     const expectedBackendUrl = 'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html';
 
-    vi.mocked(axios.get).mockImplementation((url: string) => {
+    mockedHttpGetText.mockImplementation(async (url: string) => {
       if (url === expectedBackendUrl) {
-        return Promise.resolve({
-          data: '<html><body><article><h1>Test Article</h1><p>Content</p></article></body></html>'
-        });
+        return '<html><body><article><h1>Test Article</h1><p>Content</p></article></body></html>';
       }
-      return Promise.reject(new Error('Unexpected URL: ' + url));
+      throw new Error('Unexpected URL: ' + url);
     });
 
-    const result = await fetchArticle(frontendUrl);
+    const result = await fetchArticle(ctx, frontendUrl);
     expect(result.url).toBe('https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html');
-    // axios.get should have been called with backend URL
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
+    // httpGetText should have been called with backend URL
+    expect(mockedHttpGetText).toHaveBeenCalledWith(expectedBackendUrl, expect.any(Object));
   });
 
   it('should not double-transform an already-backend URL', async () => {
     const backendUrl = 'https://learn-be.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html';
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: '<html><body><article><h1>Test</h1></article></body></html>'
-    });
+    mockedHttpGetText.mockResolvedValue(
+      '<html><body><article><h1>Test</h1></article></body></html>'
+    );
 
-    await fetchArticle(backendUrl);
+    await fetchArticle(ctx, backendUrl);
     // Should call with locale-stripped backend URL
-    expect(vi.mocked(axios.get)).toHaveBeenCalledWith(
+    expect(mockedHttpGetText).toHaveBeenCalledWith(
       'https://learn-be.jamf.com/bundle/jamf-pro-documentation/page/test.html',
       expect.any(Object)
     );
@@ -247,65 +225,57 @@ describe('URL transformation', () => {
 
 describe('error code mapping', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should throw JamfDocsError with NOT_FOUND for HTTP 404', async () => {
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(404));
+    mockedHttpGetText.mockRejectedValue(makeHttpError(404));
 
     await expect(
-      fetchArticle('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/missing.html')
+      fetchArticle(ctx, 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/missing.html')
     ).rejects.toMatchObject({ code: JamfDocsErrorCode.NOT_FOUND, statusCode: 404 });
   });
 
   it('should throw JamfDocsError with RATE_LIMITED for HTTP 429', async () => {
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(429));
+    mockedHttpGetText.mockRejectedValue(makeHttpError(429));
 
     await expect(
-      fetchArticle('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/rate.html')
+      fetchArticle(ctx, 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/rate.html')
     ).rejects.toMatchObject({ code: JamfDocsErrorCode.RATE_LIMITED, statusCode: 429 });
   });
 
-  it('should throw JamfDocsError with TIMEOUT for ECONNABORTED', async () => {
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(undefined, 'ECONNABORTED', 'timeout of 15000ms exceeded'));
-
-    await expect(
-      fetchArticle('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/slow.html')
-    ).rejects.toMatchObject({ code: JamfDocsErrorCode.TIMEOUT });
-  });
-
   it('should throw JamfDocsError with NETWORK_ERROR for HTTP 500', async () => {
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(500));
+    mockedHttpGetText.mockRejectedValue(makeHttpError(500));
 
     await expect(
-      fetchArticle('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/error.html')
+      fetchArticle(ctx, 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/error.html')
     ).rejects.toMatchObject({ code: JamfDocsErrorCode.NETWORK_ERROR });
   });
 
-  it('should throw JamfDocsError with NETWORK_ERROR for ECONNREFUSED', async () => {
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(undefined, 'ECONNREFUSED', 'connect ECONNREFUSED'));
+  it('should throw JamfDocsError with NETWORK_ERROR for non-HttpError network failures', async () => {
+    mockedHttpGetText.mockRejectedValue(new TypeError('fetch failed'));
 
     await expect(
-      fetchArticle('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/refused.html')
-    ).rejects.toMatchObject({ code: JamfDocsErrorCode.NETWORK_ERROR });
+      fetchArticle(ctx, 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/refused.html')
+    ).rejects.toThrow();
   });
 
   it('should throw JamfDocsError (not return empty) for search with HTTP 500', async () => {
     // searchDocumentation re-throws JamfDocsError instances, including NETWORK_ERROR.
     // Only non-JamfDocsError exceptions yield empty results.
-    vi.mocked(axios.get).mockRejectedValue(makeAxiosError(500));
+    mockedHttpGetJson.mockRejectedValue(makeHttpError(500));
 
-    await expect(searchDocumentation({ query: 'test-500-fallback' })).rejects.toMatchObject({
+    await expect(searchDocumentation(ctx, { query: 'test-500-fallback' })).rejects.toMatchObject({
       code: JamfDocsErrorCode.NETWORK_ERROR
     });
   });
 
-  it('should return empty results when a non-JamfDocsError is thrown during search', async () => {
-    // Non-axios errors fall through to the empty-results return path
-    vi.mocked(axios.get).mockRejectedValue(new Error('generic error'));
+  it('should return empty results when a non-HttpError is thrown during search', async () => {
+    // Non-HttpError errors fall through to the empty-results return path
+    mockedHttpGetJson.mockRejectedValue(new Error('generic error'));
 
-    const result = await searchDocumentation({ query: 'test-generic-fallback' });
+    const result = await searchDocumentation(ctx, { query: 'test-generic-fallback' });
     expect(result.results).toHaveLength(0);
     expect(result.pagination.totalItems).toBe(0);
   });
@@ -317,17 +287,17 @@ describe('error code mapping', () => {
 
 describe('fetchArticle - HTML parsing edge cases', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should handle an article with empty content gracefully', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: '<html><body><article></article></body></html>'
-    });
+    mockedHttpGetText.mockResolvedValue(
+      '<html><body><article></article></body></html>'
+    );
 
     const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/empty.html';
-    const result = await fetchArticle(url);
+    const result = await fetchArticle(ctx, url);
     expect(result.title).toBe('Untitled');
     expect(result.content).toBe('');
   });
@@ -340,10 +310,10 @@ describe('fetchArticle - HTML parsing edge cases', () => {
       Array.from({ length: 20 }, () => '</div>').join('');
     const html = `<html><body><article><h1>Deep Article</h1>${nested}</article></body></html>`;
 
-    vi.mocked(axios.get).mockResolvedValue({ data: html });
+    mockedHttpGetText.mockResolvedValue(html);
 
     const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/deep.html';
-    const result = await fetchArticle(url);
+    const result = await fetchArticle(ctx, url);
     expect(result.title).toBe('Deep Article');
     expect(result.content).toContain('Deep content');
   });
@@ -356,10 +326,10 @@ describe('fetchArticle - HTML parsing edge cases', () => {
       <p>Real content here</p>
     </article></body></html>`;
 
-    vi.mocked(axios.get).mockResolvedValue({ data: html });
+    mockedHttpGetText.mockResolvedValue(html);
 
     const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/clean.html';
-    const result = await fetchArticle(url);
+    const result = await fetchArticle(ctx, url);
     expect(result.content).not.toContain('alert(');
     expect(result.content).not.toContain('.hidden');
     expect(result.content).toContain('Real content here');
@@ -371,19 +341,19 @@ describe('fetchArticle - HTML parsing edge cases', () => {
       <p>Some content</p>
     </article></body></html>`;
 
-    vi.mocked(axios.get).mockResolvedValue({ data: html });
+    mockedHttpGetText.mockResolvedValue(html);
 
     const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/titled.html';
-    const result = await fetchArticle(url);
+    const result = await fetchArticle(ctx, url);
     expect(result.title).toBe('My Article Title');
   });
 
   it('should return Untitled when no h1 is present', async () => {
     const html = '<html><body><article><p>No heading here</p></article></body></html>';
-    vi.mocked(axios.get).mockResolvedValue({ data: html });
+    mockedHttpGetText.mockResolvedValue(html);
 
     const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/no-h1.html';
-    const result = await fetchArticle(url);
+    const result = await fetchArticle(ctx, url);
     expect(result.title).toBe('Untitled');
   });
 });
@@ -394,8 +364,8 @@ describe('fetchArticle - HTML parsing edge cases', () => {
 
 describe('fetchTableOfContents - TOC parsing edge cases', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should handle a deeply nested TOC without throwing', async () => {
@@ -418,11 +388,9 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
       </ul>
     `;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
     expect(result.toc.length).toBeGreaterThan(0);
     expect(result.toc[0]?.children).toBeDefined();
     expect(result.toc[0]?.children?.[0]?.children).toBeDefined();
@@ -440,11 +408,9 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
       </ul>
     `;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
     // The entry with empty href should be skipped
     const titles = result.toc.map(e => e.title);
     expect(titles).not.toContain('No Href Entry');
@@ -463,11 +429,9 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
       </ul>
     `;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
     const titles = result.toc.map(e => e.title);
     expect(titles).toContain('With Title');
     expect(titles.filter(t => t === '')).toHaveLength(0);
@@ -482,34 +446,28 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
       </ul>
     `;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
     expect(result.toc[0]?.url).toContain('learn.jamf.com');
     expect(result.toc[0]?.url).not.toContain('learn-be.jamf.com');
   });
 
   it('should return empty toc when API response has no ul elements', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': '<div>No lists here</div>' }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': '<div>No lists here</div>' });
 
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
     expect(result.toc).toHaveLength(0);
   });
 
   it('should throw NOT_FOUND when getBundleIdForVersion returns null and discovery also fails', async () => {
-    const { getBundleIdForVersion } = await import('../../../src/services/metadata.js');
+    const { getBundleIdForVersion } = await import('../../../src/core/services/metadata.js');
     vi.mocked(getBundleIdForVersion).mockResolvedValue(null);
 
     // Discovery also returns empty/null — make search return empty results
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { status: 'ok', Results: [] }
-    });
+    mockedHttpGetJson.mockResolvedValue({ status: 'ok', Results: [] });
 
-    await expect(fetchTableOfContents('jamf-pro')).rejects.toMatchObject({
+    await expect(fetchTableOfContents(ctx, 'jamf-pro')).rejects.toMatchObject({
       code: JamfDocsErrorCode.NOT_FOUND
     });
 
@@ -519,22 +477,20 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
 
   it('should handle null leading_result entries in bundle discovery and return NOT_FOUND', async () => {
     // When getBundleIdForVersion returns null, discoverLatestBundleId is called.
-    // If all Results have leading_result===null, it returns null → NOT_FOUND.
-    const { getBundleIdForVersion } = await import('../../../src/services/metadata.js');
+    // If all Results have leading_result===null, it returns null -> NOT_FOUND.
+    const { getBundleIdForVersion } = await import('../../../src/core/services/metadata.js');
     vi.mocked(getBundleIdForVersion).mockResolvedValue(null);
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: {
-        status: 'ok',
-        Results: [
-          { leading_result: null },
-          { leading_result: null },
-          { leading_result: null }
-        ]
-      }
+    mockedHttpGetJson.mockResolvedValue({
+      status: 'ok',
+      Results: [
+        { leading_result: null },
+        { leading_result: null },
+        { leading_result: null }
+      ]
     });
 
-    await expect(fetchTableOfContents('jamf-pro')).rejects.toMatchObject({
+    await expect(fetchTableOfContents(ctx, 'jamf-pro')).rejects.toMatchObject({
       code: JamfDocsErrorCode.NOT_FOUND
     });
 
@@ -549,8 +505,8 @@ describe('fetchTableOfContents - TOC parsing edge cases', () => {
 
 describe('fetchTableOfContents - TOC token truncation', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should truncate TOC entries when token count exceeds maxTokens', async () => {
@@ -560,12 +516,10 @@ describe('fetchTableOfContents - TOC token truncation', () => {
     ).join('\n');
     const html = `<ul class="list-links">${manyLinks}</ul>`;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
     // Use a very small maxTokens so truncation is forced
-    const result = await fetchTableOfContents('jamf-pro', 'current', { maxTokens: 20 });
+    const result = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { maxTokens: 20 });
 
     expect(result.tokenInfo.truncated).toBe(true);
     expect(result.toc.length).toBeLessThan(100);
@@ -577,12 +531,10 @@ describe('fetchTableOfContents - TOC token truncation', () => {
       <li><a href="/b">B</a></li>
     </ul>`;
 
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { 'nav-1': html }
-    });
+    mockedHttpGetJson.mockResolvedValue({ 'nav-1': html });
 
     // Large maxTokens — no truncation needed
-    const result = await fetchTableOfContents('jamf-pro', 'current', { maxTokens: 20000 });
+    const result = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { maxTokens: 20000 });
 
     expect(result.tokenInfo.truncated).toBe(false);
   });

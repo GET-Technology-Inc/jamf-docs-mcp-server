@@ -8,8 +8,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { SERVER_VERSION, getEnvNumber } from '../constants.js';
-import { createLogger } from '../services/logging.js';
+import { createNodeConfig, getEnvNumber } from '../platforms/node/config.js';
+
+const SERVER_VERSION = createNodeConfig().version;
+import { createLogger } from '../core/services/logging.js';
 
 const log = createLogger('http');
 

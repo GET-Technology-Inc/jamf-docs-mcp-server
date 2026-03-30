@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CacheEntrySchema } from '../../src/services/cache.js';
+import { CacheEntrySchema } from '../../src/core/services/cache.js';
 
 describe('CacheEntrySchema validation', () => {
   it('should accept valid cache entry', () => {

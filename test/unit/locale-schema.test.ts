@@ -9,7 +9,7 @@ import {
   SearchInputSchema,
   GetArticleInputSchema,
   GetTocInputSchema
-} from '../../src/schemas/index.js';
+} from '../../src/core/schemas/index.js';
 
 // Ground truth from FluidTopics availableUiLocales + manual verification (2026-03-29)
 const OFFICIAL_LOCALE_CODES = [

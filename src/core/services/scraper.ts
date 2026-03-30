@@ -5,7 +5,7 @@
  * (Jamf documentation has moved from docs.jamf.com to learn.jamf.com)
  */
 
-import axios, { type AxiosError } from 'axios';
+import { httpGetText, httpGetJson, HttpError } from '../http-client.js';
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { sanitizeErrorMessage } from '../utils/sanitize.js';
@@ -18,7 +18,6 @@ import {
   JAMF_PRODUCTS,
   JAMF_TOPICS,
   DOC_TYPE_LABEL_MAP,
-  REQUEST_CONFIG,
   SELECTORS,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
@@ -46,8 +45,10 @@ import {
 } from '../types.js';
 import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../utils/bundle.js';
 import { docTypeFromLabels } from '../utils/doc-type.js';
-import { cache } from './cache.js';
-import { createLogger } from './logging.js';
+import type { ServerContext } from '../types/context.js';
+import type { CacheProvider } from './interfaces.js';
+import type { Logger } from './interfaces.js';
+import type { RequestConfig } from '../config.js';
 import {
   estimateTokens,
   createTokenInfo,
@@ -58,8 +59,6 @@ import {
   calculatePagination
 } from './tokenizer.js';
 import { getBundleIdForVersion } from './metadata.js';
-
-const log = createLogger('scraper');
 
 // Initialize Turndown for HTML to Markdown conversion
 const turndown = new TurndownService({
@@ -85,13 +84,13 @@ turndown.addRule('codeBlocks', {
 // Rate limiter
 let lastRequestTime = 0;
 
-async function throttle(): Promise<void> {
+async function throttle(requestConfig: RequestConfig): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastRequestTime;
 
-  if (elapsed < REQUEST_CONFIG.RATE_LIMIT_DELAY) {
+  if (elapsed < requestConfig.rateLimitDelay) {
     await new Promise(resolve =>
-      setTimeout(resolve, REQUEST_CONFIG.RATE_LIMIT_DELAY - elapsed)
+      setTimeout(resolve, requestConfig.rateLimitDelay - elapsed)
     );
   }
 
@@ -207,19 +206,16 @@ export function cleanSnippet(snippet: string, title: string, product: string | n
 }
 
 /**
- * Handle axios errors and convert to JamfDocsError
+ * Handle HTTP errors and convert to JamfDocsError
  */
-function handleAxiosError(error: AxiosError, url: string, resourceType: string): never {
-  const status = error.response?.status;
+function handleHttpError(error: HttpError, url: string, resourceType: string): never {
+  const status = error.status;
 
   if (status === 404) {
     throw new JamfDocsError(`${resourceType} not found: ${url}`, JamfDocsErrorCode.NOT_FOUND, url, 404);
   }
   if (status === 429) {
     throw new JamfDocsError('Rate limited. Please wait and try again.', JamfDocsErrorCode.RATE_LIMITED, url, 429);
-  }
-  if (error.code === 'ECONNABORTED') {
-    throw new JamfDocsError('Request timed out', JamfDocsErrorCode.TIMEOUT, url);
   }
   throw new JamfDocsError(`Network error: ${sanitizeErrorMessage(error.message)}`, JamfDocsErrorCode.NETWORK_ERROR, url);
 }
@@ -235,33 +231,59 @@ export function buildAcceptLanguage(locale: string): string {
 }
 
 /**
- * Fetch data from a URL with error handling
+ * Fetch JSON from a URL with error handling
  */
-async function fetchUrl<T>(url: string, accept: string, resourceType: string, locale?: string): Promise<T> {
-  await throttle();
-
-  try {
-    const response = await axios.get<T>(url, {
-      timeout: REQUEST_CONFIG.TIMEOUT,
-      headers: {
-        'User-Agent': REQUEST_CONFIG.USER_AGENT,
-        'Accept': accept,
-        'Accept-Language': buildAcceptLanguage(locale ?? DEFAULT_LOCALE)
+function makeFetchJson(requestConfig: RequestConfig): <T>(url: string, locale?: string) => Promise<T> {
+  return async <T>(url: string, locale?: string): Promise<T> => {
+    await throttle(requestConfig);
+    try {
+      return await httpGetJson<T>(url, {
+        timeout: requestConfig.timeout,
+        headers: {
+          'User-Agent': requestConfig.userAgent,
+          'Accept-Language': buildAcceptLanguage(locale ?? DEFAULT_LOCALE)
+        }
+      });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        handleHttpError(error, url, 'Resource');
       }
-    });
-    return response.data;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      handleAxiosError(error, url, resourceType);
+      throw error;
     }
-    throw error;
-  }
+  };
 }
 
-const fetchJson = async <T>(url: string, locale?: string): Promise<T> =>
-  await fetchUrl<T>(url, 'application/json', 'Resource', locale);
-export const fetchHtml = async (url: string, locale?: string): Promise<string> =>
-  await fetchUrl<string>(url, 'text/html,application/xhtml+xml', 'Article', locale);
+/**
+ * Fetch HTML from a URL with error handling
+ */
+function makeFetchHtml(requestConfig: RequestConfig): (url: string, locale?: string) => Promise<string> {
+  return async (url: string, locale?: string): Promise<string> => {
+    await throttle(requestConfig);
+    try {
+      return await httpGetText(url, {
+        timeout: requestConfig.timeout,
+        headers: {
+          'User-Agent': requestConfig.userAgent,
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': buildAcceptLanguage(locale ?? DEFAULT_LOCALE)
+        }
+      });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        handleHttpError(error, url, 'Article');
+      }
+      throw error;
+    }
+  };
+}
+
+/**
+ * Fetch HTML from a URL with error handling.
+ * Requires a ServerContext for request configuration.
+ */
+export async function fetchHtml(ctx: ServerContext, url: string, locale?: string): Promise<string> {
+  return makeFetchHtml(ctx.config.request)(url, locale);
+}
 
 /**
  * Clean HTML content by removing unwanted elements
@@ -580,7 +602,10 @@ export interface SearchDocumentationResult {
 async function fetchSearchResults(
   params: SearchParams,
   locale: string,
-  cacheKey: string
+  cacheKey: string,
+  cache: CacheProvider,
+  fetchJson: <T>(url: string, locale?: string) => Promise<T>,
+  log: Logger
 ): Promise<SearchResultWithMeta[]> {
   const cached = await cache.get<SearchResultWithMeta[]>(cacheKey);
   if (cached !== null) {
@@ -658,7 +683,12 @@ function deduplicateByLatestVersion(results: SearchResultWithMeta[]): SearchResu
 /**
  * Search Jamf documentation using Zoomin Search API
  */
-export async function searchDocumentation(params: SearchParams): Promise<SearchDocumentationResult> {
+export async function searchDocumentation(
+  ctx: ServerContext,
+  params: SearchParams
+): Promise<SearchDocumentationResult> {
+  const log = ctx.logger.createLogger('scraper');
+  const fetchJson = makeFetchJson(ctx.config.request);
   const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
   const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
@@ -671,7 +701,7 @@ export async function searchDocumentation(params: SearchParams): Promise<SearchD
 
   let allResults: SearchResultWithMeta[];
   try {
-    allResults = await fetchSearchResults(params, locale, cacheKey);
+    allResults = await fetchSearchResults(params, locale, cacheKey, ctx.cache, fetchJson, log);
   } catch (error) {
     log.error(`Search error: ${String(error)}`);
 
@@ -772,9 +802,11 @@ export interface FetchArticleResult extends ParsedArticle {
  * Uses backend URL (learn-be.jamf.com) for pre-rendered content
  */
 export async function fetchArticle(
+  ctx: ServerContext,
   url: string,
   options: FetchArticleOptions = {}
 ): Promise<FetchArticleResult> {
+  const fetchHtmlInner = makeFetchHtml(ctx.config.request);
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   // Infer locale from URL if not explicitly provided (e.g., /ja-JP/bundle/...)
@@ -787,11 +819,11 @@ export async function fetchArticle(
   const cacheKey = `${locale}:article:${displayUrl}`;
 
   // Check cache for raw article (without section/token processing)
-  let rawArticle = await cache.get<ParsedArticle>(cacheKey);
+  let rawArticle = await ctx.cache.get<ParsedArticle>(cacheKey);
 
   if (rawArticle === null) {
     // Fetch HTML from backend URL (pre-rendered content, not SPA shell)
-    const html = await fetchHtml(articleFetchUrl, locale);
+    const html = await fetchHtmlInner(articleFetchUrl, locale);
     const $ = cheerio.load(html);
 
     // Clean content
@@ -849,7 +881,7 @@ export async function fetchArticle(
     };
 
     // Cache raw article
-    await cache.set(cacheKey, rawArticle);
+    await ctx.cache.set(cacheKey, rawArticle);
   }
 
   // At this point rawArticle is guaranteed to be non-null
@@ -914,7 +946,11 @@ export async function fetchArticle(
 /**
  * Discover the latest bundle version for a product via search API
  */
-async function discoverLatestBundleId(product: ProductId): Promise<string | null> {
+async function discoverLatestBundleId(
+  product: ProductId,
+  fetchJson: <T>(url: string, locale?: string) => Promise<T>,
+  log: Logger
+): Promise<string | null> {
   const productInfo = JAMF_PRODUCTS[product];
   const baseBundleId = productInfo.bundleId;
 
@@ -1030,7 +1066,12 @@ function countTocEntries(entries: TocEntry[]): number {
  * Build a flat TOC from search results when backend TOC endpoint returns empty.
  * Searches for all articles under the given product and constructs TocEntry list.
  */
-async function buildTocFromSearch(product: ProductId, locale: string): Promise<TocEntry[]> {
+async function buildTocFromSearch(
+  product: ProductId,
+  locale: string,
+  fetchJson: <T>(url: string, locale?: string) => Promise<T>,
+  log: Logger
+): Promise<TocEntry[]> {
   try {
     const apiUrl = new URL(`${DOCS_API_URL}/api/search`);
     apiUrl.searchParams.set('q', JAMF_PRODUCTS[product].name);
@@ -1073,24 +1114,27 @@ async function buildTocFromSearch(product: ProductId, locale: string): Promise<T
  * Uses backend TOC endpoint (learn-be.jamf.com/bundle/{bundleId}/toc)
  */
 export async function fetchTableOfContents(
+  ctx: ServerContext,
   product: ProductId,
   version = 'current',
   options: FetchTocOptions = {}
 ): Promise<FetchTocResult> {
+  const log = ctx.logger.createLogger('scraper');
+  const fetchJson = makeFetchJson(ctx.config.request);
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const locale = options.locale ?? DEFAULT_LOCALE;
   const cacheKey = `${locale}:toc:${product}:${version}`;
 
   // Check cache
-  let allToc = await cache.get<TocEntry[]>(cacheKey);
+  let allToc = await ctx.cache.get<TocEntry[]>(cacheKey);
 
   if (allToc === null) {
     // Get bundle ID for the specified version (or latest if current)
-    let bundleId = await getBundleIdForVersion(product, version);
+    let bundleId = await getBundleIdForVersion(ctx, product, version);
 
     // Fallback to discovery if metadata service fails
-    bundleId ??= await discoverLatestBundleId(product);
+    bundleId ??= await discoverLatestBundleId(product, fetchJson, log);
 
     if (bundleId === null || bundleId === '') {
       throw new JamfDocsError(
@@ -1122,11 +1166,11 @@ export async function fetchTableOfContents(
     // Fallback: build TOC from search results when backend returns empty or fails
     if (allToc.length === 0) {
       log.info(`No TOC entries for ${product}, falling back to search-based discovery`);
-      allToc = await buildTocFromSearch(product, locale);
+      allToc = await buildTocFromSearch(product, locale, fetchJson, log);
     }
 
     // Cache result
-    await cache.set(cacheKey, allToc);
+    await ctx.cache.set(cacheKey, allToc);
   }
 
   // Count total entries

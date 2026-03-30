@@ -5,7 +5,7 @@
  * 1. Each search result has a follower_result array with all historical versions
  * 2. When version is requested, the scraper selects the matching follower's URL
  * 3. If no follower matches, falls back to leading_result
- * 4. Version is extracted from bundle_id (e.g., "jamf-pro-documentation-11.25.0" → "11.25.0")
+ * 4. Version is extracted from bundle_id (e.g., "jamf-pro-documentation-11.25.0" -> "11.25.0")
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,31 +14,23 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-// Mock axios to return realistic fixture data
-vi.mock('axios', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('axios')>();
+// Mock http-client to return realistic fixture data
+vi.mock('../../../src/core/http-client.js', async () => {
   return {
-    ...actual,
-    default: {
-      ...actual.default,
-      get: vi.fn(),
-      isAxiosError: actual.default.isAxiosError,
-    },
+    httpGetText: vi.fn(),
+    httpGetJson: vi.fn(),
+    HttpError: (await import('../../../src/core/http-client.js')).HttpError,
   };
 });
 
-vi.mock('../../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+import { httpGetJson } from '../../../src/core/http-client.js';
+import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { registerSearchTool } from '../../../src/core/tools/search.js';
+import { createMockContext } from '../../helpers/mock-context.js';
 
-import axios from 'axios';
-import { searchDocumentation } from '../../../src/services/scraper.js';
-import { registerSearchTool } from '../../../src/tools/search.js';
+const ctx = createMockContext();
 
-const mockedAxiosGet = vi.mocked(axios.get);
+const mockedHttpGetJson = vi.mocked(httpGetJson);
 
 type TextContent = { type: 'text'; text: string };
 
@@ -49,9 +41,9 @@ beforeEach(() => {
 describe('version parameter — scraper layer (follower_result matching)', () => {
   it('should extract actual version from bundle_id instead of hardcoding current', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
-    const result = await searchDocumentation({ query: 'jamf pro' });
+    const result = await searchDocumentation(ctx, { query: 'jamf pro' });
 
     // Results with versioned bundle_ids should have actual version numbers
     const versionedResults = result.results.filter(r => r.version !== 'current');
@@ -62,12 +54,12 @@ describe('version parameter — scraper layer (follower_result matching)', () =>
     const fixtureData = createRealisticSearchResponse();
 
     // Call 1: with version
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
-    const withVersion = await searchDocumentation({ query: 'jamf pro', version: '11.13.0' });
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    const withVersion = await searchDocumentation(ctx, { query: 'jamf pro', version: '11.13.0' });
 
     // Call 2: without version
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
-    const withoutVersion = await searchDocumentation({ query: 'jamf pro' });
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    const withoutVersion = await searchDocumentation(ctx, { query: 'jamf pro' });
 
     // Both should return results (version matching falls back to leading if no match)
     expect(withVersion.results.length).toBe(withoutVersion.results.length);
@@ -80,10 +72,10 @@ describe('version parameter — tool layer (no versionNote)', () => {
 
   beforeEach(async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValue({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValue(fixtureData);
 
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerSearchTool(server);
+    registerSearchTool(server, ctx);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await server.connect(serverTransport);
@@ -97,7 +89,7 @@ describe('version parameter — tool layer (no versionNote)', () => {
     });
 
     const json = JSON.parse((result.content[0] as TextContent).text);
-    // 99.0.0 doesn't exist in fixture data → versionNote should be present
+    // 99.0.0 doesn't exist in fixture data -> versionNote should be present
     expect(json.versionNote).toBeDefined();
     expect(json.versionNote).toContain('not available');
     expect(json.results.length).toBeGreaterThan(0);

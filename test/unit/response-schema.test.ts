@@ -22,7 +22,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 // Mock service modules BEFORE importing tools/resources
 // ---------------------------------------------------------------------------
 
-vi.mock('../../src/services/scraper.js', () => ({
+vi.mock('../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -33,14 +33,7 @@ vi.mock('../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-vi.mock('../../src/services/metadata.js', () => ({
+vi.mock('../../src/core/services/metadata.js', () => ({
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
   getProductsMetadata: vi.fn().mockResolvedValue([]),
@@ -53,21 +46,24 @@ vi.mock('../../src/services/metadata.js', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { searchDocumentation, fetchArticle, fetchTableOfContents } from '../../src/services/scraper.js';
+import { searchDocumentation, fetchArticle, fetchTableOfContents } from '../../src/core/services/scraper.js';
 import {
   getProductsResourceData,
   getTopicsResourceData,
   getAvailableVersions,
   getBundleIdForVersion,
-} from '../../src/services/metadata.js';
-import { registerListProductsTool } from '../../src/tools/list-products.js';
-import { registerSearchTool } from '../../src/tools/search.js';
-import { registerGetArticleTool } from '../../src/tools/get-article.js';
-import { registerGetTocTool } from '../../src/tools/get-toc.js';
-import { registerResources } from '../../src/resources/index.js';
-import { registerTroubleshootPrompt } from '../../src/prompts/troubleshoot.js';
-import { registerSetupGuidePrompt } from '../../src/prompts/setup-guide.js';
-import { registerCompareVersionsPrompt } from '../../src/prompts/compare-versions.js';
+} from '../../src/core/services/metadata.js';
+import { registerListProductsTool } from '../../src/core/tools/list-products.js';
+import { registerSearchTool } from '../../src/core/tools/search.js';
+import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
+import { registerGetTocTool } from '../../src/core/tools/get-toc.js';
+import { registerResources } from '../../src/core/resources/index.js';
+import { createMockContext } from '../helpers/mock-context.js';
+import { registerTroubleshootPrompt } from '../../src/core/prompts/troubleshoot.js';
+
+const ctx = createMockContext();
+import { registerSetupGuidePrompt } from '../../src/core/prompts/setup-guide.js';
+import { registerCompareVersionsPrompt } from '../../src/core/prompts/compare-versions.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -179,13 +175,13 @@ describe('E2E: MCP Server Response Schema', () => {
     server = new McpServer({ name: 'jamf-docs-mcp-server', version: '1.0.0' });
 
     // Register all tools
-    registerListProductsTool(server);
-    registerSearchTool(server);
-    registerGetArticleTool(server);
-    registerGetTocTool(server);
+    registerListProductsTool(server, ctx);
+    registerSearchTool(server, ctx);
+    registerGetArticleTool(server, ctx);
+    registerGetTocTool(server, ctx);
 
     // Register resources
-    registerResources(server);
+    registerResources(server, ctx);
 
     // Register prompts
     registerTroubleshootPrompt(server);
@@ -399,6 +395,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(searchDocumentation).toHaveBeenCalledWith(
+        expect.anything(),
         expect.objectContaining({ query: 'enrollment' })
       );
     });
@@ -531,6 +528,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(fetchArticle).toHaveBeenCalledWith(
+        expect.anything(),
         VALID_URL,
         expect.objectContaining({ summaryOnly: true })
       );
@@ -542,8 +540,9 @@ describe('E2E: MCP Server Response Schema', () => {
         arguments: { url: VALID_URL, maxTokens: 1000 },
       });
 
-      // fetchArticle(url, options) — url is first arg, options second
+      // fetchArticle(ctx, url, options) — ctx is first, url second, options third
       expect(fetchArticle).toHaveBeenCalledWith(
+        expect.anything(),
         VALID_URL,
         expect.objectContaining({ maxTokens: 1000 })
       );

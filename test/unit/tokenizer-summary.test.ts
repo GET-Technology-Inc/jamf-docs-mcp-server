@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractSummary } from '../../src/services/tokenizer.js';
+import { extractSummary } from '../../src/core/services/tokenizer.js';
 
 describe('extractSummary', () => {
   const sampleMarkdown = `# Configuration Profiles

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { cleanSnippet } from '../../src/services/scraper.js';
+import { cleanSnippet } from '../../src/core/services/scraper.js';
 
 describe('cleanSnippet', () => {
   it('should pass through normal snippets unchanged', () => {

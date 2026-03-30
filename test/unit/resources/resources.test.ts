@@ -16,7 +16,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 // Mock the metadata service BEFORE importing the module under test
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../src/services/metadata.js', () => ({
+vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductsResourceData: vi.fn(),
   getTopicsResourceData: vi.fn(),
   getAvailableVersions: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('../../../src/services/metadata.js', () => ({
   getTopicsMetadata: vi.fn(),
 }));
 
-vi.mock('../../../src/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/scraper.js', () => ({
   fetchTableOfContents: vi.fn(),
   ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
   isAllowedHostname: (url: string) => {
@@ -34,13 +34,16 @@ vi.mock('../../../src/services/scraper.js', () => ({
   },
 }));
 
-import { registerResources } from '../../../src/resources/index.js';
+import { registerResources } from '../../../src/core/resources/index.js';
+import { createMockContext } from '../../helpers/mock-context.js';
+
+const ctx = createMockContext();
 import {
   getProductsResourceData,
   getTopicsResourceData,
   getAvailableVersions,
-} from '../../../src/services/metadata.js';
-import { fetchTableOfContents } from '../../../src/services/scraper.js';
+} from '../../../src/core/services/metadata.js';
+import { fetchTableOfContents } from '../../../src/core/services/scraper.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -160,32 +163,32 @@ describe('registerResources', () => {
 
   it('should not throw when called with a compatible server', () => {
     const { server } = makeFakeServer();
-    expect(() => registerResources(server)).not.toThrow();
+    expect(() => registerResources(server, ctx)).not.toThrow();
   });
 
   it('should call server.registerResource at least once', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     expect(registerResourceSpy).toHaveBeenCalled();
   });
 
   it('should register the "products" static resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const names = registerResourceSpy.mock.calls.map((call: unknown[]) => call[0]);
     expect(names).toContain('products');
   });
 
   it('should register the "topics" static resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const names = registerResourceSpy.mock.calls.map((call: unknown[]) => call[0]);
     expect(names).toContain('topics');
   });
 
   it('should pass a handler function for the "products" resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const productsCall: unknown[] = registerResourceSpy.mock.calls.find(
       (call: unknown[]) => call[0] === 'products'
     )!;
@@ -194,7 +197,7 @@ describe('registerResources', () => {
 
   it('should pass a handler function for the "topics" resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const topicsCall: unknown[] = registerResourceSpy.mock.calls.find(
       (call: unknown[]) => call[0] === 'topics'
     )!;
@@ -215,7 +218,7 @@ describe('products resource handler', () => {
 
   it('should return contents with application/json mimeType', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -226,7 +229,7 @@ describe('products resource handler', () => {
 
   it('should return valid JSON in the text field', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -236,7 +239,7 @@ describe('products resource handler', () => {
 
   it('should include all 4 products in the response', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -247,7 +250,7 @@ describe('products resource handler', () => {
 
   it('should include core product IDs: jamf-pro, jamf-school, jamf-connect, jamf-protect', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -262,7 +265,7 @@ describe('products resource handler', () => {
 
   it('should include id, name, description, and bundleId fields on each product', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -282,7 +285,7 @@ describe('products resource handler', () => {
 
   it('should set uri to "jamf://products" in contents', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     const result = await handler(new URL('jamf://products'));
@@ -292,7 +295,7 @@ describe('products resource handler', () => {
 
   it('should call getProductsResourceData exactly once', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('products');
     await handler(new URL('jamf://products'));
@@ -314,7 +317,7 @@ describe('topics resource handler', () => {
 
   it('should return contents with application/json mimeType', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -325,7 +328,7 @@ describe('topics resource handler', () => {
 
   it('should return valid JSON in the text field', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -335,7 +338,7 @@ describe('topics resource handler', () => {
 
   it('should include topics array in the response', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -347,7 +350,7 @@ describe('topics resource handler', () => {
 
   it('should include id and name fields on each topic', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -363,7 +366,7 @@ describe('topics resource handler', () => {
 
   it('should set uri to "jamf://topics" in contents', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -373,7 +376,7 @@ describe('topics resource handler', () => {
 
   it('should call getTopicsResourceData exactly once', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     await handler(new URL('jamf://topics'));
@@ -383,14 +386,14 @@ describe('topics resource handler', () => {
 
   it('should register the "product-toc" template resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const names = registerResourceSpy.mock.calls.map((call: unknown[]) => call[0]);
     expect(names).toContain('product-toc');
   });
 
   it('should register the "product-versions" template resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
     const names = registerResourceSpy.mock.calls.map((call: unknown[]) => call[0]);
     expect(names).toContain('product-versions');
   });
@@ -408,7 +411,7 @@ describe('topics resource handler', () => {
     });
 
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('topics');
     const result = await handler(new URL('jamf://topics'));
@@ -452,7 +455,7 @@ describe('product-toc resource handler', () => {
 
   it('should return TOC data in JSON format for a valid product', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-toc');
     const uri = new URL('jamf://products/jamf-pro/toc');
@@ -468,17 +471,17 @@ describe('product-toc resource handler', () => {
 
   it('should call fetchTableOfContents with the validated product ID', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-toc');
     await handler(new URL('jamf://products/jamf-pro/toc'), { productId: 'jamf-pro' });
 
-    expect(fetchTableOfContents).toHaveBeenCalledWith('jamf-pro', 'current', { maxTokens: 20000 });
+    expect(fetchTableOfContents).toHaveBeenCalledWith(expect.anything(), 'jamf-pro', 'current', { maxTokens: 20000 });
   });
 
   it('should return error response for invalid product ID', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-toc');
     const uri = new URL('jamf://products/jamf-invalid/toc');
@@ -490,7 +493,7 @@ describe('product-toc resource handler', () => {
 
   it('should include valid product IDs in the error message', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-toc');
     const uri = new URL('jamf://products/bad/toc');
@@ -501,7 +504,7 @@ describe('product-toc resource handler', () => {
 
   it('should set uri.href in returned contents', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-toc');
     const uri = new URL('jamf://products/jamf-pro/toc');
@@ -525,7 +528,7 @@ describe('product-versions resource handler', () => {
 
   it('should return versions for a valid product', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-versions');
     const uri = new URL('jamf://products/jamf-pro/versions');
@@ -541,7 +544,7 @@ describe('product-versions resource handler', () => {
 
   it('should include latestVersion in response', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-versions');
     const uri = new URL('jamf://products/jamf-pro/versions');
@@ -553,17 +556,17 @@ describe('product-versions resource handler', () => {
 
   it('should call getAvailableVersions with validated product ID', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-versions');
     await handler(new URL('jamf://products/jamf-pro/versions'), { productId: 'jamf-pro' });
 
-    expect(getAvailableVersions).toHaveBeenCalledWith('jamf-pro');
+    expect(getAvailableVersions).toHaveBeenCalledWith(expect.anything(), 'jamf-pro');
   });
 
   it('should return error response for invalid product ID', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-versions');
     const uri = new URL('jamf://products/not-a-product/versions');
@@ -575,7 +578,7 @@ describe('product-versions resource handler', () => {
 
   it('should set uri.href in returned contents', async () => {
     const { server, getHandler } = makeFakeServer();
-    registerResources(server);
+    registerResources(server, ctx);
 
     const handler = getHandler('product-versions');
     const uri = new URL('jamf://products/jamf-pro/versions');

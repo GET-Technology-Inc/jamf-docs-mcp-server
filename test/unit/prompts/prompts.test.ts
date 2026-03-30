@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { registerTroubleshootPrompt } from '../../../src/prompts/troubleshoot.js';
-import { registerSetupGuidePrompt } from '../../../src/prompts/setup-guide.js';
-import { registerCompareVersionsPrompt } from '../../../src/prompts/compare-versions.js';
-import { registerPrompts } from '../../../src/prompts/index.js';
+import { registerTroubleshootPrompt } from '../../../src/core/prompts/troubleshoot.js';
+import { registerSetupGuidePrompt } from '../../../src/core/prompts/setup-guide.js';
+import { registerCompareVersionsPrompt } from '../../../src/core/prompts/compare-versions.js';
+import { registerPrompts } from '../../../src/core/prompts/index.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ---------------------------------------------------------------------------

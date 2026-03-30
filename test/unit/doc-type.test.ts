@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { docTypeFromLabels } from '../../src/utils/doc-type.js';
+import { docTypeFromLabels } from '../../src/core/utils/doc-type.js';
 
 describe('docTypeFromLabels', () => {
   it('should return "documentation" for content-techdocs label', () => {

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { slugify, extractSections, extractSection } from '../../src/services/tokenizer.js';
+import { slugify, extractSections, extractSection } from '../../src/core/services/tokenizer.js';
 
 describe('slugify', () => {
   it('should convert standard heading to lowercase slug', () => {

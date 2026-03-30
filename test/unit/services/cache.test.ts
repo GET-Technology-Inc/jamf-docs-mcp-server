@@ -17,13 +17,11 @@ vi.mock('fs/promises', () => ({
 import * as fs from 'fs/promises';
 
 // Import after mocks are set up
-// We create a fresh FileCache instance per test group via a factory
-// The singleton 'cache' is shared, so use unique keys throughout
+// FileCache is in platforms/node
+import { FileCache } from '../../../src/platforms/node/cache.js';
+import { createMockLogger } from '../../helpers/mock-context.js';
 
-// Use dynamic import after mocking to get the real module shape
-// FileCache is not exported, but we can test via the exported 'cache' singleton
-
-import { cache } from '../../../src/services/cache.js';
+const cache = new FileCache({ log: createMockLogger() });
 
 // ============================================================================
 // Concurrent access tests
@@ -390,7 +388,7 @@ describe('stats()', () => {
     vi.mocked(fs.readdir).mockResolvedValue([] as unknown as string[]);
 
     const stats = await cache.stats();
-    expect(stats.fileEntries).toBe(0);
+    expect(stats.totalEntries).toBe(0);
     expect(stats.totalSize).toBe(0);
   });
 
@@ -399,7 +397,7 @@ describe('stats()', () => {
     vi.mocked(fs.stat).mockResolvedValue({ size: 512 } as unknown as import('fs/promises').Stats);
 
     const stats = await cache.stats();
-    expect(stats.fileEntries).toBe(2);
+    expect(stats.totalEntries).toBe(2);
   });
 
   it('should sum file sizes for all JSON files', async () => {
@@ -420,7 +418,7 @@ describe('stats()', () => {
     vi.mocked(fs.readdir).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
     const stats = await cache.stats();
-    expect(stats.fileEntries).toBe(0);
+    expect(stats.totalEntries).toBe(0);
     expect(stats.totalSize).toBe(0);
   });
 });

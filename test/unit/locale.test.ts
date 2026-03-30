@@ -13,9 +13,9 @@ import {
   DEFAULT_LOCALE,
   buildDocUrl,
   buildUrlPattern,
-} from '../../src/constants.js';
-import { extractLocaleFromUrl } from '../../src/utils/url.js';
-import { completeLanguage } from '../../src/completions.js';
+} from '../../src/core/constants.js';
+import { extractLocaleFromUrl } from '../../src/core/utils/url.js';
+import { completeLanguage } from '../../src/core/completions.js';
 
 // Ground truth from FluidTopics availableUiLocales + manual verification (2026-03-29)
 // These 8 locales have actual documentation content accessible via the language switcher.

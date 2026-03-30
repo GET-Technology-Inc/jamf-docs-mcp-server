@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
@@ -282,7 +283,7 @@ function buildSearchFilters(params: { product?: string | undefined; version?: st
   };
 }
 
-export function registerSearchTool(server: McpServer): void {
+export function registerSearchTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -332,7 +333,7 @@ export function registerSearchTool(server: McpServer): void {
         await reportProgress(extra, { progress: 0, total: 3, message: 'Searching documentation...' });
 
         // Perform search
-        const searchResult = await searchDocumentation({
+        const searchResult = await searchDocumentation(ctx, {
           query: params.query,
           product: params.product as ProductId | undefined,
           topic: params.topic as TopicId | undefined,

@@ -3,8 +3,8 @@
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createLogger, setServer } from '../../../src/services/logging.js';
-import type { Logger } from '../../../src/services/logging.js';
+import { createLogger, setServer } from '../../../src/core/services/logging.js';
+import type { Logger } from '../../../src/core/services/logging.js';
 
 // Spy on console.error for stderr verification
 let stderrSpy: ReturnType<typeof vi.spyOn>;

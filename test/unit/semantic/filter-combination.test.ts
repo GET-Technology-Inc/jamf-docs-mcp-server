@@ -3,36 +3,28 @@
  *
  * Tests the progressive filter relaxation logic when multiple filters
  * (product, topic, docType) are applied and produce zero results.
- * Relaxation order: docType → topic → product
+ * Relaxation order: docType -> topic -> product
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRealisticSearchResponse } from '../../helpers/fixtures.js';
 
-// Mock axios to return realistic fixture data
-vi.mock('axios', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('axios')>();
+// Mock http-client to return realistic fixture data
+vi.mock('../../../src/core/http-client.js', async () => {
   return {
-    ...actual,
-    default: {
-      ...actual.default,
-      get: vi.fn(),
-      isAxiosError: actual.default.isAxiosError,
-    },
+    httpGetText: vi.fn(),
+    httpGetJson: vi.fn(),
+    HttpError: (await import('../../../src/core/http-client.js')).HttpError,
   };
 });
 
-vi.mock('../../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+import { httpGetJson } from '../../../src/core/http-client.js';
+import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { createMockContext } from '../../helpers/mock-context.js';
 
-import axios from 'axios';
-import { searchDocumentation } from '../../../src/services/scraper.js';
+const ctx = createMockContext();
 
-const mockedAxiosGet = vi.mocked(axios.get);
+const mockedHttpGetJson = vi.mocked(httpGetJson);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -41,9 +33,9 @@ beforeEach(() => {
 describe('multi-filter combination behavior', () => {
   it('should return results when product filter matches', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-pro',
     });
@@ -57,10 +49,10 @@ describe('multi-filter combination behavior', () => {
 
   it('should trigger filter relaxation when product + docType yields zero', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
     // jamf-protect + release-notes is unlikely to match in a "jamf pro" search
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-protect',
       docType: 'release-notes',
@@ -77,10 +69,10 @@ describe('multi-filter combination behavior', () => {
 
   it('should relax docType before topic before product', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
     // Use a combination very unlikely to match: uncommon product + rare topic + rare docType
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-routines',
       topic: 'graphql',
@@ -109,9 +101,9 @@ describe('multi-filter combination behavior', () => {
 
   it('should include original filter values in relaxation info', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-routines',
       docType: 'training',
@@ -128,9 +120,9 @@ describe('multi-filter combination behavior', () => {
 
   it('should not relax when all filters match results', async () => {
     const fixtureData = createRealisticSearchResponse();
-    mockedAxiosGet.mockResolvedValueOnce({ data: fixtureData, status: 200 } as never);
+    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-pro',
     });

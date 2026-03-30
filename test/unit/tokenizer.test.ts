@@ -11,7 +11,7 @@ import {
   truncateToTokenLimit,
   calculatePagination,
   truncateItemsToTokenLimit
-} from '../../src/services/tokenizer.js';
+} from '../../src/core/services/tokenizer.js';
 
 describe('estimateTokens', () => {
   it('should return 0 for empty string', () => {

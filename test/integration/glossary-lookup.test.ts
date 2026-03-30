@@ -9,7 +9,8 @@ import { describe, it, expect } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { registerGlossaryLookupTool } from '../../src/tools/glossary-lookup.js';
+import { registerGlossaryLookupTool } from '../../src/core/tools/glossary-lookup.js';
+import { createMockContext } from '../helpers/mock-context.js';
 
 type TextContent = { type: 'text'; text: string };
 
@@ -23,8 +24,9 @@ describe('jamf_docs_glossary_lookup integration', () => {
   let client: Client;
 
   beforeAll(async () => {
+    const ctx = createMockContext();
     server = new McpServer({ name: 'test', version: '0.0.1' });
-    registerGlossaryLookupTool(server);
+    registerGlossaryLookupTool(server, ctx);
 
     client = new Client({ name: 'test-client', version: '0.0.1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

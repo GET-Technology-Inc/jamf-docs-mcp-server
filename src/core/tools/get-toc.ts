@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { GetTocInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
@@ -170,7 +171,7 @@ function withVersionNote<T extends object>(content: T, versionNote: string | und
   return content as T & { versionNote?: string };
 }
 
-export function registerGetTocTool(server: McpServer): void {
+export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -212,7 +213,7 @@ export function registerGetTocTool(server: McpServer): void {
         const productInfo = JAMF_PRODUCTS[productId];
 
         // Get available versions dynamically
-        const availableVersions = await getAvailableVersions(productId);
+        const availableVersions = await getAvailableVersions(ctx, productId);
         const version = params.version ?? 'current';
 
         // Validate version if specified
@@ -230,7 +231,7 @@ export function registerGetTocTool(server: McpServer): void {
 
         await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
-        const tocResult = await fetchTableOfContents(productId, version, {
+        const tocResult = await fetchTableOfContents(ctx, productId, version, {
           ...(params.page !== undefined && { page: params.page }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
           locale: params.language as LocaleId | undefined
