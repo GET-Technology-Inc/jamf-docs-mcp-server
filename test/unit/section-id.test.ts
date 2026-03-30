@@ -37,6 +37,18 @@ describe('slugify', () => {
   it('should handle single word', () => {
     expect(slugify('Overview')).toBe('overview');
   });
+
+  it('should preserve Unicode characters (CJK)', () => {
+    expect(slugify('API ロールを作成する')).toBe('api-ロールを作成する');
+  });
+
+  it('should preserve Unicode characters (Korean)', () => {
+    expect(slugify('설정 프로필 관리')).toBe('설정-프로필-관리');
+  });
+
+  it('should preserve Unicode characters (accented Latin)', () => {
+    expect(slugify('Configuración de Perfiles')).toBe('configuración-de-perfiles');
+  });
 });
 
 describe('extractSections duplicate handling', () => {
@@ -86,5 +98,97 @@ describe('extractSection ID and title matching', () => {
   it('should return null section when no match', () => {
     const result = extractSection(content, 'nonexistent-section');
     expect(result.section).toBeNull();
+  });
+});
+
+describe('extractSection duplicate-aware ID matching', () => {
+  const jaContent = [
+    '## API ロールを作成する',
+    'ロール作成の手順',
+    '## API クライアントを作成する',
+    'クライアント作成の手順',
+    '## API ロールを編集する',
+    '編集の手順'
+  ].join('\n');
+
+  it('should find all sections by IDs from extractSections', () => {
+    const sections = extractSections(jaContent);
+    for (const s of sections) {
+      const result = extractSection(jaContent, s.id);
+      expect(result.section).not.toBeNull();
+      expect(result.section!.title).toBe(s.title);
+    }
+  });
+
+  it('should handle ASCII duplicate IDs', () => {
+    const content = '## Overview\nFirst\n## Details\nMiddle\n## Overview\nSecond';
+    const sections = extractSections(content);
+    expect(sections[2].id).toBe('overview-1');
+
+    const result = extractSection(content, 'overview-1');
+    expect(result.section).not.toBeNull();
+    expect(result.section!.title).toBe('Overview');
+    expect(result.content).toContain('Second');
+  });
+
+  it('should handle title cleaning consistently with extractSections', () => {
+    const content = '## [Prerequisites](#prereq)\nSome prereq content\n## [Setup](#setup)\nSetup content';
+    const sections = extractSections(content);
+    expect(sections[0].id).toBe('prerequisites');
+
+    const result = extractSection(content, 'prerequisites');
+    expect(result.section).not.toBeNull();
+    expect(result.section!.title).toBe('Prerequisites');
+  });
+});
+
+describe('extractSection title-match guardrails', () => {
+  const content = [
+    '## API ロールとクライアント',
+    'Introduction content.',
+    '## API ロールを作成する',
+    'Creating API roles.',
+    '## Prerequisites',
+    'Prereq content.'
+  ].join('\n');
+
+  it('should NOT match single-char substring like "a"', () => {
+    const result = extractSection(content, 'a');
+    expect(result.section).toBeNull();
+  });
+
+  it('should NOT match single CJK char like "の"', () => {
+    const result = extractSection(content, 'の');
+    expect(result.section).toBeNull();
+  });
+
+  it('should NOT match 2-char substring like "AP"', () => {
+    const result = extractSection(content, 'AP');
+    expect(result.section).toBeNull();
+  });
+
+  it('should NOT match short substring that covers small portion of title', () => {
+    const result = extractSection(content, 'API');
+    expect(result.section).toBeNull();
+  });
+
+  it('should match substantial title substring', () => {
+    const result = extractSection(content, 'Prerequisites');
+    expect(result.section).not.toBeNull();
+    expect(result.section!.title).toBe('Prerequisites');
+  });
+
+  it('should match significant portion of Japanese title', () => {
+    const result = extractSection(content, 'ロールを作成する');
+    expect(result.section).not.toBeNull();
+    expect(result.section!.title).toBe('API ロールを作成する');
+  });
+
+  it('should always match by exact slug ID regardless of length', () => {
+    const sections = extractSections(content);
+    for (const s of sections) {
+      const result = extractSection(content, s.id);
+      expect(result.section).not.toBeNull();
+    }
   });
 });

@@ -378,8 +378,17 @@ describe('truncateItemsToTokenLimit', () => {
     expect(result.items[0].id).toBe(10); // First item of page 2
   });
 
-  it('should set hasNext when truncated within page', () => {
+  it('should not set hasNext on last page due to token truncation', () => {
+    // 5 items, pageSize=5, so only 1 page; very low maxTokens forces truncation
     const result = truncateItemsToTokenLimit(items, 10, itemToString, 1, 5);
+
+    // hasNext should be false (only 1 page) even though truncated
+    expect(result.pagination.hasNext).toBe(false);
+    expect(result.tokenInfo.truncated).toBe(true);
+  });
+
+  it('should set hasNext when there are more pages', () => {
+    const result = truncateItemsToTokenLimit(items, 10000, itemToString, 1, 2);
 
     expect(result.pagination.hasNext).toBe(true);
   });

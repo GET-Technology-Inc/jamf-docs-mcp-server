@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractVersionFromBundleId, extractProductSlug } from '../../../src/utils/bundle.js';
+import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../../../src/utils/bundle.js';
 
 describe('extractVersionFromBundleId', () => {
   it('should extract version from standard documentation bundle', () => {
@@ -70,5 +70,40 @@ describe('extractProductSlug', () => {
 
   it('should return null for empty string', () => {
     expect(extractProductSlug('')).toBeNull();
+  });
+});
+
+describe('compareVersions', () => {
+  it('should return 0 for equal versions', () => {
+    expect(compareVersions('11.25.0', '11.25.0')).toBe(0);
+  });
+
+  it('should compare major versions', () => {
+    expect(compareVersions('12.0.0', '11.0.0')).toBeGreaterThan(0);
+  });
+
+  it('should compare minor versions', () => {
+    expect(compareVersions('11.25.0', '11.0.0')).toBeGreaterThan(0);
+  });
+
+  it('should compare patch versions', () => {
+    expect(compareVersions('11.25.1', '11.25.0')).toBeGreaterThan(0);
+  });
+
+  it('should treat "current" as maximum', () => {
+    expect(compareVersions('current', '99.99.99')).toBeGreaterThan(0);
+    expect(compareVersions('11.0.0', 'current')).toBeLessThan(0);
+  });
+
+  it('should return 0 for both "current"', () => {
+    expect(compareVersions('current', 'current')).toBe(0);
+  });
+
+  it('should handle different length versions', () => {
+    expect(compareVersions('11.25', '11.25.0')).toBe(0);
+  });
+
+  it('should handle negative comparison', () => {
+    expect(compareVersions('11.0.0', '11.25.0')).toBeLessThan(0);
   });
 });
