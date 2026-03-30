@@ -49,8 +49,8 @@ vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => (
   }),
 }));
 
-vi.mock('../../../src/constants.js', () => ({
-  SERVER_VERSION: '1.0.0-test',
+vi.mock('../../../src/platforms/node/config.js', () => ({
+  createNodeConfig: () => ({ version: '1.0.0-test' }),
   getEnvNumber: (_key: string, defaultValue: number) => defaultValue,
 }));
 

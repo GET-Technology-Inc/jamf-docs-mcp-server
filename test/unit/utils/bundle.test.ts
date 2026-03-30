@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../../../src/utils/bundle.js';
+import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../../../src/core/utils/bundle.js';
 
 describe('extractVersionFromBundleId', () => {
   it('should extract version from standard documentation bundle', () => {

@@ -11,8 +11,8 @@ import type {
   PaginationInfo,
   ArticleSection,
   ZoominSearchResponse,
-} from '../../src/types.js';
-import type { FetchArticleResult } from '../../src/services/scraper.js';
+} from '../../src/core/types.js';
+import type { FetchArticleResult } from '../../src/core/services/scraper.js';
 
 // ============================================================================
 // Fixture loading

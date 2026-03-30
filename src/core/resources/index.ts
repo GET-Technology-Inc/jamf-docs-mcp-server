@@ -8,7 +8,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createLogger } from '../services/logging.js';
+import type { ServerContext } from '../types/context.js';
 import { JAMF_PRODUCTS, type ProductId } from '../constants.js';
 import {
   getProductsResourceData,
@@ -17,8 +17,6 @@ import {
 } from '../services/metadata.js';
 import { fetchTableOfContents } from '../services/scraper.js';
 import { completeProduct } from '../completions.js';
-
-const log = createLogger('resources');
 
 function validateProductId(
   productId: string | string[] | number | undefined,
@@ -44,7 +42,9 @@ function validateProductId(
 /**
  * Register all MCP resources
  */
-export function registerResources(server: McpServer): void {
+export function registerResources(server: McpServer, ctx: ServerContext): void {
+  const log = ctx.logger.createLogger('resources');
+
   // Products resource - dynamic with fallback
   server.registerResource(
     'products',
@@ -55,7 +55,7 @@ export function registerResources(server: McpServer): void {
       mimeType: 'application/json'
     },
     async () => {
-      const data = await getProductsResourceData();
+      const data = await getProductsResourceData(ctx);
       return {
         contents: [{
           uri: 'jamf://products',
@@ -76,7 +76,7 @@ export function registerResources(server: McpServer): void {
       mimeType: 'application/json'
     },
     async () => {
-      const data = await getTopicsResourceData();
+      const data = await getTopicsResourceData(ctx);
       return {
         contents: [{
           uri: 'jamf://topics',
@@ -105,7 +105,7 @@ export function registerResources(server: McpServer): void {
         return validation.errorResponse;
       }
 
-      const tocResult = await fetchTableOfContents(validation.id, 'current', {
+      const tocResult = await fetchTableOfContents(ctx, validation.id, 'current', {
         maxTokens: 20000,
       });
       return {
@@ -140,7 +140,7 @@ export function registerResources(server: McpServer): void {
         return validation.errorResponse;
       }
 
-      const versions = await getAvailableVersions(validation.id);
+      const versions = await getAvailableVersions(ctx, validation.id);
       return {
         contents: [{
           uri: uri.href,

@@ -7,9 +7,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-import type { SearchParams } from '../../src/types.js';
+import type { SearchParams } from '../../src/core/types.js';
+import type { ServerContext } from '../../src/core/types/context.js';
+import { createMockContext } from '../helpers/mock-context.js';
 
-const mockSearchDocumentation = vi.fn().mockImplementation((params: SearchParams) => {
+const ctx = createMockContext();
+
+const mockSearchDocumentation = vi.fn().mockImplementation((_ctx: ServerContext, params: SearchParams) => {
   const isVersionMismatch = params.version !== undefined
     && params.version !== 'current'
     && params.version !== '';
@@ -21,7 +25,7 @@ const mockSearchDocumentation = vi.fn().mockImplementation((params: SearchParams
   });
 });
 
-vi.mock('../../src/services/scraper.js', () => ({
+vi.mock('../../src/core/services/scraper.js', () => ({
   searchDocumentation: (...args: unknown[]) => mockSearchDocumentation(...args),
   ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
   isAllowedHostname: (url: string) => {
@@ -30,7 +34,7 @@ vi.mock('../../src/services/scraper.js', () => ({
   },
 }));
 
-import { registerSearchTool } from '../../src/tools/search.js';
+import { registerSearchTool } from '../../src/core/tools/search.js';
 
 type TextContent = { type: 'text'; text: string };
 
@@ -40,7 +44,7 @@ describe('Version filter transparency', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerSearchTool(server);
+    registerSearchTool(server, ctx);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.1' });
     await server.connect(serverTransport);

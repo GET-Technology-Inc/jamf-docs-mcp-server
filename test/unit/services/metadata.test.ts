@@ -4,28 +4,16 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-// Mock axios before importing the module under test
-vi.mock('axios', async () => {
-  const actual = await vi.importActual<typeof import('axios')>('axios');
+// Mock http-client before importing the module under test
+vi.mock('../../../src/core/http-client.js', async () => {
   return {
-    default: {
-      ...actual.default,
-      get: vi.fn()
-    }
+    httpGetText: vi.fn(),
+    httpGetJson: vi.fn(),
+    HttpError: (await import('../../../src/core/http-client.js')).HttpError
   };
 });
 
-// Mock cache to avoid file system interaction
-vi.mock('../../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined)
-  }
-}));
-
-import axios from 'axios';
-import { cache } from '../../../src/services/cache.js';
+import { httpGetJson } from '../../../src/core/http-client.js';
 import {
   getProductsMetadata,
   getBundleIdForVersion,
@@ -33,8 +21,13 @@ import {
   getTopicsMetadata,
   getProductsResourceData,
   getTopicsResourceData
-} from '../../../src/services/metadata.js';
-import { JAMF_PRODUCTS } from '../../../src/constants.js';
+} from '../../../src/core/services/metadata.js';
+import { JAMF_PRODUCTS } from '../../../src/core/constants.js';
+import { createMockContext } from '../../helpers/mock-context.js';
+
+const ctx = createMockContext();
+
+const mockedHttpGetJson = vi.mocked(httpGetJson);
 
 // ============================================================================
 // Helpers
@@ -63,14 +56,14 @@ function makeSearchResponse(bundleIds: (string | null)[]) {
 
 describe('getProductsMetadata - API fallback', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should fall back to static JAMF_PRODUCTS when API throws a network error', async () => {
-    vi.mocked(axios.get).mockRejectedValue(new Error('Network error: ECONNREFUSED'));
+    mockedHttpGetJson.mockRejectedValue(new Error('Network error: ECONNREFUSED'));
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     expect(products.length).toBeGreaterThan(0);
 
     // All products from static list should appear
@@ -80,18 +73,18 @@ describe('getProductsMetadata - API fallback', () => {
   });
 
   it('should use static bundleId as fallback when API fails', async () => {
-    vi.mocked(axios.get).mockRejectedValue(new Error('Network failure'));
+    mockedHttpGetJson.mockRejectedValue(new Error('Network failure'));
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
     expect(pro).toBeDefined();
     expect(pro?.bundleId).toBe(JAMF_PRODUCTS['jamf-pro'].bundleId);
   });
 
   it('should use static latestVersion as fallback when API fails', async () => {
-    vi.mocked(axios.get).mockRejectedValue(new Error('Network failure'));
+    mockedHttpGetJson.mockRejectedValue(new Error('Network failure'));
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
     expect(pro?.latestVersion).toBeDefined();
     expect(pro?.latestVersion).toBe(JAMF_PRODUCTS['jamf-pro'].latestVersion);
@@ -110,13 +103,13 @@ describe('getProductsMetadata - API fallback', () => {
       }
     ];
 
-    vi.mocked(cache.get).mockResolvedValue(cachedProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(cachedProducts);
     // Reset the call count so we can assert this test's behavior in isolation
-    vi.mocked(axios.get).mockClear();
+    mockedHttpGetJson.mockClear();
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     expect(products).toEqual(cachedProducts);
-    expect(vi.mocked(axios.get)).not.toHaveBeenCalled();
+    expect(mockedHttpGetJson).not.toHaveBeenCalled();
   });
 });
 
@@ -126,16 +119,14 @@ describe('getProductsMetadata - API fallback', () => {
 
 describe('getProductsMetadata - empty API results', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should fall back to static data when API returns empty Results array', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: { status: 'ok', Results: [] }
-    });
+    mockedHttpGetJson.mockResolvedValue({ status: 'ok', Results: [] });
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     expect(products.length).toBeGreaterThan(0);
 
     // Should still contain all static products
@@ -146,21 +137,21 @@ describe('getProductsMetadata - empty API results', () => {
   });
 
   it('should fall back when API returns results with no matching bundle prefix', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse(['some-unrelated-bundle-id'])
-    });
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse(['some-unrelated-bundle-id'])
+    );
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     // Fallback products should still be present
     expect(products.length).toBeGreaterThan(0);
   });
 
   it('should handle API response with null leading_results gracefully', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([null, null, null])
-    });
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([null, null, null])
+    );
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     expect(products.length).toBeGreaterThan(0);
   });
 });
@@ -171,63 +162,61 @@ describe('getProductsMetadata - empty API results', () => {
 
 describe('version extraction from bundleId', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should extract version from versioned bundleId', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse(['jamf-pro-documentation-11.24.0'])
-    });
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse(['jamf-pro-documentation-11.24.0'])
+    );
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
     expect(pro?.latestVersion).toBe('11.24.0');
   });
 
   it('should use "current" as latestVersion when bundleId has no version suffix', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse(['jamf-pro-documentation'])
-    });
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse(['jamf-pro-documentation'])
+    );
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
-    // bundleId 'jamf-pro-documentation' has no version suffix → versionMatch is null → 'current'
+    // bundleId 'jamf-pro-documentation' has no version suffix -> versionMatch is null -> 'current'
     expect(pro?.latestVersion).toBe('current');
   });
 
   it('should collect multiple available versions from search results', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: {
-        status: 'ok',
-        Results: [
-          {
-            leading_result: {
-              bundle_id: 'jamf-pro-documentation-11.24.0',
-              title: 'Jamf Pro 11.24',
-              url: 'https://learn-be.jamf.com/test.html',
-              snippet: '',
-              page_id: 'p1',
-              publication_title: 'Jamf Pro',
-              labels: [{ key: 'product-pro', navtitle: 'Jamf Pro' }]
-            }
-          },
-          {
-            leading_result: {
-              bundle_id: 'jamf-pro-documentation-11.23.0',
-              title: 'Jamf Pro 11.23',
-              url: 'https://learn-be.jamf.com/test2.html',
-              snippet: '',
-              page_id: 'p2',
-              publication_title: 'Jamf Pro',
-              labels: []
-            }
+    mockedHttpGetJson.mockResolvedValue({
+      status: 'ok',
+      Results: [
+        {
+          leading_result: {
+            bundle_id: 'jamf-pro-documentation-11.24.0',
+            title: 'Jamf Pro 11.24',
+            url: 'https://learn-be.jamf.com/test.html',
+            snippet: '',
+            page_id: 'p1',
+            publication_title: 'Jamf Pro',
+            labels: [{ key: 'product-pro', navtitle: 'Jamf Pro' }]
           }
-        ]
-      }
+        },
+        {
+          leading_result: {
+            bundle_id: 'jamf-pro-documentation-11.23.0',
+            title: 'Jamf Pro 11.23',
+            url: 'https://learn-be.jamf.com/test2.html',
+            snippet: '',
+            page_id: 'p2',
+            publication_title: 'Jamf Pro',
+            labels: []
+          }
+        }
+      ]
     });
 
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
     expect(pro?.availableVersions).toContain('11.24.0');
     expect(pro?.availableVersions).toContain('11.23.0');
@@ -240,8 +229,8 @@ describe('version extraction from bundleId', () => {
 
 describe('getBundleIdForVersion', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should return latestBundleId when version is "current"', async () => {
@@ -256,9 +245,9 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', 'current');
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'current');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
@@ -274,9 +263,9 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', 'latest');
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'latest');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
@@ -292,9 +281,9 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', undefined);
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', undefined);
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
@@ -310,9 +299,9 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', '11.23.0');
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '11.23.0');
     expect(bundleId).toBe('jamf-pro-documentation-11.23.0');
   });
 
@@ -328,17 +317,17 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', '10.0.0');
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '10.0.0');
     expect(bundleId).toBeNull();
   });
 
   it('should return null when product is not found in metadata', async () => {
-    vi.mocked(cache.get).mockResolvedValue([]);
-    vi.mocked(axios.get).mockResolvedValue({ data: { status: 'ok', Results: [] } });
+    vi.mocked(ctx.cache.get).mockResolvedValue([]);
+    mockedHttpGetJson.mockResolvedValue({ status: 'ok', Results: [] });
 
-    const bundleId = await getBundleIdForVersion('jamf-pro', 'current');
+    const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'current');
     expect(bundleId).toBeNull();
   });
 });
@@ -349,8 +338,8 @@ describe('getBundleIdForVersion', () => {
 
 describe('getAvailableVersions', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should return versions array for a known product', async () => {
@@ -365,26 +354,26 @@ describe('getAvailableVersions', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const versions = await getAvailableVersions('jamf-pro');
+    const versions = await getAvailableVersions(ctx, 'jamf-pro');
     expect(versions).toContain('11.24.0');
     expect(versions).toContain('11.23.0');
   });
 
   it('should return empty array when product is not in metadata', async () => {
-    vi.mocked(cache.get).mockResolvedValue([]);
-    vi.mocked(axios.get).mockResolvedValue({ data: { Results: [] } });
+    vi.mocked(ctx.cache.get).mockResolvedValue([]);
+    mockedHttpGetJson.mockResolvedValue({ Results: [] });
 
-    const versions = await getAvailableVersions('jamf-pro');
+    const versions = await getAvailableVersions(ctx, 'jamf-pro');
     expect(versions).toEqual([]);
   });
 
   it('should return single-item array with latestVersion when no versions discovered', async () => {
     // When API fails, static fallback uses [product.latestVersion]
-    vi.mocked(axios.get).mockRejectedValue(new Error('network error'));
+    mockedHttpGetJson.mockRejectedValue(new Error('network error'));
 
-    const versions = await getAvailableVersions('jamf-pro');
+    const versions = await getAvailableVersions(ctx, 'jamf-pro');
     expect(Array.isArray(versions)).toBe(true);
     expect(versions.length).toBeGreaterThan(0);
   });
@@ -396,34 +385,34 @@ describe('getAvailableVersions', () => {
 
 describe('getTopicsMetadata', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should return cached topics without calling API', async () => {
     const cachedTopics = [
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const }
     ];
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    vi.mocked(axios.get).mockClear();
+    mockedHttpGetJson.mockClear();
 
-    const topics = await getTopicsMetadata();
+    const topics = await getTopicsMetadata(ctx);
     expect(topics).toEqual(cachedTopics);
-    expect(vi.mocked(axios.get)).not.toHaveBeenCalled();
+    expect(mockedHttpGetJson).not.toHaveBeenCalled();
   });
 
   it('should include at least the manual topics from JAMF_TOPICS when API fails', async () => {
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return null;
-      if (key === 'metadata:products') return []; // empty products → no TOC fetches
+      if (key === 'metadata:products') return []; // empty products -> no TOC fetches
       return null;
     });
-    vi.mocked(axios.get).mockRejectedValue(new Error('API failure'));
+    mockedHttpGetJson.mockRejectedValue(new Error('API failure'));
 
-    const topics = await getTopicsMetadata();
+    const topics = await getTopicsMetadata(ctx);
     expect(Array.isArray(topics)).toBe(true);
     expect(topics.length).toBeGreaterThan(0);
     // All fallback topics should have source='manual'
@@ -431,15 +420,15 @@ describe('getTopicsMetadata', () => {
   });
 
   it('should cache the topics after fetching', async () => {
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return null;
       if (key === 'metadata:products') return [];
       return null;
     });
-    vi.mocked(axios.get).mockRejectedValue(new Error('skip'));
+    mockedHttpGetJson.mockRejectedValue(new Error('skip'));
 
-    await getTopicsMetadata();
-    expect(vi.mocked(cache.set)).toHaveBeenCalled();
+    await getTopicsMetadata(ctx);
+    expect(vi.mocked(ctx.cache.set)).toHaveBeenCalled();
   });
 
   it('should combine TOC categories with manual topics', async () => {
@@ -455,20 +444,18 @@ describe('getTopicsMetadata', () => {
       }
     ];
 
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return null;
       if (key === 'metadata:products') return mockProducts;
       return null;
     });
 
     // TOC API response with HTML list
-    vi.mocked(axios.get).mockResolvedValue({
-      data: {
-        'nav-1': '<ul><a href="/enroll">Enrollment Guide</a><a href="/sub">Sub Article</a></ul>',
-      }
+    mockedHttpGetJson.mockResolvedValue({
+      'nav-1': '<ul><a href="/enroll">Enrollment Guide</a><a href="/sub">Sub Article</a></ul>',
     });
 
-    const topics = await getTopicsMetadata();
+    const topics = await getTopicsMetadata(ctx);
     expect(Array.isArray(topics)).toBe(true);
     // Should include both manual and toc-derived topics
     expect(topics.length).toBeGreaterThan(0);
@@ -487,14 +474,14 @@ describe('getTopicsMetadata', () => {
       }
     ];
 
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return null;
       if (key === 'metadata:products') return mockProducts;
       return null;
     });
-    vi.mocked(axios.get).mockRejectedValue(new Error('TOC fetch failed'));
+    mockedHttpGetJson.mockRejectedValue(new Error('TOC fetch failed'));
 
-    await expect(getTopicsMetadata()).resolves.not.toThrow();
+    await expect(getTopicsMetadata(ctx)).resolves.not.toThrow();
   });
 });
 
@@ -504,7 +491,7 @@ describe('getTopicsMetadata', () => {
 
 describe('getProductsResourceData', () => {
   beforeEach(() => {
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should return correctly formatted resource data', async () => {
@@ -519,9 +506,9 @@ describe('getProductsResourceData', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const data = await getProductsResourceData();
+    const data = await getProductsResourceData(ctx);
 
     expect(typeof data.description).toBe('string');
     expect(data.description.length).toBeGreaterThan(0);
@@ -545,9 +532,9 @@ describe('getProductsResourceData', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
 
-    const data = await getProductsResourceData();
+    const data = await getProductsResourceData(ctx);
     const product = data.products[0];
 
     expect(product.id).toBe('jamf-pro');
@@ -559,10 +546,10 @@ describe('getProductsResourceData', () => {
   });
 
   it('should return a valid ISO timestamp in lastUpdated', async () => {
-    vi.mocked(cache.get).mockResolvedValue([]);
-    vi.mocked(axios.get).mockRejectedValue(new Error('skip'));
+    vi.mocked(ctx.cache.get).mockResolvedValue([]);
+    mockedHttpGetJson.mockRejectedValue(new Error('skip'));
 
-    const data = await getProductsResourceData();
+    const data = await getProductsResourceData(ctx);
     expect(() => new Date(data.lastUpdated)).not.toThrow();
     expect(new Date(data.lastUpdated).getTime()).toBeGreaterThan(0);
   });
@@ -578,13 +565,13 @@ describe('getTopicsResourceData', () => {
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const },
       { id: 'security', name: 'Security', source: 'manual' as const, articleCount: 10 },
     ];
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
 
-    const data = await getTopicsResourceData();
+    const data = await getTopicsResourceData(ctx);
 
     expect(data.description).toBeDefined();
     expect(data.totalTopics).toBe(2);
@@ -597,13 +584,13 @@ describe('getTopicsResourceData', () => {
     const cachedTopics = [
       { id: 'enrollment', name: 'Enrollment & Onboarding', source: 'manual' as const },
     ];
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
 
-    const data = await getTopicsResourceData();
+    const data = await getTopicsResourceData(ctx);
     const topic = data.topics[0];
 
     expect(topic.id).toBe('enrollment');
@@ -615,13 +602,13 @@ describe('getTopicsResourceData', () => {
     const cachedTopics = [
       { id: 'enrollment', name: 'Enrollment', source: 'toc' as const, articleCount: 42 },
     ];
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
 
-    const data = await getTopicsResourceData();
+    const data = await getTopicsResourceData(ctx);
     expect(data.topics[0].articleCount).toBe(42);
   });
 
@@ -629,13 +616,13 @@ describe('getTopicsResourceData', () => {
     const cachedTopics = [
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const },
     ];
-    vi.mocked(cache.get).mockImplementation(async (key) => {
+    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
 
-    const data = await getTopicsResourceData();
+    const data = await getTopicsResourceData(ctx);
     expect(data.topics[0].articleCount).toBeUndefined();
   });
 });

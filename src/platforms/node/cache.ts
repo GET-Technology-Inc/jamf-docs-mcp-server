@@ -1,7 +1,8 @@
 /**
- * Caching service for Jamf documentation
+ * Node.js file-based cache implementation
  *
- * Provides file-based caching with TTL support and LRU memory eviction
+ * Provides file-based caching with TTL support and LRU memory eviction.
+ * All Node.js built-in imports (fs, path, crypto) are isolated here.
  */
 
 import * as fs from 'fs/promises';
@@ -9,11 +10,9 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 import { z } from 'zod';
-import { CACHE_TTL, CACHE_DIR, CACHE_MAX_ENTRIES } from '../constants.js';
-import type { CacheEntry } from '../types.js';
-import { createLogger } from './logging.js';
-
-const log = createLogger('cache');
+import type { CacheProvider, CacheStats } from '../../core/services/interfaces.js';
+import type { CacheEntry } from '../../core/types.js';
+import type { Logger } from '../../core/services/interfaces.js';
 
 /**
  * Zod schema for validating cache entries read from disk
@@ -36,18 +35,27 @@ interface LruNode {
 /**
  * File-based cache implementation with LRU-bounded memory cache
  */
-class FileCache {
+export class FileCache implements CacheProvider {
   private readonly cacheDir: string;
   private readonly maxEntries: number;
+  private readonly defaultTtl: number;
+  private readonly log: Logger;
   private readonly memoryCache = new Map<string, CacheEntry<unknown>>();
   private readonly lruMap = new Map<string, LruNode>();
   private readonly lruHead: LruNode = { key: '__head__', prev: null, next: null };
   private readonly lruTail: LruNode = { key: '__tail__', prev: null, next: null };
   private dirCreated = false;
 
-  constructor(cacheDir: string = CACHE_DIR, maxEntries: number = CACHE_MAX_ENTRIES) {
-    this.cacheDir = cacheDir;
-    this.maxEntries = maxEntries;
+  constructor(options: {
+    cacheDir?: string;
+    maxEntries?: number;
+    defaultTtl?: number;
+    log: Logger;
+  }) {
+    this.cacheDir = options.cacheDir ?? '.cache';
+    this.maxEntries = options.maxEntries ?? 500;
+    this.defaultTtl = options.defaultTtl ?? 24 * 60 * 60 * 1000;
+    this.log = options.log;
     this.lruHead.next = this.lruTail;
     this.lruTail.prev = this.lruHead;
   }
@@ -178,13 +186,13 @@ class FileCache {
   /**
    * Set a value in cache
    */
-  async set(key: string, data: unknown, ttl: number = CACHE_TTL.ARTICLE_CONTENT): Promise<void> {
+  async set<T>(key: string, value: T, ttl?: number): Promise<void> {
     await this.ensureCacheDir();
 
     const entry: CacheEntry<unknown> = {
-      data,
+      data: value,
       timestamp: Date.now(),
-      ttl
+      ttl: ttl ?? this.defaultTtl
     };
 
     // Store in memory with LRU
@@ -198,17 +206,19 @@ class FileCache {
       await fs.rename(tmpPath, cachePath);
     } catch (error) {
       // Log but don't fail
-      log.error(`Failed to write cache: ${String(error)}`);
+      this.log.error(`Failed to write cache: ${String(error)}`);
     }
   }
 
   /**
    * Delete a cache entry
    */
-  async delete(key: string): Promise<void> {
+  async delete(key: string): Promise<boolean> {
+    const existed = this.memoryCache.has(key);
     this.memoryCache.delete(key);
     this.lruRemove(key);
     await fs.unlink(this.getCachePath(key)).catch(() => { /* ignore if not exists */ });
+    return existed;
   }
 
   /**
@@ -233,14 +243,14 @@ class FileCache {
   /**
    * Get cache statistics
    */
-  async stats(): Promise<{ memoryEntries: number; fileEntries: number; totalSize: number }> {
-    let fileEntries = 0;
+  async stats(): Promise<CacheStats> {
+    let totalEntries = 0;
     let totalSize = 0;
 
     try {
       const files = await fs.readdir(this.cacheDir);
       const jsonFiles = files.filter(f => f.endsWith('.json'));
-      fileEntries = jsonFiles.length;
+      totalEntries = jsonFiles.length;
 
       for (const file of jsonFiles) {
         const stat = await fs.stat(path.join(this.cacheDir, file));
@@ -252,7 +262,7 @@ class FileCache {
 
     return {
       memoryEntries: this.memoryCache.size,
-      fileEntries,
+      totalEntries,
       totalSize
     };
   }
@@ -313,6 +323,3 @@ class FileCache {
     return pruned;
   }
 }
-
-// Export singleton instance
-export const cache = new FileCache();

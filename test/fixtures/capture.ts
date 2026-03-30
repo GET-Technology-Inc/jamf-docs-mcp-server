@@ -4,7 +4,7 @@
  * Usage: node --experimental-strip-types test/fixtures/capture.ts
  */
 
-import axios from 'axios';
+import { httpGetJson, httpGetText, HttpError } from '../../src/core/http-client.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -46,12 +46,12 @@ async function writeFixture(name: string, data: unknown): Promise<CapturedFixtur
 async function captureSearchResponse(): Promise<{ fixture: CapturedFixture; data: ZoominResponse }> {
   console.error('[capture] Fetching search response for "jamf pro"...');
   const url = `${DOCS_API_URL}/api/search?q=jamf+pro&rpp=50`;
-  const response = await axios.get<ZoominResponse>(url, {
+  const data = await httpGetJson<ZoominResponse>(url, {
     timeout: 30000,
     headers: { Accept: 'application/json' },
   });
-  const fixture = await writeFixture('search-response.json', response.data);
-  return { fixture, data: response.data };
+  const fixture = await writeFixture('search-response.json', data);
+  return { fixture, data };
 }
 
 async function captureArticleHtml(searchData: ZoominResponse): Promise<CapturedFixture> {
@@ -66,13 +66,13 @@ async function captureArticleHtml(searchData: ZoominResponse): Promise<CapturedF
   }
 
   console.error(`[capture] Fetching article HTML from ${articleUrl}...`);
-  const response = await axios.get<string>(articleUrl, {
+  const html = await httpGetText(articleUrl, {
     timeout: 30000,
     headers: { Accept: 'text/html' },
   });
   return writeFixture('article-html.json', {
     url: articleUrl,
-    html: response.data,
+    html,
   });
 }
 
@@ -92,18 +92,18 @@ async function captureTocResponse(searchData: ZoominResponse): Promise<CapturedF
     const tocUrl = `${DOCS_API_URL}/bundle/${bundleId}/toc`;
     console.error(`[capture] Fetching TOC for ${bundleId}...`);
     try {
-      const response = await axios.get(tocUrl, {
+      const data = await httpGetJson(tocUrl, {
         timeout: 30000,
         headers: { Accept: 'application/json' },
       });
-      const fixture = await writeFixture(`toc-${bundleId}.json`, response.data);
+      const fixture = await writeFixture(`toc-${bundleId}.json`, data);
       fixtures.push(fixture);
     } catch (error) {
-      if (axios.isAxiosError(error)) {
+      if (error instanceof HttpError) {
         console.error(`[capture] TOC fetch failed for ${bundleId}: ${error.message}`);
         const fixture = await writeFixture(`toc-${bundleId}.json`, {
           error: true,
-          status: error.response?.status ?? 'unknown',
+          status: error.status,
           message: error.message,
         });
         fixtures.push(fixture);

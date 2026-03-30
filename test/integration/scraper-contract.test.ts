@@ -13,10 +13,15 @@ import {
   searchDocumentation,
   fetchArticle,
   fetchTableOfContents,
-} from '../../src/services/scraper.js';
-import type { ProductId } from '../../src/constants.js';
-import axios from 'axios';
-import { DOCS_API_URL } from '../../src/constants.js';
+} from '../../src/core/services/scraper.js';
+import type { ProductId } from '../../src/core/constants.js';
+import { DOCS_API_URL } from '../../src/core/constants.js';
+import { httpGetJson } from '../../src/core/http-client.js';
+import { createMockContext } from '../helpers/mock-context.js';
+import type { ServerContext } from '../../src/core/types/context.js';
+
+// Integration tests use a real-ish context (mock cache that stores nothing, real config)
+const ctx: ServerContext = createMockContext();
 
 // ============================================================================
 // searchDocumentation() contract tests
@@ -24,7 +29,7 @@ import { DOCS_API_URL } from '../../src/constants.js';
 
 describe('searchDocumentation() contract', { timeout: 60000, retry: 2 }, () => {
   it('should return results with correct structure', async () => {
-    const result = await searchDocumentation({ query: 'configuration profile' });
+    const result = await searchDocumentation(ctx, { query: 'configuration profile' });
 
     // Top-level structure
     expect(result).toHaveProperty('results');
@@ -59,7 +64,7 @@ describe('searchDocumentation() contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should filter results by product', async () => {
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'enrollment',
       product: 'jamf-pro',
     });
@@ -73,8 +78,8 @@ describe('searchDocumentation() contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should support pagination with different pages', async () => {
-    const page1 = await searchDocumentation({ query: 'policy', page: 1, limit: 3 });
-    const page2 = await searchDocumentation({ query: 'policy', page: 2, limit: 3 });
+    const page1 = await searchDocumentation(ctx, { query: 'policy', page: 1, limit: 3 });
+    const page2 = await searchDocumentation(ctx, { query: 'policy', page: 2, limit: 3 });
 
     expect(page1.pagination.page).toBe(1);
     expect(page2.pagination.page).toBe(2);
@@ -89,7 +94,7 @@ describe('searchDocumentation() contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should return empty results for nonexistent query', async () => {
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'xyznonexistent_query_that_returns_nothing_12345',
     });
 
@@ -107,13 +112,13 @@ describe('fetchArticle() contract', { timeout: 60000, retry: 2 }, () => {
   let ARTICLE_URL: string;
 
   beforeAll(async () => {
-    const searchResult = await searchDocumentation({ query: 'policies', limit: 1 });
+    const searchResult = await searchDocumentation(ctx, { query: 'policies', limit: 1 });
     ARTICLE_URL = searchResult.results[0]?.url
       ?? 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Policies.html';
   });
 
   it('should return article with correct structure', async () => {
-    const result = await fetchArticle(ARTICLE_URL);
+    const result = await fetchArticle(ctx, ARTICLE_URL);
 
     // Required fields
     expect(typeof result.title).toBe('string');
@@ -141,7 +146,7 @@ describe('fetchArticle() contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should return valid Markdown content', async () => {
-    const result = await fetchArticle(ARTICLE_URL);
+    const result = await fetchArticle(ctx, ARTICLE_URL);
 
     // Content should be Markdown (contains headings or paragraph text)
     expect(result.content).toMatch(/(^#|\n#|\w{10,})/);
@@ -151,7 +156,7 @@ describe('fetchArticle() contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should include breadcrumb navigation', async () => {
-    const result = await fetchArticle(ARTICLE_URL);
+    const result = await fetchArticle(ctx, ARTICLE_URL);
 
     // breadcrumb is optional per type definition, but should be present for real articles
     if (result.breadcrumb !== undefined) {
@@ -177,7 +182,7 @@ describe('fetchArticle() contract', { timeout: 60000, retry: 2 }, () => {
 
 describe('fetchTableOfContents() contract', { timeout: 60000, retry: 2 }, () => {
   it('should return TOC with hierarchical structure for jamf-pro', async () => {
-    const result = await fetchTableOfContents('jamf-pro');
+    const result = await fetchTableOfContents(ctx,'jamf-pro');
 
     // Top-level structure
     expect(Array.isArray(result.toc)).toBe(true);
@@ -209,7 +214,7 @@ describe('fetchTableOfContents() contract', { timeout: 60000, retry: 2 }, () => 
     const products: ProductId[] = ['jamf-pro', 'jamf-school', 'jamf-connect', 'jamf-protect'];
 
     for (const product of products) {
-      const result = await fetchTableOfContents(product);
+      const result = await fetchTableOfContents(ctx,product);
       expect(result.toc.length).toBeGreaterThan(0);
     }
   });
@@ -221,7 +226,7 @@ describe('fetchTableOfContents() contract', { timeout: 60000, retry: 2 }, () => 
 
 describe('searchDocumentation() docType filtering', { timeout: 60000, retry: 2 }, () => {
   it('should include docType in search results', async () => {
-    const result = await searchDocumentation({ query: 'jamf pro' });
+    const result = await searchDocumentation(ctx, { query: 'jamf pro' });
 
     expect(result.results.length).toBeGreaterThan(0);
     for (const r of result.results) {
@@ -231,7 +236,7 @@ describe('searchDocumentation() docType filtering', { timeout: 60000, retry: 2 }
   });
 
   it('should filter by docType release-notes', async () => {
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       docType: 'release-notes',
     });
@@ -249,7 +254,7 @@ describe('searchDocumentation() docType filtering', { timeout: 60000, retry: 2 }
 
 describe('searchDocumentation() version behavior', { timeout: 60000, retry: 2 }, () => {
   it('should extract actual version from bundle_id instead of hardcoding current', async () => {
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'configuration profile',
     });
 
@@ -269,11 +274,11 @@ describe('searchDocumentation() version behavior', { timeout: 60000, retry: 2 },
 describe('fetchArticle() section IDs', { timeout: 60000, retry: 2 }, () => {
   it('should produce non-empty valid slug IDs for all sections', async () => {
     // Discover a real article URL from search
-    const searchResult = await searchDocumentation({ query: 'configuration profiles', limit: 1 });
+    const searchResult = await searchDocumentation(ctx, { query: 'configuration profiles', limit: 1 });
     const url = searchResult.results[0]?.url;
     expect(url).toBeDefined();
 
-    const article = await fetchArticle(url!);
+    const article = await fetchArticle(ctx, url!);
 
     if (article.sections.length > 0) {
       for (const section of article.sections) {
@@ -291,7 +296,7 @@ describe('fetchArticle() section IDs', { timeout: 60000, retry: 2 }, () => {
 
 describe('searchDocumentation() snippet quality', { timeout: 60000, retry: 2 }, () => {
   it('should return snippets with minimum meaningful length', async () => {
-    const result = await searchDocumentation({ query: 'enrollment', limit: 10 });
+    const result = await searchDocumentation(ctx, { query: 'enrollment', limit: 10 });
 
     expect(result.results.length).toBeGreaterThan(0);
 
@@ -309,7 +314,7 @@ describe('searchDocumentation() snippet quality', { timeout: 60000, retry: 2 }, 
 
 describe('searchDocumentation() multi-filter', { timeout: 60000, retry: 2 }, () => {
   it('should return results or filterRelaxation for product + docType', async () => {
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-pro',
       docType: 'release-notes',
@@ -336,7 +341,7 @@ describe('searchDocumentation() multi-filter', { timeout: 60000, retry: 2 }, () 
 
 describe('searchDocumentation() label-based docType', { timeout: 60000, retry: 2 }, () => {
   it('should include diverse docType values in broad search results', async () => {
-    const result = await searchDocumentation({ query: 'jamf pro', limit: 50 });
+    const result = await searchDocumentation(ctx, { query: 'jamf pro', limit: 50 });
 
     expect(result.results.length).toBeGreaterThan(0);
 
@@ -352,7 +357,7 @@ describe('searchDocumentation() label-based docType', { timeout: 60000, retry: 2
 
 describe('external API contract', { timeout: 60000, retry: 2 }, () => {
   it('should return search result URLs matching expected format', async () => {
-    const result = await searchDocumentation({ query: 'policy', limit: 5 });
+    const result = await searchDocumentation(ctx, { query: 'policy', limit: 5 });
 
     for (const r of result.results) {
       // URLs should follow learn.jamf.com bundle pattern
@@ -364,14 +369,12 @@ describe('external API contract', { timeout: 60000, retry: 2 }, () => {
   });
 
   it('should reach the search API endpoint', async () => {
-    const response = await axios.get(`${DOCS_API_URL}/api/search`, {
-      params: { q: 'test', rpp: '1' },
-      timeout: 15000,
-      headers: { Accept: 'application/json' },
-    });
+    const data = await httpGetJson<{ Results: unknown[]; status: string }>(
+      `${DOCS_API_URL}/api/search`,
+      { params: { q: 'test', rpp: '1' }, timeout: 15000 },
+    );
 
-    expect(response.status).toBe(200);
-    expect(response.data).toHaveProperty('Results');
-    expect(response.data).toHaveProperty('status');
+    expect(data).toHaveProperty('Results');
+    expect(data).toHaveProperty('status');
   });
 });

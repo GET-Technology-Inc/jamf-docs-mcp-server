@@ -8,7 +8,7 @@ import {
   GetArticleInputSchema,
   GetTocInputSchema,
   ListProductsInputSchema,
-} from '../../../src/schemas/index.js';
+} from '../../../src/core/schemas/index.js';
 
 // ---------------------------------------------------------------------------
 // SearchInputSchema

@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { GlossaryLookupInputSchema } from '../schemas/index.js';
 import { GlossaryLookupOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
@@ -77,7 +78,7 @@ Errors:
   - "No matching term found" if no glossary entries match
   - "Invalid product ID" if product parameter is not recognized`;
 
-export function registerGlossaryLookupTool(server: McpServer): void {
+export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -115,7 +116,7 @@ export function registerGlossaryLookupTool(server: McpServer): void {
 
         await reportProgress(extra, { progress: 0, total: 3, message: 'Looking up term...' });
 
-        const result = await lookupGlossaryTerm({
+        const result = await lookupGlossaryTerm(ctx, {
           term: params.term,
           product: params.product as ProductId | undefined,
           language: params.language as LocaleId | undefined,

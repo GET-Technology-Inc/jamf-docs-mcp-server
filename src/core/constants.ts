@@ -1,55 +1,13 @@
 /**
  * Constants for Jamf Docs MCP Server
  *
- * Note: Jamf documentation has moved from docs.jamf.com to learn.jamf.com
- * The new URL structure is: learn.jamf.com/{locale}/bundle/{product}-documentation/page/{page}.html
+ * Platform-agnostic static constants. No Node.js built-in imports,
+ * no process.env access. Runtime configuration is handled by
+ * src/core/config.ts and src/platforms/node/config.ts.
  */
-
-import * as path from 'path';
-import { createRequire } from 'module';
-import { createLogger } from './services/logging.js';
-
-const log = createLogger('config');
-
-// Environment variable helpers
-export function getEnvNumber(
-  key: string,
-  defaultValue: number,
-  min?: number,
-  max?: number
-): number {
-  const value = process.env[key];
-  if (value === undefined) {
-    return defaultValue;
-  }
-  const parsed = parseInt(value, 10);
-  if (isNaN(parsed)) {
-    return defaultValue;
-  }
-  if (min !== undefined && parsed < min) {
-    log.warning(`${key}=${parsed} is below minimum ${min}. Using default ${defaultValue}.`);
-    return defaultValue;
-  }
-  if (max !== undefined && parsed > max) {
-    log.warning(`${key}=${parsed} exceeds maximum ${max}. Using default ${defaultValue}.`);
-    return defaultValue;
-  }
-  return parsed;
-}
-
-function getEnvString(key: string, defaultValue: string): string {
-  const value = process.env[key] ?? defaultValue;
-  // Strip CRLF characters to prevent HTTP header injection
-  return value.replace(/[\r\n]/g, '');
-}
 
 // Server icon (32x32 PNG, document theme, base64 data URI)
 export const SERVER_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAiUlEQVR4nGNgGAU4QEpKxX9qYpItpwSA9N+58wyOSXYENR0AYw+IA9AdQr4DehgQmEgHYIsGujuA7IRIqQNwOYp8B1ABUOQAOat4svDwcQA1wNB2ACVBPzwcQA0wtB0w4NlwwB1ADTC0HUBu1hs+DqAGGNoOAAbxCVLx8HIANQBZvaMB65qNKAAA5fafYXNsHh0AAAAASUVORK5CYII=';
-
-// Server metadata (auto-read from package.json)
-const require = createRequire(import.meta.url);
-const pkg = require('../package.json') as { version: string };
-export const SERVER_VERSION = pkg.version;
 
 // Base URLs
 export const DOCS_BASE_URL = 'https://learn.jamf.com';
@@ -224,68 +182,11 @@ export enum OutputMode {
   COMPACT = 'compact'
 }
 
-// Cache settings (in milliseconds) - configurable via environment variables
-// Range: 1 minute to 30 days
-const CACHE_TTL_MIN = 60_000;
-const CACHE_TTL_MAX = 30 * 24 * 60 * 60 * 1000;
-
-export const CACHE_TTL = {
-  SEARCH_RESULTS: getEnvNumber('CACHE_TTL_SEARCH', 30 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
-  ARTICLE_CONTENT: getEnvNumber('CACHE_TTL_ARTICLE', 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
-  PRODUCT_LIST: getEnvNumber('CACHE_TTL_PRODUCTS', 7 * 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
-  TOC: getEnvNumber('CACHE_TTL_TOC', 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX)
-} as const;
-
-// Cache memory limits
-export const CACHE_MAX_ENTRIES = getEnvNumber('CACHE_MAX_ENTRIES', 500, 10, 10000);
-
-// Cache directory - configurable via environment variable with path traversal protection
-const DEFAULT_CACHE_DIR = '.cache';
-
-// System-sensitive directory prefixes that should not be used as cache directories
-const SENSITIVE_DIR_PREFIXES = ['/etc', '/usr', '/var', '/sys', '/proc', '/dev', '/sbin', '/bin'];
-
-function getValidatedCacheDir(): string {
-  const raw = getEnvString('CACHE_DIR', DEFAULT_CACHE_DIR);
-  const resolved = path.resolve(raw);
-  const cwd = process.cwd();
-
-  if (path.isAbsolute(raw)) {
-    // Reject absolute paths pointing to system-sensitive directories
-    const normalizedResolved = resolved.toLowerCase();
-    for (const prefix of SENSITIVE_DIR_PREFIXES) {
-      if (normalizedResolved === prefix || normalizedResolved.startsWith(`${prefix}/`)) {
-        log.warning(`CACHE_DIR "${raw}" points to a sensitive system directory. Using default "${DEFAULT_CACHE_DIR}".`);
-        return DEFAULT_CACHE_DIR;
-      }
-    }
-  } else {
-    // Relative paths must resolve within cwd
-    if (!resolved.startsWith(cwd)) {
-      log.warning(`CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
-      return DEFAULT_CACHE_DIR;
-    }
-  }
-
-  return raw;
-}
-
-export const CACHE_DIR = getValidatedCacheDir();
-
-// Request settings - configurable via environment variables
-export const REQUEST_CONFIG = {
-  TIMEOUT: getEnvNumber('REQUEST_TIMEOUT', 15000, 1000, 60000),          // 15s (1s-60s)
-  MAX_RETRIES: getEnvNumber('MAX_RETRIES', 3, 0, 10),                   // 3 (0-10)
-  RETRY_DELAY: getEnvNumber('RETRY_DELAY', 1000, 100, 30000),           // 1s (100ms-30s)
-  RATE_LIMIT_DELAY: getEnvNumber('RATE_LIMIT_DELAY', 500, 0, 10000),    // 500ms (0-10s)
-  USER_AGENT: getEnvString('USER_AGENT', 'JamfDocsMCP/1.0 (https://github.com/GET-Technology-Inc/jamf-docs-mcp-server)')
-} as const;
-
 // Content limits
 export const CONTENT_LIMITS = {
   MAX_SEARCH_RESULTS: 50,
   DEFAULT_SEARCH_RESULTS: 10,
-  FILTER_OVERFETCH_MULTIPLIER: 3,       // fetch 3× when client-side filters need post-filtering
+  FILTER_OVERFETCH_MULTIPLIER: 3,       // fetch 3x when client-side filters need post-filtering
   FILTER_OVERFETCH_CAP: 150,            // absolute cap on over-fetched results
   MAX_CONTENT_LENGTH: 100000,           // 100KB
   MAX_SNIPPET_LENGTH: 500
@@ -541,12 +442,12 @@ export const DOC_TYPES = {
   },
 } as const;
 
-// Forward mapping: docType enum value → API label key
+// Forward mapping: docType enum value -> API label key
 export const DOC_TYPE_LABEL_MAP: Record<DocTypeId, string> = Object.fromEntries(
   Object.entries(DOC_TYPES).map(([id, dt]) => [id, dt.labelKey])
 ) as Record<DocTypeId, string>;
 
-// Reverse mapping: API label key → docType enum value
+// Reverse mapping: API label key -> docType enum value
 export const LABEL_TO_DOC_TYPE: Record<string, DocTypeId> = Object.fromEntries(
   Object.entries(DOC_TYPES).map(([id, dt]) => [dt.labelKey, id])
 ) as Record<string, DocTypeId>;

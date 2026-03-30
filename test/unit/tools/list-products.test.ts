@@ -13,11 +13,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 const mockGetProductAvailability = vi.fn().mockResolvedValue({});
 
-vi.mock('../../../src/services/metadata.js', () => ({
+vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
 }));
 
-import { registerListProductsTool } from '../../../src/tools/list-products.js';
+import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
 
 // ---------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseGlossaryEntries, searchGlossaryEntries } from '../../../src/services/glossary.js';
+import { parseGlossaryEntries, searchGlossaryEntries } from '../../../src/core/services/glossary.js';
 
 // ============================================================================
 // parseGlossaryEntries

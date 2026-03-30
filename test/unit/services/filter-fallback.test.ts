@@ -3,17 +3,22 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import axios from 'axios';
-import { searchDocumentation } from '../../../src/services/scraper.js';
-import { cache } from '../../../src/services/cache.js';
 
-vi.mock('axios');
-vi.mock('../../../src/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock('../../../src/core/http-client.js', async () => {
+  return {
+    httpGetText: vi.fn(),
+    httpGetJson: vi.fn(),
+    HttpError: (await import('../../../src/core/http-client.js')).HttpError
+  };
+});
+
+import { httpGetJson } from '../../../src/core/http-client.js';
+import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { createMockContext } from '../../helpers/mock-context.js';
+
+const ctx = createMockContext();
+
+const mockedHttpGetJson = vi.mocked(httpGetJson);
 
 function makeSearchResponse(results: { title: string; url: string; snippet: string; bundle_id: string; score?: number; labels?: { key: string }[] }[]): object {
   return {
@@ -36,13 +41,13 @@ function makeSearchResponse(results: { title: string; url: string; snippet: stri
 
 describe('Search filter fallback', () => {
   beforeEach(() => {
-    vi.mocked(cache.get).mockResolvedValue(null);
-    vi.mocked(cache.set).mockResolvedValue(undefined);
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
   it('should relax docType first when multi-filter returns zero results', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'Jamf Pro MDM Article',
           url: 'https://learn-be.jamf.com/article.html',
@@ -50,11 +55,11 @@ describe('Search filter fallback', () => {
           bundle_id: 'jamf-pro-documentation',
           labels: [{ key: 'content-techdocs' }],
         },
-      ]),
-    });
+      ])
+    );
 
     // product=jamf-pro matches, but docType=release-notes does not (result has content-techdocs)
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'enrollment',
       product: 'jamf-pro',
       docType: 'release-notes',
@@ -67,18 +72,18 @@ describe('Search filter fallback', () => {
   });
 
   it('should relax single filter when it matches nothing', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'School Article',
           url: 'https://learn-be.jamf.com/school.html',
           snippet: 'Jamf School education content',
           bundle_id: 'jamf-school-documentation',
         },
-      ]),
-    });
+      ])
+    );
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'test',
       product: 'jamf-pro',
     });
@@ -89,29 +94,29 @@ describe('Search filter fallback', () => {
   });
 
   it('should NOT trigger fallback when no filters are applied', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([]),
-    });
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([])
+    );
 
-    const result = await searchDocumentation({ query: 'nonexistent-xyz' });
+    const result = await searchDocumentation(ctx, { query: 'nonexistent-xyz' });
 
     expect(result.results).toHaveLength(0);
     expect(result.filterRelaxation).toBeUndefined();
   });
 
   it('should NOT trigger fallback when filters match results', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'Jamf Pro Config',
           url: 'https://learn-be.jamf.com/pro.html',
           snippet: 'Configuration content',
           bundle_id: 'jamf-pro-documentation',
         },
-      ]),
-    });
+      ])
+    );
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'config',
       product: 'jamf-pro',
     });
@@ -121,8 +126,8 @@ describe('Search filter fallback', () => {
   });
 
   it('should include filterRelaxation message with removed filters', async () => {
-    vi.mocked(axios.get).mockResolvedValue({
-      data: makeSearchResponse([
+    mockedHttpGetJson.mockResolvedValue(
+      makeSearchResponse([
         {
           title: 'Generic Article',
           url: 'https://learn-be.jamf.com/gen.html',
@@ -130,10 +135,10 @@ describe('Search filter fallback', () => {
           bundle_id: 'jamf-school-documentation',
           labels: [{ key: 'content-techdocs' }],
         },
-      ]),
-    });
+      ])
+    );
 
-    const result = await searchDocumentation({
+    const result = await searchDocumentation(ctx, {
       query: 'test',
       product: 'jamf-pro',
       docType: 'release-notes',

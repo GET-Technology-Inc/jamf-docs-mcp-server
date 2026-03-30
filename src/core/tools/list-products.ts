@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
 import { ProductListOutputSchema } from '../schemas/output.js';
 import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
@@ -48,7 +49,7 @@ Examples:
 
 Note: This is a read-only operation that does not modify any state.`;
 
-export function registerListProductsTool(server: McpServer): void {
+export function registerListProductsTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -79,7 +80,7 @@ export function registerListProductsTool(server: McpServer): void {
         await reportProgress(extra, { progress: 0, total: 3, message: 'Fetching product info...' });
 
         // Fetch product availability (cached)
-        const availability = await getProductAvailability();
+        const availability = await getProductAvailability(ctx);
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
 

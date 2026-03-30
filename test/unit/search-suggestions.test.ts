@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   generateSearchSuggestions,
   formatSearchSuggestions
-} from '../../src/services/search-suggestions.js';
+} from '../../src/core/services/search-suggestions.js';
 
 describe('generateSearchSuggestions', () => {
   describe('simplifiedQuery', () => {

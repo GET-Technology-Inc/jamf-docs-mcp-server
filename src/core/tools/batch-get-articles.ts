@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { GetBatchArticlesInputSchema } from '../schemas/index.js';
 import { BatchArticlesOutputSchema } from '../schemas/output.js';
 import { reportProgress } from '../utils/progress.js';
@@ -150,7 +151,7 @@ Examples:
 Note: Token budget is split evenly across articles. Use higher maxTokens for more articles.
 Partial failures are reported per-article without failing the entire batch.`;
 
-export function registerBatchGetArticlesTool(server: McpServer): void {
+export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -187,7 +188,7 @@ export function registerBatchGetArticlesTool(server: McpServer): void {
       const tasks = params.urls.map((url) => {
         return async (): Promise<FetchResult> => {
           try {
-            const article = await fetchArticle(url, {
+            const article = await fetchArticle(ctx, url, {
               maxTokens: perArticleTokens,
               locale: params.language as LocaleId | undefined
             });

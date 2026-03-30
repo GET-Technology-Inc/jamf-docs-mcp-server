@@ -13,13 +13,13 @@ import { createTokenInfo } from '../../helpers/fixtures.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/services/glossary.js', () => ({
+vi.mock('../../../src/core/services/glossary.js', () => ({
   lookupGlossaryTerm: vi.fn(),
   parseGlossaryEntries: vi.fn(),
   searchGlossaryEntries: vi.fn(),
 }));
 
-vi.mock('../../../src/services/cache.js', () => ({
+vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
@@ -27,8 +27,8 @@ vi.mock('../../../src/services/cache.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { lookupGlossaryTerm } from '../../../src/services/glossary.js';
-import { registerGlossaryLookupTool } from '../../../src/tools/glossary-lookup.js';
+import { lookupGlossaryTerm } from '../../../src/core/services/glossary.js';
+import { registerGlossaryLookupTool } from '../../../src/core/tools/glossary-lookup.js';
 
 // ---------------------------------------------------------------------------
 

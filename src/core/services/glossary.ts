@@ -17,7 +17,6 @@ import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 
 import {
-  CACHE_TTL,
   SELECTORS,
   TOKEN_CONFIG,
   DEFAULT_LOCALE,
@@ -36,12 +35,9 @@ import {
   transformToBackendUrl,
   transformToFrontendUrl,
 } from './scraper.js';
-import { cache } from './cache.js';
-import { createLogger } from './logging.js';
+import type { ServerContext } from '../types/context.js';
 import { estimateTokens } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
-
-const log = createLogger('glossary');
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -255,12 +251,16 @@ export function searchGlossaryEntries(entries: GlossaryEntry[], term: string): G
  * 2. Fetch and parse each glossary page (with caching)
  * 3. Use fuse.js to rank matching terms
  */
-export async function lookupGlossaryTerm(params: {
-  term: string;
-  product?: ProductId | undefined;
-  language?: LocaleId | undefined;
-  maxTokens?: number | undefined;
-}): Promise<GlossaryLookupResult> {
+export async function lookupGlossaryTerm(
+  ctx: ServerContext,
+  params: {
+    term: string;
+    product?: ProductId | undefined;
+    language?: LocaleId | undefined;
+    maxTokens?: number | undefined;
+  }
+): Promise<GlossaryLookupResult> {
+  const log = ctx.logger.createLogger('glossary');
   const { term, product, language, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
   const locale = language ?? DEFAULT_LOCALE;
 
@@ -276,7 +276,7 @@ export async function lookupGlossaryTerm(params: {
     page: 1,
   };
 
-  const searchResult = await searchDocumentation(searchParams);
+  const searchResult = await searchDocumentation(ctx, searchParams);
 
   // If docType filter was relaxed, it means no actual glossary pages were found
   const docTypeRelaxed = searchResult.filterRelaxation?.removed.includes('docType') === true;
@@ -302,7 +302,7 @@ export async function lookupGlossaryTerm(params: {
 
   const tasks = uniqueResults.map(result => async () => {
     try {
-      return await fetchAndParseGlossaryPage(result.url, locale, result.product ?? undefined);
+      return await fetchAndParseGlossaryPage(ctx, result.url, locale, result.product ?? undefined);
     } catch (error) {
       log.warning(`Failed to fetch glossary page ${result.url}: ${String(error)}`);
       return [];
@@ -357,14 +357,16 @@ export async function lookupGlossaryTerm(params: {
  * Fetch a glossary page and parse its entries (with caching)
  */
 async function fetchAndParseGlossaryPage(
+  ctx: ServerContext,
   url: string,
   locale: string,
   product?: string,
 ): Promise<GlossaryEntry[]> {
+  const log = ctx.logger.createLogger('glossary');
   const cacheKey = `${locale}:glossary:${url}`;
 
   // Check cache
-  const cached = await cache.get<GlossaryEntry[]>(cacheKey);
+  const cached = await ctx.cache.get<GlossaryEntry[]>(cacheKey);
   if (cached !== null) {
     log.info(`Cache hit for glossary page: ${url}`);
     return cached;
@@ -373,14 +375,14 @@ async function fetchAndParseGlossaryPage(
   // Fetch raw HTML (reuses scraper's throttle + error handling)
   log.info(`Fetching glossary page: ${url}`);
   const backendUrl = transformToBackendUrl(url);
-  const html = await fetchHtml(backendUrl, locale);
+  const html = await fetchHtml(ctx, backendUrl, locale);
 
   // Transform URL to frontend format for display
   const displayUrl = transformToFrontendUrl(url);
   const entries = parseGlossaryEntries(html, displayUrl, product);
 
   // Cache parsed entries
-  await cache.set(cacheKey, entries, CACHE_TTL.ARTICLE_CONTENT);
+  await ctx.cache.set(cacheKey, entries, ctx.config.cacheTtl.article);
   log.info(`Cached ${entries.length} glossary entries from: ${url}`);
 
   return entries;

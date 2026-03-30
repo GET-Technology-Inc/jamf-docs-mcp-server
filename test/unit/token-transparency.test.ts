@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { truncateToTokenLimit } from '../../src/services/tokenizer.js';
-import { TOKEN_CONFIG } from '../../src/constants.js';
+import { truncateToTokenLimit } from '../../src/core/services/tokenizer.js';
+import { TOKEN_CONFIG } from '../../src/core/constants.js';
 
 describe('truncateToTokenLimit transparency', () => {
   it('should return remainingSections when content is truncated', () => {

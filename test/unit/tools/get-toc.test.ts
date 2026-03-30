@@ -16,11 +16,11 @@ import {
   createPaginationInfo,
   createTokenInfo,
 } from '../../helpers/fixtures.js';
-import type { TocEntry } from '../../../src/types.js';
+import type { TocEntry } from '../../../src/core/types.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -31,21 +31,21 @@ vi.mock('../../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../../src/services/cache.js', () => ({
+vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
   },
 }));
 
-vi.mock('../../../src/services/metadata.js', () => ({
+vi.mock('../../../src/core/services/metadata.js', () => ({
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
 }));
 
 // Import AFTER mocks are set up
-import { fetchTableOfContents } from '../../../src/services/scraper.js';
-import { registerGetTocTool } from '../../../src/tools/get-toc.js';
+import { fetchTableOfContents } from '../../../src/core/services/scraper.js';
+import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
 
 // ---------------------------------------------------------------------------
 
@@ -565,7 +565,7 @@ describe('jamf_docs_get_toc tool', () => {
     });
 
     it('should return isError for invalid version (when versions list is non-empty)', async () => {
-      const { getAvailableVersions } = await import('../../../src/services/metadata.js');
+      const { getAvailableVersions } = await import('../../../src/core/services/metadata.js');
       vi.mocked(getAvailableVersions).mockResolvedValueOnce(['11.5.0', '11.4.0']);
 
       vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());

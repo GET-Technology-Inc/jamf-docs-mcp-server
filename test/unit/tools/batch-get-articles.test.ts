@@ -16,7 +16,7 @@ import {
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../../src/services/cache.js', () => ({
+vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
@@ -35,9 +35,12 @@ vi.mock('../../../src/services/cache.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { fetchArticle } from '../../../src/services/scraper.js';
-import { registerBatchGetArticlesTool } from '../../../src/tools/batch-get-articles.js';
-import { limitConcurrency, distributeTokenBudget } from '../../../src/tools/batch-get-articles.js';
+import { fetchArticle } from '../../../src/core/services/scraper.js';
+import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-articles.js';
+import { createMockContext } from '../../helpers/mock-context.js';
+
+const ctx = createMockContext();
+import { limitConcurrency, distributeTokenBudget } from '../../../src/core/tools/batch-get-articles.js';
 
 // ---------------------------------------------------------------------------
 
@@ -125,7 +128,7 @@ describe('jamf_docs_batch_get_articles tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerBatchGetArticlesTool(server);
+    registerBatchGetArticlesTool(server, ctx);
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -341,8 +344,9 @@ describe('jamf_docs_batch_get_articles tool', () => {
       });
 
       // Each article should get 4000 / 2 = 2000 tokens
+      // fetchArticle(ctx, url, options) — options is at index 2
       expect(fetchArticle).toHaveBeenCalledTimes(2);
-      const firstCallOptions = vi.mocked(fetchArticle).mock.calls[0][1];
+      const firstCallOptions = vi.mocked(fetchArticle).mock.calls[0][2];
       expect(firstCallOptions?.maxTokens).toBe(2000);
     });
   });

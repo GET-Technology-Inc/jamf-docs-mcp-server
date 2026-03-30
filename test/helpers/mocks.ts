@@ -3,48 +3,16 @@
  */
 
 import { vi } from 'vitest';
-import type { AxiosError } from 'axios';
+import { HttpError } from '../../src/core/http-client.js';
 
 /**
- * Mock axios.get to return a successful response
+ * Create an HttpError for testing
  */
-export function mockAxiosGet(
-  responseData: unknown,
-  statusCode = 200,
-  headers: Record<string, string> = {}
-): ReturnType<typeof vi.fn> {
-  const mock = vi.fn().mockResolvedValue({
-    data: responseData,
-    status: statusCode,
-    statusText: 'OK',
-    headers,
-    config: {},
-  });
-  return mock;
-}
-
-/**
- * Mock axios.get to throw an AxiosError
- */
-export function createAxiosError(
+export function createHttpError(
   statusCode: number,
-  message: string,
-  code?: string
-): AxiosError {
-  const error = new Error(message) as AxiosError;
-  error.isAxiosError = true;
-  error.name = 'AxiosError';
-  error.code = code;
-  error.response = {
-    data: {},
-    status: statusCode,
-    statusText: message,
-    headers: {},
-    config: {} as never,
-  };
-  error.config = {} as never;
-  error.toJSON = () => ({});
-  return error;
+  message: string
+): HttpError {
+  return new HttpError(statusCode, message, 'https://test.example.com');
 }
 
 /**

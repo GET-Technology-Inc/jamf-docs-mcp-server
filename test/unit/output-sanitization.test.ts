@@ -3,7 +3,7 @@ import {
   sanitizeMarkdownText,
   sanitizeMarkdownUrl,
   sanitizeErrorMessage
-} from '../../src/utils/sanitize.js';
+} from '../../src/core/utils/sanitize.js';
 
 describe('Markdown output sanitization integration', () => {
   describe('search result title sanitization', () => {

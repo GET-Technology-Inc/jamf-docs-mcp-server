@@ -3,7 +3,7 @@ import {
   sanitizeMarkdownText,
   sanitizeMarkdownUrl,
   sanitizeErrorMessage
-} from '../../src/utils/sanitize.js';
+} from '../../src/core/utils/sanitize.js';
 
 describe('sanitizeMarkdownText', () => {
   it('should return normal text unchanged', () => {

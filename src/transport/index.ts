@@ -2,7 +2,7 @@
  * Transport configuration and CLI argument parsing
  */
 
-import { createLogger } from '../services/logging.js';
+import { createLogger } from '../core/services/logging.js';
 
 const log = createLogger('transport');
 

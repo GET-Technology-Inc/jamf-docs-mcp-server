@@ -27,8 +27,12 @@ vi.mock('fs/promises', () => ({
   stat: vi.fn().mockResolvedValue({ size: 0 }),
 }));
 
-import { cache } from '../../src/services/cache.js';
-import { CACHE_MAX_ENTRIES } from '../../src/constants.js';
+import { FileCache } from '../../src/platforms/node/cache.js';
+import { createDefaultConfig } from '../../src/core/config.js';
+import { createMockLogger } from '../helpers/mock-context.js';
+
+const CACHE_MAX_ENTRIES = createDefaultConfig().cache.maxEntries;
+const cache = new FileCache({ maxEntries: CACHE_MAX_ENTRIES, log: createMockLogger() });
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -8,7 +8,7 @@ import {
   ArticleOutputSchema,
   TocOutputSchema,
   ProductListOutputSchema,
-} from '../../../src/schemas/output.js';
+} from '../../../src/core/schemas/output.js';
 
 // ---------------------------------------------------------------------------
 // SearchOutputSchema

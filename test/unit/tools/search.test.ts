@@ -18,7 +18,7 @@ import {
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -29,14 +29,14 @@ vi.mock('../../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../../src/services/cache.js', () => ({
+vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
   },
 }));
 
-vi.mock('../../../src/services/search-suggestions.js', () => ({
+vi.mock('../../../src/core/services/search-suggestions.js', () => ({
   generateSearchSuggestions: vi.fn().mockReturnValue({
     simplifiedQuery: null,
     alternativeKeywords: ['alternate-keyword'],
@@ -49,8 +49,8 @@ vi.mock('../../../src/services/search-suggestions.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { searchDocumentation } from '../../../src/services/scraper.js';
-import { registerSearchTool } from '../../../src/tools/search.js';
+import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { registerSearchTool } from '../../../src/core/tools/search.js';
 
 // ---------------------------------------------------------------------------
 

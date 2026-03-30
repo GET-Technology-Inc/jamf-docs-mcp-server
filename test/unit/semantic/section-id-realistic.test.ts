@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { createRealisticArticleHtml } from '../../helpers/fixtures.js';
-import { extractSections, slugify } from '../../../src/services/tokenizer.js';
+import { extractSections, slugify } from '../../../src/core/services/tokenizer.js';
 
 const turndown = new TurndownService({
   headingStyle: 'atx',

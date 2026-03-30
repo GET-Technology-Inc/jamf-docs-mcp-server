@@ -19,7 +19,7 @@ import {
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/scraper.js', () => ({
   searchDocumentation: vi.fn(),
   fetchArticle: vi.fn(),
   fetchTableOfContents: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('../../../src/services/scraper.js', () => ({
   },
 }));
 
-vi.mock('../../../src/services/cache.js', () => ({
+vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn(),
@@ -38,8 +38,8 @@ vi.mock('../../../src/services/cache.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { fetchArticle } from '../../../src/services/scraper.js';
-import { registerGetArticleTool } from '../../../src/tools/get-article.js';
+import { fetchArticle } from '../../../src/core/services/scraper.js';
+import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
 
 // ---------------------------------------------------------------------------
 

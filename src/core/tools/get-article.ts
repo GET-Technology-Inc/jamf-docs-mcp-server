@@ -4,6 +4,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerContext } from '../types/context.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema } from '../schemas/output.js';
@@ -217,7 +218,7 @@ Errors:
 Note: Large articles are intelligently truncated with remaining sections listed.
 Use the \`section\` parameter to retrieve specific sections for long articles.`;
 
-export function registerGetArticleTool(server: McpServer): void {
+export function registerGetArticleTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
     {
@@ -246,7 +247,7 @@ export function registerGetArticleTool(server: McpServer): void {
       try {
         await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching article...' });
 
-        const article = await fetchArticle(params.url, {
+        const article = await fetchArticle(ctx, params.url, {
           includeRelated: params.includeRelated,
           summaryOnly: params.summaryOnly,
           ...(params.section !== undefined && { section: params.section }),

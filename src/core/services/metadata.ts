@@ -5,22 +5,19 @@
  * with fallback to static constants.
  */
 
-import axios from 'axios';
+import { httpGetJson } from '../http-client.js';
 import * as cheerio from 'cheerio';
 
 import {
   DOCS_API_URL,
   JAMF_PRODUCTS,
   JAMF_TOPICS,
-  REQUEST_CONFIG,
-  CACHE_TTL,
   type ProductId
 } from '../constants.js';
 import { extractVersionFromBundleId } from '../utils/bundle.js';
-import { cache } from './cache.js';
-import { createLogger } from './logging.js';
-
-const log = createLogger('metadata');
+import type { ServerContext } from '../types/context.js';
+import type { Logger } from './interfaces.js';
+import type { RequestConfig } from '../config.js';
 
 // ============================================================================
 // Types
@@ -54,15 +51,15 @@ export interface TocCategory {
 // API Helpers
 // ============================================================================
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await axios.get<T>(url, {
-    timeout: REQUEST_CONFIG.TIMEOUT,
-    headers: {
-      'User-Agent': REQUEST_CONFIG.USER_AGENT,
-      'Accept': 'application/json'
-    }
-  });
-  return response.data;
+function makeFetchJson(requestConfig: RequestConfig): <T>(url: string) => Promise<T> {
+  return async <T>(url: string): Promise<T> => {
+    return await httpGetJson<T>(url, {
+      timeout: requestConfig.timeout,
+      headers: {
+        'User-Agent': requestConfig.userAgent
+      }
+    });
+  };
 }
 
 // ============================================================================
@@ -84,7 +81,11 @@ interface ZoominSearchResult {
 /**
  * Discover all available versions for a product
  */
-async function discoverProductVersions(productId: ProductId): Promise<string[]> {
+async function discoverProductVersions(
+  productId: ProductId,
+  fetchJson: <T>(url: string) => Promise<T>,
+  log: Logger
+): Promise<string[]> {
   const product = JAMF_PRODUCTS[productId];
   const versions = new Set<string>();
 
@@ -132,12 +133,16 @@ async function discoverProductVersions(productId: ProductId): Promise<string[]> 
 /**
  * Fetch latest version and metadata for a product from the API
  */
-async function fetchProductMetadata(productId: ProductId): Promise<ProductMetadata | null> {
+async function fetchProductMetadata(
+  productId: ProductId,
+  fetchJson: <T>(url: string) => Promise<T>,
+  log: Logger
+): Promise<ProductMetadata | null> {
   const product = JAMF_PRODUCTS[productId];
 
   try {
     // Discover all available versions
-    const availableVersions = await discoverProductVersions(productId);
+    const availableVersions = await discoverProductVersions(productId, fetchJson, log);
 
     // Search for a doc from this product to get the bundle ID and labels
     const apiUrl = `${DOCS_API_URL}/api/search?q=${encodeURIComponent(product.name)}&rpp=5`;
@@ -179,11 +184,13 @@ async function fetchProductMetadata(productId: ProductId): Promise<ProductMetada
  * Get all products with their latest metadata
  * Uses cache with fallback to static constants
  */
-export async function getProductsMetadata(): Promise<ProductMetadata[]> {
+export async function getProductsMetadata(ctx: ServerContext): Promise<ProductMetadata[]> {
+  const log = ctx.logger.createLogger('metadata');
+  const fetchJson = makeFetchJson(ctx.config.request);
   const cacheKey = 'metadata:products';
 
   // Check cache
-  const cached = await cache.get<ProductMetadata[]>(cacheKey);
+  const cached = await ctx.cache.get<ProductMetadata[]>(cacheKey);
   if (cached !== null) {
     return cached;
   }
@@ -193,7 +200,7 @@ export async function getProductsMetadata(): Promise<ProductMetadata[]> {
   const fetchResults = await Promise.all(
     productIds.map(async (productId) => {
       try {
-        const metadata = await fetchProductMetadata(productId);
+        const metadata = await fetchProductMetadata(productId, fetchJson, log);
         return { productId, metadata };
       } catch (error: unknown) {
         log.error(`Failed to fetch metadata for ${productId}: ${String(error)}`);
@@ -223,7 +230,7 @@ export async function getProductsMetadata(): Promise<ProductMetadata[]> {
   }
 
   // Cache for 24 hours
-  await cache.set(cacheKey, products, CACHE_TTL.ARTICLE_CONTENT);
+  await ctx.cache.set(cacheKey, products, ctx.config.cacheTtl.article);
 
   return products;
 }
@@ -233,10 +240,12 @@ export async function getProductsMetadata(): Promise<ProductMetadata[]> {
  * Returns the latest bundle ID if version is undefined or 'current'
  */
 export async function getBundleIdForVersion(
+  ctx: ServerContext,
   productId: ProductId,
   version?: string
 ): Promise<string | null> {
-  const products = await getProductsMetadata();
+  const log = ctx.logger.createLogger('metadata');
+  const products = await getProductsMetadata(ctx);
   const product = products.find(p => p.id === productId);
 
   if (product === undefined) {
@@ -262,8 +271,11 @@ export async function getBundleIdForVersion(
 /**
  * Get available versions for a product
  */
-export async function getAvailableVersions(productId: ProductId): Promise<string[]> {
-  const products = await getProductsMetadata();
+export async function getAvailableVersions(
+  ctx: ServerContext,
+  productId: ProductId
+): Promise<string[]> {
+  const products = await getProductsMetadata(ctx);
   const product = products.find(p => p.id === productId);
   return product?.availableVersions ?? [];
 }
@@ -335,10 +347,15 @@ function categoryToTopicId(title: string): string {
 /**
  * Fetch topic categories from TOC for a product
  */
-async function fetchTopicCategories(productId: ProductId): Promise<TocCategory[]> {
+async function fetchTopicCategories(
+  productId: ProductId,
+  ctx: ServerContext,
+  fetchJson: <T>(url: string) => Promise<T>,
+  log: Logger
+): Promise<TocCategory[]> {
   try {
     // First get the latest bundle ID
-    const products = await getProductsMetadata();
+    const products = await getProductsMetadata(ctx);
     const product = products.find(p => p.id === productId);
 
     if (product === undefined) {
@@ -384,11 +401,13 @@ function upsertTopic(
 /**
  * Get all topics, combining TOC-derived from all products and manual topics
  */
-export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
+export async function getTopicsMetadata(ctx: ServerContext): Promise<TopicMetadata[]> {
+  const log = ctx.logger.createLogger('metadata');
+  const fetchJson = makeFetchJson(ctx.config.request);
   const cacheKey = 'metadata:topics';
 
   // Check cache
-  const cached = await cache.get<TopicMetadata[]>(cacheKey);
+  const cached = await ctx.cache.get<TopicMetadata[]>(cacheKey);
   if (cached !== null) {
     return cached;
   }
@@ -409,7 +428,7 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
   const tocResults = await Promise.all(
     productIds.map(async (productId) => {
       try {
-        const categories = await fetchTopicCategories(productId);
+        const categories = await fetchTopicCategories(productId, ctx, fetchJson, log);
         return { productId, categories };
       } catch (error: unknown) {
         log.error(`Error fetching TOC for ${productId}: ${String(error)}`);
@@ -427,7 +446,7 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
   const topics = Array.from(topicsMap.values());
 
   // Cache for 24 hours
-  await cache.set(cacheKey, topics, CACHE_TTL.ARTICLE_CONTENT);
+  await ctx.cache.set(cacheKey, topics, ctx.config.cacheTtl.article);
 
   return topics;
 }
@@ -439,10 +458,12 @@ export async function getTopicsMetadata(): Promise<TopicMetadata[]> {
 /**
  * Check which products have TOC content available
  */
-export async function getProductAvailability(): Promise<Record<string, boolean>> {
+export async function getProductAvailability(ctx: ServerContext): Promise<Record<string, boolean>> {
+  const log = ctx.logger.createLogger('metadata');
+  const fetchJson = makeFetchJson(ctx.config.request);
   const cacheKey = 'metadata:product-availability';
 
-  const cached = await cache.get<Record<string, boolean>>(cacheKey);
+  const cached = await ctx.cache.get<Record<string, boolean>>(cacheKey);
   if (cached !== null) {
     return cached;
   }
@@ -453,7 +474,7 @@ export async function getProductAvailability(): Promise<Record<string, boolean>>
   const results = await Promise.all(
     productIds.map(async (productId) => {
       try {
-        const categories = await fetchTopicCategories(productId);
+        const categories = await fetchTopicCategories(productId, ctx, fetchJson, log);
         return { productId, hasContent: categories.length > 0 };
       } catch {
         return { productId, hasContent: false };
@@ -466,7 +487,7 @@ export async function getProductAvailability(): Promise<Record<string, boolean>>
   }
 
   // Cache for 1 hour
-  await cache.set(cacheKey, availability, 60 * 60 * 1000);
+  await ctx.cache.set(cacheKey, availability, 60 * 60 * 1000);
 
   return availability;
 }
@@ -478,7 +499,7 @@ export async function getProductAvailability(): Promise<Record<string, boolean>>
 /**
  * Get products data formatted for resource response
  */
-export async function getProductsResourceData(): Promise<{
+export async function getProductsResourceData(ctx: ServerContext): Promise<{
   description: string;
   products: {
     id: string;
@@ -491,7 +512,7 @@ export async function getProductsResourceData(): Promise<{
   lastUpdated: string;
   usage: string;
 }> {
-  const products = await getProductsMetadata();
+  const products = await getProductsMetadata(ctx);
 
   return {
     description: 'Available Jamf products for documentation search',
@@ -511,7 +532,7 @@ export async function getProductsResourceData(): Promise<{
 /**
  * Get topics data formatted for resource response
  */
-export async function getTopicsResourceData(): Promise<{
+export async function getTopicsResourceData(ctx: ServerContext): Promise<{
   description: string;
   totalTopics: number;
   topics: {
@@ -523,7 +544,7 @@ export async function getTopicsResourceData(): Promise<{
   lastUpdated: string;
   usage: string;
 }> {
-  const topics = await getTopicsMetadata();
+  const topics = await getTopicsMetadata(ctx);
 
   return {
     description: 'Topic categories for filtering Jamf documentation searches',
