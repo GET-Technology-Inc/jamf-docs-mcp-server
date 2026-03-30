@@ -1,3 +1,44 @@
+## [2.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.5.1...v2.0.0) (2026-03-30)
+
+### ⚠ BREAKING CHANGES
+
+* Tool registration and service function signatures now
+require a ServerContext parameter for dependency injection.
+
+Core changes:
+- Define platform interfaces: CacheProvider, MetadataStore, LoggerFactory
+- Add ServerContext DI container and createMcpServer() factory function
+- Replace axios with native fetch (httpGetText/httpGetJson/HttpError)
+- Remove all process.env access from core — moved to platforms/node
+- Add package.json exports for ./core and ./platforms/node sub-paths
+- Add TypeScript declarations for all export paths
+
+Platform Node.js:
+- FileCache implements CacheProvider (fs/path/crypto)
+- NodeMetadataStore implements MetadataStore
+- NodeLoggerFactory implements LoggerFactory (stderr + MCP notifications)
+- createNodeConfig() reads process.env with validation
+
+Dependencies:
+- Remove axios (replaced by global fetch)
+- Update @modelcontextprotocol/sdk to 1.28.0
+- Set engines.node >= 18.11
+
+The public API (bin entry, MCP tools, resources, prompts) is unchanged.
+All 1116 tests pass across unit, integration, and E2E suites.
+
+Co-authored-by: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+### Refactoring
+
+* decouple core from Node.js for multi-platform support ([#60](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/60)) ([61f2c3a](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/61f2c3af1f24a646b22f92a09396b26acbdb89c3))
+
+## [1.5.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.5.0...v1.5.1) (2026-03-30)
+
+### Bug Fixes
+
+* resolve 5 verified issues with section IDs, search dedup, pagination, related URLs, and locale handling ([819ec0f](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/819ec0f83df97e03c850dd851de3a3180c9ceda7)), closes [#section](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/section)
+
 ## [1.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v1.4.1...v1.5.0) (2026-03-29)
 
 ### Features
