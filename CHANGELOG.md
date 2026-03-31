@@ -1,3 +1,9 @@
+## [3.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.0...v3.0.1) (2026-03-31)
+
+### Bug Fixes
+
+* prevent sanitizeErrorMessage from mangling URLs into https:<path> ([c858128](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c8581288a453f50f41b215789d97a1151c321770))
+
 ## [3.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v2.0.0...v3.0.0) (2026-03-30)
 
 ### ⚠ BREAKING CHANGES
