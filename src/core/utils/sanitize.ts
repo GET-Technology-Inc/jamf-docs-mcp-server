@@ -53,7 +53,7 @@ export function sanitizeErrorMessage(message: string): string {
   sanitized = sanitized.replaceAll('learn-be.jamf.com', 'learn.jamf.com');
 
   // Remove absolute file paths (Unix and Windows)
-  sanitized = sanitized.replace(/\/[\w./-]+\.\w{1,4}/g, '<path>');
+  sanitized = sanitized.replace(/(?<![:/\w.])\/[\w./-]+\.\w{1,4}/g, '<path>');
   sanitized = sanitized.replace(/[A-Z]:\\[\w.\\-]+\.\w{1,4}/g, '<path>');
 
   // Remove stack traces (lines starting with "at ")
