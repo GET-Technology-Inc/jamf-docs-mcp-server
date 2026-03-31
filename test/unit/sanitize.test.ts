@@ -149,6 +149,12 @@ describe('sanitizeErrorMessage', () => {
     expect(result).toContain('TypeError');
   });
 
+  it('should preserve full URLs and not strip URL path as file path', () => {
+    const msg = 'Failed to fetch https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Overview.html';
+    const result = sanitizeErrorMessage(msg);
+    expect(result).toContain('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Overview.html');
+  });
+
   it('should pass through generic messages unchanged', () => {
     const msg = 'Request timed out';
     expect(sanitizeErrorMessage(msg)).toBe('Request timed out');
