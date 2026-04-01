@@ -1,3 +1,9 @@
+## [3.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.2...v3.0.3) (2026-04-01)
+
+### Dependencies
+
+* bump conventional-changelog-conventionalcommits ([#72](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/72)) ([34557d8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/34557d857d8be2374ca57298893ed416cb76922f))
+
 ## [3.0.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.1...v3.0.2) (2026-04-01)
 
 ### Dependencies
