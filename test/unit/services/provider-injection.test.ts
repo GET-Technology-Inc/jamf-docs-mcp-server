@@ -9,21 +9,24 @@ import type {
   TocProvider,
 } from '../../../src/core/services/interfaces/index.js';
 import type {
-  SearchDocumentationResult,
   FetchArticleResult,
   FetchTocResult,
 } from '../../../src/core/services/scraper.js';
-import type { GlossaryLookupResult } from '../../../src/core/types.js';
+import type { SearchResult, GlossaryLookupResult } from '../../../src/core/types.js';
 
 // ============================================================================
 // Shared fixtures
 // ============================================================================
 
-const mockSearchResult: SearchDocumentationResult = {
-  results: [],
-  pagination: { currentPage: 1, pageSize: 10, totalResults: 0, totalPages: 0 },
-  tokenInfo: { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 5000, truncated: false },
-};
+function makeSearchResults(count: number): SearchResult[] {
+  return Array.from({ length: count }, (_, i) => ({
+    title: `Result ${i + 1}`,
+    url: `https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/article-${i + 1}.html`,
+    snippet: `Snippet for result ${i + 1}`,
+    product: 'Jamf Pro',
+    version: '11.0',
+  }));
+}
 
 const mockArticleResult: FetchArticleResult = {
   title: 'Test Article',
@@ -52,16 +55,127 @@ const mockGlossaryResult: GlossaryLookupResult = {
 // ============================================================================
 
 describe('SearchProvider injection', () => {
-  it('should use provider result when non-null', async () => {
+  it('should pass provider results through core post-processing pipeline', async () => {
+    const results = makeSearchResults(3);
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => mockSearchResult),
+      search: vi.fn(async () => results),
     };
     const ctx = createMockContext({ searchProvider });
 
     const result = await searchDocumentation(ctx, { query: 'test' });
 
     expect(searchProvider.search).toHaveBeenCalledOnce();
-    expect(result).toBe(mockSearchResult);
+    // Results went through the pipeline, so we get proper pagination metadata
+    expect(result.results).toHaveLength(3);
+    expect(result.pagination.page).toBe(1);
+    expect(result.pagination.totalItems).toBe(3);
+    expect(result.pagination.totalPages).toBe(1);
+    expect(result.tokenInfo.truncated).toBe(false);
+  });
+
+  it('should paginate provider results correctly', async () => {
+    const results = makeSearchResults(15);
+    const searchProvider: SearchProvider = {
+      search: vi.fn(async () => results),
+    };
+    const ctx = createMockContext({ searchProvider });
+
+    const result = await searchDocumentation(ctx, {
+      query: 'test',
+      page: 2,
+      limit: 5,
+    });
+
+    expect(result.results).toHaveLength(5);
+    expect(result.results[0].title).toBe('Result 6');
+    expect(result.results[4].title).toBe('Result 10');
+    expect(result.pagination.page).toBe(2);
+    expect(result.pagination.pageSize).toBe(5);
+    expect(result.pagination.totalPages).toBe(3);
+    expect(result.pagination.totalItems).toBe(15);
+    expect(result.pagination.hasNext).toBe(true);
+    expect(result.pagination.hasPrev).toBe(true);
+  });
+
+  it('should token-truncate provider results', async () => {
+    const results = makeSearchResults(20);
+    const searchProvider: SearchProvider = {
+      search: vi.fn(async () => results),
+    };
+    const ctx = createMockContext({ searchProvider });
+
+    // Very small token budget to force truncation
+    const result = await searchDocumentation(ctx, {
+      query: 'test',
+      maxTokens: 1,
+    });
+
+    expect(result.tokenInfo.truncated).toBe(true);
+    expect(result.results.length).toBeLessThan(20);
+  });
+
+  it('should extract bundleSlug from provider result URLs for product filter', async () => {
+    const results: SearchResult[] = [
+      {
+        title: 'Jamf Pro Article',
+        url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html',
+        snippet: 'A Jamf Pro article',
+        product: 'Jamf Pro',
+      },
+      {
+        title: 'Jamf Connect Article',
+        url: 'https://learn.jamf.com/en-US/bundle/jamf-connect-documentation/page/test.html',
+        snippet: 'A Jamf Connect article',
+        product: 'Jamf Connect',
+      },
+    ];
+    const searchProvider: SearchProvider = {
+      search: vi.fn(async () => results),
+    };
+    const ctx = createMockContext({ searchProvider });
+
+    const result = await searchDocumentation(ctx, {
+      query: 'test',
+      product: 'jamf-pro',
+    });
+
+    // Only the Jamf Pro result should pass the product filter
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].title).toBe('Jamf Pro Article');
+  });
+
+  it('should handle provider results with non-bundle URLs gracefully', async () => {
+    const results: SearchResult[] = [
+      {
+        title: 'External Article',
+        url: 'https://learn.jamf.com/some/other/path.html',
+        snippet: 'No bundle in URL',
+        product: null,
+      },
+    ];
+    const searchProvider: SearchProvider = {
+      search: vi.fn(async () => results),
+    };
+    const ctx = createMockContext({ searchProvider });
+
+    const result = await searchDocumentation(ctx, { query: 'test' });
+
+    // Result should still be included (just not filterable by product)
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].title).toBe('External Article');
+  });
+
+  it('should handle provider returning empty array', async () => {
+    const searchProvider: SearchProvider = {
+      search: vi.fn(async () => []),
+    };
+    const ctx = createMockContext({ searchProvider });
+
+    const result = await searchDocumentation(ctx, { query: 'test' });
+
+    expect(result.results).toHaveLength(0);
+    expect(result.pagination.totalItems).toBe(0);
+    expect(result.pagination.totalPages).toBe(0);
   });
 
   it('should fall through when provider returns null', async () => {
@@ -71,10 +185,8 @@ describe('SearchProvider injection', () => {
     const ctx = createMockContext({ searchProvider });
 
     // Will attempt default implementation (which calls API).
-    // We expect it to proceed past the provider check.
+    // We verify the provider was checked by calling it directly.
     expect(searchProvider.search).not.toHaveBeenCalled();
-    // Calling searchDocumentation would hit the network; we verify the provider
-    // was checked by calling it directly.
     const provided = await searchProvider.search({ query: 'test' });
     expect(provided).toBeNull();
   });
@@ -82,8 +194,6 @@ describe('SearchProvider injection', () => {
   it('should skip provider check when not configured', async () => {
     const ctx = createMockContext();
     expect(ctx.searchProvider).toBeUndefined();
-    // No provider set — function should proceed to default logic.
-    // Full execution would require network; we just verify context shape.
   });
 });
 
@@ -219,8 +329,9 @@ describe('Provider error propagation', () => {
     };
     const ctx = createMockContext({ searchProvider });
 
-    await expect(searchDocumentation(ctx, { query: 'test' }))
-      .rejects.toThrow('Search backend down');
+    // Non-JamfDocsError is caught by the pipeline and returns empty results
+    const result = await searchDocumentation(ctx, { query: 'test' });
+    expect(result.results).toHaveLength(0);
   });
 
   it('should propagate article provider errors', async () => {
