@@ -1,3 +1,9 @@
+## [3.0.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.3...v3.0.4) (2026-04-02)
+
+### Dependencies
+
+* bump lodash-es from 4.17.23 to 4.18.1 ([#74](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/74)) ([62029ef](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/62029ef08e0c1ea6c6c87b21cf45a04b7d01d96d))
+
 ## [3.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.2...v3.0.3) (2026-04-01)
 
 ### Dependencies
