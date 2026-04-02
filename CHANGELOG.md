@@ -1,3 +1,9 @@
+## [3.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.5...v3.0.6) (2026-04-02)
+
+### Refactoring
+
+* let SearchProvider return raw results, core handles pipeline ([#76](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/76)) ([21fdd46](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/21fdd460631bbc4aa9d644ea409eb5e94f97f4b4))
+
 ## [3.0.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.4...v3.0.5) (2026-04-02)
 
 ### Dependencies
