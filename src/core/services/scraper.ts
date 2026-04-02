@@ -495,13 +495,45 @@ function transformZoominResult(
     searchResult.relevance = leading.score;
   }
 
-  const searchText = `${searchResult.title} ${searchResult.snippet}`.toLowerCase();
-  const matchedTopics: TopicId[] = ALL_TOPIC_IDS
+  return {
+    result: searchResult, bundleSlug, bundleId,
+    matchedTopics: matchTopics(searchResult.title, searchResult.snippet),
+    labelKeys,
+    versionMatched: versioned.versionMatched
+  };
+}
+
+/**
+ * Match topic IDs from title + snippet text.
+ */
+function matchTopics(title: string, snippet: string): TopicId[] {
+  const searchText = `${title} ${snippet}`.toLowerCase();
+  return ALL_TOPIC_IDS
     .filter(topicId => TOPIC_KEYWORDS_LOWER[topicId].some(kw => searchText.includes(kw)));
+}
+
+const BUNDLE_ID_REGEX = /\/bundle\/([^/]+)\//;
+
+/**
+ * Convert a flat SearchResult (e.g. from a SearchProvider) into a
+ * SearchResultWithMeta so it can flow through the core post-processing pipeline.
+ */
+function toSearchResultWithMeta(result: SearchResult): SearchResultWithMeta {
+  const bundleMatch = BUNDLE_ID_REGEX.exec(result.url);
+  const bundleId = bundleMatch?.[1] ?? '';
+  const bundleSlug = bundleId !== '' ? extractProductSlug(bundleId) : null;
+
+  const labelKeys: string[] = result.docType !== undefined
+    ? [DOC_TYPE_LABEL_MAP[result.docType]]
+    : [];
 
   return {
-    result: searchResult, bundleSlug, bundleId, matchedTopics, labelKeys,
-    versionMatched: versioned.versionMatched
+    result,
+    bundleSlug,
+    bundleId,
+    matchedTopics: matchTopics(result.title, result.snippet),
+    labelKeys,
+    versionMatched: true,
   };
 }
 
@@ -705,21 +737,21 @@ function deduplicateByLatestVersion(results: SearchResultWithMeta[]): SearchResu
 }
 
 /**
- * Search Jamf documentation using Zoomin Search API
+ * Resolve search results from provider or Zoomin API fallback.
  */
-export async function searchDocumentation(
+async function resolveSearchResults(
   ctx: ServerContext,
-  params: SearchParams
-): Promise<SearchDocumentationResult> {
+  params: SearchParams,
+  log: Logger
+): Promise<SearchResultWithMeta[]> {
   if (ctx.searchProvider) {
     const provided = await ctx.searchProvider.search(params);
-    if (provided !== null) return provided;
+    if (provided !== null) {
+      return provided.map(toSearchResultWithMeta);
+    }
   }
-  const log = ctx.logger.createLogger('scraper');
+
   const fetchJson = makeFetchJson(ctx.config.request);
-  const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
-  const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
-  const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const locale = params.language ?? DEFAULT_LOCALE;
   const cacheKey = `${locale}:search:${JSON.stringify({
     query: params.query, product: params.product, topic: params.topic,
@@ -727,28 +759,30 @@ export async function searchDocumentation(
     maxTokens: params.maxTokens, page: 1
   })}`;
 
+  return fetchSearchResults(params, locale, cacheKey, ctx.cache, fetchJson, log);
+}
+
+/**
+ * Search Jamf documentation using Zoomin Search API
+ */
+export async function searchDocumentation(
+  ctx: ServerContext,
+  params: SearchParams
+): Promise<SearchDocumentationResult> {
+  const log = ctx.logger.createLogger('scraper');
+  const page = params.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
+  const pageSize = params.limit ?? CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS;
+  const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+
   let allResults: SearchResultWithMeta[];
   try {
-    allResults = await fetchSearchResults(params, locale, cacheKey, ctx.cache, fetchJson, log);
+    allResults = await resolveSearchResults(ctx, params, log);
   } catch (error) {
     log.error(`Search error: ${String(error)}`);
-
     if (error instanceof JamfDocsError) {
       throw error;
     }
-
-    return {
-      results: [],
-      pagination: {
-        page: 1,
-        pageSize,
-        totalPages: 0,
-        totalItems: 0,
-        hasNext: false,
-        hasPrev: false
-      },
-      tokenInfo: createTokenInfo('', maxTokens)
-    };
+    allResults = [];
   }
 
   // Build and apply filters with progressive relaxation

@@ -11,9 +11,8 @@
  */
 
 import type { ProductId, LocaleId } from '../../constants.js';
-import type { SearchParams, GlossaryLookupResult } from '../../types.js';
+import type { SearchParams, SearchResult, GlossaryLookupResult } from '../../types.js';
 import type {
-  SearchDocumentationResult,
   FetchArticleResult,
   FetchArticleOptions,
   FetchTocResult,
@@ -22,10 +21,13 @@ import type {
 
 /**
  * Custom search backend (e.g., Vectorize semantic search).
- * Return null to fall through to the default Zoomin API search.
+ *
+ * Return all matched results as a flat array. The core handles pagination,
+ * token truncation, version deduplication, and filter relaxation.
+ * Return `null` to fall through to the default Zoomin API search.
  */
 export interface SearchProvider {
-  search(params: SearchParams): Promise<SearchDocumentationResult | null>;
+  search(params: SearchParams): Promise<SearchResult[] | null>;
 }
 
 /**
