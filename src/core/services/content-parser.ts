@@ -172,6 +172,10 @@ export function cleanSnippet(
     cleaned = cleaned.replace(pattern, '').trim();
   }
 
+  // As an extra safety step, strip any remaining angle brackets to avoid
+  // residual fragments like "<script" from being interpreted as HTML.
+  cleaned = cleaned.replace(/[<>]/g, '').trim();
+
   if (cleaned.length < MIN_SNIPPET_LENGTH) {
     const productSuffix =
       product !== null && product !== '' ? ` \u2014 ${product}` : '';
