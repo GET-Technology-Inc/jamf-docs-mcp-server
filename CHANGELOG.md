@@ -1,3 +1,9 @@
+## [3.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.6...v3.0.7) (2026-04-04)
+
+### Refactoring
+
+* replace monolithic scraper with Fluid Topics service layer ([#78](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/78)) ([ed63fb0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ed63fb0db4164a423235bd7ea87406711e3b4591))
+
 ## [3.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.5...v3.0.6) (2026-04-02)
 
 ### Refactoring
