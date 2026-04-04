@@ -160,8 +160,13 @@ export function cleanSnippet(
   title: string,
   product: string | null
 ): string {
-  // Strip HTML tags
-  let cleaned = snippet.replace(/<[^>]*>/g, '').trim();
+  // Strip HTML tags — loop until stable to handle nested/malformed fragments
+  let cleaned = snippet;
+  let prev: string;
+  do {
+    prev = cleaned;
+    cleaned = cleaned.replace(/<[^>]*>/g, '').trim();
+  } while (cleaned !== prev);
 
   for (const pattern of NAV_PATTERNS) {
     cleaned = cleaned.replace(pattern, '').trim();
