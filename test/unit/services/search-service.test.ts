@@ -228,15 +228,13 @@ describe('transformFtSearchResult()', () => {
   describe('TOPIC entries', () => {
     it('should extract title from topic.title', () => {
       const entry = makeTopicEntry({ title: 'My Custom Title' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.title).toBe('My Custom Title');
     });
 
     it('should build URL from ft:prettyUrl with DOCS_BASE_URL prefix', () => {
       const entry = makeTopicEntry();
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.url).toBe(
         `${DOCS_BASE_URL}/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html`
       );
@@ -251,8 +249,7 @@ describe('transformFtSearchResult()', () => {
           'version': ['11.5.0'],
         }),
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.url).toBe(
         `${DOCS_BASE_URL}/r/en-US/jamf-pro-documentation/topic-456`
       );
@@ -262,8 +259,7 @@ describe('transformFtSearchResult()', () => {
       const entry = makeTopicEntry({
         htmlExcerpt: '<b>Learn</b> about <em>profiles</em> in Jamf Pro for managing device settings and security.',
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.snippet).not.toContain('<b>');
       expect(result.snippet).not.toContain('<em>');
       expect(result.snippet).toContain('Learn');
@@ -276,57 +272,49 @@ describe('transformFtSearchResult()', () => {
           'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
         }),
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.product).toBe('Jamf Pro');
     });
 
     it('should extract version from metadata', () => {
       const entry = makeTopicEntry();
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.version).toBe('11.5.0');
     });
 
     it('should set mapId from topic', () => {
       const entry = makeTopicEntry({ mapId: 'my-map-id' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.mapId).toBe('my-map-id');
     });
 
     it('should set contentId from topic', () => {
       const entry = makeTopicEntry({ contentId: 'my-content-id' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.contentId).toBe('my-content-id');
     });
 
     it('should set breadcrumb from topic', () => {
       const entry = makeTopicEntry({ breadcrumb: ['Level 1', 'Level 2', 'Level 3'] });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.breadcrumb).toEqual(['Level 1', 'Level 2', 'Level 3']);
     });
 
     it('should omit breadcrumb when empty', () => {
       const entry = makeTopicEntry({ breadcrumb: [] });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.breadcrumb).toBeUndefined();
     });
 
     it('should set mapTitle from topic', () => {
       const entry = makeTopicEntry({ mapTitle: 'Jamf Pro Documentation Guide' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.mapTitle).toBe('Jamf Pro Documentation Guide');
     });
 
     it('should omit mapTitle when empty', () => {
       const entry = makeTopicEntry({ mapTitle: '' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.mapTitle).toBeUndefined();
     });
 
@@ -338,8 +326,7 @@ describe('transformFtSearchResult()', () => {
           'jamf:contentType': ['Release Notes'],
         }),
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.docType).toBe('release-notes');
     });
 
@@ -351,15 +338,13 @@ describe('transformFtSearchResult()', () => {
           'jamf:contentType': ['Unknown Type'],
         }),
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.docType).toBe('documentation');
     });
 
     it('should handle Untitled when title is empty', () => {
       const entry = makeTopicEntry({ title: '' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.title).toBe('Untitled');
     });
 
@@ -370,8 +355,7 @@ describe('transformFtSearchResult()', () => {
           'ft:prettyUrl': ['/en-US/bundle/test/page/test.html'],
         }),
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.product).toBeNull();
     });
   });
@@ -379,8 +363,7 @@ describe('transformFtSearchResult()', () => {
   describe('MAP entries', () => {
     it('should extract title from map', () => {
       const entry = makeMapEntry({ title: 'Jamf School Documentation' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.title).toBe('Jamf School Documentation');
     });
 
@@ -388,8 +371,7 @@ describe('transformFtSearchResult()', () => {
       const entry = makeMapEntry({
         readerUrl: '/en-US/bundle/jamf-school-documentation/page/index.html',
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.url).toBe(
         `${DOCS_BASE_URL}/en-US/bundle/jamf-school-documentation/page/index.html`
       );
@@ -400,22 +382,19 @@ describe('transformFtSearchResult()', () => {
         readerUrl: '',
         mapUrl: '/en-US/bundle/jamf-pro-documentation',
       });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.url).toBe(`${DOCS_BASE_URL}/en-US/bundle/jamf-pro-documentation`);
     });
 
     it('should set mapId from map', () => {
       const entry = makeMapEntry({ mapId: 'school-map-1' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.mapId).toBe('school-map-1');
     });
 
     it('should set mapTitle from map title', () => {
       const entry = makeMapEntry({ title: 'Jamf Protect Docs' });
-      const cluster = makeCluster([entry]);
-      const result = transformFtSearchResult(entry, cluster);
+      const result = transformFtSearchResult(entry);
       expect(result.mapTitle).toBe('Jamf Protect Docs');
     });
   });

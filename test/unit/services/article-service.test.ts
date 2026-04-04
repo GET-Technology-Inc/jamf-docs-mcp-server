@@ -206,17 +206,35 @@ describe('fetchArticleFromFt()', () => {
       expect(result.breadcrumb).toBeUndefined();
     });
 
-    it('should include relatedArticles when present', async () => {
+    it('should include relatedArticles when present and includeRelated is true', async () => {
       // Arrange
       const cache = createMockCache();
       const related = [{ title: 'Policies', url: 'https://learn.jamf.com/bundle/jamf-pro/page/Policies.html' }];
       mockedParseArticle.mockReturnValue(makeParsedContent({ relatedArticles: related }));
 
       // Act
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true }
+      );
 
       // Assert
       expect(result.relatedArticles).toEqual(related);
+    });
+
+    it('should omit relatedArticles when includeRelated is false even if parsed', async () => {
+      // Arrange — parseArticle always extracts related (cache-safe),
+      // but the result should filter them out when includeRelated is false
+      const cache = createMockCache();
+      const related = [{ title: 'Policies', url: 'https://learn.jamf.com/bundle/jamf-pro/page/Policies.html' }];
+      mockedParseArticle.mockReturnValue(makeParsedContent({ relatedArticles: related }));
+
+      // Act
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: false }
+      );
+
+      // Assert — related articles should be filtered out at the result layer
+      expect(result.relatedArticles).toBeUndefined();
     });
 
     it('should omit relatedArticles when empty', async () => {
@@ -246,18 +264,19 @@ describe('fetchArticleFromFt()', () => {
       );
     });
 
-    it('should not pass includeRelated option when false', async () => {
+    it('should always parse with includeRelated true for cache safety', async () => {
       // Arrange
       const cache = createMockCache();
 
-      // Act
+      // Act — even when caller passes includeRelated: false,
+      // parseArticle should always extract related articles for caching
       await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: false });
 
       // Assert
       expect(mockedParseArticle).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(String),
-        undefined
+        { includeRelated: true }
       );
     });
   });

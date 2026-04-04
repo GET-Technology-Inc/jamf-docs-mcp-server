@@ -67,11 +67,7 @@ export async function fetchArticleFromFt(
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
     const { product, version } = extractProductVersion(topicMeta.metadata);
-    const rawContent = parseArticle(
-      html,
-      displayUrl,
-      options.includeRelated === true ? { includeRelated: true } : undefined
-    );
+    const rawContent = parseArticle(html, displayUrl, { includeRelated: true });
 
     cached = { content: rawContent, displayUrl, product, version };
     await cache.set(cacheKey, cached, cacheTtl);
@@ -87,7 +83,7 @@ export async function fetchArticleFromFt(
     product,
     version,
     breadcrumb: rawContent.breadcrumb.length > 0 ? rawContent.breadcrumb : undefined,
-    relatedArticles: rawContent.relatedArticles.length > 0
+    relatedArticles: options.includeRelated === true && rawContent.relatedArticles.length > 0
       ? rawContent.relatedArticles : undefined,
     mapId,
     contentId,

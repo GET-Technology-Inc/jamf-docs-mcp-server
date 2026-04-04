@@ -102,7 +102,6 @@ async function collectBody(req: IncomingMessage, maxBodySize: number): Promise<B
     const buf = typeof chunk === 'string' ? Buffer.from(chunk) : (chunk as Buffer);
     totalSize += buf.length;
     if (totalSize > maxBodySize) {
-      req.destroy();
       throw new Error('Payload too large');
     }
     chunks.push(buf);
@@ -260,9 +259,11 @@ async function handleNodeRequest(
     try {
       body = await collectBody(req, config.maxBodySize);
     } catch {
-      // Body too large — respond directly
+      // Body too large — send 413, then destroy to stop reading remaining data
       res.writeHead(413, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Payload too large' }));
+      res.end(JSON.stringify({ error: 'Payload too large' }), () => {
+        req.destroy();
+      });
       return;
     }
   } else {
