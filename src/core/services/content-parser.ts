@@ -165,7 +165,7 @@ export function cleanSnippet(
   let prev: string;
   do {
     prev = cleaned;
-    cleaned = cleaned.replace(/<[^>]*>/g, '').trim();
+    cleaned = cleaned.replace(/<[^>]*>?/g, '').trim();
   } while (cleaned !== prev);
 
   for (const pattern of NAV_PATTERNS) {
