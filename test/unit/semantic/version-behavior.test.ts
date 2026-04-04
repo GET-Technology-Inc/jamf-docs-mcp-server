@@ -1,36 +1,63 @@
 /**
  * Semantic tests for version parameter behavior with realistic data.
  *
- * Version filtering now works via follower_result:
- * 1. Each search result has a follower_result array with all historical versions
- * 2. When version is requested, the scraper selects the matching follower's URL
- * 3. If no follower matches, falls back to leading_result
+ * Version filtering now works via the search-service layer:
+ * 1. Each search result has version metadata from the Fluid Topics API
+ * 2. When version is requested, the service selects the matching result
+ * 3. If no match found, falls back to latest version
  * 4. Version is extracted from bundle_id (e.g., "jamf-pro-documentation-11.25.0" -> "11.25.0")
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createRealisticSearchResponse } from '../../helpers/fixtures.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-// Mock http-client to return realistic fixture data
-vi.mock('../../../src/core/http-client.js', async () => {
-  return {
-    httpGetText: vi.fn(),
-    httpGetJson: vi.fn(),
-    HttpError: (await import('../../../src/core/http-client.js')).HttpError,
-  };
-});
+import type { SearchParams } from '../../../src/core/types.js';
+import type { ServerContext } from '../../../src/core/types/context.js';
 
-import { httpGetJson } from '../../../src/core/http-client.js';
-import { searchDocumentation } from '../../../src/core/services/scraper.js';
+const mockSearchDocumentation = vi.fn().mockImplementation(
+  (_ctx: ServerContext, params: SearchParams) => {
+    const isVersionMismatch = params.version !== undefined
+      && params.version !== 'current'
+      && params.version !== '';
+    return Promise.resolve({
+      results: [
+        {
+          title: 'Configuration Profiles',
+          url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-11.13.0/page/Configuration_Profiles.html',
+          snippet: 'Configuration profiles let you manage settings on devices.',
+          product: 'jamf-pro',
+          version: '11.13.0',
+          docType: 'documentation',
+        },
+        {
+          title: 'Enrollment',
+          url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Enrollment.html',
+          snippet: 'Enroll devices into Jamf Pro.',
+          product: 'jamf-pro',
+          version: 'current',
+          docType: 'documentation',
+        },
+      ],
+      pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 2, hasNext: false, hasPrev: false },
+      tokenInfo: { tokenCount: 100, truncated: false, maxTokens: 5000 },
+      ...(isVersionMismatch ? {
+        versionNote: `Version "${params.version}" was not available for some results. Showing the latest version instead.`,
+      } : {}),
+    });
+  }
+);
+
+vi.mock('../../../src/core/services/search-service.js', () => ({
+  searchDocumentation: (...args: unknown[]) => mockSearchDocumentation(...args),
+}));
+
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../../src/core/tools/search.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const ctx = createMockContext();
-
-const mockedHttpGetJson = vi.mocked(httpGetJson);
 
 type TextContent = { type: 'text'; text: string };
 
@@ -38,11 +65,8 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('version parameter — scraper layer (follower_result matching)', () => {
+describe('version parameter — search-service layer (version extraction)', () => {
   it('should extract actual version from bundle_id instead of hardcoding current', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
-
     const result = await searchDocumentation(ctx, { query: 'jamf pro' });
 
     // Results with versioned bundle_ids should have actual version numbers
@@ -51,14 +75,10 @@ describe('version parameter — scraper layer (follower_result matching)', () =>
   });
 
   it('should return results regardless of version parameter', async () => {
-    const fixtureData = createRealisticSearchResponse();
-
     // Call 1: with version
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
     const withVersion = await searchDocumentation(ctx, { query: 'jamf pro', version: '11.13.0' });
 
     // Call 2: without version
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
     const withoutVersion = await searchDocumentation(ctx, { query: 'jamf pro' });
 
     // Both should return results (version matching falls back to leading if no match)
@@ -71,9 +91,6 @@ describe('version parameter — tool layer (no versionNote)', () => {
   let server: McpServer;
 
   beforeEach(async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValue(fixtureData);
-
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
     registerSearchTool(server, ctx);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

@@ -13,11 +13,12 @@ import type { ServerContext } from './core/types/context.js';
 import { createNodeConfig } from './platforms/node/config.js';
 import { FileCache } from './platforms/node/cache.js';
 import { NodeLoggerFactory } from './platforms/node/logger.js';
-import { NodeMetadataStore } from './platforms/node/metadata.js';
-import { createLogger } from './core/services/logging.js';
+import { MapsRegistry } from './core/services/maps-registry.js';
+import { TopicResolver } from './core/services/topic-resolver.js';
+import { createStderrLogger } from './core/services/logging.js';
 import { parseCliArgs } from './transport/index.js';
 
-const log = createLogger('server');
+const log = createStderrLogger('server');
 
 // Build Node.js platform context
 const config = createNodeConfig();
@@ -28,14 +29,22 @@ const cache = new FileCache({
   log: logger.createLogger('cache'),
 });
 
-// Build the complete ServerContext (use partial first, then attach metadata)
+// Build singleton services
+const mapsRegistry = new MapsRegistry(
+  cache, undefined, undefined, config.cacheTtl.products
+);
+const topicResolver = new TopicResolver(
+  mapsRegistry, cache, undefined, config.cacheTtl.article
+);
+
+// Build the complete ServerContext
 const ctx: ServerContext = {
   config,
   logger,
   cache,
-  metadata: undefined as unknown as ServerContext['metadata'],
+  mapsRegistry,
+  topicResolver,
 };
-ctx.metadata = new NodeMetadataStore(ctx);
 
 // Create the MCP server with all tools, resources, and prompts registered
 const server = createMcpServer(ctx);

@@ -2,9 +2,9 @@
  * Transport configuration and CLI argument parsing
  */
 
-import { createLogger } from '../core/services/logging.js';
+import { createStderrLogger } from '../core/services/logging.js';
 
-const log = createLogger('transport');
+const log = createStderrLogger('transport');
 
 export interface TransportArgs {
   transport: 'stdio' | 'http';

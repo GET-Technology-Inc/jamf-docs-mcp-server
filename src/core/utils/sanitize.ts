@@ -49,9 +49,6 @@ export function getSafeErrorMessage(error: unknown): string {
 export function sanitizeErrorMessage(message: string): string {
   let sanitized = message;
 
-  // Replace backend hostname with frontend (hostnames extracted from DOCS_API_URL / DOCS_BASE_URL)
-  sanitized = sanitized.replaceAll('learn-be.jamf.com', 'learn.jamf.com');
-
   // Remove absolute file paths (Unix and Windows)
   sanitized = sanitized.replace(/(?<![:/\w.])\/[\w./-]+\.\w{1,4}/g, '<path>');
   sanitized = sanitized.replace(/[A-Z]:\\[\w.\\-]+\.\w{1,4}/g, '<path>');

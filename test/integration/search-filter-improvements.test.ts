@@ -12,18 +12,19 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { SearchResult, PaginationInfo, TokenInfo, FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
+import type { FetchArticleResult } from '../../src/core/types.js';
 
 // Mock services
-vi.mock('../../src/core/services/scraper.js', () => ({
+vi.mock('../../src/core/services/search-service.js', () => ({
   searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
-  fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
 }));
+
+vi.mock('../../src/core/services/toc-service.js', () => ({
+  fetchTableOfContents: vi.fn(),
+}));
+
+// TopicResolver and MapsRegistry are singletons on ServerContext;
+// tests override ctx.topicResolver.resolve where needed.
 
 vi.mock('../../src/core/services/cache.js', () => ({
   cache: {
@@ -47,13 +48,11 @@ vi.mock('../../src/core/services/metadata.js', () => ({
   getTopicsResourceData: vi.fn(),
 }));
 
-import { searchDocumentation, fetchArticle } from '../../src/core/services/scraper.js';
+import { searchDocumentation } from '../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
 import { registerListProductsTool } from '../../src/core/tools/list-products.js';
-import { createMockContext } from '../helpers/mock-context.js';
-
-const ctx = createMockContext();
+import { createMockContext, createMockArticleProvider } from '../helpers/mock-context.js';
 
 type TextContent = { type: 'text'; text: string };
 
@@ -68,6 +67,7 @@ function getText(result: { content: unknown[] }): string {
 describe('Integration: Search filter fallback flow', () => {
   let client: Client;
   let server: McpServer;
+  const ctx = createMockContext();
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
@@ -147,7 +147,6 @@ describe('Integration: Search filter fallback flow', () => {
     });
 
     const json = JSON.parse(getText(result));
-    // versionNote is only set by scraper when version mismatch occurs; mock doesn't include it
     expect(json.versionNote).toBeUndefined();
   });
 
@@ -209,7 +208,28 @@ describe('Integration: get_article section ID matching', () => {
   let client: Client;
   let server: McpServer;
 
+  const sections: ArticleSection[] = [
+    { id: 'managing-configuration-profiles', title: 'Managing Configuration Profiles', level: 2, tokenCount: 200 },
+    { id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 100 },
+  ];
+
+  const fullArticle: FetchArticleResult = {
+    title: 'Configuration Profiles',
+    content: '## Managing Configuration Profiles\nContent here\n\n## Prerequisites\nPrereq content',
+    url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/ConfigProfiles.html',
+    product: 'Jamf Pro',
+    version: 'current',
+    tokenInfo: { tokenCount: 300, truncated: false, maxTokens: 5000 },
+    sections,
+  };
+
   beforeAll(async () => {
+    const articleProvider = createMockArticleProvider(() => fullArticle);
+    const ctx = createMockContext({ articleProvider });
+    // Override topicResolver.resolve to return fixed IDs (avoids network calls)
+    ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+      mapId: 'test-map', contentId: 'test-content', locale: 'en-US',
+    });
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
     registerGetArticleTool(server, ctx);
     const [ct, st] = InMemoryTransport.createLinkedPair();
@@ -223,21 +243,6 @@ describe('Integration: get_article section ID matching', () => {
   });
 
   it('should return article with slugified section IDs', async () => {
-    const sections: ArticleSection[] = [
-      { id: 'managing-configuration-profiles', title: 'Managing Configuration Profiles', level: 2, tokenCount: 200 },
-      { id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 100 },
-    ];
-
-    vi.mocked(fetchArticle).mockResolvedValue({
-      title: 'Configuration Profiles',
-      content: '## Managing Configuration Profiles\nContent here\n\n## Prerequisites\nPrereq content',
-      url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/ConfigProfiles.html',
-      product: 'Jamf Pro',
-      version: 'current',
-      tokenInfo: { tokenCount: 300, truncated: false, maxTokens: 5000 },
-      sections,
-    });
-
     const result = await client.callTool({
       name: 'jamf_docs_get_article',
       arguments: {
@@ -253,16 +258,6 @@ describe('Integration: get_article section ID matching', () => {
   });
 
   it('should return article with section parameter via slug ID', async () => {
-    vi.mocked(fetchArticle).mockResolvedValue({
-      title: 'Configuration Profiles',
-      content: '## Prerequisites\nYou need admin access.',
-      url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/ConfigProfiles.html',
-      product: 'Jamf Pro',
-      version: 'current',
-      tokenInfo: { tokenCount: 20, truncated: false, maxTokens: 5000 },
-      sections: [{ id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 20 }],
-    });
-
     const result = await client.callTool({
       name: 'jamf_docs_get_article',
       arguments: {
@@ -284,6 +279,7 @@ describe('Integration: get_article section ID matching', () => {
 describe('Integration: list_products with hasContent', () => {
   let client: Client;
   let server: McpServer;
+  const ctx = createMockContext();
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });

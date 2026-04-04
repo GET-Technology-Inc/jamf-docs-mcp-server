@@ -15,7 +15,7 @@ import {
   getTopicsResourceData,
   getAvailableVersions
 } from '../services/metadata.js';
-import { fetchTableOfContents } from '../services/scraper.js';
+import { fetchTableOfContents } from '../services/toc-service.js';
 import { completeProduct } from '../completions.js';
 
 function validateProductId(

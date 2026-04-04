@@ -104,10 +104,9 @@ describe('sanitizeMarkdownUrl', () => {
 });
 
 describe('sanitizeErrorMessage', () => {
-  it('should replace backend hostname with frontend', () => {
-    const msg = 'Network error: connect ECONNREFUSED learn-be.jamf.com:443';
+  it('should pass through messages with no sensitive content', () => {
+    const msg = 'Network error: connect ECONNREFUSED learn.jamf.com:443';
     expect(sanitizeErrorMessage(msg)).toContain('learn.jamf.com');
-    expect(sanitizeErrorMessage(msg)).not.toContain('learn-be.jamf.com');
   });
 
   it('should remove Unix file paths', () => {
@@ -160,15 +159,8 @@ describe('sanitizeErrorMessage', () => {
     expect(sanitizeErrorMessage(msg)).toBe('Request timed out');
   });
 
-  it('should handle multiple backend URL occurrences', () => {
-    const msg = 'Failed: learn-be.jamf.com returned 500, retry learn-be.jamf.com';
-    const result = sanitizeErrorMessage(msg);
-    expect(result).not.toContain('learn-be.jamf.com');
-    expect(result.match(/learn\.jamf\.com/g)?.length).toBe(2);
-  });
-
-  it('should replace backend hostname but preserve the rest of the message', () => {
-    const msg = 'Error connecting to learn-be.jamf.com: timeout after 15000ms';
+  it('should preserve error details while stripping paths', () => {
+    const msg = 'Error connecting to learn.jamf.com: timeout after 15000ms';
     const result = sanitizeErrorMessage(msg);
     expect(result).toContain('timeout after 15000ms');
     expect(result).toContain('learn.jamf.com');

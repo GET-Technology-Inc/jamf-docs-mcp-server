@@ -44,7 +44,6 @@ export interface JamfProduct {
   id: ProductId;
   name: string;
   description: string;
-  urlPattern: string;
   bundleId: string;
   latestVersion: string;
   versions: readonly string[];
@@ -86,6 +85,10 @@ export interface SearchResult {
   version?: string;
   relevance?: number;
   docType?: DocTypeId;
+  mapId?: string;
+  contentId?: string;
+  breadcrumb?: string[];
+  mapTitle?: string;
 }
 
 export interface FilterRelaxation {
@@ -116,6 +119,59 @@ export interface SearchResponse {
   truncatedContent?: TruncatedContentInfo;
 }
 
+// Article fetch types
+
+/**
+ * Options for fetching articles
+ */
+export interface FetchArticleOptions {
+  includeRelated?: boolean;
+  section?: string;
+  summaryOnly?: boolean;
+  maxTokens?: number;
+  locale?: LocaleId | undefined;
+}
+
+/**
+ * Article result with token and section info
+ */
+export interface FetchArticleResult extends ParsedArticle {
+  tokenInfo: TokenInfo;
+  sections: ArticleSection[];
+}
+
+/**
+ * Options for fetching table of contents
+ */
+export interface FetchTocOptions {
+  page?: number;
+  maxTokens?: number;
+  locale?: LocaleId | undefined;
+}
+
+/**
+ * TOC result with pagination and token info
+ */
+export interface FetchTocResult {
+  toc: TocEntry[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+}
+
+/**
+ * Search response with token and pagination info
+ */
+export interface SearchDocumentationResult {
+  results: SearchResult[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+  filterRelaxation?: FilterRelaxation;
+  versionNote?: string;
+  truncatedContent?: TruncatedContentInfo;
+  /** Set when the upstream search call failed; results will be empty. */
+  searchError?: string;
+}
+
 // Article types
 export interface GetArticleParams {
   url: string;
@@ -138,6 +194,8 @@ export interface ParsedArticle {
     title: string;
     url: string;
   }[] | undefined;
+  mapId?: string | undefined;
+  contentId?: string | undefined;
 }
 
 export interface ArticleResponse extends ParsedArticle {
@@ -160,6 +218,104 @@ export interface GlossaryLookupResult {
   tokenInfo: TokenInfo;
 }
 
+// Fluid Topics API types
+
+export interface FtTocNode {
+  tocId: string;
+  contentId: string;
+  title: string;
+  prettyUrl: string;
+  hasRating?: boolean;
+  children: FtTocNode[];
+}
+
+export interface FtMetadataEntry {
+  key: string;
+  label: string;
+  values: string[];
+}
+
+export interface FtSearchTopic {
+  mapId: string;
+  contentId: string;
+  tocId: string;
+  title: string;
+  htmlTitle: string;
+  mapTitle: string;
+  breadcrumb: string[];
+  htmlExcerpt: string;
+  metadata: FtMetadataEntry[];
+}
+
+export interface FtSearchMap {
+  mapId: string;
+  mapUrl: string;
+  readerUrl: string;
+  title: string;
+  htmlTitle: string;
+  htmlExcerpt: string;
+  metadata: FtMetadataEntry[];
+  editorialType: string;
+  lastEditionDate?: string;
+  lastPublicationDate?: string;
+  openMode: string;
+}
+
+export interface FtSearchEntry {
+  type: 'TOPIC' | 'MAP';
+  missingTerms: string[];
+  topic?: FtSearchTopic;
+  map?: FtSearchMap;
+}
+
+export interface FtSearchCluster {
+  metadataVariableAxis: string;
+  entries: FtSearchEntry[];
+}
+
+export interface FtSearchPaging {
+  currentPage: number;
+  isLastPage: boolean;
+  totalResultsCount: number;
+  totalClustersCount: number;
+}
+
+export interface FtClusteredSearchResponse {
+  facets: unknown[];
+  results: FtSearchCluster[];
+  announcements: unknown[];
+  paging: FtSearchPaging;
+}
+
+export interface FtSearchFilter {
+  key: string;
+  values: string[];
+}
+
+export interface FtSearchRequest {
+  query: string;
+  contentLocale?: string;
+  paging?: { perPage: number; page: number };
+  filters?: FtSearchFilter[];
+  sortId?: string;
+}
+
+export interface FtMapInfo {
+  title: string;
+  id: string;
+  mapApiEndpoint: string;
+  metadata: FtMetadataEntry[];
+}
+
+export interface FtTopicInfo {
+  title: string;
+  id: string;
+  contentApiEndpoint: string;
+  readerUrl?: string;
+  breadcrumb?: string[];
+  metadata: FtMetadataEntry[];
+}
+
 // TOC types
 export interface GetTocParams {
   product: ProductId;
@@ -172,6 +328,8 @@ export interface GetTocParams {
 export interface TocEntry {
   title: string;
   url: string;
+  contentId?: string;
+  tocId?: string;
   children?: TocEntry[];
 }
 
@@ -229,40 +387,3 @@ export interface ToolResult {
   isError?: boolean;
   structuredContent?: Record<string, unknown>;
 }
-
-// Zoomin API types (learn-be.jamf.com)
-export interface ZoominSearchResponse {
-  status: string;
-  Results: ZoominSearchResultWrapper[];
-  Pagination?: ZoominPagination;
-}
-
-export interface ZoominSearchResultWrapper {
-  leading_result?: ZoominLeadingResult | null;
-  follower_result?: ZoominLeadingResult[];
-  bundle_data?: unknown;
-}
-
-export interface ZoominLeadingResult {
-  title: string;
-  url: string;
-  snippet: string;  // HTML snippet with <b> tags
-  bundle_id: string;
-  page_id: string;
-  publication_title: string;
-  score?: number;
-  labels?: ZoominLabel[];
-}
-
-export interface ZoominLabel {
-  key: string;
-  navtitle: string;
-}
-
-export interface ZoominPagination {
-  CurrentPage: number;
-  TotalPages: number;
-  ResultsPerPage: number;
-  TotalResults: number;
-}
-

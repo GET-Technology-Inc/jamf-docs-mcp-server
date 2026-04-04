@@ -10,7 +10,7 @@ import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
-import { searchDocumentation } from '../services/scraper.js';
+import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
@@ -273,9 +273,9 @@ function appendMarkdownNotices(
 }
 
 /**
- * Build search filters from params
+ * Build a display-level filter summary from search params.
  */
-function buildSearchFilters(params: { product?: string | undefined; version?: string | undefined; topic?: string | undefined }): SearchFilters {
+function buildFilterSummary(params: { product?: string | undefined; version?: string | undefined; topic?: string | undefined }): SearchFilters {
   return {
     ...(params.product !== undefined ? { product: params.product } : {}),
     ...(params.version !== undefined ? { version: params.version } : {}),
@@ -350,7 +350,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
 
         // Build response
-        const filters = buildSearchFilters(params);
+        const filters = buildFilterSummary(params);
         const response: SearchResponse = {
           total: pagination.totalItems,
           query: params.query,
@@ -385,7 +385,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           // Add relevance note only in JSON format
           const jsonResponse = {
             ...response,
-            relevanceNote: 'Relevance scores are provided by the Zoomin Search API based on text matching. Higher values indicate stronger keyword matches.'
+            relevanceNote: 'Relevance scores are provided by the Fluid Topics Search API based on text matching. Higher values indicate stronger keyword matches.'
           };
           await reportProgress(extra, { progress: 3, total: 3 });
           return {

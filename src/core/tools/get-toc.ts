@@ -11,7 +11,7 @@ import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
-import { fetchTableOfContents } from '../services/scraper.js';
+import { fetchTableOfContents } from '../services/toc-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 

@@ -42,14 +42,3 @@ export interface TocData {
   product: string;
   version: string;
 }
-
-/**
- * Platform-agnostic metadata store for Jamf documentation
- */
-export interface MetadataStore {
-  getProducts(): Promise<ProductMetadata[]>;
-  getTopics(): Promise<TopicMetadata[]>;
-  getToc(productId: string, bundleId: string): Promise<TocData>;
-  getBundleIdForVersion(productId: string, version?: string): Promise<string | null>;
-  getAvailableVersions(productId: string): Promise<string[]>;
-}

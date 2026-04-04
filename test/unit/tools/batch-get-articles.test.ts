@@ -13,19 +13,9 @@ import {
   createFetchArticleResult,
   createTokenInfo,
 } from '../../helpers/fixtures.js';
+import type { FetchArticleResult, FetchArticleOptions } from '../../../src/core/types.js';
 
 // --- Mock service modules before importing the tool --------------------------
-
-vi.mock('../../../src/core/services/scraper.js', () => ({
-  searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
-  fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
-}));
 
 vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
@@ -35,12 +25,11 @@ vi.mock('../../../src/core/services/cache.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { fetchArticle } from '../../../src/core/services/scraper.js';
 import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-articles.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
-const ctx = createMockContext();
-import { limitConcurrency, distributeTokenBudget } from '../../../src/core/tools/batch-get-articles.js';
+import { distributeTokenBudget } from '../../../src/core/tools/batch-get-articles.js';
+import { limitConcurrency } from '../../../src/core/utils/concurrency.js';
 
 // ---------------------------------------------------------------------------
 
@@ -122,11 +111,71 @@ describe('limitConcurrency', () => {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Build a mock articleProvider that supports sequential results.
+ * Each call to getArticleByIds pops the next result from the queue.
+ * When the queue is empty, returns `repeatingResult` (if set) or null.
+ */
+function createMockProvider() {
+  let resultQueue: (FetchArticleResult | Error | null)[] = [];
+  let repeatingResult: FetchArticleResult | Error | null = null;
+
+  const getArticle = vi.fn().mockResolvedValue(null);
+
+  const getArticleByIds = vi.fn(
+    async (
+      _mapId: string,
+      _contentId: string,
+      _options?: FetchArticleOptions,
+    ): Promise<FetchArticleResult | null> => {
+      if (resultQueue.length > 0) {
+        const next = resultQueue.shift()!;
+        if (next instanceof Error) throw next;
+        return next;
+      }
+      if (repeatingResult instanceof Error) throw repeatingResult;
+      return repeatingResult;
+    }
+  );
+
+  const provider = { getArticle, getArticleByIds };
+
+  return {
+    provider,
+    /** Set ordered results (consumed one per call). */
+    setResults(...results: (FetchArticleResult | Error | null)[]): void {
+      resultQueue = [...results];
+      repeatingResult = null;
+    },
+    /** Set a single result that repeats for all calls. */
+    setRepeating(result: FetchArticleResult | Error | null): void {
+      resultQueue = [];
+      repeatingResult = result;
+    },
+    reset(): void {
+      resultQueue = [];
+      repeatingResult = null;
+      getArticleByIds.mockClear();
+      getArticle.mockClear();
+    },
+  };
+}
+
 describe('jamf_docs_batch_get_articles tool', () => {
   let client: Client;
   let server: McpServer;
+  let mock: ReturnType<typeof createMockProvider>;
 
   beforeAll(async () => {
+    mock = createMockProvider();
+    const ctx = createMockContext({ articleProvider: mock.provider });
+    // Override topicResolver.resolve to return deterministic IDs per URL
+    ctx.topicResolver.resolve = vi.fn(async (input: { url?: string }) => {
+      const url = input.url ?? '';
+      const slug = url.split('/').pop()?.replace('.html', '') ?? 'unknown';
+      return { mapId: `map-${slug}`, contentId: `content-${slug}`, locale: 'en-US' };
+    });
+
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
     registerBatchGetArticlesTool(server, ctx);
 
@@ -143,7 +192,7 @@ describe('jamf_docs_batch_get_articles tool', () => {
   });
 
   beforeEach(() => {
-    vi.mocked(fetchArticle).mockReset();
+    mock.reset();
   });
 
   // --- Input validation ---
@@ -184,13 +233,12 @@ describe('jamf_docs_batch_get_articles tool', () => {
 
   describe('successful batch', () => {
     it('should return all articles in markdown format', async () => {
-      vi.mocked(fetchArticle).mockResolvedValue(
-        createFetchArticleResult({
-          title: 'Config Profiles',
-          content: 'Article content here',
-          tokenInfo: createTokenInfo({ tokenCount: 500, maxTokens: 2500 }),
-        })
-      );
+      const article = createFetchArticleResult({
+        title: 'Config Profiles',
+        content: 'Article content here',
+        tokenInfo: createTokenInfo({ tokenCount: 500, maxTokens: 2500 }),
+      });
+      mock.setRepeating(article);
 
       const result = await client.callTool({
         name: 'jamf_docs_batch_get_articles',
@@ -205,7 +253,7 @@ describe('jamf_docs_batch_get_articles tool', () => {
     });
 
     it('should return JSON format when requested', async () => {
-      vi.mocked(fetchArticle).mockResolvedValue(
+      mock.setRepeating(
         createFetchArticleResult({
           title: 'Test Article',
           content: 'Content',
@@ -231,7 +279,7 @@ describe('jamf_docs_batch_get_articles tool', () => {
     });
 
     it('should use compact output mode', async () => {
-      vi.mocked(fetchArticle).mockResolvedValue(
+      mock.setRepeating(
         createFetchArticleResult({
           title: 'Compact Article',
           content: 'Short content',
@@ -260,15 +308,14 @@ describe('jamf_docs_batch_get_articles tool', () => {
 
   describe('partial failure handling', () => {
     it('should succeed overall when some articles fail', async () => {
-      vi.mocked(fetchArticle)
-        .mockResolvedValueOnce(
-          createFetchArticleResult({
-            title: 'Good Article',
-            content: 'Works fine',
-            tokenInfo: createTokenInfo({ tokenCount: 300 }),
-          })
-        )
-        .mockRejectedValueOnce(new Error('Article not found (404)'));
+      mock.setResults(
+        createFetchArticleResult({
+          title: 'Good Article',
+          content: 'Works fine',
+          tokenInfo: createTokenInfo({ tokenCount: 300 }),
+        }),
+        new Error('Article not found (404)')
+      );
 
       const result = await client.callTool({
         name: 'jamf_docs_batch_get_articles',
@@ -285,7 +332,7 @@ describe('jamf_docs_batch_get_articles tool', () => {
     });
 
     it('should set isError when all articles fail', async () => {
-      vi.mocked(fetchArticle).mockRejectedValue(new Error('Network timeout'));
+      mock.setRepeating(new Error('Network timeout'));
 
       const result = await client.callTool({
         name: 'jamf_docs_batch_get_articles',
@@ -298,15 +345,14 @@ describe('jamf_docs_batch_get_articles tool', () => {
     });
 
     it('should report partial failure in JSON format', async () => {
-      vi.mocked(fetchArticle)
-        .mockResolvedValueOnce(
-          createFetchArticleResult({
-            title: 'OK',
-            content: 'ok',
-            tokenInfo: createTokenInfo({ tokenCount: 100 }),
-          })
-        )
-        .mockRejectedValueOnce(new Error('Not found (404)'));
+      mock.setResults(
+        createFetchArticleResult({
+          title: 'OK',
+          content: 'ok',
+          tokenInfo: createTokenInfo({ tokenCount: 100 }),
+        }),
+        new Error('Not found (404)')
+      );
 
       const result = await client.callTool({
         name: 'jamf_docs_batch_get_articles',
@@ -328,8 +374,8 @@ describe('jamf_docs_batch_get_articles tool', () => {
   // --- Token budget ---
 
   describe('token budget distribution', () => {
-    it('should distribute maxTokens evenly to fetchArticle calls', async () => {
-      vi.mocked(fetchArticle).mockResolvedValue(
+    it('should distribute maxTokens evenly to article fetch calls', async () => {
+      mock.setRepeating(
         createFetchArticleResult({
           tokenInfo: createTokenInfo({ tokenCount: 100, maxTokens: 1000 }),
         })
@@ -344,9 +390,8 @@ describe('jamf_docs_batch_get_articles tool', () => {
       });
 
       // Each article should get 4000 / 2 = 2000 tokens
-      // fetchArticle(ctx, url, options) — options is at index 2
-      expect(fetchArticle).toHaveBeenCalledTimes(2);
-      const firstCallOptions = vi.mocked(fetchArticle).mock.calls[0][2];
+      expect(mock.provider.getArticleByIds).toHaveBeenCalledTimes(2);
+      const firstCallOptions = mock.provider.getArticleByIds.mock.calls[0][2];
       expect(firstCallOptions?.maxTokens).toBe(2000);
     });
   });

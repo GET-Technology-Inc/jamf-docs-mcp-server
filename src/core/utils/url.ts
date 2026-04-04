@@ -10,7 +10,6 @@ import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type LocaleId } from '../constants.j
 /** Allowed hostnames for URL validation. */
 export const ALLOWED_HOSTNAMES = new Set([
   'learn.jamf.com',
-  'learn-be.jamf.com',
   'docs.jamf.com',
 ]);
 

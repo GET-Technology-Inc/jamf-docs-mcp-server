@@ -4,5 +4,5 @@
 
 export { FileCache } from './cache.js';
 export { NodeLoggerFactory } from './logger.js';
-export { NodeMetadataStore } from './metadata.js';
 export { createNodeConfig } from './config.js';
+export { startHttpServer } from './http-server.js';

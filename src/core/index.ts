@@ -4,9 +4,17 @@
  * Platform adapters (e.g. src/platforms/node/) and the entry-point
  * (src/index.ts) should import from here rather than reaching into
  * internal modules.
+ *
+ * Internal helpers (FT client functions, content-parser utilities,
+ * tool registration functions, etc.) are intentionally NOT re-exported.
+ * Consumers that need them can import from the specific module via
+ * the "jamf-docs-mcp/core/*" export map.
  */
 
+// ============================================================================
 // Factory
+// ============================================================================
+
 export { createMcpServer } from './create-server.js';
 export type { CreateServerOptions } from './create-server.js';
 
@@ -17,7 +25,6 @@ export type { CreateServerOptions } from './create-server.js';
 export type {
   CacheProvider,
   CacheStats,
-  MetadataStore,
   ProductMetadata,
   TopicMetadata,
   TocEntry as TocEntryInterface,
@@ -28,6 +35,7 @@ export type {
   ArticleProvider,
   GlossaryProvider,
   TocProvider,
+  MapsProvider,
 } from './services/interfaces/index.js';
 
 // ============================================================================
@@ -43,43 +51,21 @@ export type {
 } from './config.js';
 export { createDefaultConfig } from './config.js';
 
+// ============================================================================
 // Context
+// ============================================================================
+
 export type { ServerContext } from './types/context.js';
 
 // ============================================================================
-// HTTP Client (runtime-agnostic, uses global fetch)
-// ============================================================================
-
-export { httpGetText, httpGetJson, HttpError } from './http-client.js';
-export type { HttpGetOptions } from './http-client.js';
-
-// ============================================================================
-// Constants (static, no runtime dependencies)
+// Constants (consumer-facing)
 // ============================================================================
 
 export {
   DOCS_BASE_URL,
-  DOCS_API_URL,
   JAMF_PRODUCTS,
   JAMF_TOPICS,
   DOC_TYPES,
-  DOC_TYPE_LABEL_MAP,
-  LABEL_TO_DOC_TYPE,
-  PRODUCT_IDS,
-  TOPIC_IDS,
-  DOC_TYPE_IDS,
-  SELECTORS,
-  SERVER_ICON,
-  SUPPORTED_LOCALES,
-  SUPPORTED_LOCALE_IDS,
-  DEFAULT_LOCALE,
-  ResponseFormat,
-  OutputMode,
-  CONTENT_LIMITS,
-  TOKEN_CONFIG,
-  PAGINATION_CONFIG,
-  buildDocUrl,
-  buildUrlPattern,
 } from './constants.js';
 
 export type {
@@ -90,27 +76,14 @@ export type {
 } from './constants.js';
 
 // ============================================================================
-// Tool registration (for selective registration by platform adapters)
+// Service classes (needed to construct ServerContext)
 // ============================================================================
 
-export { registerSearchTool } from './tools/search.js';
-export { registerGetArticleTool } from './tools/get-article.js';
-export { registerListProductsTool } from './tools/list-products.js';
-export { registerGetTocTool } from './tools/get-toc.js';
-export { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
-export { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
+export { MapsRegistry } from './services/maps-registry.js';
+export type { MapEntry, RegistryProductInfo } from './services/maps-registry.js';
 
-// ============================================================================
-// Service result / option types (for provider implementations)
-// ============================================================================
-
-export type {
-  SearchDocumentationResult,
-  FetchArticleResult,
-  FetchArticleOptions,
-  FetchTocResult,
-  FetchTocOptions,
-} from './services/scraper.js';
+export { TopicResolver } from './services/topic-resolver.js';
+export type { ResolvedTopic, TopicResolverInput } from './services/topic-resolver.js';
 
 // ============================================================================
 // Domain types (for consumers that need response / param shapes)
@@ -139,6 +112,11 @@ export type {
   CacheEntry,
   CacheOptions,
   ToolResult,
+  FetchArticleResult,
+  FetchArticleOptions,
+  FetchTocResult,
+  FetchTocOptions,
+  SearchDocumentationResult,
 } from './types.js';
 
 export {

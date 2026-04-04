@@ -25,13 +25,8 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
   getTopicsMetadata: vi.fn(),
 }));
 
-vi.mock('../../../src/core/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/toc-service.js', () => ({
   fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
 }));
 
 import { registerResources } from '../../../src/core/resources/index.js';
@@ -43,7 +38,7 @@ import {
   getTopicsResourceData,
   getAvailableVersions,
 } from '../../../src/core/services/metadata.js';
-import { fetchTableOfContents } from '../../../src/core/services/scraper.js';
+import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures

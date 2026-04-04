@@ -1,67 +1,89 @@
 /**
- * Unit tests for metadata service
+ * Unit tests for metadata service (MapsRegistry-backed)
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-
-// Mock http-client before importing the module under test
-vi.mock('../../../src/core/http-client.js', async () => {
-  return {
-    httpGetText: vi.fn(),
-    httpGetJson: vi.fn(),
-    HttpError: (await import('../../../src/core/http-client.js')).HttpError
-  };
-});
-
-import { httpGetJson } from '../../../src/core/http-client.js';
+import type { RegistryProductInfo } from '../../../src/core/services/maps-registry.js';
 import {
   getProductsMetadata,
   getBundleIdForVersion,
   getAvailableVersions,
   getTopicsMetadata,
   getProductsResourceData,
-  getTopicsResourceData
+  getTopicsResourceData,
+  getProductAvailability,
 } from '../../../src/core/services/metadata.js';
-import { JAMF_PRODUCTS } from '../../../src/core/constants.js';
+import { JAMF_PRODUCTS, JAMF_TOPICS } from '../../../src/core/constants.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const ctx = createMockContext();
 
-const mockedHttpGetJson = vi.mocked(httpGetJson);
+// Helper to access the mocked MapsRegistry methods on ctx
+function getMockedRegistry(): {
+  getProducts: ReturnType<typeof vi.fn>;
+  getVersions: ReturnType<typeof vi.fn>;
+  resolveMapId: ReturnType<typeof vi.fn>;
+} {
+  return ctx.mapsRegistry as unknown as {
+    getProducts: ReturnType<typeof vi.fn>;
+    getVersions: ReturnType<typeof vi.fn>;
+    resolveMapId: ReturnType<typeof vi.fn>;
+  };
+}
+
+// Spy on ctx.mapsRegistry methods so tests can control their behavior
+vi.spyOn(ctx.mapsRegistry, 'getProducts');
+vi.spyOn(ctx.mapsRegistry, 'getVersions');
+vi.spyOn(ctx.mapsRegistry, 'resolveMapId');
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function makeSearchResponse(bundleIds: (string | null)[]) {
+function makeRegistryProduct(overrides: Partial<RegistryProductInfo> = {}): RegistryProductInfo {
   return {
-    status: 'ok',
-    Results: bundleIds.map(bundleId => ({
-      leading_result: bundleId !== null ? {
-        bundle_id: bundleId,
-        title: 'Test Article',
-        url: 'https://learn-be.jamf.com/test.html',
-        snippet: '',
-        page_id: 'p1',
-        publication_title: 'Jamf',
-        labels: [{ key: 'product-pro', navtitle: 'Jamf Pro' }]
-      } : null
-    }))
+    bundleStem: 'jamf-pro-documentation',
+    title: 'Jamf Pro Documentation',
+    versions: ['11.24.0', '11.23.0'],
+    ...overrides,
   };
 }
 
 // ============================================================================
-// API fallback tests
+// getProductsMetadata tests
 // ============================================================================
 
-describe('getProductsMetadata - API fallback', () => {
+describe('getProductsMetadata - MapsRegistry integration', () => {
   beforeEach(() => {
     vi.mocked(ctx.cache.get).mockResolvedValue(null);
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
-  it('should fall back to static JAMF_PRODUCTS when API throws a network error', async () => {
-    mockedHttpGetJson.mockRejectedValue(new Error('Network error: ECONNREFUSED'));
+  it('should return products from MapsRegistry with correct metadata', async () => {
+    const registryProducts: RegistryProductInfo[] = [
+      makeRegistryProduct({
+        bundleStem: 'jamf-pro-documentation',
+        title: 'Jamf Pro Documentation',
+        versions: ['11.24.0', '11.23.0'],
+      }),
+    ];
+    getMockedRegistry().getProducts.mockResolvedValue(registryProducts);
+
+    const products = await getProductsMetadata(ctx);
+    const pro = products.find(p => p.id === 'jamf-pro');
+
+    expect(pro).toBeDefined();
+    expect(pro?.name).toBe('Jamf Pro');
+    expect(pro?.latestVersion).toBe('11.24.0');
+    expect(pro?.availableVersions).toEqual(['11.24.0', '11.23.0']);
+    expect(pro?.bundleId).toBe('jamf-pro-documentation-11.24.0');
+    expect(pro?.labelKey).toBe('product-pro');
+  });
+
+  it('should fall back to static JAMF_PRODUCTS when MapsRegistry throws', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(
+      new Error('Network error: ECONNREFUSED')
+    );
 
     const products = await getProductsMetadata(ctx);
     expect(products.length).toBeGreaterThan(0);
@@ -72,8 +94,8 @@ describe('getProductsMetadata - API fallback', () => {
     staticIds.forEach(id => expect(resultIds).toContain(id));
   });
 
-  it('should use static bundleId as fallback when API fails', async () => {
-    mockedHttpGetJson.mockRejectedValue(new Error('Network failure'));
+  it('should use static bundleId as fallback when MapsRegistry fails', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('Network failure'));
 
     const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
@@ -81,8 +103,8 @@ describe('getProductsMetadata - API fallback', () => {
     expect(pro?.bundleId).toBe(JAMF_PRODUCTS['jamf-pro'].bundleId);
   });
 
-  it('should use static latestVersion as fallback when API fails', async () => {
-    mockedHttpGetJson.mockRejectedValue(new Error('Network failure'));
+  it('should use static latestVersion as fallback when MapsRegistry fails', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('Network failure'));
 
     const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
@@ -90,7 +112,7 @@ describe('getProductsMetadata - API fallback', () => {
     expect(pro?.latestVersion).toBe(JAMF_PRODUCTS['jamf-pro'].latestVersion);
   });
 
-  it('should return cached data without calling API again', async () => {
+  it('should return cached data without calling MapsRegistry again', async () => {
     const cachedProducts = [
       {
         id: 'jamf-pro',
@@ -104,122 +126,50 @@ describe('getProductsMetadata - API fallback', () => {
     ];
 
     vi.mocked(ctx.cache.get).mockResolvedValue(cachedProducts);
-    // Reset the call count so we can assert this test's behavior in isolation
-    mockedHttpGetJson.mockClear();
+    getMockedRegistry().getProducts.mockClear();
 
     const products = await getProductsMetadata(ctx);
     expect(products).toEqual(cachedProducts);
-    expect(mockedHttpGetJson).not.toHaveBeenCalled();
-  });
-});
-
-// ============================================================================
-// Empty API results tests
-// ============================================================================
-
-describe('getProductsMetadata - empty API results', () => {
-  beforeEach(() => {
-    vi.mocked(ctx.cache.get).mockResolvedValue(null);
-    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
   });
 
-  it('should fall back to static data when API returns empty Results array', async () => {
-    mockedHttpGetJson.mockResolvedValue({ status: 'ok', Results: [] });
+  it('should use fallback for products not found in registry', async () => {
+    // Registry only has jamf-pro, not jamf-school
+    const registryProducts: RegistryProductInfo[] = [
+      makeRegistryProduct({
+        bundleStem: 'jamf-pro-documentation',
+        versions: ['11.24.0'],
+      }),
+    ];
+    getMockedRegistry().getProducts.mockResolvedValue(registryProducts);
 
     const products = await getProductsMetadata(ctx);
-    expect(products.length).toBeGreaterThan(0);
-
-    // Should still contain all static products
-    const staticIds = Object.keys(JAMF_PRODUCTS);
-    staticIds.forEach(id => {
-      expect(products.some(p => p.id === id)).toBe(true);
-    });
+    const school = products.find(p => p.id === 'jamf-school');
+    expect(school).toBeDefined();
+    expect(school?.bundleId).toBe(JAMF_PRODUCTS['jamf-school'].bundleId);
   });
 
-  it('should fall back when API returns results with no matching bundle prefix', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse(['some-unrelated-bundle-id'])
-    );
-
-    const products = await getProductsMetadata(ctx);
-    // Fallback products should still be present
-    expect(products.length).toBeGreaterThan(0);
-  });
-
-  it('should handle API response with null leading_results gracefully', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([null, null, null])
-    );
-
-    const products = await getProductsMetadata(ctx);
-    expect(products.length).toBeGreaterThan(0);
-  });
-});
-
-// ============================================================================
-// Version extraction tests
-// ============================================================================
-
-describe('version extraction from bundleId', () => {
-  beforeEach(() => {
-    vi.mocked(ctx.cache.get).mockResolvedValue(null);
-    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
-  });
-
-  it('should extract version from versioned bundleId', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse(['jamf-pro-documentation-11.24.0'])
-    );
+  it('should handle unversioned products from registry', async () => {
+    const registryProducts: RegistryProductInfo[] = [
+      makeRegistryProduct({
+        bundleStem: 'jamf-pro-documentation',
+        versions: [],
+      }),
+    ];
+    getMockedRegistry().getProducts.mockResolvedValue(registryProducts);
 
     const products = await getProductsMetadata(ctx);
     const pro = products.find(p => p.id === 'jamf-pro');
-    expect(pro?.latestVersion).toBe('11.24.0');
-  });
-
-  it('should use "current" as latestVersion when bundleId has no version suffix', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse(['jamf-pro-documentation'])
-    );
-
-    const products = await getProductsMetadata(ctx);
-    const pro = products.find(p => p.id === 'jamf-pro');
-    // bundleId 'jamf-pro-documentation' has no version suffix -> versionMatch is null -> 'current'
     expect(pro?.latestVersion).toBe('current');
+    expect(pro?.availableVersions).toEqual(['current']);
+    expect(pro?.bundleId).toBe('jamf-pro-documentation');
   });
 
-  it('should collect multiple available versions from search results', async () => {
-    mockedHttpGetJson.mockResolvedValue({
-      status: 'ok',
-      Results: [
-        {
-          leading_result: {
-            bundle_id: 'jamf-pro-documentation-11.24.0',
-            title: 'Jamf Pro 11.24',
-            url: 'https://learn-be.jamf.com/test.html',
-            snippet: '',
-            page_id: 'p1',
-            publication_title: 'Jamf Pro',
-            labels: [{ key: 'product-pro', navtitle: 'Jamf Pro' }]
-          }
-        },
-        {
-          leading_result: {
-            bundle_id: 'jamf-pro-documentation-11.23.0',
-            title: 'Jamf Pro 11.23',
-            url: 'https://learn-be.jamf.com/test2.html',
-            snippet: '',
-            page_id: 'p2',
-            publication_title: 'Jamf Pro',
-            labels: []
-          }
-        }
-      ]
-    });
+  it('should cache the results after fetching', async () => {
+    getMockedRegistry().getProducts.mockResolvedValue([]);
 
-    const products = await getProductsMetadata(ctx);
-    const pro = products.find(p => p.id === 'jamf-pro');
-    expect(pro?.availableVersions).toContain('11.24.0');
-    expect(pro?.availableVersions).toContain('11.23.0');
+    await getProductsMetadata(ctx);
+    expect(vi.mocked(ctx.cache.set)).toHaveBeenCalled();
   });
 });
 
@@ -324,11 +274,14 @@ describe('getBundleIdForVersion', () => {
   });
 
   it('should return null when product is not found in metadata', async () => {
-    vi.mocked(ctx.cache.get).mockResolvedValue([]);
-    mockedHttpGetJson.mockResolvedValue({ status: 'ok', Results: [] });
+    // Empty products from cache, MapsRegistry returns empty
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    getMockedRegistry().getProducts.mockResolvedValue([]);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'current');
-    expect(bundleId).toBeNull();
+    // Falls back to static, so jamf-pro should still be found
+    // The static fallback has latestVersion 'current' and bundleId 'jamf-pro-documentation'
+    expect(bundleId).toBe('jamf-pro-documentation');
   });
 });
 
@@ -340,42 +293,41 @@ describe('getAvailableVersions', () => {
   beforeEach(() => {
     vi.mocked(ctx.cache.get).mockResolvedValue(null);
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
+    getMockedRegistry().getVersions.mockReset();
   });
 
-  it('should return versions array for a known product', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation',
-        latestVersion: 'current',
-        availableVersions: ['11.24.0', '11.23.0', '11.22.0'],
-        labelKey: 'product-pro'
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+  it('should return versions from MapsRegistry.getVersions() directly', async () => {
+    getMockedRegistry().getVersions.mockResolvedValue(['11.24.0', '11.23.0', '11.22.0']);
 
     const versions = await getAvailableVersions(ctx, 'jamf-pro');
-    expect(versions).toContain('11.24.0');
-    expect(versions).toContain('11.23.0');
+    expect(versions).toEqual(['11.24.0', '11.23.0', '11.22.0']);
+    expect(getMockedRegistry().getVersions).toHaveBeenCalledWith('jamf-pro-documentation');
   });
 
-  it('should return empty array when product is not in metadata', async () => {
-    vi.mocked(ctx.cache.get).mockResolvedValue([]);
-    mockedHttpGetJson.mockResolvedValue({ Results: [] });
+  it('should NOT call getProducts (avoids loading full catalogue)', async () => {
+    getMockedRegistry().getVersions.mockResolvedValue(['11.24.0']);
+    getMockedRegistry().getProducts.mockClear();
 
-    const versions = await getAvailableVersions(ctx, 'jamf-pro');
-    expect(versions).toEqual([]);
+    await getAvailableVersions(ctx, 'jamf-pro');
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
   });
 
-  it('should return single-item array with latestVersion when no versions discovered', async () => {
-    // When API fails, static fallback uses [product.latestVersion]
-    mockedHttpGetJson.mockRejectedValue(new Error('network error'));
+  it('should fall back to static latestVersion when getVersions returns empty', async () => {
+    getMockedRegistry().getVersions.mockResolvedValue([]);
 
     const versions = await getAvailableVersions(ctx, 'jamf-pro');
     expect(Array.isArray(versions)).toBe(true);
     expect(versions.length).toBeGreaterThan(0);
+    expect(versions).toContain(JAMF_PRODUCTS['jamf-pro'].latestVersion);
+  });
+
+  it('should fall back to static latestVersion when getVersions throws', async () => {
+    getMockedRegistry().getVersions.mockRejectedValue(new Error('network error'));
+
+    const versions = await getAvailableVersions(ctx, 'jamf-pro');
+    expect(Array.isArray(versions)).toBe(true);
+    expect(versions.length).toBeGreaterThan(0);
+    expect(versions).toContain(JAMF_PRODUCTS['jamf-pro'].latestVersion);
   });
 });
 
@@ -389,7 +341,7 @@ describe('getTopicsMetadata', () => {
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
-  it('should return cached topics without calling API', async () => {
+  it('should return cached topics without calling registry', async () => {
     const cachedTopics = [
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const }
     ];
@@ -397,91 +349,71 @@ describe('getTopicsMetadata', () => {
       if (key === 'metadata:topics') return cachedTopics;
       return null;
     });
-    mockedHttpGetJson.mockClear();
 
     const topics = await getTopicsMetadata(ctx);
     expect(topics).toEqual(cachedTopics);
-    expect(mockedHttpGetJson).not.toHaveBeenCalled();
   });
 
-  it('should include at least the manual topics from JAMF_TOPICS when API fails', async () => {
-    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return null;
-      if (key === 'metadata:products') return []; // empty products -> no TOC fetches
-      return null;
-    });
-    mockedHttpGetJson.mockRejectedValue(new Error('API failure'));
-
+  it('should include all manual topics from JAMF_TOPICS', async () => {
     const topics = await getTopicsMetadata(ctx);
     expect(Array.isArray(topics)).toBe(true);
     expect(topics.length).toBeGreaterThan(0);
-    // All fallback topics should have source='manual'
+    // All topics should have source='manual'
     expect(topics.every(t => t.source === 'manual')).toBe(true);
   });
 
   it('should cache the topics after fetching', async () => {
-    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return null;
-      if (key === 'metadata:products') return [];
-      return null;
-    });
-    mockedHttpGetJson.mockRejectedValue(new Error('skip'));
-
     await getTopicsMetadata(ctx);
     expect(vi.mocked(ctx.cache.set)).toHaveBeenCalled();
   });
 
-  it('should combine TOC categories with manual topics', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation',
-        latestVersion: 'current',
-        availableVersions: ['current'],
-        labelKey: 'product-pro'
-      }
-    ];
-
-    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return null;
-      if (key === 'metadata:products') return mockProducts;
-      return null;
-    });
-
-    // TOC API response with HTML list
-    mockedHttpGetJson.mockResolvedValue({
-      'nav-1': '<ul><a href="/enroll">Enrollment Guide</a><a href="/sub">Sub Article</a></ul>',
-    });
-
+  it('should include known topic IDs', async () => {
     const topics = await getTopicsMetadata(ctx);
-    expect(Array.isArray(topics)).toBe(true);
-    // Should include both manual and toc-derived topics
-    expect(topics.length).toBeGreaterThan(0);
+    const topicIds = topics.map(t => t.id);
+    const expectedIds = Object.keys(JAMF_TOPICS);
+    for (const id of expectedIds) {
+      expect(topicIds).toContain(id);
+    }
+  });
+});
+
+// ============================================================================
+// getProductAvailability tests
+// ============================================================================
+
+describe('getProductAvailability', () => {
+  beforeEach(() => {
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
-  it('should not throw when TOC fetch fails for a product', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation',
-        latestVersion: 'current',
-        availableVersions: ['current'],
-        labelKey: 'product-pro'
-      }
+  it('should return true for products found in registry', async () => {
+    const registryProducts: RegistryProductInfo[] = [
+      makeRegistryProduct({ bundleStem: 'jamf-pro-documentation' }),
     ];
+    getMockedRegistry().getProducts.mockResolvedValue(registryProducts);
 
-    vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return null;
-      if (key === 'metadata:products') return mockProducts;
-      return null;
-    });
-    mockedHttpGetJson.mockRejectedValue(new Error('TOC fetch failed'));
+    const availability = await getProductAvailability(ctx);
+    expect(availability['jamf-pro']).toBe(true);
+    expect(availability['jamf-school']).toBe(false);
+  });
 
-    await expect(getTopicsMetadata(ctx)).resolves.not.toThrow();
+  it('should return cached availability', async () => {
+    const cached = { 'jamf-pro': true, 'jamf-school': false };
+    vi.mocked(ctx.cache.get).mockResolvedValue(cached);
+
+    const availability = await getProductAvailability(ctx);
+    expect(availability).toEqual(cached);
+  });
+
+  it('should assume all products available on registry failure', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('fail'));
+
+    const availability = await getProductAvailability(ctx);
+    const productIds = Object.keys(JAMF_PRODUCTS);
+    for (const id of productIds) {
+      expect(availability[id]).toBe(true);
+    }
   });
 });
 
@@ -546,8 +478,8 @@ describe('getProductsResourceData', () => {
   });
 
   it('should return a valid ISO timestamp in lastUpdated', async () => {
-    vi.mocked(ctx.cache.get).mockResolvedValue([]);
-    mockedHttpGetJson.mockRejectedValue(new Error('skip'));
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('skip'));
 
     const data = await getProductsResourceData(ctx);
     expect(() => new Date(data.lastUpdated)).not.toThrow();

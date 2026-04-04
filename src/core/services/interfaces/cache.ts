@@ -15,10 +15,10 @@ export interface CacheStats {
  * Platform-agnostic cache provider
  */
 export interface CacheProvider {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T, ttl?: number): Promise<void>;
-  delete(key: string): Promise<boolean>;
-  clear(): Promise<void>;
-  stats(): Promise<CacheStats>;
-  prune(): Promise<number>;
+  get: <T>(key: string) => Promise<T | null>;
+  set: <T>(key: string, value: T, ttl?: number) => Promise<void>;
+  delete: (key: string) => Promise<boolean>;
+  clear: () => Promise<void>;
+  stats: () => Promise<CacheStats>;
+  prune: () => Promise<number>;
 }

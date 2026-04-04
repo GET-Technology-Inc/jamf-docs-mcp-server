@@ -138,7 +138,20 @@ export const GetArticleInputSchema = z.object({
       (url) => isAllowedHostname(url),
       'URL must be from docs.jamf.com or learn.jamf.com'
     )
-    .describe('Full URL of the Jamf documentation article'),
+    .optional()
+    .describe('Full URL of the Jamf documentation article. Alternative: use mapId + contentId for direct fetch.'),
+
+  mapId: z.string()
+    .max(200)
+    .regex(/^[a-zA-Z0-9_~\-]+$/, 'Invalid mapId format')
+    .optional()
+    .describe('Fluid Topics map ID (from search results or TOC). Use with contentId for direct fetch.'),
+
+  contentId: z.string()
+    .max(200)
+    .regex(/^[a-zA-Z0-9_~\-]+$/, 'Invalid contentId format')
+    .optional()
+    .describe('Fluid Topics content ID (from search results or TOC). Use with mapId for direct fetch.'),
 
   language: completable(
     z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),

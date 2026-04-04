@@ -1,8 +1,11 @@
 /**
  * Glossary service for parsing and looking up Jamf documentation glossary terms
  *
- * Jamf's glossary uses DITA glossentry format where each term is a separate page:
- *   <h1 class="glossterm">Term Name</h1>
+ * Uses Fluid Topics API on learn.jamf.com:
+ * - GET /api/khub/maps/{mapId}/toc — list all glossary terms
+ * - GET /api/khub/maps/{mapId}/topics/{contentId}/content — term HTML
+ *
+ * Jamf's glossary uses DITA glossentry format where each term is a separate topic:
  *   <div class="glossdef"><p>Definition text</p></div>
  *
  * Also supports fallback formats:
@@ -12,9 +15,8 @@
  * Uses fuse.js for fuzzy ranking of collected entries.
  */
 
-import Fuse from 'fuse.js';
+import Fuse, { type IFuseOptions } from 'fuse.js';
 import * as cheerio from 'cheerio';
-import TurndownService from 'turndown';
 
 import {
   SELECTORS,
@@ -23,27 +25,90 @@ import {
   type ProductId,
   type LocaleId,
 } from '../constants.js';
+
 import type {
   GlossaryEntry,
   GlossaryLookupResult,
-  SearchParams,
-  TokenInfo,
+  FtTocNode,
 } from '../types.js';
-import {
-  searchDocumentation,
-  fetchHtml,
-  transformToBackendUrl,
-  transformToFrontendUrl,
-} from './scraper.js';
+import { fetchMapToc, fetchTopicContent } from './ft-client.js';
+import { buildDisplayUrl } from './topic-resolver.js';
+import { cleanHtml, htmlToMarkdown } from './content-parser.js';
 import type { ServerContext } from '../types/context.js';
-import { estimateTokens } from './tokenizer.js';
+import type { CacheProvider } from './interfaces/cache.js';
+import { truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 
-const turndown = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  bulletListMarker: '-',
-});
+/** Return a zero-entry result when there is nothing to report. */
+function emptyGlossaryResult(maxTokens: number): GlossaryLookupResult {
+  return {
+    entries: [],
+    totalMatches: 0,
+    tokenInfo: { tokenCount: 0, truncated: false, maxTokens },
+  };
+}
+
+// ─── Fluid Topics API helpers ───────────────────────────────────
+
+/**
+ * Fetch the glossary TOC from Fluid Topics via ft-client.
+ * The TOC is a tree: root node has children, each child is a glossary term.
+ * Cached with article TTL to avoid repeated requests.
+ */
+async function fetchGlossaryToc(
+  ctx: ServerContext,
+  mapId: string,
+  locale: string
+): Promise<FtTocNode[]> {
+  const cacheKey = `${locale}:glossary-toc`;
+
+  const cached = await ctx.cache.get<FtTocNode[]>(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const nodes = await fetchMapToc(mapId);
+
+  // Flatten: collect all leaf terms (children of the root)
+  const terms: FtTocNode[] = [];
+  for (const node of nodes) {
+    // Skip non-term entries like "Glossary Revision History"
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        if (!child.title.toLowerCase().includes('revision history')) {
+          terms.push(child);
+        }
+      }
+    }
+  }
+
+  await ctx.cache.set(cacheKey, terms, ctx.config.cacheTtl.article);
+  return terms;
+}
+
+/**
+ * Fetch the HTML content of a single glossary topic via ft-client.
+ */
+async function fetchGlossaryContent(
+  ctx: ServerContext,
+  mapId: string,
+  contentId: string,
+  locale: string
+): Promise<string> {
+  const cacheKey = `${locale}:glossary-content:${contentId}`;
+
+  const cached = await ctx.cache.get<string>(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const html = await fetchTopicContent(mapId, contentId);
+
+  await ctx.cache.set(cacheKey, html, ctx.config.cacheTtl.article);
+  return html;
+}
+
+// ─── HTML parsing ───────────────────────────────────────────────
 
 /**
  * Parse glossary entries from HTML content.
@@ -54,11 +119,14 @@ const turndown = new TurndownService({
  * 3. Heading + paragraph (h2/h3 followed by <p>)
  * 4. Fallback: h1 title + article body content
  */
-export function parseGlossaryEntries(html: string, sourceUrl: string, product?: string): GlossaryEntry[] {
+export function parseGlossaryEntries(
+  html: string,
+  sourceUrl: string,
+  product?: string
+): GlossaryEntry[] {
   const $ = cheerio.load(html);
 
-  // Remove unwanted elements
-  $(SELECTORS.REMOVE).remove();
+  cleanHtml($);
 
   // 1. Try DITA glossentry format (Jamf's actual structure)
   const ditaEntries = parseDitaGlossentry($, sourceUrl, product);
@@ -89,7 +157,11 @@ export function parseGlossaryEntries(html: string, sourceUrl: string, product?: 
  *
  * Each Jamf glossary page contains exactly one term.
  */
-function parseDitaGlossentry($: cheerio.CheerioAPI, sourceUrl: string, product?: string): GlossaryEntry[] {
+function parseDitaGlossentry(
+  $: cheerio.CheerioAPI,
+  sourceUrl: string,
+  product?: string
+): GlossaryEntry[] {
   // Look for the DITA glossterm heading
   const glossterm = $('h1.glossterm, .glossterm').first();
   if (glossterm.length === 0) { return []; }
@@ -103,7 +175,7 @@ function parseDitaGlossentry($: cheerio.CheerioAPI, sourceUrl: string, product?:
 
   if (glossdef.length > 0) {
     const defHtml = glossdef.html() ?? '';
-    definition = turndown.turndown(defHtml).trim();
+    definition = htmlToMarkdown(defHtml).trim();
   }
 
   // If no glossdef, try to get any content after the heading
@@ -114,7 +186,7 @@ function parseDitaGlossentry($: cheerio.CheerioAPI, sourceUrl: string, product?:
       const clone = article.clone();
       clone.find('h1').remove();
       const bodyHtml = clone.html() ?? '';
-      definition = turndown.turndown(bodyHtml).trim();
+      definition = htmlToMarkdown(bodyHtml).trim();
     }
   }
 
@@ -123,7 +195,11 @@ function parseDitaGlossentry($: cheerio.CheerioAPI, sourceUrl: string, product?:
   return [{ term, definition, url: sourceUrl, product }];
 }
 
-function parseDlFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: string): GlossaryEntry[] {
+function parseDlFormat(
+  $: cheerio.CheerioAPI,
+  sourceUrl: string,
+  product?: string
+): GlossaryEntry[] {
   const entries: GlossaryEntry[] = [];
   const dlElements = $('dl');
 
@@ -141,7 +217,7 @@ function parseDlFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: strin
       let next = $(dt).next();
       while (next.length > 0 && next.is('dd')) {
         const ddHtml = next.html() ?? '';
-        ddParts.push(turndown.turndown(ddHtml).trim());
+        ddParts.push(htmlToMarkdown(ddHtml).trim());
         next = next.next();
       }
 
@@ -155,7 +231,11 @@ function parseDlFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: strin
   return entries;
 }
 
-function parseHeadingFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: string): GlossaryEntry[] {
+function parseHeadingFormat(
+  $: cheerio.CheerioAPI,
+  sourceUrl: string,
+  product?: string
+): GlossaryEntry[] {
   const entries: GlossaryEntry[] = [];
   const contentArea = $(SELECTORS.CONTENT).first();
   if (contentArea.length === 0) { return entries; }
@@ -178,7 +258,7 @@ function parseHeadingFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: 
         break;
       }
       const html = next.html() ?? '';
-      const text = turndown.turndown(html).trim();
+      const text = htmlToMarkdown(html).trim();
       if (text !== '') {
         parts.push(text);
       }
@@ -194,7 +274,11 @@ function parseHeadingFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: 
   return entries;
 }
 
-function parseFallbackFormat($: cheerio.CheerioAPI, sourceUrl: string, product?: string): GlossaryEntry[] {
+function parseFallbackFormat(
+  $: cheerio.CheerioAPI,
+  sourceUrl: string,
+  product?: string
+): GlossaryEntry[] {
   // Try to use h1 as term name instead of generic "Glossary"
   const h1 = $('h1').first().text().trim();
   const termName = h1 !== '' ? h1 : 'Glossary';
@@ -203,7 +287,7 @@ function parseFallbackFormat($: cheerio.CheerioAPI, sourceUrl: string, product?:
   if (contentArea.length === 0) { return []; }
 
   const html = contentArea.html() ?? '';
-  const content = turndown.turndown(html).trim();
+  const content = htmlToMarkdown(html).trim();
   if (content === '') { return []; }
 
   return [{
@@ -214,11 +298,73 @@ function parseFallbackFormat($: cheerio.CheerioAPI, sourceUrl: string, product?:
   }];
 }
 
+// ─── Cached TOC Fuse index ──────────────────────────────────────
+
+/**
+ * Per-server cache for glossary Fuse.js indexes.
+ * Keyed by locale. Stores the Fuse instance alongside the source array
+ * reference so we can detect when the underlying TOC data has changed.
+ *
+ * Uses a WeakMap keyed by CacheProvider so each ServerContext gets its
+ * own isolated cache without leaking across requests in runtimes where
+ * module scope persists (e.g. Cloudflare Workers).  When a
+ * CacheProvider is garbage-collected, its Fuse cache is too.
+ */
+type GlossaryFuseCache = Map<string, {
+  source: FtTocNode[];
+  fuse: Fuse<FtTocNode>;
+}>;
+
+const fuseCacheByServer = new WeakMap<CacheProvider, GlossaryFuseCache>();
+
+/** Get (or lazily create) the GlossaryFuseCache for the given context. */
+function getFuseCacheForContext(ctx: ServerContext): GlossaryFuseCache {
+  let cache = fuseCacheByServer.get(ctx.cache);
+  if (cache === undefined) {
+    cache = new Map();
+    fuseCacheByServer.set(ctx.cache, cache);
+  }
+  return cache;
+}
+
+const TOC_FUSE_OPTIONS: IFuseOptions<FtTocNode> = {
+  keys: [{ name: 'title', weight: 1.0 }],
+  threshold: 0.4,
+  includeScore: true,
+  ignoreLocation: true,
+  minMatchCharLength: 2,
+};
+
+/**
+ * Get or create a Fuse index for the given TOC entries.
+ * Rebuilds the index when the entries array reference changes
+ * (i.e., the cache was refreshed).
+ */
+function getTocFuse(
+  fuseCache: GlossaryFuseCache,
+  locale: string,
+  entries: FtTocNode[],
+): Fuse<FtTocNode> {
+  const cached = fuseCache.get(locale);
+  if (cached?.source === entries) {
+    return cached.fuse;
+  }
+
+  const fuse = new Fuse(entries, TOC_FUSE_OPTIONS);
+  fuseCache.set(locale, { source: entries, fuse });
+  return fuse;
+}
+
+// ─── Fuzzy matching ─────────────────────────────────────────────
+
 /**
  * Search for matching glossary entries using fuse.js fuzzy matching.
  * Used to rank and filter entries collected from multiple glossary pages.
  */
-export function searchGlossaryEntries(entries: GlossaryEntry[], term: string): GlossaryEntry[] {
+export function searchGlossaryEntries(
+  entries: GlossaryEntry[],
+  term: string
+): GlossaryEntry[] {
   if (entries.length === 0) { return []; }
 
   const fuse = new Fuse(entries, {
@@ -235,7 +381,6 @@ export function searchGlossaryEntries(entries: GlossaryEntry[], term: string): G
   const results = fuse.search(term);
 
   // If fuse.js returns no results, return all entries as-is
-  // (the search API already filtered for relevance)
   if (results.length === 0) {
     return entries;
   }
@@ -243,13 +388,16 @@ export function searchGlossaryEntries(entries: GlossaryEntry[], term: string): G
   return results.map(r => r.item);
 }
 
+// ─── Main lookup ────────────────────────────────────────────────
+
 /**
  * Look up a glossary term across Jamf documentation.
  *
  * Strategy:
- * 1. Search via Zoomin API with docType=glossary to find glossary pages
- * 2. Fetch and parse each glossary page (with caching)
- * 3. Use fuse.js to rank matching terms
+ * 1. Fetch glossary TOC from Fluid Topics API (cached)
+ * 2. Fuzzy-match term against TOC titles
+ * 3. Fetch and parse matching glossary topics
+ * 4. Rank results with fuse.js and apply token limit
  */
 export async function lookupGlossaryTerm(
   ctx: ServerContext,
@@ -262,53 +410,100 @@ export async function lookupGlossaryTerm(
 ): Promise<GlossaryLookupResult> {
   if (ctx.glossaryProvider) {
     const provided = await ctx.glossaryProvider.lookup(params);
-    if (provided !== null) return provided;
+    if (provided !== null) {return provided;}
   }
   const log = ctx.logger.createLogger('glossary');
-  const { term, product, language, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
-  const locale = language ?? DEFAULT_LOCALE;
+  const { term, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
+  const locale = params.language ?? DEFAULT_LOCALE;
 
-  log.info(`Looking up glossary term: "${term}" (product=${product ?? 'all'}, locale=${locale})`);
+  log.info(
+    `Looking up glossary term: "${term}"` +
+    ` (product=${params.product ?? 'all'}, locale=${locale})`
+  );
 
-  // Step 1: Search for glossary pages via Zoomin API
-  const searchParams: SearchParams = {
-    query: term,
-    product,
-    docType: 'glossary',
-    language: locale,
-    limit: 10,
-    page: 1,
-  };
-
-  const searchResult = await searchDocumentation(ctx, searchParams);
-
-  // If docType filter was relaxed, it means no actual glossary pages were found
-  const docTypeRelaxed = searchResult.filterRelaxation?.removed.includes('docType') === true;
-
-  if (searchResult.results.length === 0 || docTypeRelaxed) {
-    log.info(docTypeRelaxed
-      ? 'docType filter was relaxed — no actual glossary pages found'
-      : 'No glossary pages found via search API');
-    return {
-      entries: [],
-      totalMatches: 0,
-      tokenInfo: { tokenCount: 0, truncated: false, maxTokens },
-    };
+  // Resolve glossary mapId dynamically via MapsRegistry
+  let mapId: string | null;
+  try {
+    mapId = await ctx.mapsRegistry.resolveGlossaryMapId(locale);
+  } catch (error) {
+    log.error(`Failed to resolve glossary mapId: ${String(error)}`);
+    return emptyGlossaryResult(maxTokens);
   }
 
-  // Step 2: Fetch and parse glossary pages concurrently (with caching)
-  const seenUrls = new Set<string>();
-  const uniqueResults = searchResult.results.filter(r => {
-    if (seenUrls.has(r.url)) { return false; }
-    seenUrls.add(r.url);
-    return true;
-  });
+  if (mapId === null) {
+    log.info(`No glossary map found for locale="${locale}"`);
+    return emptyGlossaryResult(maxTokens);
+  }
 
-  const tasks = uniqueResults.map(result => async () => {
+  log.info(`Resolved glossary mapId: ${mapId} (locale=${locale})`);
+
+  // Step 1: Fetch glossary TOC (cached after first call)
+  let tocEntries: FtTocNode[];
+  try {
+    tocEntries = await fetchGlossaryToc(ctx, mapId, locale);
+  } catch (error) {
+    log.error(`Failed to fetch glossary TOC: ${String(error)}`);
+    return emptyGlossaryResult(maxTokens);
+  }
+
+  if (tocEntries.length === 0) {
+    log.info('Glossary TOC is empty');
+    return emptyGlossaryResult(maxTokens);
+  }
+
+  // Step 2: Fuzzy-match term against TOC titles (Fuse index is cached per locale)
+  const fuseCache = getFuseCacheForContext(ctx);
+  const tocFuse = getTocFuse(fuseCache, locale, tocEntries);
+  const tocMatches = tocFuse.search(term);
+
+  // If no fuzzy match, try exact substring match as fallback
+  const matchedTocEntries = tocMatches.length > 0
+    ? tocMatches.map(m => m.item)
+    : tocEntries.filter(e =>
+        e.title.toLowerCase().includes(term.toLowerCase())
+      );
+
+  if (matchedTocEntries.length === 0) {
+    log.info(`No matching glossary terms found for "${term}"`);
+    return emptyGlossaryResult(maxTokens);
+  }
+
+  log.info(
+    `Found ${matchedTocEntries.length} TOC matches for "${term}"`
+  );
+
+  // Step 3: Fetch and parse content for top matches (limit to 10)
+  const toFetch = matchedTocEntries.slice(0, 10);
+
+  const tasks = toFetch.map(tocNode => async (): Promise<GlossaryEntry[]> => {
     try {
-      return await fetchAndParseGlossaryPage(ctx, result.url, locale, result.product ?? undefined);
+      const html = await fetchGlossaryContent(
+        ctx, mapId, tocNode.contentId, locale
+      );
+
+      const displayUrl = buildDisplayUrl(tocNode.prettyUrl);
+
+      // Try parsing with the existing format parsers
+      const parsed = parseGlossaryEntries(html, displayUrl);
+
+      // If parsing returned nothing, use TOC title + raw HTML as fallback
+      if (parsed.length === 0 && html.trim() !== '') {
+        const definition = htmlToMarkdown(html).trim();
+        if (definition !== '') {
+          return [{
+            term: tocNode.title,
+            definition,
+            url: displayUrl,
+          }];
+        }
+      }
+
+      return parsed;
     } catch (error) {
-      log.warning(`Failed to fetch glossary page ${result.url}: ${String(error)}`);
+      log.warning(
+        `Failed to fetch glossary entry "${tocNode.title}": ${
+        String(error)}`
+      );
       return [];
     }
   });
@@ -317,77 +512,32 @@ export async function lookupGlossaryTerm(
   const allEntries = fetchedEntries.flat();
 
   if (allEntries.length === 0) {
-    return {
-      entries: [],
-      totalMatches: 0,
-      tokenInfo: { tokenCount: 0, truncated: false, maxTokens },
-    };
+    return emptyGlossaryResult(maxTokens);
   }
 
-  // Step 3: Rank with fuse.js (search API already filtered, fuse.js re-ranks)
+  // Step 4: Rank with fuse.js and apply token limit
   const matchedEntries = searchGlossaryEntries(allEntries, term);
 
-  // Step 4: Apply token limit
-  const includedEntries: GlossaryEntry[] = [];
-  let runningTokens = 0;
-  let truncated = false;
+  const glossaryEntryToString = (e: GlossaryEntry): string =>
+    `${e.term}: ${e.definition}`;
 
-  for (const entry of matchedEntries) {
-    const entryTokens = estimateTokens(`${entry.term}: ${entry.definition}`);
-    if (runningTokens + entryTokens > maxTokens) {
-      truncated = true;
-      break;
-    }
-    includedEntries.push(entry);
-    runningTokens += entryTokens;
-  }
-
-  const tokenInfo: TokenInfo = {
-    tokenCount: runningTokens,
-    truncated,
+  const { items: includedEntries, tokenInfo } = truncateItemsToTokenLimit(
+    matchedEntries,
     maxTokens,
-  };
+    glossaryEntryToString,
+    1,
+    matchedEntries.length,
+  );
 
-  log.info(`Found ${matchedEntries.length} matches, returning ${includedEntries.length} (truncated=${String(truncated)})`);
+  log.info(
+    `Found ${matchedEntries.length} matches, ` +
+    `returning ${includedEntries.length} ` +
+    `(truncated=${String(tokenInfo.truncated)})`
+  );
 
   return {
     entries: includedEntries,
     totalMatches: matchedEntries.length,
     tokenInfo,
   };
-}
-
-/**
- * Fetch a glossary page and parse its entries (with caching)
- */
-async function fetchAndParseGlossaryPage(
-  ctx: ServerContext,
-  url: string,
-  locale: string,
-  product?: string,
-): Promise<GlossaryEntry[]> {
-  const log = ctx.logger.createLogger('glossary');
-  const cacheKey = `${locale}:glossary:${url}`;
-
-  // Check cache
-  const cached = await ctx.cache.get<GlossaryEntry[]>(cacheKey);
-  if (cached !== null) {
-    log.info(`Cache hit for glossary page: ${url}`);
-    return cached;
-  }
-
-  // Fetch raw HTML (reuses scraper's throttle + error handling)
-  log.info(`Fetching glossary page: ${url}`);
-  const backendUrl = transformToBackendUrl(url);
-  const html = await fetchHtml(ctx, backendUrl, locale);
-
-  // Transform URL to frontend format for display
-  const displayUrl = transformToFrontendUrl(url);
-  const entries = parseGlossaryEntries(html, displayUrl, product);
-
-  // Cache parsed entries
-  await ctx.cache.set(cacheKey, entries, ctx.config.cacheTtl.article);
-  log.info(`Cached ${entries.length} glossary entries from: ${url}`);
-
-  return entries;
 }

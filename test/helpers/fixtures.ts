@@ -10,9 +10,27 @@ import type {
   TokenInfo,
   PaginationInfo,
   ArticleSection,
-  ZoominSearchResponse,
+  FetchArticleResult,
+  FtClusteredSearchResponse,
+  FtMetadataEntry,
 } from '../../src/core/types.js';
-import type { FetchArticleResult } from '../../src/core/services/scraper.js';
+
+/** Legacy Zoomin search response shape (used only by fixture loader). */
+interface ZoominSearchResponse {
+  status: string;
+  Results: {
+    leading_result?: {
+      title: string;
+      url: string;
+      snippet: string;
+      bundle_id: string;
+      page_id: string;
+      publication_title: string;
+      score?: number;
+      labels?: { key: string; navtitle: string }[];
+    } | null;
+  }[];
+}
 
 // ============================================================================
 // Fixture loading
@@ -148,4 +166,78 @@ export function createRealisticTocResponse(
     throw new Error('No jamf-pro TOC fixture found');
   }
   return loadFixture<Record<string, unknown>>(proTocFile);
+}
+
+// ============================================================================
+// FT API response factories
+// ============================================================================
+
+/**
+ * Build a minimal FT clustered search response containing TOPIC entries.
+ *
+ * Shared across filter-fallback, filter-combination, and similar tests.
+ */
+export function makeFtSearchResponse(
+  entries: {
+    title: string;
+    mapId: string;
+    contentId?: string;
+    snippet?: string;
+    productLabel?: string;
+    contentType?: string;
+  }[]
+): FtClusteredSearchResponse {
+  return {
+    facets: [],
+    announcements: [],
+    paging: {
+      currentPage: 0,
+      isLastPage: true,
+      totalResultsCount: entries.length,
+      totalClustersCount: 1,
+    },
+    results: [{
+      metadataVariableAxis: '',
+      entries: entries.map(e => {
+        const metadata: FtMetadataEntry[] = [
+          {
+            key: 'ft:prettyUrl',
+            label: 'URL',
+            values: [
+              `/en-US/bundle/${e.mapId}/page/${e.contentId ?? 'page-1'}.html`,
+            ],
+          },
+        ];
+        if (e.productLabel) {
+          metadata.push({
+            key: 'zoominmetadata',
+            label: 'zoominmetadata',
+            values: [e.productLabel],
+          });
+        }
+        if (e.contentType) {
+          metadata.push({
+            key: 'jamf:contentType',
+            label: 'Content Type',
+            values: [e.contentType],
+          });
+        }
+        return {
+          type: 'TOPIC' as const,
+          missingTerms: [],
+          topic: {
+            mapId: e.mapId,
+            contentId: e.contentId ?? 'page-1',
+            tocId: 'toc-1',
+            title: e.title,
+            htmlTitle: e.title,
+            mapTitle: 'Docs',
+            breadcrumb: [],
+            htmlExcerpt: e.snippet ?? `Snippet for ${e.title}`,
+            metadata,
+          },
+        };
+      }),
+    }],
+  };
 }
