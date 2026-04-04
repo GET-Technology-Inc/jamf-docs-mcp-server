@@ -1,5 +1,5 @@
 /**
- * Unit tests for HTTP transport (src/transport/http.ts)
+ * Unit tests for HTTP transport (src/platforms/node/http-server.ts)
  *
  * Strategy: mock node:http's createServer to capture the request handler,
  * then invoke the captured handler with mock IncomingMessage / ServerResponse
@@ -253,7 +253,8 @@ describe('/health endpoint', () => {
 
   it('should set Content-Type: application/json for /health', async () => {
     const result = await makeRequest({ method: 'GET', url: '/health' });
-    expect(result.headers['Content-Type']).toBe('application/json');
+    // Web Standard Response normalizes header keys to lowercase
+    expect(result.headers['content-type']).toBe('application/json');
   });
 });
 
@@ -277,7 +278,8 @@ describe('/llms.txt endpoint', () => {
   it('should return 200 with text/plain content type for GET /llms.txt', async () => {
     const result = await makeRequest({ method: 'GET', url: '/llms.txt' });
     expect(result.statusCode).toBe(200);
-    expect(result.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+    // Web Standard Response normalizes header keys to lowercase
+    expect(result.headers['content-type']).toBe('text/plain; charset=utf-8');
   });
 
   it('should start with the server title heading', async () => {

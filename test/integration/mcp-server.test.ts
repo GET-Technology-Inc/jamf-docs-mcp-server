@@ -612,7 +612,8 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const json = JSON.parse((result.content[0] as { type: 'text'; text: string }).text);
+      const rawText = (result.content[0] as { type: 'text'; text: string }).text;
+      const json = JSON.parse(rawText);
 
       expect(json.title).toBeDefined();
       expect(json.content).toBeDefined();

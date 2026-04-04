@@ -16,19 +16,9 @@ import {
   createTokenInfo,
   createArticleSection,
 } from '../../helpers/fixtures.js';
+import type { FetchArticleResult } from '../../../src/core/types.js';
 
 // --- Mock service modules before importing the tool --------------------------
-
-vi.mock('../../../src/core/services/scraper.js', () => ({
-  searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
-  fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
-}));
 
 vi.mock('../../../src/core/services/cache.js', () => ({
   cache: {
@@ -38,8 +28,8 @@ vi.mock('../../../src/core/services/cache.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { fetchArticle } from '../../../src/core/services/scraper.js';
 import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
+import { createMockContext, createMockArticleProvider } from '../../helpers/mock-context.js';
 
 // ---------------------------------------------------------------------------
 
@@ -57,15 +47,26 @@ const VALID_URL = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/pa
 describe('jamf_docs_get_article tool', () => {
   let client: Client;
   let server: McpServer;
+  let mockProvider: ReturnType<typeof createMockArticleProvider>;
+  let nextResult: FetchArticleResult | null;
 
   beforeAll(async () => {
+    nextResult = null;
+    mockProvider = createMockArticleProvider(() => nextResult);
+
+    const ctx = createMockContext({
+      articleProvider: mockProvider,
+    });
+    // Override topicResolver.resolve to return fixed IDs (avoids network calls)
+    ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+      mapId: 'test-map', contentId: 'test-content', locale: 'en-US',
+    });
+
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerGetArticleTool(server);
+    registerGetArticleTool(server, ctx);
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-
     client = new Client({ name: 'test-client', version: '0.0.1' });
-
     await server.connect(serverTransport);
     await client.connect(clientTransport);
   });
@@ -75,16 +76,21 @@ describe('jamf_docs_get_article tool', () => {
   });
 
   beforeEach(() => {
-    vi.mocked(fetchArticle).mockReset();
+    nextResult = null;
+    mockProvider.getArticleByIds.mockClear();
+    mockProvider.getArticle.mockClear();
   });
+
+  /** Helper: set the mock provider to return a specific result. */
+  function mockArticle(overrides?: Partial<FetchArticleResult>): void {
+    nextResult = createFetchArticleResult(overrides);
+  }
 
   // --- Full markdown format -------------------------------------------------
 
   describe('full markdown output (default)', () => {
     it('should include breadcrumb as italic text', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ breadcrumb: ['Jamf Pro', 'Device Management', 'Config Profiles'] })
-      );
+      mockArticle({ breadcrumb: ['Jamf Pro', 'Device Management', 'Config Profiles'] });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -93,9 +99,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include article title as H1', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ title: 'Configuration Profiles' })
-      );
+      mockArticle({ title: 'Configuration Profiles' });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -104,9 +108,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include product in metadata line', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: 'Jamf Pro', version: '11.5.0', lastUpdated: '2025-01-15' })
-      );
+      mockArticle({ product: 'Jamf Pro', version: '11.5.0', lastUpdated: '2025-01-15' });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -117,9 +119,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include token count in metadata line', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ tokenInfo: createTokenInfo({ tokenCount: 1234, maxTokens: 5000 }) })
-      );
+      mockArticle({ tokenInfo: createTokenInfo({ tokenCount: 1234, maxTokens: 5000 }) });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -128,9 +128,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should omit product/version when they are empty strings', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: '', version: '' })
-      );
+      mockArticle({ product: '', version: '' });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -140,15 +138,13 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should show available sections list when truncated', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          tokenInfo: createTokenInfo({ truncated: true }),
-          sections: [
-            createArticleSection({ id: 's1', title: 'Overview', level: 2, tokenCount: 100 }),
-            createArticleSection({ id: 's2', title: 'Prerequisites', level: 2, tokenCount: 200 }),
-          ],
-        })
-      );
+      mockArticle({
+        tokenInfo: createTokenInfo({ truncated: true }),
+        sections: [
+          createArticleSection({ id: 's1', title: 'Overview', level: 2, tokenCount: 100 }),
+          createArticleSection({ id: 's2', title: 'Prerequisites', level: 2, tokenCount: 200 }),
+        ],
+      });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -159,14 +155,12 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should NOT show sections list when not truncated', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          tokenInfo: createTokenInfo({ truncated: false }),
-          sections: [
-            createArticleSection({ id: 's1', title: 'Overview', level: 2, tokenCount: 100 }),
-          ],
-        })
-      );
+      mockArticle({
+        tokenInfo: createTokenInfo({ truncated: false }),
+        sections: [
+          createArticleSection({ id: 's1', title: 'Overview', level: 2, tokenCount: 100 }),
+        ],
+      });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -175,9 +169,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include source footer with URL', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ url: VALID_URL })
-      );
+      mockArticle({ url: VALID_URL });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -187,13 +179,11 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include related articles when includeRelated is true', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          relatedArticles: [
-            { title: 'Policies', url: 'https://learn.jamf.com/page/Policies.html' },
-          ],
-        })
-      );
+      mockArticle({
+        relatedArticles: [
+          { title: 'Policies', url: 'https://learn.jamf.com/page/Policies.html' },
+        ],
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -206,13 +196,11 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should NOT include related articles when includeRelated is false', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          relatedArticles: [
-            { title: 'Policies', url: 'https://learn.jamf.com/page/Policies.html' },
-          ],
-        })
-      );
+      mockArticle({
+        relatedArticles: [
+          { title: 'Policies', url: 'https://learn.jamf.com/page/Policies.html' },
+        ],
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -224,9 +212,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should show section label when section parameter is provided', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult()
-      );
+      mockArticle();
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -238,11 +224,9 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should show truncated flag in metadata when content is truncated', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          tokenInfo: createTokenInfo({ truncated: true, tokenCount: 5000, maxTokens: 5000 }),
-        })
-      );
+      mockArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 5000, maxTokens: 5000 }),
+      });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -255,9 +239,7 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('compact markdown output', () => {
     it('should include article title as H1 but no breadcrumb', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ title: 'Config Profiles', breadcrumb: ['Jamf Pro', 'Device Management'] })
-      );
+      mockArticle({ title: 'Config Profiles', breadcrumb: ['Jamf Pro', 'Device Management'] });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -271,9 +253,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should use compact footer with [Source] link format', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ url: VALID_URL })
-      );
+      mockArticle({ url: VALID_URL });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -287,9 +267,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include product and version in compact metadata when present', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: 'Jamf Pro', version: '11.5.0' })
-      );
+      mockArticle({ product: 'Jamf Pro', version: '11.5.0' });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -302,9 +280,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should omit metadata line in compact mode when no product or version', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: '', version: '' })
-      );
+      mockArticle({ product: '', version: '' });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -321,9 +297,7 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('JSON format output', () => {
     it('should return valid JSON with title, content, url', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult()
-      );
+      mockArticle();
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -338,13 +312,11 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include sections array in JSON output', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          sections: [
-            createArticleSection({ id: 'prereq', title: 'Prerequisites', level: 2, tokenCount: 150 }),
-          ],
-        })
-      );
+      mockArticle({
+        sections: [
+          createArticleSection({ id: 'prereq', title: 'Prerequisites', level: 2, tokenCount: 150 }),
+        ],
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -359,9 +331,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include tokenInfo in JSON output', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ tokenInfo: createTokenInfo({ tokenCount: 999, maxTokens: 5000 }) })
-      );
+      mockArticle({ tokenInfo: createTokenInfo({ tokenCount: 999, maxTokens: 5000 }) });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -378,9 +348,7 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('structuredContent', () => {
     it('should have title, url, content, sections, and truncated fields', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult()
-      );
+      mockArticle();
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -394,9 +362,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include optional product field when present', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: 'Jamf Pro' })
-      );
+      mockArticle({ product: 'Jamf Pro' });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -405,9 +371,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should omit product field from structuredContent when product is undefined', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ product: undefined })
-      );
+      mockArticle({ product: undefined });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -416,9 +380,7 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should include breadcrumb in structuredContent when present', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ breadcrumb: ['Jamf Pro', 'Device Management'] })
-      );
+      mockArticle({ breadcrumb: ['Jamf Pro', 'Device Management'] });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -427,14 +389,22 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should set truncated to true when tokenInfo.truncated is true', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({ tokenInfo: createTokenInfo({ truncated: true }) })
-      );
+      mockArticle({ tokenInfo: createTokenInfo({ truncated: true }) });
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
       const sc = result.structuredContent as Record<string, unknown>;
       expect(sc.truncated).toBe(true);
+    });
+
+    it('should include mapId and contentId in structuredContent', async () => {
+      mockArticle({ mapId: 'test-map', contentId: 'test-content' });
+
+      const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.mapId).toBe('test-map');
+      expect(sc.contentId).toBe('test-content');
     });
   });
 
@@ -442,15 +412,13 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('section extraction', () => {
     it('should show section label and content when a valid section is matched', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          content: '## Prerequisites\n\nYou need admin access.',
-          sections: [
-            createArticleSection({ id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 50 }),
-          ],
-          tokenInfo: createTokenInfo({ truncated: false }),
-        })
-      );
+      mockArticle({
+        content: '## Prerequisites\n\nYou need admin access.',
+        sections: [
+          createArticleSection({ id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 50 }),
+        ],
+        tokenInfo: createTokenInfo({ truncated: false }),
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -459,24 +427,20 @@ describe('jamf_docs_get_article tool', () => {
 
       const text = getTextContent(result);
       expect(text).toContain('*Showing section: "Prerequisites"*');
-      // The section content returned by the (mocked) scraper should appear
+      // The section content returned by the provider should appear
       expect(text).toContain('Prerequisites');
       expect(result.isError).toBeFalsy();
     });
 
     it('should return not-found message with available sections when section does not exist', async () => {
-      // When the scraper cannot find the requested section it returns a "not found" message
-      // with an available sections list as the content field.
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          content: '*Section "NonExistentSection" not found.*\n\n**Available sections:**\n- Prerequisites\n- Configuration',
-          sections: [
-            createArticleSection({ id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 50 }),
-            createArticleSection({ id: 'configuration', title: 'Configuration', level: 2, tokenCount: 200 }),
-          ],
-          tokenInfo: createTokenInfo({ truncated: false }),
-        })
-      );
+      mockArticle({
+        content: '*Section "NonExistentSection" not found.*\n\n**Available sections:**\n- Prerequisites\n- Configuration',
+        sections: [
+          createArticleSection({ id: 'prerequisites', title: 'Prerequisites', level: 2, tokenCount: 50 }),
+          createArticleSection({ id: 'configuration', title: 'Configuration', level: 2, tokenCount: 200 }),
+        ],
+        tokenInfo: createTokenInfo({ truncated: false }),
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -504,14 +468,10 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('summaryOnly mode', () => {
     it('should return content with Summary and Article Outline when summaryOnly is true', async () => {
-      // The scraper returns content pre-formatted with ## Summary and ## Article Outline
-      // when summaryOnly=true. We mock this return value here.
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          content: '## Summary\n\nThis article covers configuration profiles.\n\n## Article Outline (2 sections)\n\n- Prerequisites (~200 tokens)\n- Configuration (~500 tokens)\n\n*Estimated read time: 3 min | Total: 5,000 tokens*\n',
-          tokenInfo: createTokenInfo({ tokenCount: 200, truncated: false }),
-        })
-      );
+      mockArticle({
+        content: '## Summary\n\nThis article covers configuration profiles.\n\n## Article Outline (2 sections)\n\n- Prerequisites (~200 tokens)\n- Configuration (~500 tokens)\n\n*Estimated read time: 3 min | Total: 5,000 tokens*\n',
+        tokenInfo: createTokenInfo({ tokenCount: 200, truncated: false }),
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -533,12 +493,10 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should set truncated=false in structuredContent for summaryOnly response', async () => {
-      vi.mocked(fetchArticle).mockResolvedValueOnce(
-        createFetchArticleResult({
-          content: '## Summary\n\nBrief overview.\n\n## Article Outline (1 sections)\n\n- Overview (~100 tokens)\n',
-          tokenInfo: createTokenInfo({ tokenCount: 80, truncated: false }),
-        })
-      );
+      mockArticle({
+        content: '## Summary\n\nBrief overview.\n\n## Article Outline (1 sections)\n\n- Overview (~100 tokens)\n',
+        tokenInfo: createTokenInfo({ tokenCount: 80, truncated: false }),
+      });
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -554,7 +512,9 @@ describe('jamf_docs_get_article tool', () => {
 
   describe('error handling', () => {
     it('should return isError with 404 message and search suggestion', async () => {
-      vi.mocked(fetchArticle).mockRejectedValueOnce(new Error('Article not found: 404 Not Found'));
+      // Provider returns null, and the FT API will be called — mock it to fail
+      nextResult = null;
+      mockProvider.getArticleByIds.mockRejectedValueOnce(new Error('Article not found: 404 Not Found'));
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -566,7 +526,8 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should return isError with rate limit help text', async () => {
-      vi.mocked(fetchArticle).mockRejectedValueOnce(new Error('Too many requests: rate limit exceeded'));
+      nextResult = null;
+      mockProvider.getArticleByIds.mockRejectedValueOnce(new Error('Too many requests: rate limit exceeded'));
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -576,7 +537,8 @@ describe('jamf_docs_get_article tool', () => {
     });
 
     it('should return isError for general network errors', async () => {
-      vi.mocked(fetchArticle).mockRejectedValueOnce(new Error('Network connection failed'));
+      nextResult = null;
+      mockProvider.getArticleByIds.mockRejectedValueOnce(new Error('Network connection failed'));
 
       const result = await client.callTool({ name: 'jamf_docs_get_article', arguments: { url: VALID_URL } });
 
@@ -593,6 +555,34 @@ describe('jamf_docs_get_article tool', () => {
 
       // Zod schema rejects non-jamf.com URLs
       expect(result.isError).toBe(true);
+    });
+
+    it('should return isError when neither url nor mapId+contentId is provided', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: {},
+      });
+
+      expect(result.isError).toBe(true);
+      const text = getTextContent(result);
+      expect(text).toContain('Either url or both mapId and contentId must be provided');
+    });
+  });
+
+  // --- mapId + contentId input -----------------------------------------------
+
+  describe('mapId + contentId input', () => {
+    it('should accept mapId + contentId without url', async () => {
+      mockArticle({ title: 'Direct ID Fetch' });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { mapId: 'map-123', contentId: 'content-456' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getTextContent(result);
+      expect(text).toContain('# Direct ID Fetch');
     });
   });
 });

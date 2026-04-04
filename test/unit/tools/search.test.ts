@@ -18,15 +18,8 @@ import {
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/core/services/scraper.js', () => ({
+vi.mock('../../../src/core/services/search-service.js', () => ({
   searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
-  fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
 }));
 
 vi.mock('../../../src/core/services/cache.js', () => ({
@@ -49,7 +42,7 @@ vi.mock('../../../src/core/services/search-suggestions.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../../src/core/tools/search.js';
 
 // ---------------------------------------------------------------------------

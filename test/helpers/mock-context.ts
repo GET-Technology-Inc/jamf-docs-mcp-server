@@ -8,12 +8,18 @@
 import { vi } from 'vitest';
 import type { ServerContext } from '../../src/core/types/context.js';
 import type {
+  FetchArticleResult,
+  FetchArticleOptions,
+} from '../../src/core/types.js';
+import type {
+  ArticleProvider,
   CacheProvider,
-  MetadataStore,
   LoggerFactory,
   Logger,
 } from '../../src/core/services/interfaces/index.js';
 import { createDefaultConfig } from '../../src/core/config.js';
+import { MapsRegistry } from '../../src/core/services/maps-registry.js';
+import { TopicResolver } from '../../src/core/services/topic-resolver.js';
 
 export function createMockLogger(): Logger {
   return {
@@ -53,22 +59,35 @@ export function createMockCache(): CacheProvider {
   };
 }
 
-export function createMockMetadata(): MetadataStore {
+export function createMockContext(overrides?: Partial<ServerContext>): ServerContext {
+  const cache = createMockCache();
+  const mapsRegistry = new MapsRegistry(cache);
+  const topicResolver = new TopicResolver(mapsRegistry, cache);
   return {
-    getProducts: vi.fn(async () => []),
-    getTopics: vi.fn(async () => []),
-    getToc: vi.fn(async () => ({ entries: [], product: '', version: '' })),
-    getBundleIdForVersion: vi.fn(async () => null),
-    getAvailableVersions: vi.fn(async () => []),
+    cache,
+    logger: createMockLoggerFactory(),
+    config: createDefaultConfig(),
+    mapsRegistry,
+    topicResolver,
+    ...overrides,
   };
 }
 
-export function createMockContext(overrides?: Partial<ServerContext>): ServerContext {
+/**
+ * Build a mock ArticleProvider where getArticleByIds returns resultFn()
+ * and getArticle always returns null.
+ */
+export function createMockArticleProvider(
+  resultFn: () => FetchArticleResult | null
+): ArticleProvider {
   return {
-    cache: createMockCache(),
-    metadata: createMockMetadata(),
-    logger: createMockLoggerFactory(),
-    config: createDefaultConfig(),
-    ...overrides,
+    getArticle: vi.fn().mockResolvedValue(null),
+    getArticleByIds: vi.fn(
+      async (
+        _mapId: string,
+        _contentId: string,
+        _options?: FetchArticleOptions,
+      ): Promise<FetchArticleResult | null> => resultFn()
+    ),
   };
 }

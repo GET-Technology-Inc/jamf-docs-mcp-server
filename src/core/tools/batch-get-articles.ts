@@ -9,9 +9,10 @@ import { GetBatchArticlesInputSchema } from '../schemas/index.js';
 import { BatchArticlesOutputSchema } from '../schemas/output.js';
 import { reportProgress } from '../utils/progress.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
-import type { ToolResult, TokenInfo } from '../types.js';
-import { fetchArticle, type FetchArticleResult } from '../services/scraper.js';
-import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
+import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
+import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { resolveAndFetchArticle } from '../services/article-service.js';
+import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
 
 // ============================================================================
 // Types
@@ -38,7 +39,6 @@ interface BatchSummary {
 }
 
 import { limitConcurrency } from '../utils/concurrency.js';
-export { limitConcurrency };
 
 // ============================================================================
 // Token budget
@@ -57,63 +57,17 @@ export function distributeTokenBudget(totalTokens: number, count: number): numbe
 // Formatting helpers
 // ============================================================================
 
-function formatArticleFull(article: FetchArticleResult): string {
-  let md = `# ${article.title}\n\n`;
-
-  const meta: string[] = [];
-  if (article.product !== undefined && article.product !== '') {
-    meta.push(`**Product**: ${article.product}`);
-  }
-  if (article.version !== undefined && article.version !== '') {
-    meta.push(`**Version**: ${article.version}`);
-  }
-  meta.push(
-    `**Tokens**: ${article.tokenInfo.tokenCount.toLocaleString()}/${article.tokenInfo.maxTokens.toLocaleString()}`
-  );
-  if (article.tokenInfo.truncated) {
-    meta.push('*(truncated)*');
-  }
-  if (meta.length > 0) {
-    md += `${meta.join(' | ')}\n\n`;
-  }
-
-  md += '---\n\n';
-  md += article.content;
-
-  const safeUrl = sanitizeMarkdownUrl(article.url);
-  md += `\n\n---\n*Source: [${sanitizeMarkdownText(article.url)}](${safeUrl})*\n`;
-
-  return md;
-}
-
-function formatArticleCompact(article: FetchArticleResult): string {
-  let md = `# ${article.title}\n\n`;
-
-  const meta: string[] = [];
-  if (article.product !== undefined && article.product !== '') {
-    meta.push(article.product);
-  }
-  if (article.version !== undefined && article.version !== '') {
-    meta.push(`v${article.version}`);
-  }
-  if (meta.length > 0) {
-    md += `*${meta.join(' | ')}*\n\n`;
-  }
-
-  md += article.content;
-
-  const safeUrl = sanitizeMarkdownUrl(article.url);
-  md += `\n---\n*[Source](${safeUrl}) | ${article.tokenInfo.tokenCount} tokens${article.tokenInfo.truncated ? ' (truncated)' : ''}*\n`;
-
-  return md;
-}
-
 function formatBatchAsMarkdown(results: FetchResult[], compact: boolean): string {
   const parts: string[] = [];
 
   for (const result of results) {
     if (result.status === 'success') {
-      parts.push(compact ? formatArticleCompact(result.article) : formatArticleFull(result.article));
+      const { article } = result;
+      parts.push(
+        compact
+          ? formatArticleCompact(article)
+          : formatArticleFull(article, { briefFooter: true })
+      );
     } else {
       parts.push(`# Error\n\n**URL**: ${result.url}\n**Error**: ${result.error}\n`);
     }
@@ -184,14 +138,20 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
 
       let completedCount = 0;
 
+      const locale = params.language as LocaleId | undefined;
+
       // Build fetch tasks — each task catches its own errors
       const tasks = params.urls.map((url) => {
         return async (): Promise<FetchResult> => {
           try {
-            const article = await fetchArticle(ctx, url, {
+            const options: FetchArticleOptions = {
               maxTokens: perArticleTokens,
-              locale: params.language as LocaleId | undefined
-            });
+              locale,
+            };
+
+            const article = await resolveAndFetchArticle(
+              ctx, { url }, options
+            );
 
             completedCount++;
             await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });

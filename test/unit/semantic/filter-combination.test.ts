@@ -7,24 +7,21 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createRealisticSearchResponse } from '../../helpers/fixtures.js';
 
-// Mock http-client to return realistic fixture data
-vi.mock('../../../src/core/http-client.js', async () => {
-  return {
-    httpGetText: vi.fn(),
-    httpGetJson: vi.fn(),
-    HttpError: (await import('../../../src/core/http-client.js')).HttpError,
-  };
-});
+vi.mock('../../../src/core/services/ft-client.js', () => ({
+  search: vi.fn(),
+  fetchMaps: vi.fn().mockResolvedValue([]),
+  fetchMapTopics: vi.fn().mockResolvedValue([]),
+}));
 
-import { httpGetJson } from '../../../src/core/http-client.js';
-import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { search as ftSearch } from '../../../src/core/services/ft-client.js';
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { makeFtSearchResponse } from '../../helpers/fixtures.js';
 
 const ctx = createMockContext();
 
-const mockedHttpGetJson = vi.mocked(httpGetJson);
+const mockedFtSearch = vi.mocked(ftSearch);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,8 +29,12 @@ beforeEach(() => {
 
 describe('multi-filter combination behavior', () => {
   it('should return results when product filter matches', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        { title: 'Config Profiles', mapId: 'jamf-pro-documentation', productLabel: 'product-pro' },
+        { title: 'Smart Groups', mapId: 'jamf-pro-documentation', productLabel: 'product-pro' },
+      ])
+    );
 
     const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
@@ -41,24 +42,30 @@ describe('multi-filter combination behavior', () => {
     });
 
     expect(result.results.length).toBeGreaterThan(0);
-    // All results should be from jamf-pro
     for (const r of result.results) {
       expect(r.product).toBe('Jamf Pro');
     }
   });
 
   it('should trigger filter relaxation when product + docType yields zero', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        {
+          title: 'Jamf Pro Article',
+          mapId: 'jamf-pro-documentation',
+          productLabel: 'product-pro',
+          contentType: 'Technical Documentation',
+        },
+      ])
+    );
 
-    // jamf-protect + release-notes is unlikely to match in a "jamf pro" search
+    // product=jamf-protect + docType=release-notes won't match jamf-pro + techdocs
     const result = await searchDocumentation(ctx, {
-      query: 'jamf pro',
+      query: 'test',
       product: 'jamf-protect',
       docType: 'release-notes',
     });
 
-    // Should either have results (with relaxation) or be empty
     if (result.filterRelaxation) {
       expect(result.filterRelaxation.removed.length).toBeGreaterThan(0);
       expect(result.filterRelaxation.message).toContain('Removed filter');
@@ -68,12 +75,20 @@ describe('multi-filter combination behavior', () => {
   });
 
   it('should relax docType before topic before product', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        {
+          title: 'Some Article',
+          mapId: 'jamf-pro-documentation',
+          productLabel: 'product-pro',
+          contentType: 'Technical Documentation',
+        },
+      ])
+    );
 
-    // Use a combination very unlikely to match: uncommon product + rare topic + rare docType
+    // Combination very unlikely to match: uncommon product + rare topic + rare docType
     const result = await searchDocumentation(ctx, {
-      query: 'jamf pro',
+      query: 'test',
       product: 'jamf-routines',
       topic: 'graphql',
       docType: 'training',
@@ -100,17 +115,19 @@ describe('multi-filter combination behavior', () => {
   });
 
   it('should include original filter values in relaxation info', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        { title: 'Generic Article', mapId: 'jamf-pro-documentation', productLabel: 'product-pro' },
+      ])
+    );
 
     const result = await searchDocumentation(ctx, {
-      query: 'jamf pro',
+      query: 'test',
       product: 'jamf-routines',
       docType: 'training',
     });
 
     if (result.filterRelaxation) {
-      // Original values should be preserved
       expect(result.filterRelaxation.original).toBeDefined();
       for (const filterName of result.filterRelaxation.removed) {
         expect(result.filterRelaxation.original[filterName]).toBeDefined();
@@ -119,15 +136,17 @@ describe('multi-filter combination behavior', () => {
   });
 
   it('should not relax when all filters match results', async () => {
-    const fixtureData = createRealisticSearchResponse();
-    mockedHttpGetJson.mockResolvedValueOnce(fixtureData);
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        { title: 'Config Profiles', mapId: 'jamf-pro-documentation', productLabel: 'product-pro' },
+      ])
+    );
 
     const result = await searchDocumentation(ctx, {
       query: 'jamf pro',
       product: 'jamf-pro',
     });
 
-    // No relaxation needed when results exist
     expect(result.filterRelaxation).toBeUndefined();
     expect(result.results.length).toBeGreaterThan(0);
   });

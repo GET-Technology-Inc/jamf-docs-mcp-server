@@ -3,7 +3,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractVersionFromBundleId, extractProductSlug, compareVersions } from '../../../src/core/utils/bundle.js';
+import {
+  extractVersionFromBundleId,
+  extractProductSlug,
+  compareVersions,
+  stripVersionSuffix,
+  stripCurrentSuffix,
+} from '../../../src/core/utils/bundle.js';
 
 describe('extractVersionFromBundleId', () => {
   it('should extract version from standard documentation bundle', () => {
@@ -32,6 +38,56 @@ describe('extractVersionFromBundleId', () => {
 
   it('should only match trailing semver (not mid-string)', () => {
     expect(extractVersionFromBundleId('jamf-pro-1.0.0-extra')).toBeNull();
+  });
+
+  it('should extract 2-part version', () => {
+    expect(extractVersionFromBundleId('jamf-school-documentation-2.45')).toBe('2.45');
+  });
+
+  it('should extract 2-part version with larger numbers', () => {
+    expect(extractVersionFromBundleId('some-bundle-10.99')).toBe('10.99');
+  });
+});
+
+describe('stripVersionSuffix', () => {
+  it('should strip 3-part version suffix', () => {
+    expect(stripVersionSuffix('jamf-pro-documentation-11.25.0'))
+      .toBe('jamf-pro-documentation');
+  });
+
+  it('should strip 2-part version suffix', () => {
+    expect(stripVersionSuffix('jamf-school-documentation-2.45'))
+      .toBe('jamf-school-documentation');
+  });
+
+  it('should return unchanged string when no version suffix', () => {
+    expect(stripVersionSuffix('jamf-pro-documentation'))
+      .toBe('jamf-pro-documentation');
+  });
+
+  it('should return empty string for empty input', () => {
+    expect(stripVersionSuffix('')).toBe('');
+  });
+});
+
+describe('stripCurrentSuffix', () => {
+  it('should strip -current suffix', () => {
+    expect(stripCurrentSuffix('jamf-pro-documentation-current'))
+      .toBe('jamf-pro-documentation');
+  });
+
+  it('should return unchanged string when no -current suffix', () => {
+    expect(stripCurrentSuffix('jamf-pro-documentation-11.25.0'))
+      .toBe('jamf-pro-documentation-11.25.0');
+  });
+
+  it('should return unchanged string for plain stem', () => {
+    expect(stripCurrentSuffix('jamf-pro-documentation'))
+      .toBe('jamf-pro-documentation');
+  });
+
+  it('should return empty string for empty input', () => {
+    expect(stripCurrentSuffix('')).toBe('');
   });
 });
 

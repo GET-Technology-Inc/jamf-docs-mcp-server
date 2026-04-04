@@ -25,13 +25,8 @@ const mockSearchDocumentation = vi.fn().mockImplementation((_ctx: ServerContext,
   });
 });
 
-vi.mock('../../src/core/services/scraper.js', () => ({
+vi.mock('../../src/core/services/search-service.js', () => ({
   searchDocumentation: (...args: unknown[]) => mockSearchDocumentation(...args),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
 }));
 
 import { registerSearchTool } from '../../src/core/tools/search.js';
@@ -97,7 +92,7 @@ describe('Version filter transparency', () => {
 
     const json = JSON.parse((result.content[0] as TextContent).text);
     expect(json.relevanceNote).toBeDefined();
-    expect(json.relevanceNote).toContain('Zoomin Search API');
+    expect(json.relevanceNote).toContain('Fluid Topics Search API');
   });
 
   it('should NOT include relevanceNote in markdown format', async () => {

@@ -6,16 +6,16 @@
 
 export type { CacheProvider, CacheStats } from './cache.js';
 export type {
-  MetadataStore,
   ProductMetadata,
   TopicMetadata,
   TocEntry,
   TocData,
 } from './metadata.js';
-export type { Logger, LoggerFactory } from './logger.js';
+export type { Logger, LoggerFactory, WriteStderrFn } from './logger.js';
 export type {
   SearchProvider,
   ArticleProvider,
   GlossaryProvider,
   TocProvider,
+  MapsProvider,
 } from './providers.js';

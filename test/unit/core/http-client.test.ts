@@ -10,7 +10,7 @@
  */
 
 import { vi, describe, it, expect, afterEach } from 'vitest';
-import { httpGetText, httpGetJson, HttpError } from '../../../src/core/http-client.js';
+import { httpGetText, httpGetJson, httpPostJson, HttpError } from '../../../src/core/http-client.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,6 +165,96 @@ describe('httpGetJson', () => {
 
     expect(err).not.toBeInstanceOf(HttpError);
     expect(err).toBeInstanceOf(Error);
+  });
+});
+
+// ===========================================================================
+// httpPostJson
+// ===========================================================================
+
+describe('httpPostJson', () => {
+  it('should send POST with JSON body and return parsed response', async () => {
+    const responsePayload = { id: 42, status: 'ok' };
+    const mock = mockFetchOk(JSON.stringify(responsePayload));
+    vi.stubGlobal('fetch', mock);
+
+    const result = await httpPostJson<{ id: number; status: string }>(
+      'https://example.com/api/create',
+      { name: 'test', value: 123 }
+    );
+
+    expect(result).toEqual(responsePayload);
+    expect(mock).toHaveBeenCalledOnce();
+
+    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    expect(calledInit.method).toBe('POST');
+    expect(calledInit.body).toBe(JSON.stringify({ name: 'test', value: 123 }));
+  });
+
+  it('should include Accept and Content-Type headers', async () => {
+    const mock = mockFetchOk(JSON.stringify({}));
+    vi.stubGlobal('fetch', mock);
+
+    await httpPostJson('https://example.com/api', { q: 'jamf' });
+
+    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    const headers = calledInit.headers as Record<string, string>;
+    expect(headers['Accept']).toBe('application/json');
+    expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('should throw HttpError on non-ok response', async () => {
+    vi.stubGlobal('fetch', mockFetchStatus(400, 'Bad Request'));
+
+    const err = await httpPostJson('https://example.com/api', {}).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(HttpError);
+    const httpErr = err as HttpError;
+    expect(httpErr.status).toBe(400);
+    expect(httpErr.isRetryable).toBe(false);
+  });
+
+  it('should merge custom headers with defaults', async () => {
+    const mock = mockFetchOk(JSON.stringify({}));
+    vi.stubGlobal('fetch', mock);
+
+    await httpPostJson('https://example.com/api', {}, {
+      headers: { 'X-Request-Id': 'abc-123' },
+    });
+
+    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    const headers = calledInit.headers as Record<string, string>;
+    expect(headers['Accept']).toBe('application/json');
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers['X-Request-Id']).toBe('abc-123');
+  });
+
+  it('should serialize body once and reuse on retry', async () => {
+    let callCount = 0;
+    const mock = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve(new Response(null, { status: 500, statusText: 'Server Error' }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', mock);
+
+    const body = { query: 'test' };
+    const result = await httpPostJson<{ ok: boolean }>(
+      'https://example.com/api',
+      body,
+      { maxRetries: 1, retryDelay: 1 }
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mock).toHaveBeenCalledTimes(2);
+
+    // Both calls should have the same serialized body
+    const body1 = (mock.mock.calls[0][1] as RequestInit).body;
+    const body2 = (mock.mock.calls[1][1] as RequestInit).body;
+    expect(body1).toBe(body2);
+    expect(body1).toBe(JSON.stringify({ query: 'test' }));
   });
 });
 

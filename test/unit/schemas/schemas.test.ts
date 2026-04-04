@@ -185,12 +185,11 @@ describe('GetArticleInputSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept a learn-be.jamf.com URL (backend URL is in allowed domain list)', () => {
-    // The refine check allows docs.jamf.com, learn.jamf.com, AND learn-be.jamf.com
+  it('should reject a learn-be.jamf.com URL (backend hostname removed after FT migration)', () => {
     const result = GetArticleInputSchema.safeParse({
       url: 'https://learn-be.jamf.com/services/search/v2/search?query=test',
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it('should reject a non-Jamf URL', () => {

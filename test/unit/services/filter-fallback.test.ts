@@ -1,43 +1,26 @@
 /**
  * Unit tests for search filter fallback mechanism
+ *
+ * Tests progressive filter relaxation in the search-service
+ * when applied filters produce zero results.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../src/core/http-client.js', async () => {
-  return {
-    httpGetText: vi.fn(),
-    httpGetJson: vi.fn(),
-    HttpError: (await import('../../../src/core/http-client.js')).HttpError
-  };
-});
+vi.mock('../../../src/core/services/ft-client.js', () => ({
+  search: vi.fn(),
+  fetchMaps: vi.fn().mockResolvedValue([]),
+  fetchMapTopics: vi.fn().mockResolvedValue([]),
+}));
 
-import { httpGetJson } from '../../../src/core/http-client.js';
-import { searchDocumentation } from '../../../src/core/services/scraper.js';
+import { search as ftSearch } from '../../../src/core/services/ft-client.js';
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { makeFtSearchResponse } from '../../helpers/fixtures.js';
 
 const ctx = createMockContext();
 
-const mockedHttpGetJson = vi.mocked(httpGetJson);
-
-function makeSearchResponse(results: { title: string; url: string; snippet: string; bundle_id: string; score?: number; labels?: { key: string }[] }[]): object {
-  return {
-    status: 'OK',
-    Results: results.map(r => ({
-      leading_result: {
-        title: r.title,
-        url: r.url,
-        snippet: r.snippet,
-        bundle_id: r.bundle_id,
-        page_id: 'page-1',
-        publication_title: 'Jamf Docs',
-        score: r.score ?? 1.0,
-        labels: r.labels,
-      },
-    })),
-    Pagination: { CurrentPage: 1, TotalPages: 1, ResultsPerPage: 50, TotalResults: results.length },
-  };
-}
+const mockedFtSearch = vi.mocked(ftSearch);
 
 describe('Search filter fallback', () => {
   beforeEach(() => {
@@ -46,19 +29,19 @@ describe('Search filter fallback', () => {
   });
 
   it('should relax docType first when multi-filter returns zero results', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([
+    mockedFtSearch.mockResolvedValue(
+      makeFtSearchResponse([
         {
           title: 'Jamf Pro MDM Article',
-          url: 'https://learn-be.jamf.com/article.html',
+          mapId: 'jamf-pro-documentation',
           snippet: 'MDM enrollment configuration profile for device management',
-          bundle_id: 'jamf-pro-documentation',
-          labels: [{ key: 'content-techdocs' }],
+          productLabel: 'product-pro',
+          contentType: 'Technical Documentation',
         },
       ])
     );
 
-    // product=jamf-pro matches, but docType=release-notes does not (result has content-techdocs)
+    // product=jamf-pro matches (mapId slug), but docType=release-notes does not
     const result = await searchDocumentation(ctx, {
       query: 'enrollment',
       product: 'jamf-pro',
@@ -72,13 +55,13 @@ describe('Search filter fallback', () => {
   });
 
   it('should relax single filter when it matches nothing', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([
+    mockedFtSearch.mockResolvedValue(
+      makeFtSearchResponse([
         {
           title: 'School Article',
-          url: 'https://learn-be.jamf.com/school.html',
+          mapId: 'jamf-school-documentation',
           snippet: 'Jamf School education content',
-          bundle_id: 'jamf-school-documentation',
+          productLabel: 'product-school',
         },
       ])
     );
@@ -94,8 +77,8 @@ describe('Search filter fallback', () => {
   });
 
   it('should NOT trigger fallback when no filters are applied', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([])
+    mockedFtSearch.mockResolvedValue(
+      makeFtSearchResponse([])
     );
 
     const result = await searchDocumentation(ctx, { query: 'nonexistent-xyz' });
@@ -105,13 +88,13 @@ describe('Search filter fallback', () => {
   });
 
   it('should NOT trigger fallback when filters match results', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([
+    mockedFtSearch.mockResolvedValue(
+      makeFtSearchResponse([
         {
           title: 'Jamf Pro Config',
-          url: 'https://learn-be.jamf.com/pro.html',
+          mapId: 'jamf-pro-documentation',
           snippet: 'Configuration content',
-          bundle_id: 'jamf-pro-documentation',
+          productLabel: 'product-pro',
         },
       ])
     );
@@ -126,14 +109,14 @@ describe('Search filter fallback', () => {
   });
 
   it('should include filterRelaxation message with removed filters', async () => {
-    mockedHttpGetJson.mockResolvedValue(
-      makeSearchResponse([
+    mockedFtSearch.mockResolvedValue(
+      makeFtSearchResponse([
         {
           title: 'Generic Article',
-          url: 'https://learn-be.jamf.com/gen.html',
+          mapId: 'jamf-school-documentation',
           snippet: 'Some generic content about various topics in device management',
-          bundle_id: 'jamf-school-documentation',
-          labels: [{ key: 'content-techdocs' }],
+          productLabel: 'product-school',
+          contentType: 'Technical Documentation',
         },
       ])
     );

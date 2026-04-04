@@ -60,9 +60,8 @@ describe('Markdown output sanitization integration', () => {
 
   describe('error message sanitization in tool context', () => {
     it('should sanitize network errors before returning to client', () => {
-      const rawError = 'getaddrinfo ENOTFOUND learn-be.jamf.com';
+      const rawError = 'getaddrinfo ENOTFOUND learn.jamf.com';
       const sanitized = sanitizeErrorMessage(rawError);
-      expect(sanitized).not.toContain('learn-be.jamf.com');
       expect(sanitized).toContain('learn.jamf.com');
     });
 

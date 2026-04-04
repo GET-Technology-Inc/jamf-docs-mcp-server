@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createRealisticSearchResponse } from '../../helpers/fixtures.js';
-import { cleanSnippet } from '../../../src/core/services/scraper.js';
+import { cleanSnippet } from '../../../src/core/services/content-parser.js';
 
 /**
  * Strip HTML tags (same logic as scraper.ts stripHtml)

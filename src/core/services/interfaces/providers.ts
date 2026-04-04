@@ -11,47 +11,62 @@
  */
 
 import type { ProductId, LocaleId } from '../../constants.js';
-import type { SearchParams, SearchResult, GlossaryLookupResult } from '../../types.js';
 import type {
+  SearchParams,
+  SearchResult,
+  GlossaryLookupResult,
   FetchArticleResult,
   FetchArticleOptions,
   FetchTocResult,
   FetchTocOptions,
-} from '../scraper.js';
+  FtMapInfo,
+} from '../../types.js';
 
 /**
  * Custom search backend (e.g., Vectorize semantic search).
  *
  * Return all matched results as a flat array. The core handles pagination,
  * token truncation, version deduplication, and filter relaxation.
- * Return `null` to fall through to the default Zoomin API search.
+ * Return `null` to fall through to the default Fluid Topics API search.
  */
 export interface SearchProvider {
-  search(params: SearchParams): Promise<SearchResult[] | null>;
+  search: (params: SearchParams) => Promise<SearchResult[] | null>;
 }
 
 /**
  * Custom article provider (e.g., R2 local storage).
- * Return null to fall through to the default web scraping.
+ * Return null to fall through to the default Fluid Topics API fetch.
+ *
+ * Primary method is `getArticleByIds` — in the FT world, ID-based access
+ * is the fast path (mapId + contentId are always resolved first).
+ * The optional `getArticle` method provides a URL-based fallback.
  */
 export interface ArticleProvider {
-  getArticle(
+  /** ID-based fetch — primary method, used when mapId+contentId are known. */
+  getArticleByIds: (
+    mapId: string,
+    contentId: string,
+    options?: FetchArticleOptions,
+  ) => Promise<FetchArticleResult | null>;
+
+  /** Optional URL-based fallback — used when ID-based fetch returns null. */
+  getArticle?: (
     url: string,
     options?: FetchArticleOptions,
-  ): Promise<FetchArticleResult | null>;
+  ) => Promise<FetchArticleResult | null>;
 }
 
 /**
  * Custom glossary provider (e.g., D1 database).
- * Return null to fall through to the default glossary scraping.
+ * Return null to fall through to the default Fluid Topics API glossary.
  */
 export interface GlossaryProvider {
-  lookup(params: {
+  lookup: (params: {
     term: string;
     product?: ProductId | undefined;
     language?: LocaleId | undefined;
     maxTokens?: number | undefined;
-  }): Promise<GlossaryLookupResult | null>;
+  }) => Promise<GlossaryLookupResult | null>;
 }
 
 /**
@@ -59,9 +74,17 @@ export interface GlossaryProvider {
  * Return null to fall through to the default TOC fetching.
  */
 export interface TocProvider {
-  getTableOfContents(
+  getTableOfContents: (
     product: ProductId,
     version: string,
     options?: FetchTocOptions,
-  ): Promise<FetchTocResult | null>;
+  ) => Promise<FetchTocResult | null>;
+}
+
+/**
+ * Custom maps provider (e.g., KV storage on Workers).
+ * When present, MapsRegistry uses this instead of the FT API fetchMaps().
+ */
+export interface MapsProvider {
+  getMaps: () => Promise<FtMapInfo[]>;
 }

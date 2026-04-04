@@ -33,6 +33,10 @@ export const SearchOutputSchema = z.object({
     product: z.string(),
     version: z.string().optional(),
     docType: z.string().optional(),
+    mapId: z.string().optional(),
+    contentId: z.string().optional(),
+    breadcrumb: z.array(z.string()).optional(),
+    mapTitle: z.string().optional(),
   })),
   suggestions: z.array(z.string()).optional(),
   filterRelaxation: z.object({
@@ -59,6 +63,8 @@ export const ArticleOutputSchema = z.object({
   version: z.string().optional(),
   lastUpdated: z.string().optional(),
   breadcrumb: z.array(z.string()).optional(),
+  mapId: z.string().optional(),
+  contentId: z.string().optional(),
   sections: z.array(z.object({
     id: z.string(),
     title: z.string(),
@@ -107,5 +113,6 @@ export const TocOutputSchema = z.object({
   entries: z.array(z.object({
     title: z.string(),
     url: z.string(),
+    contentId: z.string().optional(),
   })),
 });

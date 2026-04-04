@@ -223,7 +223,8 @@ export function extractSection(
  */
 export function truncateToTokenLimit(
   content: string,
-  maxTokens: number = TOKEN_CONFIG.DEFAULT_MAX_TOKENS
+  maxTokens: number = TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
+  preExtractedSections?: ArticleSection[]
 ): TruncateResult {
   const currentTokens = estimateTokens(content);
 
@@ -239,8 +240,8 @@ export function truncateToTokenLimit(
     };
   }
 
-  // Extract all sections before truncation
-  const allSections = extractSections(content);
+  // Reuse pre-extracted sections when available; otherwise extract them now
+  const allSections = preExtractedSections ?? extractSections(content);
 
   // Smart truncation
   const lines = content.split('\n');

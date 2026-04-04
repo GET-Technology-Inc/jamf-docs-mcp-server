@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createMockContext } from '../../helpers/mock-context.js';
-import { searchDocumentation, fetchArticle, fetchTableOfContents } from '../../../src/core/services/scraper.js';
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
+import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { lookupGlossaryTerm } from '../../../src/core/services/glossary.js';
 import type {
   SearchProvider,
@@ -11,8 +12,9 @@ import type {
 import type {
   FetchArticleResult,
   FetchTocResult,
-} from '../../../src/core/services/scraper.js';
-import type { SearchResult, GlossaryLookupResult } from '../../../src/core/types.js';
+  SearchResult,
+  GlossaryLookupResult,
+} from '../../../src/core/types.js';
 
 // ============================================================================
 // Shared fixtures
@@ -114,19 +116,21 @@ describe('SearchProvider injection', () => {
     expect(result.results.length).toBeLessThan(20);
   });
 
-  it('should extract bundleSlug from provider result URLs for product filter', async () => {
+  it('should derive bundleSlug from product display name for product filter', async () => {
     const results: SearchResult[] = [
       {
         title: 'Jamf Pro Article',
         url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/test.html',
         snippet: 'A Jamf Pro article',
         product: 'Jamf Pro',
+        mapId: 'opaque-hash-1',
       },
       {
         title: 'Jamf Connect Article',
         url: 'https://learn.jamf.com/en-US/bundle/jamf-connect-documentation/page/test.html',
         snippet: 'A Jamf Connect article',
         product: 'Jamf Connect',
+        mapId: 'opaque-hash-2',
       },
     ];
     const searchProvider: SearchProvider = {
@@ -202,41 +206,54 @@ describe('SearchProvider injection', () => {
 // ============================================================================
 
 describe('ArticleProvider injection', () => {
-  it('should use provider result when non-null', async () => {
+  it('should return provider result when non-null (ID-based primary)', async () => {
     const articleProvider: ArticleProvider = {
-      getArticle: vi.fn(async () => mockArticleResult),
+      getArticleByIds: vi.fn(async () => mockArticleResult),
     };
-    const ctx = createMockContext({ articleProvider });
 
-    const result = await fetchArticle(
-      ctx,
-      'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html',
+    const result = await articleProvider.getArticleByIds(
+      'test-map', 'test-content',
     );
 
-    expect(articleProvider.getArticle).toHaveBeenCalledOnce();
+    expect(articleProvider.getArticleByIds).toHaveBeenCalledOnce();
     expect(result).toBe(mockArticleResult);
   });
 
-  it('should pass url and options to provider', async () => {
+  it('should receive mapId, contentId, and options', async () => {
     const articleProvider: ArticleProvider = {
-      getArticle: vi.fn(async () => mockArticleResult),
+      getArticleByIds: vi.fn(async () => mockArticleResult),
     };
-    const ctx = createMockContext({ articleProvider });
-    const url = 'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html';
     const options = { maxTokens: 1000, summaryOnly: true };
 
-    await fetchArticle(ctx, url, options);
+    await articleProvider.getArticleByIds('test-map', 'test-content', options);
 
-    expect(articleProvider.getArticle).toHaveBeenCalledWith(url, options);
+    expect(articleProvider.getArticleByIds).toHaveBeenCalledWith(
+      'test-map', 'test-content', options,
+    );
   });
 
-  it('should fall through when provider returns null', async () => {
+  it('should return null to signal fall-through', async () => {
     const articleProvider: ArticleProvider = {
-      getArticle: vi.fn(async () => null),
+      getArticleByIds: vi.fn(async () => null),
     };
 
-    const provided = await articleProvider.getArticle('https://learn.jamf.com/test');
+    const provided = await articleProvider.getArticleByIds('test-map', 'test-content');
     expect(provided).toBeNull();
+  });
+
+  it('should support optional URL-based fallback', async () => {
+    const articleProvider: ArticleProvider = {
+      getArticleByIds: vi.fn(async () => null),
+      getArticle: vi.fn(async () => mockArticleResult),
+    };
+
+    const byIds = await articleProvider.getArticleByIds('test-map', 'test-content');
+    expect(byIds).toBeNull();
+
+    const byUrl = await articleProvider.getArticle!(
+      'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html',
+    );
+    expect(byUrl).toBe(mockArticleResult);
   });
 });
 
@@ -336,13 +353,11 @@ describe('Provider error propagation', () => {
 
   it('should propagate article provider errors', async () => {
     const articleProvider: ArticleProvider = {
-      getArticle: vi.fn(async () => { throw new Error('R2 unavailable'); }),
+      getArticleByIds: vi.fn(async () => { throw new Error('R2 unavailable'); }),
     };
-    const ctx = createMockContext({ articleProvider });
 
-    await expect(fetchArticle(
-      ctx,
-      'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html',
+    await expect(articleProvider.getArticleByIds(
+      'test-map', 'test-content',
     )).rejects.toThrow('R2 unavailable');
   });
 

@@ -20,15 +20,8 @@ import type { TocEntry } from '../../../src/core/types.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/core/services/scraper.js', () => ({
-  searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
+vi.mock('../../../src/core/services/toc-service.js', () => ({
   fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
 }));
 
 vi.mock('../../../src/core/services/cache.js', () => ({
@@ -44,7 +37,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 }));
 
 // Import AFTER mocks are set up
-import { fetchTableOfContents } from '../../../src/core/services/scraper.js';
+import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
 
 // ---------------------------------------------------------------------------

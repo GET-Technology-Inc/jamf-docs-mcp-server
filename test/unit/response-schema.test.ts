@@ -22,15 +22,30 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 // Mock service modules BEFORE importing tools/resources
 // ---------------------------------------------------------------------------
 
-vi.mock('../../src/core/services/scraper.js', () => ({
+// Search tool now uses search-service.js instead of scraper.js
+vi.mock('../../src/core/services/search-service.js', () => ({
   searchDocumentation: vi.fn(),
-  fetchArticle: vi.fn(),
+}));
+
+// TOC tool now uses toc-service.js instead of scraper.js
+vi.mock('../../src/core/services/toc-service.js', () => ({
   fetchTableOfContents: vi.fn(),
-  ALLOWED_HOSTNAMES: new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']),
-  isAllowedHostname: (url: string) => {
-    try { return new Set(['learn.jamf.com', 'learn-be.jamf.com', 'docs.jamf.com']).has(new URL(url).hostname); }
-    catch { return false; }
-  },
+}));
+
+// Get-article tool uses ctx.topicResolver and ctx.mapsRegistry (singletons).
+// The articleProvider on ServerContext is the primary path tested here.
+
+// Mock search suggestions (used by search tool no-results path)
+vi.mock('../../src/core/services/search-suggestions.js', () => ({
+  generateSearchSuggestions: vi.fn().mockReturnValue({
+    simplifiedQuery: null,
+    alternativeKeywords: ['alternate-keyword'],
+    suggestedTopics: [],
+    tips: ['Browse with jamf_docs_get_toc'],
+  }),
+  formatSearchSuggestions: vi.fn().mockReturnValue(
+    'No results found\n\n## Search Suggestions\n\n**Tips**:\n- Browse the table of contents with `jamf_docs_get_toc`\n'
+  ),
 }));
 
 vi.mock('../../src/core/services/metadata.js', () => ({
@@ -42,28 +57,48 @@ vi.mock('../../src/core/services/metadata.js', () => ({
   getTopicsResourceData: vi.fn(),
 }));
 
+vi.mock('../../src/core/services/cache.js', () => ({
+  cache: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn(),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { searchDocumentation, fetchArticle, fetchTableOfContents } from '../../src/core/services/scraper.js';
+import { searchDocumentation } from '../../src/core/services/search-service.js';
+import { fetchTableOfContents } from '../../src/core/services/toc-service.js';
 import {
   getProductsResourceData,
   getTopicsResourceData,
   getAvailableVersions,
   getBundleIdForVersion,
 } from '../../src/core/services/metadata.js';
+import type { FetchArticleResult } from '../../src/core/types.js';
 import { registerListProductsTool } from '../../src/core/tools/list-products.js';
 import { registerSearchTool } from '../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
 import { registerGetTocTool } from '../../src/core/tools/get-toc.js';
 import { registerResources } from '../../src/core/resources/index.js';
-import { createMockContext } from '../helpers/mock-context.js';
+import { createMockContext, createMockArticleProvider } from '../helpers/mock-context.js';
 import { registerTroubleshootPrompt } from '../../src/core/prompts/troubleshoot.js';
-
-const ctx = createMockContext();
 import { registerSetupGuidePrompt } from '../../src/core/prompts/setup-guide.js';
 import { registerCompareVersionsPrompt } from '../../src/core/prompts/compare-versions.js';
+
+// ---------------------------------------------------------------------------
+
+let nextArticleResult: FetchArticleResult | null = null;
+const mockArticleProvider = createMockArticleProvider(() => nextArticleResult);
+
+const ctx = createMockContext({
+  articleProvider: mockArticleProvider,
+});
+// Override topicResolver.resolve to return fixed IDs (avoids network calls)
+ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+  mapId: 'test-map', contentId: 'test-content', locale: 'en-US',
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -204,7 +239,6 @@ describe('E2E: MCP Server Response Schema', () => {
 
     // Re-set default mock implementations after clearAllMocks
     vi.mocked(searchDocumentation).mockResolvedValue(MOCK_SEARCH_RESULTS);
-    vi.mocked(fetchArticle).mockResolvedValue(MOCK_ARTICLE_RESULT);
     vi.mocked(fetchTableOfContents).mockResolvedValue(MOCK_TOC_RESULT);
     vi.mocked(getProductsResourceData).mockResolvedValue(MOCK_PRODUCTS_RESOURCE_DATA);
     vi.mocked(getTopicsResourceData).mockResolvedValue(MOCK_TOPICS_RESOURCE_DATA);
@@ -212,6 +246,13 @@ describe('E2E: MCP Server Response Schema', () => {
     // Re-set metadata service mocks (used by get-toc and get-article tools)
     vi.mocked(getAvailableVersions).mockResolvedValue([]);
     vi.mocked(getBundleIdForVersion).mockResolvedValue('jamf-pro-documentation');
+
+    // Re-set article provider mock for get-article tool
+    nextArticleResult = MOCK_ARTICLE_RESULT as FetchArticleResult;
+    mockArticleProvider.getArticleByIds.mockImplementation(
+      async () => nextArticleResult
+    );
+    mockArticleProvider.getArticle.mockResolvedValue(null);
   });
 
   // =========================================================================
@@ -497,8 +538,8 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(text).toContain('must be from');
     });
 
-    it('should return error when fetchArticle throws a network error', async () => {
-      vi.mocked(fetchArticle).mockRejectedValueOnce(new Error('Network error'));
+    it('should return error when article provider throws a network error', async () => {
+      mockArticleProvider.getArticleByIds.mockRejectedValueOnce(new Error('Network error'));
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -508,9 +549,7 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(result.isError).toBe(true);
     });
 
-    it('should return content when summaryOnly is true (fetchArticle handles summary logic)', async () => {
-      // When summaryOnly is true, the tool passes { summaryOnly: true } to fetchArticle.
-      // Since fetchArticle is mocked, the returned content is the mock's content.
+    it('should return content when summaryOnly is true', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
         arguments: { url: VALID_URL, summaryOnly: true },
@@ -521,29 +560,28 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(result.content[0].type).toBe('text');
     });
 
-    it('should pass summaryOnly option to fetchArticle', async () => {
+    it('should pass summaryOnly option to articleProvider', async () => {
       await client.callTool({
         name: 'jamf_docs_get_article',
         arguments: { url: VALID_URL, summaryOnly: true },
       });
 
-      expect(fetchArticle).toHaveBeenCalledWith(
-        expect.anything(),
-        VALID_URL,
+      expect(mockArticleProvider.getArticleByIds).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
         expect.objectContaining({ summaryOnly: true })
       );
     });
 
-    it('should pass maxTokens to fetchArticle as part of options', async () => {
+    it('should pass maxTokens to articleProvider as part of options', async () => {
       await client.callTool({
         name: 'jamf_docs_get_article',
         arguments: { url: VALID_URL, maxTokens: 1000 },
       });
 
-      // fetchArticle(ctx, url, options) — ctx is first, url second, options third
-      expect(fetchArticle).toHaveBeenCalledWith(
-        expect.anything(),
-        VALID_URL,
+      expect(mockArticleProvider.getArticleByIds).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
         expect.objectContaining({ maxTokens: 1000 })
       );
     });
