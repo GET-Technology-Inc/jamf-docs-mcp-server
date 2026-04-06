@@ -1,3 +1,9 @@
+## [3.0.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.7...v3.0.8) (2026-04-06)
+
+### Refactoring
+
+* FT service layer improvements ([#79](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/79)) ([6796731](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6796731c359ddbe55a82d2900682c4cb9ddd034a))
+
 ## [3.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.6...v3.0.7) (2026-04-04)
 
 ### Refactoring
