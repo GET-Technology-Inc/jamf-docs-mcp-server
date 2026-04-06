@@ -1,3 +1,9 @@
+## [3.0.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.8...v3.0.9) (2026-04-06)
+
+### Bug Fixes
+
+* use FT metadata title instead of HTML h1 for article titles ([#80](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/80)) ([ee252fa](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ee252fa35912e5165b29e3d798e412ae5859c7c3))
+
 ## [3.0.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.7...v3.0.8) (2026-04-06)
 
 ### Refactoring
