@@ -372,7 +372,7 @@ export function searchGlossaryEntries(
       { name: 'term', weight: 0.7 },
       { name: 'definition', weight: 0.3 },
     ],
-    threshold: 0.5,
+    threshold: 0.3,
     includeScore: true,
     ignoreLocation: true,
     minMatchCharLength: 2,

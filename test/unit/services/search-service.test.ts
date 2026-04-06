@@ -1,26 +1,30 @@
 /**
  * Unit tests for search-service — Fluid Topics powered search
+ *
+ * Mocks at the HTTP layer (http-client) so the real ft-client.search()
+ * URL construction and request body serialization are exercised.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-// Mock ft-client before importing module under test
-vi.mock('../../../src/core/services/ft-client.js', () => ({
-  search: vi.fn(),
-  fetchMaps: vi.fn().mockResolvedValue([]),
-  fetchMapToc: vi.fn().mockResolvedValue([]),
-  fetchMapTopics: vi.fn().mockResolvedValue([]),
-  fetchTopicContent: vi.fn().mockResolvedValue(''),
-  fetchTopicMetadata: vi.fn().mockResolvedValue([]),
-}));
+// Mock http-client at the HTTP layer, keeping the real HttpError class
+vi.mock('../../../src/core/http-client.js', async () => {
+  const actual = await import('../../../src/core/http-client.js');
+  return {
+    httpGetJson: vi.fn(),
+    httpGetText: vi.fn(),
+    httpPostJson: vi.fn(),
+    HttpError: actual.HttpError,
+  };
+});
 
-import { search as ftSearch } from '../../../src/core/services/ft-client.js';
+import { httpPostJson } from '../../../src/core/http-client.js';
 import {
   buildSearchFilters,
   transformFtSearchResult,
   searchDocumentation,
 } from '../../../src/core/services/search-service.js';
-import { DOCS_BASE_URL, DOC_TYPE_CONTENT_TYPE_MAP } from '../../../src/core/constants.js';
+import { DOCS_BASE_URL, FT_API_BASE, DOC_TYPE_CONTENT_TYPE_MAP } from '../../../src/core/constants.js';
 import type {
   FtSearchEntry,
   FtSearchCluster,
@@ -29,7 +33,7 @@ import type {
 } from '../../../src/core/types.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
-const mockedFtSearch = vi.mocked(ftSearch);
+const mockedPostJson = vi.mocked(httpPostJson);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -413,7 +417,7 @@ describe('searchDocumentation()', () => {
 
   it('should return results from FT API', async () => {
     const entry = makeTopicEntry();
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry])])
     );
 
@@ -424,11 +428,12 @@ describe('searchDocumentation()', () => {
   });
 
   it('should pass latestVersion filter when no version specified', async () => {
-    mockedFtSearch.mockResolvedValueOnce(makeFtResponse([]));
+    mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test' });
 
-    expect(mockedFtSearch).toHaveBeenCalledWith(
+    expect(mockedPostJson).toHaveBeenCalledWith(
+      `${FT_API_BASE}/api/khub/clustered-search`,
       expect.objectContaining({
         filters: expect.arrayContaining([
           { key: 'latestVersion', values: ['yes'] },
@@ -438,11 +443,12 @@ describe('searchDocumentation()', () => {
   });
 
   it('should pass version filter when version specified', async () => {
-    mockedFtSearch.mockResolvedValueOnce(makeFtResponse([]));
+    mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test', version: '11.5.0' });
 
-    expect(mockedFtSearch).toHaveBeenCalledWith(
+    expect(mockedPostJson).toHaveBeenCalledWith(
+      `${FT_API_BASE}/api/khub/clustered-search`,
       expect.objectContaining({
         filters: expect.arrayContaining([
           { key: 'version', values: ['11.5.0'] },
@@ -452,11 +458,12 @@ describe('searchDocumentation()', () => {
   });
 
   it('should pass product filter as zoominmetadata', async () => {
-    mockedFtSearch.mockResolvedValueOnce(makeFtResponse([]));
+    mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test', product: 'jamf-protect' });
 
-    expect(mockedFtSearch).toHaveBeenCalledWith(
+    expect(mockedPostJson).toHaveBeenCalledWith(
+      `${FT_API_BASE}/api/khub/clustered-search`,
       expect.objectContaining({
         filters: expect.arrayContaining([
           { key: 'zoominmetadata', values: ['product-protect'] },
@@ -466,7 +473,7 @@ describe('searchDocumentation()', () => {
   });
 
   it('should return empty results when API returns no clusters', async () => {
-    mockedFtSearch.mockResolvedValueOnce(makeFtResponse([]));
+    mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     const result = await searchDocumentation(ctx, { query: 'nonexistent' });
     expect(result.results).toHaveLength(0);
@@ -474,7 +481,7 @@ describe('searchDocumentation()', () => {
   });
 
   it('should handle API errors gracefully', async () => {
-    mockedFtSearch.mockRejectedValueOnce(new Error('Network timeout'));
+    mockedPostJson.mockRejectedValueOnce(new Error('Network timeout'));
 
     const result = await searchDocumentation(ctx, { query: 'test' });
     expect(result.results).toHaveLength(0);
@@ -492,7 +499,7 @@ describe('searchDocumentation()', () => {
         }),
       })
     );
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster(entries)])
     );
 
@@ -528,12 +535,12 @@ describe('searchDocumentation()', () => {
     const result = await searchDocumentation(ctxWithProvider, { query: 'test' });
     expect(result.results).toHaveLength(1);
     expect(result.results[0].title).toBe('Custom Result');
-    expect(mockedFtSearch).not.toHaveBeenCalled();
+    expect(mockedPostJson).not.toHaveBeenCalled();
   });
 
   it('should fall through to FT API when SearchProvider returns null', async () => {
     const entry = makeTopicEntry({ title: 'FT Result' });
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry])])
     );
 
@@ -546,12 +553,12 @@ describe('searchDocumentation()', () => {
     const result = await searchDocumentation(ctxWithNullProvider, { query: 'test' });
     expect(result.results).toHaveLength(1);
     expect(result.results[0].title).toBe('FT Result');
-    expect(mockedFtSearch).toHaveBeenCalled();
+    expect(mockedPostJson).toHaveBeenCalled();
   });
 
   it('should include tokenInfo in response', async () => {
     const entry = makeTopicEntry();
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry])])
     );
 
@@ -563,11 +570,12 @@ describe('searchDocumentation()', () => {
   });
 
   it('should pass locale as contentLocale to FT API', async () => {
-    mockedFtSearch.mockResolvedValueOnce(makeFtResponse([]));
+    mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test', language: 'ja-JP' });
 
-    expect(mockedFtSearch).toHaveBeenCalledWith(
+    expect(mockedPostJson).toHaveBeenCalledWith(
+      `${FT_API_BASE}/api/khub/clustered-search`,
       expect.objectContaining({
         contentLocale: 'ja-JP',
       })
@@ -577,7 +585,7 @@ describe('searchDocumentation()', () => {
   it('should flatten multiple clusters into results', async () => {
     const entry1 = makeTopicEntry({ title: 'Cluster 1 Result', contentId: 'c1' });
     const entry2 = makeTopicEntry({ title: 'Cluster 2 Result', contentId: 'c2' });
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry1]), makeCluster([entry2])])
     );
 
@@ -593,7 +601,7 @@ describe('searchDocumentation()', () => {
 
   it('should cache FT API results and return cached on second call', async () => {
     const entry = makeTopicEntry({ title: 'Cached Result' });
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry])])
     );
 
@@ -601,19 +609,19 @@ describe('searchDocumentation()', () => {
     const first = await searchDocumentation(ctx, { query: 'cache-test' });
     expect(first.results).toHaveLength(1);
     expect(first.results[0].title).toBe('Cached Result');
-    expect(mockedFtSearch).toHaveBeenCalledTimes(1);
+    expect(mockedPostJson).toHaveBeenCalledTimes(1);
 
     // Second call — should come from cache, no additional API call
     const second = await searchDocumentation(ctx, { query: 'cache-test' });
     expect(second.results).toHaveLength(1);
     expect(second.results[0].title).toBe('Cached Result');
-    expect(mockedFtSearch).toHaveBeenCalledTimes(1); // still 1
+    expect(mockedPostJson).toHaveBeenCalledTimes(1); // still 1
   });
 
   it('should use different cache keys for different queries', async () => {
     const entryA = makeTopicEntry({ title: 'Result A', contentId: 'a' });
     const entryB = makeTopicEntry({ title: 'Result B', contentId: 'b' });
-    mockedFtSearch
+    mockedPostJson
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entryA])]))
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entryB])]));
 
@@ -622,13 +630,13 @@ describe('searchDocumentation()', () => {
 
     expect(resultA.results[0].title).toBe('Result A');
     expect(resultB.results[0].title).toBe('Result B');
-    expect(mockedFtSearch).toHaveBeenCalledTimes(2);
+    expect(mockedPostJson).toHaveBeenCalledTimes(2);
   });
 
   it('should use different cache keys for different filters', async () => {
     const entryPro = makeTopicEntry({ title: 'Pro Result' });
     const entrySchool = makeTopicEntry({ title: 'School Result' });
-    mockedFtSearch
+    mockedPostJson
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entryPro])]))
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entrySchool])]));
 
@@ -643,7 +651,7 @@ describe('searchDocumentation()', () => {
 
     expect(prResult.results[0].title).toBe('Pro Result');
     expect(scResult.results[0].title).toBe('School Result');
-    expect(mockedFtSearch).toHaveBeenCalledTimes(2);
+    expect(mockedPostJson).toHaveBeenCalledTimes(2);
   });
 
   it('should NOT cache results from SearchProvider', async () => {
@@ -671,7 +679,7 @@ describe('searchDocumentation()', () => {
   it('should cache results keyed by locale', async () => {
     const entryEn = makeTopicEntry({ title: 'English Result' });
     const entryJa = makeTopicEntry({ title: 'Japanese Result' });
-    mockedFtSearch
+    mockedPostJson
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entryEn])]))
       .mockResolvedValueOnce(makeFtResponse([makeCluster([entryJa])]));
 
@@ -679,7 +687,7 @@ describe('searchDocumentation()', () => {
     await searchDocumentation(ctx, { query: 'locale-test', language: 'ja-JP' });
 
     // Both should call FT API since locale differs
-    expect(mockedFtSearch).toHaveBeenCalledTimes(2);
+    expect(mockedPostJson).toHaveBeenCalledTimes(2);
   });
 
   it('should share cache across different page requests', async () => {
@@ -694,7 +702,7 @@ describe('searchDocumentation()', () => {
         }),
       })
     );
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster(entries)])
     );
 
@@ -713,12 +721,12 @@ describe('searchDocumentation()', () => {
       page: 2,
     });
     expect(page2.results).toHaveLength(5);
-    expect(mockedFtSearch).toHaveBeenCalledTimes(1);
+    expect(mockedPostJson).toHaveBeenCalledTimes(1);
   });
 
   it('should pass cacheTtl.search as TTL to cache.set', async () => {
     const entry = makeTopicEntry();
-    mockedFtSearch.mockResolvedValueOnce(
+    mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster([entry])])
     );
 
@@ -728,6 +736,119 @@ describe('searchDocumentation()', () => {
       expect.stringContaining('ft-search:'),
       expect.any(Array),
       ctx.config.cacheTtl.search,
+    );
+  });
+
+  // ==========================================================================
+  // paginationNote when requested page exceeds total pages
+  // ==========================================================================
+
+  it('should include paginationNote when requested page exceeds total pages', async () => {
+    // Return 3 results — with limit=5 that's 1 page total
+    const entries = Array.from({ length: 3 }, (_, i) =>
+      makeTopicEntry({
+        title: `Result ${i + 1}`,
+        contentId: `topic-pn-${i}`,
+        metadata: makeMetadata({
+          'zoominmetadata': ['product-pro'],
+          'ft:prettyUrl': [`/en-US/bundle/jamf-pro-documentation/page/pn-${i}.html`],
+          'version': ['11.5.0'],
+        }),
+      })
+    );
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([makeCluster(entries)])
+    );
+
+    const result = await searchDocumentation(ctx, {
+      query: 'pagination-note-test',
+      limit: 5,
+      page: 99,
+    });
+
+    // The page should be clamped to the last page (1)
+    expect(result.pagination.page).toBe(1);
+    expect(result.pagination.totalPages).toBe(1);
+
+    // paginationNote should exist and mention the requested page number
+    const note = (result as Record<string, unknown>).paginationNote as string;
+    expect(note).toBeDefined();
+    expect(note).toContain('99');
+    expect(note).toContain('1'); // total pages
+  });
+
+  it('should NOT include paginationNote when requested page is within range', async () => {
+    const entries = Array.from({ length: 10 }, (_, i) =>
+      makeTopicEntry({
+        title: `Result ${i + 1}`,
+        contentId: `topic-no-pn-${i}`,
+        metadata: makeMetadata({
+          'zoominmetadata': ['product-pro'],
+          'ft:prettyUrl': [`/en-US/bundle/jamf-pro-documentation/page/no-pn-${i}.html`],
+          'version': ['11.5.0'],
+        }),
+      })
+    );
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([makeCluster(entries)])
+    );
+
+    const result = await searchDocumentation(ctx, {
+      query: 'no-pagination-note-test',
+      limit: 5,
+      page: 2,
+    });
+
+    expect(result.pagination.page).toBe(2);
+    const note = (result as Record<string, unknown>).paginationNote;
+    expect(note).toBeUndefined();
+  });
+
+  // ==========================================================================
+  // Token truncation — actual truncation of results under small maxTokens
+  // ==========================================================================
+
+  it('should truncate results when maxTokens budget is exceeded', async () => {
+    // Create 20 results with substantial content to exceed a small token budget
+    const entries = Array.from({ length: 20 }, (_, i) =>
+      makeTopicEntry({
+        title: `Detailed Article Number ${i + 1} About Device Management`,
+        contentId: `topic-trunc-${i}`,
+        htmlExcerpt: `<p>This is a detailed description of article ${i + 1} ` +
+          'covering device management, configuration profiles, security policies, ' +
+          'network settings, application deployment, inventory management, and ' +
+          'compliance reporting for enterprise environments using Jamf Pro.</p>',
+        metadata: makeMetadata({
+          'zoominmetadata': ['product-pro'],
+          'ft:prettyUrl': [
+            `/en-US/bundle/jamf-pro-documentation/page/article-${i}.html`,
+          ],
+          'version': ['11.5.0'],
+          'jamf:contentType': ['Technical Documentation'],
+        }),
+      })
+    );
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([makeCluster(entries)])
+    );
+
+    const result = await searchDocumentation(ctx, {
+      query: 'device management',
+      maxTokens: 200,
+      limit: 20,
+    });
+
+    // With only 200 tokens budget, not all 20 results should fit
+    expect(result.results.length).toBeLessThan(20);
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.tokenInfo.truncated).toBe(true);
+    expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(200);
+
+    // truncatedContent should describe the omitted items
+    expect(result.truncatedContent).toBeDefined();
+    expect(result.truncatedContent!.omittedCount).toBeGreaterThan(0);
+    expect(result.truncatedContent!.omittedCount).toBe(
+      20 - result.results.length
     );
   });
 });

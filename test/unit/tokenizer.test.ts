@@ -304,7 +304,9 @@ describe('calculatePagination', () => {
       hasNext: true,
       hasPrev: false,
       startIndex: 0,
-      endIndex: 10
+      endIndex: 10,
+      requestedPage: 1,
+      pageWasClamped: false
     });
   });
 
@@ -574,6 +576,26 @@ describe('calculatePagination - additional edge cases', () => {
   it('should clamp page>totalPages to totalPages even when totalItems=0', () => {
     // totalPages = 0, so normalizedPage = Math.min(Math.max(1, page), Math.max(0, 1)) = Math.min(page, 1) = 1
     const result = calculatePagination(0, 5, 10);
+    expect(result.page).toBe(1);
+  });
+
+  it('should set pageWasClamped when page exceeds totalPages', () => {
+    const result = calculatePagination(50, 99, 10);
+    expect(result.pageWasClamped).toBe(true);
+    expect(result.requestedPage).toBe(99);
+    expect(result.page).toBe(5); // clamped to last page
+  });
+
+  it('should not set pageWasClamped for valid page', () => {
+    const result = calculatePagination(50, 3, 10);
+    expect(result.pageWasClamped).toBe(false);
+    expect(result.requestedPage).toBe(3);
+  });
+
+  it('should set pageWasClamped when page is less than 1', () => {
+    const result = calculatePagination(50, -1, 10);
+    expect(result.pageWasClamped).toBe(true);
+    expect(result.requestedPage).toBe(-1);
     expect(result.page).toBe(1);
   });
 });

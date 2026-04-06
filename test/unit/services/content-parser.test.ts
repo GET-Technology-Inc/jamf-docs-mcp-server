@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parseArticle, cleanSnippet, htmlToMarkdown } from '../../../src/core/services/content-parser.js';
+import { extractSections } from '../../../src/core/services/tokenizer.js';
 
 describe('parseArticle', () => {
   it('should extract title and convert content to markdown', () => {
@@ -116,6 +117,55 @@ describe('parseArticle', () => {
 
     expect(result.content).toContain('policy is applied');
     expect(result.content.length).toBeGreaterThan(10);
+  });
+
+  it('should extract title when h1 is outside body wrapper', () => {
+    const html = `
+      <html><body>
+        <h1>Computer Configuration Profiles</h1>
+        <div class="taskbody">
+          <section class="section"><h2>Prerequisites</h2><p>Content here</p></section>
+        </div>
+      </body></html>
+    `;
+    const result = parseArticle(html, 'https://learn.jamf.com/r/en-US/doc/page');
+    expect(result.title).toBe('Computer Configuration Profiles');
+    // Body wrapper content is extracted separately from the h1 title
+    expect(result.content).toContain('Prerequisites');
+    expect(result.content).toContain('Content here');
+  });
+
+  it('should extract sections when headings are inside body wrapper', () => {
+    const html = `
+      <html><body>
+        <h1>Main Title</h1>
+        <div class="conbody">
+          <h2>Section One</h2><p>Content one</p>
+          <h2>Section Two</h2><p>Content two</p>
+        </div>
+      </body></html>
+    `;
+    const result = parseArticle(html, 'https://learn.jamf.com/r/en-US/doc/page');
+    const sections = extractSections(result.content);
+    expect(sections.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('should prefer article wrapper over body wrapper when they are siblings', () => {
+    const html = `
+      <html><body>
+        <article>
+          <h1>Article Title</h1>
+          <p>Full article content with details</p>
+        </article>
+        <div class="taskbody">
+          <p>Narrow body only</p>
+        </div>
+      </body></html>
+    `;
+    const result = parseArticle(html, 'https://learn.jamf.com/r/en-US/doc/page');
+    expect(result.title).toBe('Article Title');
+    expect(result.content).toContain('Full article content');
+    expect(result.content).not.toContain('Narrow body only');
   });
 });
 

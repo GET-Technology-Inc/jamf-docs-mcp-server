@@ -28,6 +28,8 @@ export interface TopicResolverInput {
   url?: string;
   mapId?: string;
   contentId?: string;
+  /** Optional locale override — takes precedence over locale extracted from URL */
+  locale?: string | undefined;
 }
 
 // ─── URL Parsers ────────────────────────────────────────────────
@@ -78,7 +80,7 @@ function parsePrettyUrl(pathname: string): ParsedPrettyUrl | null {
   };
 }
 
-function parseUrl(url: string): ParsedUrl | null {
+export function parseUrl(url: string): ParsedUrl | null {
   try {
     const parsed = new URL(url);
     return parseLegacyUrl(parsed.pathname) ?? parsePrettyUrl(parsed.pathname);
@@ -183,10 +185,13 @@ export class TopicResolver {
   async resolve(input: TopicResolverInput): Promise<ResolvedTopic> {
     // Direct IDs — zero cost passthrough
     if (input.mapId && input.contentId) {
+      const locale = input.locale !== undefined && input.locale !== ''
+        ? toValidLocale(input.locale)
+        : DEFAULT_LOCALE;
       return {
         mapId: input.mapId,
         contentId: input.contentId,
-        locale: DEFAULT_LOCALE,
+        locale,
       };
     }
 
@@ -206,15 +211,22 @@ export class TopicResolver {
       );
     }
 
+    const localeOverride = input.locale !== undefined && input.locale !== ''
+      ? toValidLocale(input.locale)
+      : undefined;
+
     if (parsed.type === 'legacy') {
-      return await this.resolveLegacy(parsed);
+      return await this.resolveLegacy(parsed, localeOverride);
     }
 
-    return await this.resolvePretty(parsed);
+    return await this.resolvePretty(parsed, localeOverride);
   }
 
-  private async resolveLegacy(parsed: ParsedLegacyUrl): Promise<ResolvedTopic> {
-    const locale = toValidLocale(parsed.locale);
+  private async resolveLegacy(
+    parsed: ParsedLegacyUrl,
+    localeOverride?: LocaleId,
+  ): Promise<ResolvedTopic> {
+    const locale = localeOverride ?? toValidLocale(parsed.locale);
 
     const mapId = await this.registry.resolveFromBundleId(parsed.bundleId, locale);
     if (mapId === null) {
@@ -236,8 +248,11 @@ export class TopicResolver {
     return { mapId, contentId, locale };
   }
 
-  private async resolvePretty(parsed: ParsedPrettyUrl): Promise<ResolvedTopic> {
-    const locale = toValidLocale(parsed.locale);
+  private async resolvePretty(
+    parsed: ParsedPrettyUrl,
+    localeOverride?: LocaleId,
+  ): Promise<ResolvedTopic> {
+    const locale = localeOverride ?? toValidLocale(parsed.locale);
 
     const mapId = await this.registry.resolveMapId(
       parsed.productSlug, undefined, locale

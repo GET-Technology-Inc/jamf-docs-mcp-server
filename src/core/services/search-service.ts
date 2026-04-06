@@ -34,7 +34,8 @@ import { getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import {
   estimateTokens,
   calculatePagination,
-  truncateItemsToTokenLimit,
+  truncateListByTokens,
+  buildPaginationNote,
 } from './tokenizer.js';
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -427,23 +428,14 @@ function truncateSearchResults(
   truncated: boolean;
   truncatedContent?: TruncatedContentInfo;
 } {
-  const { items, tokenInfo } = truncateItemsToTokenLimit(
-    paginatedResults,
-    maxTokens,
-    resultToString,
-    1,
-    paginatedResults.length,
-  );
+  const { items: finalResults, tokenCount: finalTokenCount, truncated } =
+    truncateListByTokens(paginatedResults, maxTokens, resultToString);
 
-  if (!tokenInfo.truncated) {
-    return {
-      finalResults: items,
-      finalTokenCount: tokenInfo.tokenCount,
-      truncated: false,
-    };
+  if (!truncated) {
+    return { finalResults, finalTokenCount, truncated: false };
   }
 
-  const omittedResults = paginatedResults.slice(items.length);
+  const omittedResults = paginatedResults.slice(finalResults.length);
   const truncatedContent: TruncatedContentInfo = {
     omittedCount: omittedResults.length,
     omittedItems: omittedResults.map(r => ({
@@ -452,12 +444,7 @@ function truncateSearchResults(
     })),
   };
 
-  return {
-    finalResults: items,
-    finalTokenCount: tokenInfo.tokenCount,
-    truncated: true,
-    truncatedContent,
-  };
+  return { finalResults, finalTokenCount, truncated: true, truncatedContent };
 }
 
 // ─── Convert flat SearchResult to SearchResultWithMeta ─────────
@@ -527,14 +514,14 @@ export async function searchDocumentation(
   // Calculate pagination
   const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
 
-  // Get paginated results
   const paginatedResults = filteredResults
     .slice(paginationInfo.startIndex, paginationInfo.endIndex)
     .map(r => r.result);
 
-  // Truncate results to fit within token budget
   const { finalResults, finalTokenCount, truncated, truncatedContent } =
     truncateSearchResults(paginatedResults, maxTokens);
+
+  const paginationNote = buildPaginationNote(paginationInfo);
 
   return {
     results: finalResults,
@@ -551,6 +538,7 @@ export async function searchDocumentation(
       truncated,
       maxTokens,
     },
+    ...(paginationNote !== undefined ? { paginationNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {}),
     ...(searchError !== undefined ? { searchError } : {}),

@@ -423,6 +423,69 @@ describe('jamf_docs_list_products tool', () => {
     });
   });
 
+  // --- maxTokens behaviour (regression test for #9) -------------------------
+
+  describe('maxTokens behaviour', () => {
+    it('should truncate markdown output when maxTokens is small', async () => {
+      // First, get the full output to know its size
+      const fullResult = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { maxTokens: 20000 },
+      });
+      const fullText = getTextContent(fullResult);
+
+      // Now request with the minimum allowed token limit
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { maxTokens: 100 },
+      });
+
+      const text = getTextContent(result);
+      // Output must contain truncation indicator
+      expect(text).toContain('Content truncated');
+      // Truncated output must be shorter than the full output
+      expect(text.length).toBeLessThan(fullText.length);
+    });
+
+    it('should reflect maxTokens in JSON tokenInfo when maxTokens is small', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { responseFormat: 'json', maxTokens: 100 },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      expect(json.tokenInfo).toBeDefined();
+      // maxTokens should be forwarded into tokenInfo so callers know the budget
+      expect(json.tokenInfo.maxTokens).toBe(100);
+      // The full product list exceeds 100 tokens
+      expect(json.tokenInfo.tokenCount).toBeGreaterThan(100);
+    });
+
+    it('should set truncated to false in JSON when maxTokens is large enough', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { responseFormat: 'json', maxTokens: 20000 },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      expect(json.tokenInfo.maxTokens).toBe(20000);
+      expect(json.tokenInfo.truncated).toBe(false);
+    });
+
+    it('should return full markdown output when maxTokens is large enough', async () => {
+      const result = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { maxTokens: 20000 },
+      });
+
+      const text = getTextContent(result);
+      // With generous maxTokens the output should contain all products
+      expect(text).toContain('## Jamf Pro');
+      expect(text).toContain('## Jamf Protect');
+      expect(text).toContain('# Available Topics for Filtering');
+    });
+  });
+
   // --- Product availability filtering ---------------------------------------
 
   describe('product availability filtering', () => {

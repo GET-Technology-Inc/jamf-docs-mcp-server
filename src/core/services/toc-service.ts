@@ -7,7 +7,11 @@
 
 import { fetchMapToc } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
-import { calculatePagination, truncateItemsToTokenLimit } from './tokenizer.js';
+import {
+  calculatePagination,
+  truncateListByTokens,
+  buildPaginationNote,
+} from './tokenizer.js';
 import {
   JAMF_PRODUCTS,
   DEFAULT_LOCALE,
@@ -129,14 +133,10 @@ export async function fetchTableOfContents(
 
   const paginatedToc = allToc.slice(paginationCalc.startIndex, paginationCalc.endIndex);
 
-  // Token-truncate the paginated slice
-  const { items: finalToc, tokenInfo } = truncateItemsToTokenLimit(
-    paginatedToc,
-    maxTokens,
-    tocEntryToString,
-    1,
-    paginatedToc.length,
-  );
+  const { items: finalToc, tokenCount, truncated } =
+    truncateListByTokens(paginatedToc, maxTokens, tocEntryToString);
+
+  const tokenInfo = { tokenCount, truncated, maxTokens };
 
   const pagination: PaginationInfo = {
     page: paginationCalc.page,
@@ -147,5 +147,12 @@ export async function fetchTableOfContents(
     hasPrev: paginationCalc.hasPrev,
   };
 
-  return { toc: finalToc, pagination, tokenInfo };
+  const paginationNote = buildPaginationNote(paginationCalc);
+
+  return {
+    toc: finalToc,
+    pagination,
+    tokenInfo,
+    ...(paginationNote !== undefined ? { paginationNote } : {}),
+  };
 }

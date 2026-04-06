@@ -11,6 +11,7 @@ import { reportProgress } from '../utils/progress.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { isAllowedHostname } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
 
@@ -143,6 +144,11 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
       // Build fetch tasks — each task catches its own errors
       const tasks = params.urls.map((url) => {
         return async (): Promise<FetchResult> => {
+          if (!isAllowedHostname(url)) {
+            completedCount++;
+            await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });
+            return { status: 'error', url, error: 'URL must be from docs.jamf.com or learn.jamf.com' };
+          }
           try {
             const options: FetchArticleOptions = {
               maxTokens: perArticleTokens,

@@ -210,6 +210,70 @@ describe('jamf_docs_glossary_lookup', () => {
     });
   });
 
+  describe('language warning', () => {
+    it('should show English-only warning for non-English language', async () => {
+      vi.mocked(lookupGlossaryTerm).mockResolvedValue({
+        entries: [{
+          term: 'MDM',
+          definition: 'Mobile Device Management protocol.',
+          url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Glossary.html',
+        }],
+        totalMatches: 1,
+        tokenInfo: createTokenInfo({ tokenCount: 50, truncated: false }),
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'MDM', language: 'zh-TW' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toMatch(/English|en-US/i);
+    });
+
+    it('should show English-only warning in JSON format for non-English language', async () => {
+      vi.mocked(lookupGlossaryTerm).mockResolvedValue({
+        entries: [{
+          term: 'MDM',
+          definition: 'Mobile Device Management protocol.',
+          url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Glossary.html',
+        }],
+        totalMatches: 1,
+        tokenInfo: createTokenInfo({ tokenCount: 50, truncated: false }),
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'MDM', language: 'ja-JP', responseFormat: 'json' },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      expect(json.warning).toBeDefined();
+      expect(json.warning).toMatch(/English|en-US/i);
+    });
+
+    it('should not show warning for English locale', async () => {
+      vi.mocked(lookupGlossaryTerm).mockResolvedValue({
+        entries: [{
+          term: 'MDM',
+          definition: 'Mobile Device Management protocol.',
+          url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Glossary.html',
+        }],
+        totalMatches: 1,
+        tokenInfo: createTokenInfo({ tokenCount: 50, truncated: false }),
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'MDM', language: 'en-US' },
+      });
+
+      const text = getTextContent(result);
+      // Should not contain the English-only warning
+      expect(text).not.toContain('currently only available in English');
+    });
+  });
+
   describe('error handling', () => {
     it('should return error message on service failure', async () => {
       vi.mocked(lookupGlossaryTerm).mockRejectedValue(new Error('Network timeout'));

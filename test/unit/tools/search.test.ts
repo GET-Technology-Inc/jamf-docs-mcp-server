@@ -573,6 +573,87 @@ describe('jamf_docs_search tool', () => {
     });
   });
 
+  // --- maxTokens behaviour (regression test for #12) ------------------------
+
+  describe('maxTokens behaviour', () => {
+    it('should respect maxTokens limit by reflecting truncation in output', async () => {
+      // Simulate many results that would collectively exceed a small token budget.
+      // searchDocumentation is mocked, so we return a response where the service
+      // has already applied truncation (truncated: true) for a small maxTokens.
+      const manyResults = Array.from({ length: 10 }, (_, i) =>
+        createSearchResult({
+          title: `Article ${i + 1}: A Long Title About Apple Device Management`,
+          snippet: 'This is a detailed snippet about configuring devices and policies '
+            + 'for enterprise management including enrollment, profiles, and more.',
+          url: `https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Article_${i + 1}.html`,
+        })
+      );
+
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: manyResults,
+          pagination: createPaginationInfo({
+            totalItems: 10,
+            totalPages: 1,
+            hasNext: false,
+            pageSize: 10,
+          }),
+          tokenInfo: createTokenInfo({
+            truncated: true,
+            tokenCount: 100,
+            maxTokens: 100,
+          }),
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'device management', maxTokens: 100 },
+      });
+
+      const text = getTextContent(result);
+      // The tool should render the truncation notice from tokenInfo.truncated
+      expect(text.toLowerCase()).toContain('truncated');
+    });
+
+    it('should forward maxTokens to searchDocumentation', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult()],
+          tokenInfo: createTokenInfo({ tokenCount: 50, maxTokens: 200 }),
+        })
+      );
+
+      await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'test', maxTokens: 200 },
+      });
+
+      // Verify searchDocumentation was called with the correct maxTokens
+      expect(searchDocumentation).toHaveBeenCalledTimes(1);
+      const callArgs = vi.mocked(searchDocumentation).mock.calls[0];
+      // Second argument is the params object containing maxTokens
+      expect(callArgs[1]).toMatchObject({ maxTokens: 200 });
+    });
+
+    it('should not show truncation notice when maxTokens is sufficient', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult()],
+          tokenInfo: createTokenInfo({ truncated: false, tokenCount: 200, maxTokens: 5000 }),
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'test', maxTokens: 5000 },
+      });
+
+      const text = getTextContent(result);
+      expect(text).not.toContain('Results truncated');
+    });
+  });
+
   // --- Error paths ---------------------------------------------------------
 
   describe('error handling', () => {

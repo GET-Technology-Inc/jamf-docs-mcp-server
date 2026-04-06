@@ -9,7 +9,7 @@ import { ListProductsInputSchema } from '../schemas/index.js';
 import { ProductListOutputSchema } from '../schemas/output.js';
 import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult } from '../types.js';
-import { estimateTokens, createTokenInfo } from '../services/tokenizer.js';
+import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
 import { getProductAvailability } from '../services/metadata.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
@@ -134,12 +134,14 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           for (const topic of topics) {
             markdown += `- \`${topic.id}\`: ${topic.name}\n`;
           }
+
+          const compactResult = truncateToTokenLimit(markdown, maxTokens);
           await reportProgress(extra, { progress: 3, total: 3 });
 
           return {
             content: [{
               type: 'text',
-              text: markdown
+              text: compactResult.content
             }],
             structuredContent
           };
@@ -185,12 +187,14 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         markdown += '*Use `jamf_docs_search` to search within these products, ';
         markdown += 'or `jamf_docs_get_toc` to browse the table of contents.*\n';
 
+        const fullResult = truncateToTokenLimit(markdown, maxTokens);
+
         await reportProgress(extra, { progress: 3, total: 3 });
 
         return {
           content: [{
             type: 'text',
-            text: markdown
+            text: fullResult.content
           }],
           structuredContent
         };

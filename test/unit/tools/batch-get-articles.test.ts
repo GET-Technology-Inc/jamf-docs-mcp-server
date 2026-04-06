@@ -219,13 +219,40 @@ describe('jamf_docs_batch_get_articles tool', () => {
       expect(getTextContent(result)).toMatch(/Invalid input|validation error/i);
     });
 
-    it('should reject invalid URL domains', async () => {
+    it('should report invalid URL domains as per-article error', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_batch_get_articles',
         arguments: { urls: ['https://evil.com/malicious'] },
       });
-      expect(result.isError).toBe(true);
-      expect(getTextContent(result)).toMatch(/Invalid input|validation error/i);
+      const text = getTextContent(result);
+      expect(text).toMatch(/docs\.jamf\.com|learn\.jamf\.com/);
+      expect(text).toMatch(/0\/1 articles retrieved/);
+    });
+
+    it('should handle mixed valid and invalid domains per-article', async () => {
+      mock.setRepeating(
+        createFetchArticleResult({
+          title: 'Valid Article',
+          content: 'Valid content',
+          tokenInfo: createTokenInfo({ tokenCount: 300 }),
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_batch_get_articles',
+        arguments: {
+          urls: [
+            'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Test.html',
+            'https://evil.com/malicious',
+          ],
+        },
+      });
+
+      // Should NOT fail entire batch — invalid domain should be a per-article error
+      expect(result.isError).not.toBe(true);
+      const text = getTextContent(result);
+      // The invalid domain URL should appear as a per-article error
+      expect(text).toContain('evil.com');
     });
   });
 

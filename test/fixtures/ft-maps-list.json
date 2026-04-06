@@ -1,0 +1,67 @@
+[
+  {
+    "title": "Jamf Pro Documentation",
+    "id": "rl4BoC7yEG_jamf_pro_latest",
+    "mapApiEndpoint": "/api/khub/maps/rl4BoC7yEG_jamf_pro_latest",
+    "metadata": [
+      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-pro-documentation"] },
+      { "key": "version", "label": "Version", "values": ["11.25.0"] },
+      { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
+      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-pro-documentation"] },
+      { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-pro"] }
+    ]
+  },
+  {
+    "title": "Jamf Pro Documentation",
+    "id": "xK9mPqR3_jamf_pro_old",
+    "mapApiEndpoint": "/api/khub/maps/xK9mPqR3_jamf_pro_old",
+    "metadata": [
+      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-pro-documentation"] },
+      { "key": "version", "label": "Version", "values": ["11.24.0"] },
+      { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
+      { "key": "latestVersion", "label": "Latest Version", "values": ["no"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-pro-documentation"] },
+      { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-pro"] }
+    ]
+  },
+  {
+    "title": "Jamf Connect Documentation",
+    "id": "aB3cDe5fG_jamf_connect",
+    "mapApiEndpoint": "/api/khub/maps/aB3cDe5fG_jamf_connect",
+    "metadata": [
+      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-connect-documentation"] },
+      { "key": "version", "label": "Version", "values": ["2.40.0"] },
+      { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
+      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-connect-documentation"] },
+      { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-connect"] }
+    ]
+  },
+  {
+    "title": "Jamf Pro Documentation",
+    "id": "jP_de_DE_latest",
+    "mapApiEndpoint": "/api/khub/maps/jP_de_DE_latest",
+    "metadata": [
+      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-pro-documentation"] },
+      { "key": "version", "label": "Version", "values": ["11.25.0"] },
+      { "key": "ft:locale", "label": "Locale", "values": ["de-DE"] },
+      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-pro-documentation"] },
+      { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-pro"] }
+    ]
+  },
+  {
+    "title": "Jamf Protect Documentation",
+    "id": "hJ7kLm9nO_jamf_protect",
+    "mapApiEndpoint": "/api/khub/maps/hJ7kLm9nO_jamf_protect",
+    "metadata": [
+      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-protect-documentation"] },
+      { "key": "version", "label": "Version", "values": ["5.5.0"] },
+      { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
+      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-protect-documentation"] },
+      { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-protect"] }
+    ]
+  }
+]

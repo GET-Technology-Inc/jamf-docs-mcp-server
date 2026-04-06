@@ -269,10 +269,6 @@ export const GetBatchArticlesInputSchema = z.object({
   urls: z.array(
     z.string()
       .url('Each item must be a valid URL')
-      .refine(
-        (url) => isAllowedHostname(url),
-        'URL must be from docs.jamf.com or learn.jamf.com'
-      )
   )
     .min(1, 'At least 1 URL is required')
     .max(10, 'Maximum 10 URLs allowed per batch')
