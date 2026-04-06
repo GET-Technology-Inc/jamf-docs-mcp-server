@@ -14,6 +14,16 @@ import { lookupGlossaryTerm } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
+const ENGLISH_ONLY_WARNING =
+  'Note: Glossary content is currently only available in English (en-US).' +
+  ' Showing English results.';
+
+function isNonEnglishLocale(language: string | undefined): boolean {
+  if (language === undefined) return false;
+  const normalised = language.toLowerCase();
+  return normalised !== 'en-us' && normalised !== 'en';
+}
+
 function formatEntryMarkdown(entry: GlossaryEntry): string {
   let output = `### ${sanitizeMarkdownText(entry.term)}\n\n`;
   output += `${entry.definition}\n\n`;
@@ -49,10 +59,13 @@ const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get i
 This tool searches glossary pages across Jamf product documentation and returns
 matching term definitions using fuzzy matching.
 
+Note: Glossary content is currently only available in English (en-US).
+Non-English language parameters are accepted but results will be in English.
+
 Args:
   - term (string, required): Glossary term to look up (2-100 characters). Supports fuzzy matching.
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
-  - language (string, optional): Documentation language/locale (default: en-US)
+  - language (string, optional): Documentation language/locale (default: en-US). Note: glossary is English-only.
   - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full')
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
@@ -153,33 +166,42 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           };
         }
 
+        const nonEnglish = isNonEnglishLocale(params.language);
+
         // JSON format
         if (params.responseFormat === ResponseFormat.JSON) {
+          const jsonPayload: Record<string, unknown> = {
+            term: params.term,
+            totalMatches: result.totalMatches,
+            entries: result.entries,
+            tokenInfo: result.tokenInfo,
+          };
+          if (nonEnglish) {
+            jsonPayload.warning = ENGLISH_ONLY_WARNING;
+          }
           await reportProgress(extra, { progress: 3, total: 3 });
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify({
-                term: params.term,
-                totalMatches: result.totalMatches,
-                entries: result.entries,
-                tokenInfo: result.tokenInfo,
-              }, null, 2),
+              text: JSON.stringify(jsonPayload, null, 2),
             }],
             structuredContent,
           };
         }
 
         // Markdown format
+        const langWarning = nonEnglish ? `> ${ENGLISH_ONLY_WARNING}\n\n` : '';
         let markdown: string;
         if (params.outputMode === OutputMode.COMPACT) {
           markdown = `## Glossary: "${params.term}" (${result.totalMatches} match${result.totalMatches !== 1 ? 'es' : ''})\n\n`;
+          markdown += langWarning;
           result.entries.forEach((entry, idx) => {
             markdown += formatEntryCompact(entry, idx + 1);
           });
           markdown += formatTokenFooter(result.tokenInfo, result.totalMatches, result.entries.length);
         } else {
           markdown = `# Glossary Lookup: "${params.term}"\n\n`;
+          markdown += langWarning;
           markdown += `Found ${result.totalMatches} match${result.totalMatches !== 1 ? 'es' : ''}\n\n---\n\n`;
           for (const entry of result.entries) {
             markdown += formatEntryMarkdown(entry);

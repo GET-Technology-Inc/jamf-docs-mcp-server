@@ -426,6 +426,8 @@ export function calculatePagination(
   hasPrev: boolean;
   startIndex: number;
   endIndex: number;
+  requestedPage: number;
+  pageWasClamped: boolean;
 } {
   const totalPages = Math.ceil(totalItems / pageSize);
   const normalizedPage = Math.min(Math.max(1, page), Math.max(totalPages, 1));
@@ -438,8 +440,46 @@ export function calculatePagination(
     hasNext: normalizedPage < totalPages,
     hasPrev: normalizedPage > 1,
     startIndex: (normalizedPage - 1) * pageSize,
-    endIndex: Math.min(normalizedPage * pageSize, totalItems)
+    endIndex: Math.min(normalizedPage * pageSize, totalItems),
+    requestedPage: page,
+    pageWasClamped: normalizedPage !== page,
   };
+}
+
+/**
+ * Truncate an already-paginated list to fit within a token budget.
+ * Items are dropped from the end once cumulative tokens exceed maxTokens.
+ */
+export function truncateListByTokens<T>(
+  items: T[],
+  maxTokens: number,
+  toString: (item: T) => string,
+): { items: T[]; tokenCount: number; truncated: boolean } {
+  const included: T[] = [];
+  let tokenCount = 0;
+
+  for (const item of items) {
+    const itemTokens = estimateTokens(toString(item));
+    if (tokenCount + itemTokens > maxTokens) {
+      return { items: included, tokenCount, truncated: true };
+    }
+    included.push(item);
+    tokenCount += itemTokens;
+  }
+
+  return { items: included, tokenCount, truncated: false };
+}
+
+/**
+ * Build a human-readable note when the requested page was clamped.
+ */
+export function buildPaginationNote(
+  pagination: { pageWasClamped: boolean; requestedPage: number; totalPages: number },
+): string | undefined {
+  return pagination.pageWasClamped
+    ? `Note: Requested page ${pagination.requestedPage} exceeds total pages` +
+      ` (${pagination.totalPages}). Showing last page.`
+    : undefined;
 }
 
 /**

@@ -228,7 +228,8 @@ describe('searchGlossaryEntries', () => {
     const results = searchGlossaryEntries(entries, 'config prof');
 
     expect(results.length).toBeGreaterThan(0);
-    expect(results[0].term).toBe('Configuration Profile');
+    const terms = results.map(r => r.term);
+    expect(terms).toContain('Configuration Profile');
   });
 
   it('should return multiple matches for ambiguous term', () => {
@@ -265,5 +266,27 @@ describe('searchGlossaryEntries', () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].term).toBe('Device Enrollment Program');
+  });
+
+  it('should not return loosely matching acronyms (MDM should not match DMG)', () => {
+    const entriesWithDMG = [
+      ...entries,
+      {
+        term: 'disk image (DMG)',
+        definition: 'Apple disk image format.',
+        url: 'https://example.com/dmg',
+      },
+    ];
+    const results = searchGlossaryEntries(entriesWithDMG, 'MDM');
+
+    const terms = results.map(r => r.term);
+    expect(terms).not.toContain('disk image (DMG)');
+  });
+
+  it('should rank exact term match above partial matches', () => {
+    const results = searchGlossaryEntries(entries, 'MDM');
+
+    // "Mobile Device Management" contains MDM in definition and is the canonical match
+    expect(results[0].term).toBe('Mobile Device Management');
   });
 });

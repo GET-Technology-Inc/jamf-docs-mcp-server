@@ -130,6 +130,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
 | `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`install-guide`、`technical-paper`、`configuration-guide`、`training` |
 | `version` | string | 否 | 依版本篩選 (例如 `"11.5.0"`) |
+| `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `limit` | number | 否 | 每頁最多結果數 1-50 (預設: 10) |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
@@ -146,8 +147,9 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
+| `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
-| `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
+| `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"`；compact 模式顯示約 500 token 預覽加上段落清單 (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
 ### jamf_docs_get_toc
@@ -158,8 +160,35 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 |------|------|------|------|
 | `product` | string | 是 | 產品 ID (詳見支援產品表) |
 | `version` | string | 否 | 特定版本 (預設: 最新版) |
+| `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
+| `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
+| `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
+
+### jamf_docs_batch_get_articles
+
+一次取得多篇文件文章。每個 URL 平行取得，無效網域會以單篇錯誤回報，不影響整批結果。
+
+| 參數 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆) |
+| `concurrency` | number | 否 | 最大平行請求數 1-5 (預設: 3) |
+| `language` | string | 否 | 文件語系 (預設: `en-US`) |
+| `maxTokens` | number | 否 | 所有文章的總 token 預算 100-20000 (預設: 5000) |
+| `outputMode` | string | 否 | 每篇文章的輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
+| `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
+
+### jamf_docs_glossary_lookup
+
+查詢 Jamf 官方術語表，支援模糊比對。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
+
+| 參數 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| `term` | string | 是 | 要查詢的術語 (2-100 字元) |
+| `product` | string | 否 | 依產品 ID 篩選 |
+| `language` | string | 否 | 文件語系 (預設: `en-US`，術語表僅英文) |
+| `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
@@ -169,6 +198,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
+| `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
@@ -226,8 +256,11 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 ## 主要功能
 
-- **精簡模式**：使用 `outputMode: "compact"` 取得節省 token 的簡潔回應
+- **精簡模式**：使用 `outputMode: "compact"` 取得節省 token 的簡潔回應；文章會顯示約 500 token 預覽加上可用段落清單
 - **摘要預覽**：使用 `summaryOnly: true` 預覽文章大綱，再決定是否取得完整內容
+- **批次取得**：使用 `jamf_docs_batch_get_articles` 一次取得最多 10 篇文章
+- **術語查詢**：使用 `jamf_docs_glossary_lookup` 模糊比對 Jamf 官方術語
+- **多語系支援**：所有工具皆支援 `language` 參數切換文件語系 (例如 `ja-JP`、`de-DE`)
 - **版本查詢**：使用 `version` 參數查詢特定產品版本的文件
 - **搜尋建議**：搜尋無結果時提供替代關鍵字與主題建議
 - **分頁支援**：大型搜尋結果與目錄支援分頁瀏覽

@@ -88,14 +88,16 @@ export function parseArticle(
   // 1. FT API returns HTML fragments wrapped in <div class="content-locale-...">
   let contentHtml = $('div[class*="content-locale"]').first().html() ?? '';
 
-  // 2. Common FT body wrappers (taskbody, conbody, refbody, etc.)
-  if (contentHtml === '') {
-    contentHtml = $('[class*="body"]').first().html() ?? '';
-  }
-
-  // 3. Standard selectors for full HTML pages (article, .article-content, etc.)
+  // 2. Standard selectors for full HTML pages (article, .article-content, etc.)
+  //    Checked before body wrappers because <article> is semantically broader
+  //    and should take priority when both exist as siblings.
   if (contentHtml === '') {
     contentHtml = $(SELECTORS.CONTENT).html() ?? '';
+  }
+
+  // 3. Common FT body wrappers (taskbody, conbody, refbody, etc.)
+  if (contentHtml === '') {
+    contentHtml = $('[class*="body"]').first().html() ?? '';
   }
 
   // 4. Fallback: inner HTML of <body> (cheerio wraps fragments in <html><body>)

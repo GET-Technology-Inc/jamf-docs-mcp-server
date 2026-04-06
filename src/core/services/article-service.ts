@@ -12,7 +12,7 @@ import type { CacheProvider } from './interfaces/cache.js';
 import type { ServerContext } from '../types/context.js';
 import { TOKEN_CONFIG } from '../constants.js';
 import type { FetchArticleResult, FetchArticleOptions, ArticleSection, FtMetadataEntry } from '../types.js';
-import { buildDisplayUrl, type TopicResolverInput } from './topic-resolver.js';
+import { buildDisplayUrl, parseUrl, type TopicResolverInput } from './topic-resolver.js';
 import { fetchTopicContent, fetchTopicMetadata } from './ft-client.js';
 import { parseArticle, type ParsedArticleContent } from './content-parser.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
@@ -143,10 +143,17 @@ export async function resolveAndFetchArticle(
   // Step 1: Resolve mapId + contentId
   let mapId = input.mapId;
   let contentId = input.contentId;
+  let resolvedLocale: string | undefined;
 
   if (mapId === undefined || contentId === undefined) {
-    const resolved = await topicResolver.resolve({ url: articleUrl });
+    const resolved = await topicResolver.resolve({
+      url: articleUrl,
+      locale: options.locale,
+    });
     ({ mapId, contentId } = resolved);
+    resolvedLocale = resolved.locale;
+  } else if (options.locale !== undefined) {
+    resolvedLocale = options.locale;
   }
 
   // Step 2: Try provider shortcuts (ID-based is primary, URL-based is fallback)
@@ -165,12 +172,29 @@ export async function resolveAndFetchArticle(
   }
 
   // Step 3: Default — fetch from FT API + parse
-  return await fetchArticleFromFt(
+  const result = await fetchArticleFromFt(
     cache, mapId, contentId, articleUrl, options, ctx.config.cacheTtl.article
   );
+
+  if (resolvedLocale !== undefined && articleUrl !== '') {
+    const urlLocale = extractLocaleFromUrl(articleUrl);
+    if (urlLocale !== null && urlLocale !== resolvedLocale) {
+      const note = `\n\n---\n*Note: Language "${resolvedLocale}" was requested`
+        + ` but this article was resolved from a "${urlLocale}" URL.`
+        + ' Content may be in the original language if a localized version'
+        + ' is unavailable.*\n';
+      return { ...result, content: result.content + note };
+    }
+  }
+
+  return result;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
+
+function extractLocaleFromUrl(url: string): string | null {
+  return parseUrl(url)?.locale ?? null;
+}
 
 function deriveDisplayUrl(
   readerUrl: string | undefined,

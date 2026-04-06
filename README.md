@@ -78,6 +78,8 @@ Once configured, just ask your AI assistant:
 | `jamf_docs_search` | Search documentation by keyword with filtering and pagination |
 | `jamf_docs_get_article` | Retrieve full content of a specific documentation article |
 | `jamf_docs_get_toc` | Browse the table of contents for a product |
+| `jamf_docs_batch_get_articles` | Fetch multiple articles in one call (up to 10 URLs) |
+| `jamf_docs_glossary_lookup` | Look up Jamf terminology and definitions (fuzzy matching) |
 
 ### jamf_docs_list_products
 
@@ -85,6 +87,7 @@ Returns all available Jamf products and their IDs, available topic filters, and 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `language` | string | `en-US` | Documentation language/locale |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level of the response |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 | `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
@@ -100,6 +103,7 @@ Searches across all Jamf product documentation.
 | `topic` | string | — | Filter by topic category (e.g., `enrollment`, `security`) |
 | `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, `training` |
 | `version` | string | — | Filter by version (e.g., `"11.5.0"`) |
+| `language` | string | `en-US` | Documentation language/locale |
 | `limit` | number (1–50) | `10` | Results per page |
 | `page` | number (1–100) | `1` | Page number for pagination |
 | `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
@@ -116,8 +120,9 @@ Fetches and converts a documentation article to clean markdown or JSON.
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`) |
 | `summaryOnly` | boolean | `false` | Return only article outline — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
+| `language` | string | `en-US` | Documentation language/locale |
 | `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
-| `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level |
+| `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
 When content exceeds `maxTokens`, the tool truncates the response and lists all available sections with their token counts. Use the `section` parameter on a follow-up call to retrieve a specific part.
@@ -130,9 +135,36 @@ Retrieves the navigation structure (table of contents) for a product.
 |-----------|------|---------|-------------|
 | `product` | string | required | Product ID (see supported products below) |
 | `version` | string | latest | Specific version to fetch |
+| `language` | string | `en-US` | Documentation language/locale |
 | `page` | number (1–100) | `1` | Page number for paginated TOC |
 | `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Use `"compact"` for a flat list without nested children |
+| `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
+
+### jamf_docs_batch_get_articles
+
+Fetches multiple documentation articles in a single call. Each URL is fetched concurrently, and invalid domains are reported as per-article errors without failing the entire batch.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `urls` | string[] (1–10) | required | Array of Jamf documentation URLs |
+| `concurrency` | number (1–5) | `3` | Maximum parallel requests |
+| `language` | string | `en-US` | Documentation language/locale |
+| `maxTokens` | number (100–20000) | `5000` | Total token budget across all articles |
+| `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level per article |
+| `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
+
+### jamf_docs_glossary_lookup
+
+Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `term` | string (2–100 chars) | required | Glossary term to look up |
+| `product` | string | — | Filter by product ID |
+| `language` | string | `en-US` | Documentation language/locale (glossary is English-only) |
+| `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
+| `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
 ## MCP Resources
@@ -199,9 +231,12 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 
 ## Key Features
 
-- **Compact Mode**: Use `outputMode: "compact"` for token-efficient responses when browsing or listing
+- **Compact Mode**: Use `outputMode: "compact"` for token-efficient responses; articles show a ~500-token preview with an available sections list
 - **Summary Only**: Use `summaryOnly: true` on `jamf_docs_get_article` to preview an article outline before fetching full content
 - **Section Extraction**: Use `section: "Prerequisites"` to retrieve only the part of an article you need
+- **Batch Fetching**: Use `jamf_docs_batch_get_articles` to fetch up to 10 articles in one call with concurrent requests
+- **Glossary Lookup**: Use `jamf_docs_glossary_lookup` to look up Jamf terminology with fuzzy matching
+- **Multi-language**: All tools accept a `language` parameter for localized documentation (e.g., `ja-JP`, `de-DE`)
 - **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, or `training`
 - **Version Query**: Use the `version` parameter to query documentation for a specific product version
 - **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated

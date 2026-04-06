@@ -562,8 +562,8 @@ describe('formatArticleCompact()', () => {
       expect(output).toContain('# MDM Profile Settings');
     });
 
-    it('should include article content', () => {
-      // Arrange
+    it('should include short article content in full (no truncation notice)', () => {
+      // Arrange — content is well under ~500 tokens so it is shown completely
       const article = makeArticle({ content: 'Compact content here.' });
 
       // Act
@@ -571,6 +571,7 @@ describe('formatArticleCompact()', () => {
 
       // Assert
       expect(output).toContain('Compact content here.');
+      expect(output).not.toContain('Showing preview');
     });
 
     it('should include compact metadata with product and version', () => {
@@ -622,6 +623,96 @@ describe('formatArticleCompact()', () => {
 
       // Assert
       expect(output).not.toContain('(truncated)');
+    });
+  });
+
+  // ── Content preview / truncation ────────────────────────────────────────────
+
+  describe('content preview (summary-only compact mode)', () => {
+    // Helper to generate content well above the ~500 token preview limit.
+    // At ~4 chars/token, 3000 chars ≈ 750 tokens — clearly exceeds the preview.
+    function makeLongContent(): string {
+      const paragraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ';
+      return Array.from({ length: 60 }, () => paragraph).join('') + '\n\n'
+        + '## Deep Section\n\nMore detailed content that should not appear in preview.';
+    }
+
+    it('should truncate long content and show truncation notice', () => {
+      // Arrange
+      const article = makeArticle({ content: makeLongContent() });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert — truncation notice present
+      expect(output).toContain('Showing preview');
+      expect(output).toContain('outputMode="full"');
+      expect(output).toContain('section="<name>"');
+    });
+
+    it('should produce shorter output than full mode for a long article', () => {
+      // Arrange
+      const article = makeArticle({ content: makeLongContent() });
+
+      // Act
+      const compact = formatArticleCompact(article);
+      const full = formatArticleFull(article);
+
+      // Assert — compact should be noticeably smaller
+      expect(compact.length).toBeLessThan(full.length);
+    });
+
+    it('should not show truncation notice when content fits in preview', () => {
+      // Arrange — short content
+      const article = makeArticle({ content: 'Short paragraph.' });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).not.toContain('Showing preview');
+    });
+  });
+
+  // ── Sections list ───────────────────────────────────────────────────────────
+
+  describe('available sections list', () => {
+    it('should list available sections when sections are present', () => {
+      // Arrange
+      const article = makeArticle({ sections: makeSections(3) });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).toContain('## Available Sections (3)');
+      expect(output).toContain('Section 1');
+      expect(output).toContain('Section 2');
+      expect(output).toContain('Section 3');
+    });
+
+    it('should not show sections list when sections array is empty', () => {
+      // Arrange
+      const article = makeArticle({ sections: [] });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).not.toContain('Available Sections');
+    });
+
+    it('should cap sections list at 15 entries and show overflow count', () => {
+      // Arrange
+      const article = makeArticle({ sections: makeSections(20) });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).toContain('Section 15');
+      expect(output).not.toContain('Section 16');
+      expect(output).toContain('...and 5 more sections');
     });
   });
 

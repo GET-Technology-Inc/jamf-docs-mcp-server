@@ -7,6 +7,7 @@
 
 import type { TokenInfo, ArticleSection, FetchArticleResult } from '../types.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl } from './sanitize.js';
+import { estimateTokens } from '../services/tokenizer.js';
 
 // ============================================================================
 // Types
@@ -144,6 +145,50 @@ function formatCompactFooter(url: string, tokenInfo: TokenInfo): string {
   return `\n---\n*[Source](${safeUrl}) | ${tokenInfo.tokenCount} tokens${tokenInfo.truncated ? ' (truncated)' : ''}*\n`;
 }
 
+const COMPACT_PREVIEW_TOKENS = 500;
+
+/** Break at paragraph boundaries so the preview reads cleanly. */
+function truncateContentForPreview(content: string, maxTokens: number): string {
+  if (estimateTokens(content) <= maxTokens) {
+    return content;
+  }
+
+  const paragraphs = content.split(/\n\n+/);
+  const included: string[] = [];
+  let running = 0;
+
+  for (const para of paragraphs) {
+    const paraTokens = estimateTokens(para);
+    if (running + paraTokens > maxTokens && included.length > 0) {
+      break;
+    }
+    included.push(para);
+    running += paraTokens;
+    if (running >= maxTokens) {
+      break;
+    }
+  }
+
+  return included.join('\n\n');
+}
+
+/** Always shown so the AI knows which sections can be fetched individually. */
+function formatCompactSectionsList(sections: ArticleSection[]): string {
+  if (sections.length === 0) {
+    return '';
+  }
+
+  let result = `\n## Available Sections (${String(sections.length)})\n\n`;
+  for (const section of sections.slice(0, 15)) {
+    const indent = '  '.repeat(Math.max(0, section.level - 1));
+    result += `${indent}- ${section.title}\n`;
+  }
+  if (sections.length > 15) {
+    result += `\n*...and ${String(sections.length - 15)} more sections*\n`;
+  }
+  return result;
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -151,14 +196,29 @@ function formatCompactFooter(url: string, tokenInfo: TokenInfo): string {
 /**
  * Format an article in compact mode.
  *
- * Output: title, compact metadata (product | version), content, compact footer.
+ * Shows only a preview (~500 tokens) of the content plus a list of all
+ * available sections so the AI knows what can be retrieved in full.
+ *
+ * Output: title, compact metadata, content preview, truncation notice,
+ * available sections list, compact footer.
  */
 export function formatArticleCompact(
   article: FetchArticleResult
 ): string {
+  const preview = truncateContentForPreview(article.content, COMPACT_PREVIEW_TOKENS);
+  const isPreviewTruncated = preview.length < article.content.length;
+
   let markdown = `# ${article.title}\n\n`;
   markdown += formatCompactMetadata(article.product, article.version);
-  markdown += article.content;
+  markdown += preview;
+
+  if (isPreviewTruncated) {
+    markdown += '\n\n*[Showing preview. '
+      + 'Use outputMode="full" for complete content, '
+      + 'or section="<name>" for specific section.]*';
+  }
+
+  markdown += formatCompactSectionsList(article.sections);
   markdown += formatCompactFooter(article.url, article.tokenInfo);
   return markdown;
 }

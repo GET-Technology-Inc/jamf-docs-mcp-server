@@ -1,0 +1,49 @@
+{
+  "title": "Computer Configuration Profiles",
+  "id": "Computer_Configuration_Profiles",
+  "contentApiEndpoint": "/api/khub/maps/rl4BoC7yEG_test_map_id/topics/Computer_Configuration_Profiles/content",
+  "readerUrl": "https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Computer_Configuration_Profiles.html",
+  "breadcrumb": ["Jamf Pro Documentation", "Device Management", "macOS", "Configuration Profiles"],
+  "metadata": [
+    {
+      "key": "version_bundle_stem",
+      "label": "Bundle Stem",
+      "values": ["jamf-pro-documentation"]
+    },
+    {
+      "key": "version",
+      "label": "Version",
+      "values": ["11.25.0"]
+    },
+    {
+      "key": "ft:locale",
+      "label": "Locale",
+      "values": ["en-US"]
+    },
+    {
+      "key": "ft:prettyUrl",
+      "label": "Pretty URL",
+      "values": ["/en-US/bundle/jamf-pro-documentation/page/Computer_Configuration_Profiles.html"]
+    },
+    {
+      "key": "zoominmetadata",
+      "label": "zoominmetadata",
+      "values": ["product-pro"]
+    },
+    {
+      "key": "latestVersion",
+      "label": "Latest Version",
+      "values": ["yes"]
+    },
+    {
+      "key": "ft:lastEdition",
+      "label": "Last Edition",
+      "values": ["2025-03-10"]
+    },
+    {
+      "key": "bundle",
+      "label": "Bundle",
+      "values": ["jamf-pro-documentation"]
+    }
+  ]
+}
