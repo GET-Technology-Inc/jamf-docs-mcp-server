@@ -1,3 +1,9 @@
+## [3.0.10](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.9...v3.0.10) (2026-04-06)
+
+### Dependencies
+
+* bump vite from 8.0.3 to 8.0.5 ([#81](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/81)) ([b8dc648](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b8dc648a9d5f528599eb1e6e7ad0f79ea2f2c2ab))
+
 ## [3.0.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.8...v3.0.9) (2026-04-06)
 
 ### Bug Fixes
