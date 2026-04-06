@@ -116,7 +116,7 @@ describe('fetchArticleFromFt()', () => {
         cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
       );
 
-      expect(result.title).toBe('MDM Profile Settings');
+      expect(result.title).toBe('Computer Configuration Profiles');
       expect(result.content).toContain('Overview');
       expect(result.content).toContain('MDM profiles');
       expect(result.sections).toBeDefined();
@@ -287,7 +287,7 @@ describe('fetchArticleFromFt()', () => {
 
       expect(mockedGetJson).not.toHaveBeenCalled();
       expect(mockedGetText).not.toHaveBeenCalled();
-      expect(result.title).toBe('MDM Profile Settings');
+      expect(result.title).toBe('Computer Configuration Profiles');
     });
 
     it('should use cache key scoped to mapId and contentId', async () => {
@@ -705,7 +705,7 @@ describe('resolveAndFetchArticle()', () => {
 
       // HTTP layer was called (real ft-client, real content-parser ran)
       expect(mockedGetText).toHaveBeenCalled();
-      expect(result.title).toBe('MDM Profile Settings');
+      expect(result.title).toBe('Computer Configuration Profiles');
     });
   });
 
@@ -727,7 +727,7 @@ describe('resolveAndFetchArticle()', () => {
       expect(mockedGetText).toHaveBeenCalledWith(
         expect.stringContaining(`/topics/${CONTENT_ID}/content`),
       );
-      expect(result.title).toBe('MDM Profile Settings');
+      expect(result.title).toBe('Computer Configuration Profiles');
     });
   });
 

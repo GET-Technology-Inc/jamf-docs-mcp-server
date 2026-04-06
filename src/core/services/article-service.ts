@@ -37,9 +37,16 @@ import {
  * Both `get-article` and `batch-get-articles` delegate to this function
  * after resolving mapId/contentId and exhausting provider shortcuts.
  */
-/** Cached article data — content + derived metadata stored together */
+/**
+ * Cached article data.
+ *
+ * Metadata-sourced fields (title, displayUrl, product, version) live at the
+ * top level.  HTML-only fields (markdown content, breadcrumb, relatedArticles)
+ * stay inside `parsed`.
+ */
 interface CachedArticle {
-  content: ParsedArticleContent;
+  title: string;
+  parsed: ParsedArticleContent;
   displayUrl: string;
   product: string | undefined;
   version: string;
@@ -55,11 +62,10 @@ export async function fetchArticleFromFt(
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
-  const cacheKey = `ft:article:v2:${mapId}:${contentId}`;
+  const cacheKey = `ft:article:v3:${mapId}:${contentId}`;
   let cached = await cache.get<CachedArticle>(cacheKey);
 
   if (cached === null) {
-    // Cache miss — fetch metadata AND content in parallel
     const [topicMeta, html] = await Promise.all([
       fetchTopicMetadata(mapId, contentId),
       fetchTopicContent(mapId, contentId),
@@ -67,24 +73,29 @@ export async function fetchArticleFromFt(
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
     const { product, version } = extractProductVersion(topicMeta.metadata);
-    const rawContent = parseArticle(html, displayUrl, { includeRelated: true });
+    const parsed = parseArticle(html, displayUrl, { includeRelated: true });
 
-    cached = { content: rawContent, displayUrl, product, version };
+    // Metadata title is authoritative; parseArticle h1 is only a fallback
+    const title = (topicMeta.title !== undefined && topicMeta.title !== '')
+      ? topicMeta.title
+      : parsed.title;
+
+    cached = { title, parsed, displayUrl, product, version };
     await cache.set(cacheKey, cached, cacheTtl);
   }
 
-  const { content: rawContent, displayUrl, product, version } = cached;
+  const { title, parsed, displayUrl, product, version } = cached;
 
   // Build base result (shared across all code paths)
-  const allSections: ArticleSection[] = extractSections(rawContent.content);
+  const allSections: ArticleSection[] = extractSections(parsed.content);
   const base = {
-    title: rawContent.title,
+    title,
     url: displayUrl,
     product,
     version,
-    breadcrumb: rawContent.breadcrumb.length > 0 ? rawContent.breadcrumb : undefined,
-    relatedArticles: options.includeRelated === true && rawContent.relatedArticles.length > 0
-      ? rawContent.relatedArticles : undefined,
+    breadcrumb: parsed.breadcrumb.length > 0 ? parsed.breadcrumb : undefined,
+    relatedArticles: options.includeRelated === true && parsed.relatedArticles.length > 0
+      ? parsed.relatedArticles : undefined,
     mapId,
     contentId,
     sections: allSections,
@@ -92,7 +103,7 @@ export async function fetchArticleFromFt(
 
   // ── summaryOnly mode ──
   if (options.summaryOnly === true) {
-    const summaryResult = extractSummary(rawContent.content, rawContent.title, maxTokens);
+    const summaryResult = extractSummary(parsed.content, title, maxTokens);
     let summaryContent = `## Summary\n\n${summaryResult.summary}\n\n`;
     summaryContent += `## Article Outline (${summaryResult.outline.length} sections)\n\n`;
     for (const section of summaryResult.outline) {
@@ -107,7 +118,7 @@ export async function fetchArticleFromFt(
 
   // ── Section extraction ──
   if (options.section !== undefined && options.section !== '') {
-    const sectionResult = extractSection(rawContent.content, options.section, maxTokens);
+    const sectionResult = extractSection(parsed.content, options.section, maxTokens);
     if (sectionResult.section !== null) {
       return { ...base, content: sectionResult.content, tokenInfo: sectionResult.tokenInfo };
     }
@@ -118,7 +129,7 @@ export async function fetchArticleFromFt(
   }
 
   // ── Full content with truncation ──
-  const truncateResult = truncateToTokenLimit(rawContent.content, maxTokens, allSections);
+  const truncateResult = truncateToTokenLimit(parsed.content, maxTokens, allSections);
   return { ...base, content: truncateResult.content, tokenInfo: truncateResult.tokenInfo };
 }
 
