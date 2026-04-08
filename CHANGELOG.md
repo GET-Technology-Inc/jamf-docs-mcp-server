@@ -1,3 +1,14 @@
+## [3.0.11](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.10...v3.0.11) (2026-04-08)
+
+### Dependencies
+
+* bump @types/node from 25.5.0 to 25.5.2 ([#89](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/89)) ([47cb48a](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/47cb48a517ec3636be4a16ad247df260bf8973ea))
+* bump @vitest/coverage-v8 from 4.1.2 to 4.1.3 ([#88](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/88)) ([c43297d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c43297d6e0923a378cf0c826111b7164f0febdd8))
+* bump eslint from 10.1.0 to 10.2.0 ([#85](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/85)) ([264263d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/264263da267368f64b02c23a0e0ec9a946a0d069))
+* bump fuse.js from 7.1.0 to 7.3.0 ([#84](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/84)) ([361bcec](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/361bcecf5bea5f58b100ef31c04d6b5149baa8fb))
+* bump turndown from 7.2.2 to 7.2.4 ([#87](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/87)) ([b8f667c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b8f667c0572f94faee6df29c667604c01a2d8b32))
+* bump vitest from 4.1.2 to 4.1.3 ([#86](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/86)) ([bbdd51d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bbdd51d198ef577090dbfcfe1a3127cd0d6852f9))
+
 ## [3.0.10](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.9...v3.0.10) (2026-04-06)
 
 ### Dependencies
