@@ -1,3 +1,9 @@
+## [3.0.12](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.11...v3.0.12) (2026-04-08)
+
+### Dependencies
+
+* bump @hono/node-server from 1.19.11 to 1.19.13 ([#90](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/90)) ([9f14a17](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9f14a17426ee17a2e7075278ea6e7319c8dfe6ce))
+
 ## [3.0.11](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.10...v3.0.11) (2026-04-08)
 
 ### Dependencies
