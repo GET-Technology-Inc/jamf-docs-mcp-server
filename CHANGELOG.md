@@ -1,3 +1,12 @@
+## [3.0.16](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.15...v3.0.16) (2026-04-22)
+
+### Dependencies
+
+* bump eslint from 10.2.0 to 10.2.1 ([#100](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/100)) ([98824ad](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/98824ada71c58d9ebedbe18cdb03a734d9412e83))
+* bump typescript from 6.0.2 to 6.0.3 ([#101](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/101)) ([e182cba](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e182cbaffcacc8b06a47e9b9c1843f33518d5751))
+* bump typescript-eslint from 8.58.2 to 8.59.0 ([#99](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/99)) ([e6f5f73](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e6f5f7382ef1089aac086daf38cbbe243311d7cf))
+* bump vitest from 4.1.4 to 4.1.5 ([#98](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/98)) ([a0dffbc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/a0dffbc0dbe7e65e9792b24bb7a8b99e711d2f82))
+
 ## [3.0.15](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.14...v3.0.15) (2026-04-16)
 
 ### Dependencies
