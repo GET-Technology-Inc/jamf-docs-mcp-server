@@ -1,3 +1,9 @@
+## [3.0.20](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.19...v3.0.20) (2026-05-09)
+
+### Dependencies
+
+* bump fast-uri from 3.1.0 to 3.1.2 ([#108](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/108)) ([6504930](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6504930e1426e4ca2b095d8b5ef6b4e031bfb129))
+
 ## [3.0.19](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.18...v3.0.19) (2026-05-08)
 
 ### Dependencies
