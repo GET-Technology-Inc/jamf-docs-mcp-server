@@ -8,7 +8,7 @@ import type { ServerContext } from '../types/context.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
@@ -128,7 +128,56 @@ function formatSearchResultsAsMarkdown(
 
 const TOOL_NAME = 'jamf_docs_search';
 
-const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
+// Topic hint derived from COMMON_TOPIC_IDS — see constants/topics.ts. Keeping
+// this dynamic prevents the description from drifting away from the enum.
+const TOPIC_HINT = `Filter by topic. Common: ${COMMON_TOPIC_IDS.join(', ')}. See jamf_docs_list_products for the full list of ${TOPIC_IDS.length} topic IDs.`;
+
+/**
+ * Worked examples surfaced in TOOL_DESCRIPTION to nudge LLMs toward
+ * (query + filter) combinations that maximise recall.
+ *
+ * Typing `product` as `ProductId` and `topic` as `TopicId` makes the compiler
+ * reject any ID that does not exist in JAMF_PRODUCTS / JAMF_TOPICS. The
+ * `SEARCH_EXAMPLES are valid` test in search-examples.test.ts is the runtime
+ * belt-and-braces guard.
+ */
+interface SearchExample {
+  /** Plain-English query an admin might ask */
+  label: string;
+  /** Search keywords passed as `query` */
+  query: string;
+  /** Optional product filter */
+  product?: ProductId;
+  /** Optional topic filter */
+  topic?: TopicId;
+  /** Optional page (used for the pagination demo) */
+  page?: number;
+}
+
+export const SEARCH_EXAMPLES: readonly SearchExample[] = [
+  { label: 'Configure SSO with Okta in Jamf Connect', query: 'SSO Okta', product: 'jamf-connect', topic: 'sso' },
+  { label: 'Set up FileVault encryption', query: 'FileVault encryption', product: 'jamf-pro', topic: 'filevault' },
+  { label: 'Patch macOS apps', query: 'patch policy', product: 'jamf-pro', topic: 'patch' },
+  { label: 'Smart group criteria', query: 'smart group criteria', product: 'jamf-pro', topic: 'reports' },
+  { label: 'Automated Device Enrollment workflow', query: 'ADE prestage', product: 'jamf-pro', topic: 'enrollment' },
+  { label: 'Shared iPad in a classroom', query: 'shared iPad classroom', product: 'jamf-school', topic: 'education' },
+  { label: 'Jamf Protect custom analytic', query: 'custom analytic', product: 'jamf-protect', topic: 'protect-analytics' },
+  { label: 'Jamf Pro REST API authentication', query: 'API role bearer token', product: 'jamf-pro', topic: 'api' },
+  { label: 'Extension attribute scripts', query: 'extension attribute script', product: 'jamf-pro', topic: 'extension-attributes' },
+  { label: 'Paginate through results', query: 'policy', page: 2 },
+];
+
+function formatSearchExample(ex: SearchExample): string {
+  const parts: string[] = [`query="${ex.query}"`];
+  if (ex.product !== undefined) parts.push(`product="${ex.product}"`);
+  if (ex.topic !== undefined) parts.push(`topic="${ex.topic}"`);
+  if (ex.page !== undefined) parts.push(`page=${ex.page}`);
+  return `  - "${ex.label}" → ${parts.join(', ')}`;
+}
+
+const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
+
+export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
 This tool searches across all Jamf product documentation including Jamf Pro,
 Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet, and more.
@@ -137,7 +186,7 @@ Results include article titles, snippets, and direct links.
 Args:
   - query (string, required): Search keywords (2-200 characters)
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
-  - topic (string, optional): Filter by topic (enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network)
+  - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
   - limit (number, optional): Maximum results per page 1-50 (default: 10)
@@ -170,11 +219,8 @@ Returns:
   For Markdown format:
   A formatted list of search results with pagination and token info.
 
-Examples:
-  - "How to configure SSO" → query="SSO configuration"
-  - "MDM enrollment steps" → query="MDM enrollment", topic="enrollment"
-  - "Jamf Pro configuration profiles" → query="configuration profile", product="jamf-pro", topic="profiles"
-  - Get page 2 of results → query="policy", page=2
+Examples (common query → recommended filters):
+${EXAMPLES_BLOCK}
 
 Errors:
   - "No results found" if search returns empty

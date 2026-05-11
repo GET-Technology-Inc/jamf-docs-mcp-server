@@ -12,6 +12,7 @@ import {
   PAGINATION_CONFIG,
   PRODUCT_IDS,
   TOPIC_IDS,
+  COMMON_TOPIC_IDS,
   DOC_TYPE_IDS,
   SUPPORTED_LOCALE_IDS,
   DEFAULT_LOCALE
@@ -43,6 +44,12 @@ const PageSchema = z.number()
   .max(PAGINATION_CONFIG.MAX_PAGE)
   .default(PAGINATION_CONFIG.DEFAULT_PAGE)
   .describe(`Page number (1-${PAGINATION_CONFIG.MAX_PAGE}, default: 1)`);
+
+// Topic field description — derived from COMMON_TOPIC_IDS so the hint list
+// cannot drift from the actual enum. See constants/topics.ts.
+const TOPIC_DESCRIPTION =
+  `Filter by topic. Common: ${COMMON_TOPIC_IDS.join(', ')}. ` +
+  `See jamf_docs_list_products for the full list of ${TOPIC_IDS.length} topic IDs.`;
 
 /**
  * Schema for jamf_docs_list_products
@@ -82,7 +89,7 @@ export const SearchInputSchema = z.object({
   topic: completable(
     z.enum(TOPIC_IDS)
       .optional()
-      .describe('Filter by topic: enrollment, profiles, security, inventory, policies, smart-groups, apps, identity, api, network'),
+      .describe(TOPIC_DESCRIPTION),
     completeTopic
   ),
 

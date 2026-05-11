@@ -26,6 +26,7 @@ export {
   // topics
   JAMF_TOPICS,
   TOPIC_IDS,
+  COMMON_TOPIC_IDS,
 
   // doc-types
   DOC_TYPES,
