@@ -13,7 +13,7 @@ export const JAMF_TOPICS = {
   // === Device Management ===
   'computer-management': {
     name: 'Computer Management',
-    keywords: ['computer management', 'computer inventory', 'remote command', 'remote administration', 'mass action', 'unmanag', 'check-in', 'startup script', 'login event']
+    keywords: ['computer management', 'computer inventory', 'remote command', 'remote administration', 'mass action', 'unmanag', 'check-in', 'startup script', 'login event', 'lock computer', 'wipe computer', 'erase mac', 'computer group', 'managed computer', 'recovery lock', 'flush logs']
   },
   'mobile-management': {
     name: 'Mobile Device Management',
@@ -71,15 +71,15 @@ export const JAMF_TOPICS = {
   // === Endpoint Protection (Jamf Protect) ===
   'protect-analytics': {
     name: 'Threat Analytics',
-    keywords: ['analytic', 'threat', 'detection', 'analytic chain', 'custom analytic', 'jamf-managed analytic', 'alert']
+    keywords: ['analytic', 'threat', 'detection', 'analytic chain', 'custom analytic', 'jamf-managed analytic', 'alert', 'jamf protect', 'malware', 'mrt', 'xprotect', 'unified log', 'gatekeeper bypass', 'cve', 'indicator of compromise', 'ioc']
   },
   'protect-plans': {
     name: 'Protect Plans',
-    keywords: ['protect plan', 'jamf protect plan', 'threat prevention', 'endpoint security']
+    keywords: ['protect plan', 'jamf protect plan', 'threat prevention', 'endpoint security', 'jamf protect', 'protect tenant', 'mobile threat defense', 'mtd', 'endpoint protection', 'protect deployment']
   },
   'data-integration': {
     name: 'SIEM & Data Integration',
-    keywords: ['siem', 'splunk', 'sentinel', 'elastic', 'datadog', 'sumo logic', 'google secops', 'amazon s3', 'data stream', 'data integration']
+    keywords: ['siem', 'splunk', 'sentinel', 'elastic', 'datadog', 'sumo logic', 'google secops', 'amazon s3', 'data stream', 'data integration', 'event forwarding', 'log forwarding', 'cef', 'access events', 'ztna events', 'security cloud events']
   },
 
   // === Identity & Authentication ===
@@ -203,3 +203,29 @@ export type TopicId = keyof typeof JAMF_TOPICS;
 
 // Derived ID array (shared by schemas, completions, etc.)
 export const TOPIC_IDS = Object.keys(JAMF_TOPICS) as [string, ...string[]];
+
+/**
+ * Curated subset of TOPIC_IDS surfaced in tool descriptions for LLM guidance.
+ * Covers the most common admin search patterns across all four Jamf products.
+ * Consumers should reference JAMF_TOPICS / TOPIC_IDS for the authoritative full list.
+ *
+ * IMPORTANT: Every entry must exist as a key in JAMF_TOPICS. The
+ * `COMMON_TOPIC_IDS are all valid TOPIC_IDS` test in topics.test.ts guards this.
+ */
+export const COMMON_TOPIC_IDS: readonly TopicId[] = [
+  'enrollment',
+  'profiles',
+  'policies',
+  'packages',
+  'scripts',
+  'patch',
+  'apps',
+  'security',
+  'filevault',
+  'sso',
+  'identity-provider',
+  'inventory',
+  'reports',
+  'api',
+  'network',
+] as const;

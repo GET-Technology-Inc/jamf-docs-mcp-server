@@ -27,6 +27,7 @@ export type { LocaleId } from './locales.js';
 export {
   JAMF_TOPICS,
   TOPIC_IDS,
+  COMMON_TOPIC_IDS,
 } from './topics.js';
 export type { TopicId } from './topics.js';
 
