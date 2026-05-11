@@ -1,3 +1,9 @@
+## [3.0.21](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.20...v3.0.21) (2026-05-11)
+
+### Bug Fixes
+
+* **search:** correct topic hint list and expand examples for jamf_docs_search ([#109](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/109)) ([9cb60d8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9cb60d8c8b3e4f145da3d0f8ea4ac6f68960672e))
+
 ## [3.0.20](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.19...v3.0.20) (2026-05-09)
 
 ### Dependencies
