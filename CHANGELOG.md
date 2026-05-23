@@ -1,3 +1,9 @@
+## [3.0.24](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.23...v3.0.24) (2026-05-23)
+
+### Dependencies
+
+* bump qs from 6.15.0 to 6.15.2 ([#118](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/118)) ([8fcf841](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/8fcf841e0a190369ab01911ad945786b19bbcf2b))
+
 ## [3.0.23](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.22...v3.0.23) (2026-05-20)
 
 ### Dependencies
