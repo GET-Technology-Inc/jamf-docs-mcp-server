@@ -1,3 +1,9 @@
+## [3.0.28](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.27...v3.0.28) (2026-06-04)
+
+### Dependencies
+
+* bump hono from 4.12.18 to 4.12.23 ([#128](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/128)) ([6284e9a](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6284e9a28c7525bf8da45294957ed5587908a26d))
+
 ## [3.0.27](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.26...v3.0.27) (2026-06-04)
 
 ### Dependencies
