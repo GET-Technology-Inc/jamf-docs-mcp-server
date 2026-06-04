@@ -1,3 +1,11 @@
+## [3.0.26](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.25...v3.0.26) (2026-06-04)
+
+### Dependencies
+
+* bump @vitest/coverage-v8 from 4.1.7 to 4.1.8 ([#122](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/122)) ([bba6884](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bba68849df71b4c5ca6b16014eb1901bd84e0ee7))
+* bump tsx from 4.22.3 to 4.22.4 ([#124](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/124)) ([9bd275e](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9bd275ed692e605ef321f2fe393ae53263b382dc))
+* bump vitest from 4.1.7 to 4.1.8 ([#123](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/123)) ([2bad5fc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/2bad5fcd2f5ade30d9cba1e2eb7ade8f89218b93))
+
 ## [3.0.25](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.24...v3.0.25) (2026-05-27)
 
 ### Dependencies
