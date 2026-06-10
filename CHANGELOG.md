@@ -1,3 +1,11 @@
+## [3.0.29](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.28...v3.0.29) (2026-06-10)
+
+### Dependencies
+
+* bump @types/node from 25.9.1 to 25.9.2 ([#130](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/130)) ([e50d34b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e50d34b82363742750ad8bea490dc55a86d35a0f))
+* bump fuse.js from 7.4.1 to 7.4.2 ([#131](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/131)) ([afb1449](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/afb1449f00caabbcd0da16314f3a5bdf4702ef74))
+* bump typescript-eslint from 8.60.1 to 8.61.0 ([#132](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/132)) ([8bb9db7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/8bb9db77c22ad68042f59a97e3b0e727c59ec75e))
+
 ## [3.0.28](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.27...v3.0.28) (2026-06-04)
 
 ### Dependencies
