@@ -1,3 +1,9 @@
+## [3.0.30](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.29...v3.0.30) (2026-06-13)
+
+### Dependencies
+
+* bump esbuild from 0.28.0 to 0.28.1 ([#133](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/133)) ([747997f](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/747997f767aa773a6276d1d76554244881080d86))
+
 ## [3.0.29](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.28...v3.0.29) (2026-06-10)
 
 ### Dependencies
