@@ -1,3 +1,9 @@
+## [3.0.33](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.32...v3.0.33) (2026-06-17)
+
+### Dependencies
+
+* bump js-yaml from 4.1.1 to 4.2.0 ([#141](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/141)) ([8bd011d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/8bd011d626683a0286e67ad6d421a74c1e98ecca))
+
 ## [3.0.32](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.31...v3.0.32) (2026-06-17)
 
 ### Dependencies
