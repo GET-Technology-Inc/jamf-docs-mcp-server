@@ -1,3 +1,9 @@
+## [3.0.34](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.33...v3.0.34) (2026-06-17)
+
+### Dependencies
+
+* bump tar and npm ([#142](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/142)) ([1f129a1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1f129a199ac811baadc6440565a69bce82337186))
+
 ## [3.0.33](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.32...v3.0.33) (2026-06-17)
 
 ### Dependencies
