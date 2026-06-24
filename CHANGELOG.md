@@ -1,3 +1,9 @@
+## [3.0.39](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.38...v3.0.39) (2026-06-24)
+
+### Bug Fixes
+
+* **maps:** deterministic latest resolution + harden tests vs Jamf upstream drift ([#149](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/149)) ([a438de7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/a438de75cb081c7acfc4793526031816002da4ac))
+
 ## [3.0.38](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.37...v3.0.38) (2026-06-24)
 
 ### Dependencies
