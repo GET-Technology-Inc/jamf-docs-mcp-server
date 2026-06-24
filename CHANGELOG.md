@@ -1,3 +1,9 @@
+## [3.0.37](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.36...v3.0.37) (2026-06-24)
+
+### Bug Fixes
+
+* **search:** restore non-Pro product results after Jamf unversioned-docs migration ([#146](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/146)) ([50f15ff](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/50f15ffc111ce1fbef835d5bc02307f905325a00))
+
 ## [3.0.36](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.35...v3.0.36) (2026-06-24)
 
 ### Bug Fixes
