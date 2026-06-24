@@ -29,12 +29,10 @@
     "title": "Jamf Connect Documentation",
     "id": "aB3cDe5fG_jamf_connect",
     "mapApiEndpoint": "/api/khub/maps/aB3cDe5fG_jamf_connect",
+    "comment": "Post-migration unversioned shape: non-Pro products carry NO version_bundle_stem / version / latestVersion — only bundle (…-current) and zoominmetadata. deriveBundleStem must recover the stem from the bundle value.",
     "metadata": [
-      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-connect-documentation"] },
-      { "key": "version", "label": "Version", "values": ["2.40.0"] },
       { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
-      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
-      { "key": "bundle", "label": "Bundle", "values": ["jamf-connect-documentation"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-connect-documentation-current"] },
       { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-connect"] }
     ]
   },
@@ -55,12 +53,10 @@
     "title": "Jamf Protect Documentation",
     "id": "hJ7kLm9nO_jamf_protect",
     "mapApiEndpoint": "/api/khub/maps/hJ7kLm9nO_jamf_protect",
+    "comment": "Post-migration unversioned shape (see Jamf Connect entry above).",
     "metadata": [
-      { "key": "version_bundle_stem", "label": "Bundle Stem", "values": ["jamf-protect-documentation"] },
-      { "key": "version", "label": "Version", "values": ["5.5.0"] },
       { "key": "ft:locale", "label": "Locale", "values": ["en-US"] },
-      { "key": "latestVersion", "label": "Latest Version", "values": ["yes"] },
-      { "key": "bundle", "label": "Bundle", "values": ["jamf-protect-documentation"] },
+      { "key": "bundle", "label": "Bundle", "values": ["jamf-protect-documentation-current"] },
       { "key": "zoominmetadata", "label": "zoominmetadata", "values": ["product-protect"] }
     ]
   }

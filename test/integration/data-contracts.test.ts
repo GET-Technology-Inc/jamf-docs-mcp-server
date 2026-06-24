@@ -18,6 +18,8 @@ import {
   fetchTopicContent,
 } from '../../src/core/services/ft-client.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode } from '../../src/core/types.js';
+import { JAMF_PRODUCTS } from '../../src/core/constants.js';
+import type { ProductId } from '../../src/core/constants.js';
 
 // ─── Regex patterns for opaque ID format ────────────────────────────────────
 
@@ -406,5 +408,117 @@ describe('FT API data contracts', () => {
       // Must contain at least one HTML tag
       expect(html).toMatch(/<[a-zA-Z]/);
     }, 30000);
+  });
+
+  // ─── Non-Pro / unversioned product contracts ──────────────────────────────
+  //
+  // The incident that motivated these tests was Jamf migrating all NON-Pro
+  // products to an unversioned model (no latestVersion/version/version_bundle_stem).
+  // The original suite only ever inspected Jamf Pro maps, so the migration was
+  // invisible. These contracts touch the non-Pro surface directly.
+  describe('non-Pro / unversioned product contracts', () => {
+    // Products whose zoominmetadata search label Jamf does NOT currently expose,
+    // so they cannot be product-filtered via clustered-search. Documented gaps,
+    // not regressions — see products.ts. jamf-routines docs are tagged product-pro
+    // upstream, so 'product-routines' never appears as a label.
+    const SEARCH_LABEL_ALLOWLIST = new Set<ProductId>(['jamf-routines']);
+
+    it('every configured searchLabel still exists in the live zoominmetadata label set', () => {
+      // Collect every live `product-*` zoominmetadata value from the maps registry.
+      const liveLabels = new Set<string>();
+      for (const map of maps) {
+        for (const meta of map.metadata) {
+          if (meta.key === 'zoominmetadata') {
+            for (const v of meta.values) {
+              if (v.startsWith('product-')) { liveLabels.add(v); }
+            }
+          }
+        }
+      }
+      expect(liveLabels.size).toBeGreaterThan(0);
+
+      const missing = (Object.keys(JAMF_PRODUCTS) as ProductId[])
+        .filter(id => !SEARCH_LABEL_ALLOWLIST.has(id))
+        .map(id => ({ id, label: JAMF_PRODUCTS[id].searchLabel }))
+        .filter(({ label }) => !liveLabels.has(label));
+
+      expect(
+        missing,
+        `searchLabel(s) no longer present in live zoominmetadata: ${JSON.stringify(missing)}. ` +
+        `Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).`
+      ).toEqual([]);
+    });
+
+    it('a non-Pro product map exposes bundle + locale (the unversioned contract)', () => {
+      // deriveBundleStem now depends ENTIRELY on the bundle value for non-Pro
+      // products, because they no longer carry version_bundle_stem.
+      const schoolMap = maps.find(m =>
+        m.metadata.some(meta => meta.key === 'bundle'
+          && meta.values.some(v => v.startsWith('jamf-school-documentation')))
+        && m.metadata.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
+      );
+      expect(schoolMap, 'expected at least one en-US Jamf School map').toBeDefined();
+
+      const bundle = schoolMap!.metadata.find(meta => meta.key === 'bundle');
+      expect(bundle?.values[0], 'non-Pro map must carry a bundle value to derive its stem').toBeTruthy();
+
+      // Document the unversioned contract: these keys are EXPECTED to be absent.
+      // If Jamf re-adds them, that is a meaningful upstream change worth noticing.
+      const hasLatest = schoolMap!.metadata.some(meta => meta.key === 'latestVersion');
+      const hasVersion = schoolMap!.metadata.some(meta => meta.key === 'version');
+      expect(
+        { hasLatest, hasVersion },
+        'Jamf School map unexpectedly carries version metadata — the unversioned ' +
+        'model may have changed; re-check search/registry version handling.'
+      ).toEqual({ hasLatest: false, hasVersion: false });
+    });
+
+    it('product-filtered search for an unversioned non-Pro product returns version-less results', async () => {
+      const res = await search({
+        query: 'enrollment',
+        contentLocale: 'en-US',
+        paging: { perPage: 5, page: 1 },
+        filters: [{ key: 'zoominmetadata', values: [JAMF_PRODUCTS['jamf-school'].searchLabel] }],
+      });
+      const entries = res.results.flatMap(c => c.entries);
+      expect(entries.length, 'product-school filtered search must return results').toBeGreaterThan(0);
+
+      // Every returned entry should be School and carry no `version` metadata.
+      for (const entry of entries) {
+        const md = entry.topic?.metadata ?? entry.map?.metadata ?? [];
+        const zoomin = md.find(m => m.key === 'zoominmetadata')?.values ?? [];
+        expect(zoomin).toContain('product-school');
+        expect(md.some(m => m.key === 'version')).toBe(false);
+      }
+    }, 30000);
+
+    it('Jamf Pro search entries carry ft:clusterId + version (the version-dedup precondition)', () => {
+      // dedupeToLatestVersions groups by ft:clusterId and keeps the highest
+      // version. If Jamf drops either field, dedup silently floods results with
+      // duplicate version snapshots.
+      const proEntries = searchClusters
+        .flatMap(c => c.entries)
+        .filter(e => e.topic?.metadata.some(
+          m => m.key === 'zoominmetadata' && m.values.includes('product-pro')
+        ));
+      expect(proEntries.length, 'expected Jamf Pro topics in the enrollment search').toBeGreaterThan(0);
+
+      const clusterIds: string[] = [];
+      for (const entry of proEntries) {
+        const md = entry.topic!.metadata;
+        const clusterId = md.find(m => m.key === 'ft:clusterId')?.values[0] ?? '';
+        const version = md.find(m => m.key === 'version')?.values[0] ?? '';
+        expect(clusterId, 'Pro entry missing ft:clusterId — version dedup would break').toBeTruthy();
+        expect(version, 'Pro entry missing version — version dedup would break').toBeTruthy();
+        clusterIds.push(clusterId);
+      }
+      // At least one cluster id should repeat across version snapshots, proving the
+      // grouping key actually collapses multiple versions of one topic.
+      const hasSharedCluster = clusterIds.some((id, i) => clusterIds.indexOf(id) !== i);
+      expect(
+        hasSharedCluster,
+        'no ft:clusterId shared across entries — version snapshots may no longer cluster'
+      ).toBe(true);
+    });
   });
 });
