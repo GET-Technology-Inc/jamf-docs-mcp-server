@@ -1,3 +1,9 @@
+## [3.0.38](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.37...v3.0.38) (2026-06-24)
+
+### Dependencies
+
+* bump @types/node from 25.9.3 to 26.0.0 ([#145](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/145)) ([a36ba45](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/a36ba45f84b13187d2a6280b937d6d8a308ca68d))
+
 ## [3.0.37](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.36...v3.0.37) (2026-06-24)
 
 ### Bug Fixes
