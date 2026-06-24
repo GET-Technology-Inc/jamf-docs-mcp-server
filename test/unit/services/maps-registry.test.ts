@@ -44,9 +44,10 @@ const MOCK_MAPS = [
     'bundle': ['jamf-pro-documentation-11.26.0'],
   }),
   makeMap('connect-en', 'Jamf Connect Documentation', {
-    'version_bundle_stem': ['jamf-connect-documentation'],
+    // Post-migration unversioned shape: non-Pro maps carry NO version_bundle_stem,
+    // version, or latestVersion. The stem must be derived from the bundle value
+    // (deriveBundleStem fallback) — this is the sole non-Pro resolution path live.
     'ft:locale': ['en-US'],
-    'latestVersion': ['yes'],
     'bundle': ['jamf-connect-documentation-current'],
   }),
   makeMap('glossary-en', 'Jamf Platform Technical Glossary', {
@@ -129,6 +130,30 @@ describe('findMap tie-break for unversioned stem collisions', () => {
     const reg = new MapsRegistry(createMockCache());
     expect(await reg.resolveMapId('jamf-connect-documentation')).toBe('connect-current');
   });
+
+  // Forward-looking: if Jamf ever drops `latestVersion` from a still-VERSIONED
+  // family (e.g. unversions Jamf Pro but keeps per-version maps), resolution must
+  // pick the highest version deterministically — not an arbitrary array position.
+  it('picks the highest version when a versioned family has no latestVersion flag', async () => {
+    const v1128 = makeMap('pro-1128', 'Jamf Pro Documentation 11.28.0', {
+      'version_bundle_stem': ['jamf-pro-documentation'],
+      'version': ['11.28.0'],
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-pro-documentation-11.28.0'],
+    });
+    const v1129 = makeMap('pro-1129', 'Jamf Pro Documentation 11.29.0', {
+      'version_bundle_stem': ['jamf-pro-documentation'],
+      'version': ['11.29.0'],
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-pro-documentation-11.29.0'],
+    });
+
+    for (const order of [[v1128, v1129], [v1129, v1128]]) {
+      mockedFetchMaps.mockResolvedValue(order);
+      const reg = new MapsRegistry(createMockCache());
+      expect(await reg.resolveMapId('jamf-pro-documentation')).toBe('pro-1129');
+    }
+  });
 });
 
 describe('resolveFromBundleId', () => {
@@ -200,6 +225,15 @@ describe('getVersions', () => {
 
   it('should return empty for unversioned product', async () => {
     const versions = await registry.getVersions('jamf-technical-glossary');
+    expect(versions).toHaveLength(0);
+  });
+
+  it('returns no versions for a non-Pro product whose stem is derived from bundle', async () => {
+    // connect-en in MOCK_MAPS has the real post-migration shape (only bundle
+    // ['jamf-connect-documentation-current'], no version_bundle_stem/version).
+    // It must still resolve and report no versions.
+    expect(await registry.resolveMapId('jamf-connect-documentation')).toBe('connect-en');
+    const versions = await registry.getVersions('jamf-connect-documentation');
     expect(versions).toHaveLength(0);
   });
 });

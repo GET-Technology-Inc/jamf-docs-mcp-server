@@ -189,14 +189,16 @@ export class MapsRegistry {
     }
 
     // Default: latest version. When no candidate is flagged latest (Jamf's
-    // unversioned non-Pro docs carry no `latestVersion`), deterministically
-    // prefer the unversioned/current map (version === '') over any versioned
-    // sibling instead of falling through to API array order. Without this, a
-    // stem collision like jamf-connect-documentation (a `-current` map plus a
-    // `-2.45.0` map, neither flagged latest) would resolve non-deterministically.
+    // unversioned non-Pro docs carry no `latestVersion`), resolve
+    // deterministically instead of falling through to API array order:
+    //   1. prefer the unversioned/current map (version === ''), e.g. the
+    //      jamf-connect-documentation `-current` vs `-2.45.0` collision;
+    //   2. otherwise pick the highest version, so a family that loses
+    //      `latestVersion` but keeps per-version maps still resolves to the
+    //      newest rather than an arbitrary array position.
     return candidates.find(e => e.isLatest)
       ?? candidates.find(e => e.version === '')
-      ?? candidates[0]; // fallback to any match
+      ?? [...candidates].sort((a, b) => compareVersions(b.version, a.version))[0];
   }
 
   /**

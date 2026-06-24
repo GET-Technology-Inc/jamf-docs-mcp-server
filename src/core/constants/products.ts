@@ -112,6 +112,11 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Routines',
     description: 'Automated workflow orchestration for device management',
     bundleId: 'jamf-routines-documentation',
+    // NOTE: Jamf tags the "Jamf Routines Documentation" map with zoominmetadata
+    // `product-pro` (not `product-routines`), so product-filtered SEARCH for
+    // jamf-routines returns 0 results. TOC/article fetch still work via the
+    // bundle. This searchLabel is kept for forward-compat and is explicitly
+    // allow-listed in the searchLabel contract test (see data-contracts.test.ts).
     searchLabel: 'product-routines',
     latestVersion: 'current',
     versions: ['current']

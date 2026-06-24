@@ -178,6 +178,17 @@ describe('buildSearchFilters()', () => {
     });
   });
 
+  // Offline guard against constants drift for a non-Pro product. The live
+  // counterpart (data-contracts: searchLabel must exist in live zoominmetadata)
+  // catches Jamf-side renames; this catches an accidental constants edit without
+  // needing the network. (This is exactly the chain that silently broke for
+  // jamf-routines.)
+  it('maps a non-Pro product to its exact zoominmetadata search label', () => {
+    expect(buildSearchFilters({ product: 'jamf-school' })).toEqual([
+      { key: 'zoominmetadata', values: ['product-school'] },
+    ]);
+  });
+
   it('should map docType to jamf:contentType filter', () => {
     const filters = buildSearchFilters({ docType: 'release-notes' });
     expect(filters).toContainEqual({
