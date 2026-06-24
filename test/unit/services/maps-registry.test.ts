@@ -99,6 +99,38 @@ describe('resolveMapId', () => {
   });
 });
 
+describe('findMap tie-break for unversioned stem collisions', () => {
+  // After Jamf's unversioned-docs migration, jamf-connect-documentation has TWO
+  // en-US maps sharing one derived stem, neither flagged latestVersion: a
+  // `-current` map (no version) and a stale `-2.45.0` map (latestVersion=no).
+  // Resolution must deterministically pick the current map regardless of the
+  // order the maps API returns them — not fall through to array order.
+  const connectCurrent = makeMap('connect-current', 'Jamf Connect Documentation', {
+    'version_bundle_stem': ['jamf-connect-documentation'],
+    'ft:locale': ['en-US'],
+    'bundle': ['jamf-connect-documentation-current'],
+  });
+  const connectOld = makeMap('connect-2.45.0', 'Jamf Connect Documentation 2.45.0', {
+    'version_bundle_stem': ['jamf-connect-documentation'],
+    'version': ['2.45.0'],
+    'ft:locale': ['en-US'],
+    'latestVersion': ['no'],
+    'bundle': ['jamf-connect-documentation-2.45.0'],
+  });
+
+  it('picks the current (unversioned) map when it appears first', async () => {
+    mockedFetchMaps.mockResolvedValue([connectCurrent, connectOld]);
+    const reg = new MapsRegistry(createMockCache());
+    expect(await reg.resolveMapId('jamf-connect-documentation')).toBe('connect-current');
+  });
+
+  it('picks the current (unversioned) map even when the versioned sibling is first', async () => {
+    mockedFetchMaps.mockResolvedValue([connectOld, connectCurrent]);
+    const reg = new MapsRegistry(createMockCache());
+    expect(await reg.resolveMapId('jamf-connect-documentation')).toBe('connect-current');
+  });
+});
+
 describe('resolveFromBundleId', () => {
   it('should resolve from versioned bundleId', async () => {
     const mapId = await registry.resolveFromBundleId('jamf-pro-documentation-11.12.0');

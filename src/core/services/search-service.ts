@@ -7,6 +7,7 @@ import type {
   SearchParams,
   SearchDocumentationResult,
   FtSearchEntry,
+  FtSearchCluster,
   FtSearchFilter,
   FtClusteredSearchResponse,
   FtMetadataEntry,
@@ -30,7 +31,8 @@ import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import { cleanSnippet } from './content-parser.js';
 import type { ProductId } from '../constants.js';
-import { getMetaValues, FT_META } from '../utils/ft-metadata.js';
+import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
+import { compareVersions } from '../utils/bundle.js';
 import {
   estimateTokens,
   calculatePagination,
@@ -139,8 +141,14 @@ function docTypeFromFtMetadata(metadata: FtMetadataEntry[]): DocTypeId {
  *
  * - product → `zoominmetadata` filter using searchLabel
  * - docType → `jamf:contentType` filter using DOC_TYPE_CONTENT_TYPE_MAP
- * - version → `version` filter
- * - auto-adds `latestVersion=yes` when no version specified
+ * - version → `version` filter (only when a specific version is requested)
+ *
+ * NOTE: we intentionally do NOT add `latestVersion=yes` when no version is given.
+ * Jamf migrated all non-Pro products (School, Connect, Protect, Now, …) to an
+ * unversioned documentation model with no `latestVersion` metadata, so that filter
+ * silently dropped every non-Pro product from results (and returned zero results
+ * for product-filtered non-Pro searches). Jamf Pro's many version snapshots are
+ * instead collapsed client-side via {@link dedupeToLatestVersions}.
  */
 export function buildSearchFilters(
   params: Pick<SearchParams, 'product' | 'docType' | 'version'>
@@ -167,21 +175,57 @@ export function buildSearchFilters(
     }
   }
 
-  // Version handling
+  // Version handling — only filter when a specific version is requested.
+  // See the function doc above for why `latestVersion=yes` is no longer auto-added.
   if (params.version !== undefined && params.version !== '' && params.version !== 'current') {
     filters.push({
       key: FT_META.VERSION,
       values: [params.version],
     });
-  } else {
-    // Auto-add latestVersion filter when no specific version requested
-    filters.push({
-      key: FT_META.LATEST_VERSION,
-      values: ['yes'],
-    });
   }
 
   return filters;
+}
+
+/**
+ * Collapse Fluid Topics version snapshots to a single result per topic.
+ *
+ * Jamf Pro documentation publishes a separate search entry for every product
+ * version (11.13 … 11.29), all sharing the same `ft:clusterId`. We keep only the
+ * highest-versioned entry per cluster so the user sees one (latest) result per
+ * topic. Non-versioned products (Jamf School, Connect, Protect, …) carry a single
+ * entry per topic and a distinct `ft:clusterId`, so they pass through untouched.
+ * Entries with no `ft:clusterId` cannot be version-deduped and are each kept.
+ *
+ * First-seen (relevance) order is preserved.
+ */
+export function dedupeToLatestVersions(
+  clusters: FtSearchCluster[]
+): FtSearchEntry[] {
+  const order: string[] = [];
+  const best = new Map<string, { entry: FtSearchEntry; version: string }>();
+  let anonCount = 0;
+
+  for (const cluster of clusters) {
+    for (const entry of cluster.entries) {
+      const metadata = entry.topic?.metadata ?? entry.map?.metadata ?? [];
+      const clusterId = getMetaValue(metadata, FT_META.CLUSTER_ID);
+      const version = getMetaValue(metadata, FT_META.VERSION);
+      // Entries without a cluster id can't be version-deduped — keep each.
+      const key = clusterId !== '' ? clusterId : `anon-${anonCount++}`;
+      const existing = best.get(key);
+      if (existing === undefined) {
+        order.push(key);
+        best.set(key, { entry, version });
+      } else if (compareVersions(version, existing.version) > 0) {
+        best.set(key, { entry, version });
+      }
+    }
+  }
+
+  return order
+    .map(key => best.get(key)?.entry)
+    .filter((entry): entry is FtSearchEntry => entry !== undefined);
 }
 
 // ─── Result Transformation ─────────────────────────────────────
@@ -609,14 +653,14 @@ async function resolveSearchResults(
     filters,
   });
 
-  // 4. Flatten clusters and transform entries
+  // 4. Collapse version snapshots to the latest per topic, then transform.
+  //    Deduping before transform avoids running cleanSnippet etc. over every
+  //    Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
   const results: SearchResultWithMeta[] = [];
-  for (const cluster of ftResponse.results) {
-    for (const entry of cluster.entries) {
-      const searchResult = transformFtSearchResult(entry);
-      if (searchResult.url !== '') {
-        results.push(toSearchResultWithMeta(searchResult, needsTopicMatching));
-      }
+  for (const entry of dedupeToLatestVersions(ftResponse.results)) {
+    const searchResult = transformFtSearchResult(entry);
+    if (searchResult.url !== '') {
+      results.push(toSearchResultWithMeta(searchResult, needsTopicMatching));
     }
   }
 
