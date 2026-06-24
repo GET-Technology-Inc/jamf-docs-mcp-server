@@ -165,6 +165,24 @@ describe('fetchArticleFromFt()', () => {
       expect(result.version).toBe('current');
     });
 
+    it('derives product from prodname for unversioned non-Pro articles', async () => {
+      const cache = createMockCache();
+      // Jamf's non-Pro docs carry no version_bundle_stem/version, only `prodname`.
+      // Without the fallback the product line would be missing entirely.
+      currentTopicMetadata = {
+        ...defaultMetadata,
+        metadata: [
+          { key: 'prodname', label: 'prodname', values: ['Jamf School'] },
+          { key: 'zoominmetadata', label: 'zoominmetadata', values: ['product-school'] },
+        ],
+      };
+
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+
+      expect(result.product).toBe('Jamf School');
+      expect(result.version).toBe('current');
+    });
+
     it('should include breadcrumb when parser extracts entries', async () => {
       const cache = createMockCache();
       // Use HTML with a breadcrumb nav

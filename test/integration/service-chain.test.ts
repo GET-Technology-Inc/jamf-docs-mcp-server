@@ -131,16 +131,29 @@ describe('search product filtering with real API data', () => {
     }
   }, 30000);
 
-  it('unfiltered search returns results from multiple products', async () => {
-    // proSearchResults was fetched without a product filter
-    expect(proSearchResults.length).toBeGreaterThan(0);
+  it('returns results when filtering by an unversioned non-Pro product', async () => {
+    // Regression guard for Jamf's unversioned-docs migration: non-Pro products
+    // (Jamf School, Connect, …) no longer carry `latestVersion` metadata. The
+    // old auto-added `latestVersion=yes` filter therefore returned ZERO results
+    // for any product-filtered non-Pro search. Each of these must come back
+    // non-empty and contain only the requested product.
+    //
+    // NOTE: we deliberately do NOT assert that an *unfiltered* broad query spans
+    // multiple products. Jamf Pro has far more content and out-ranks every other
+    // product for common terms, so unfiltered results are legitimately Pro-heavy
+    // — that reflects Jamf's relevance ranking, not our filtering logic.
+    for (const product of ['jamf-school', 'jamf-connect'] as const) {
+      const res = await searchDocumentation(ctx, { query: 'enrollment', product, limit: 10 });
+      expect(res.results.length).toBeGreaterThan(0);
 
-    const uniqueProducts = new Set(
-      proSearchResults.map(r => r.product).filter((p): p is string => p !== null)
-    );
-
-    // A broad query like 'enrollment' should span at least 2 products
-    expect(uniqueProducts.size).toBeGreaterThanOrEqual(2);
+      const expectedName = JAMF_PRODUCTS[product].name;
+      for (const r of res.results) {
+        // Every result that carries a product must be the one we filtered on.
+        if (r.product !== null) {
+          expect(r.product).toBe(expectedName);
+        }
+      }
+    }
   }, 30000);
 
   it('each result has a non-empty URL pointing to learn.jamf.com', async () => {

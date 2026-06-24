@@ -17,6 +17,7 @@ export const FT_META = {
   CONTENT_TYPE: 'jamf:contentType',
   CLUSTER_ID: 'ft:clusterId',
   PUBLICATION_ID: 'ft:publicationId',
+  PRODNAME: 'prodname',
 } as const;
 
 export function getMetaValue(metadata: FtMetadataEntry[], key: string): string {

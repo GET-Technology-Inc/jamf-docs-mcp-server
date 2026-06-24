@@ -219,7 +219,15 @@ function extractProductVersion(
   metadata: FtMetadataEntry[]
 ): { product: string | undefined; version: string } {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
-  const product = stem !== '' ? bundleStemToDisplayName(stem) : undefined;
+  // Versioned products (Jamf Pro family) carry version_bundle_stem; non-Pro
+  // products are unversioned and only expose `prodname` (e.g. "Jamf School").
+  let product: string | undefined;
+  if (stem !== '') {
+    product = bundleStemToDisplayName(stem);
+  } else {
+    const prodname = getMetaValue(metadata, FT_META.PRODNAME);
+    product = prodname !== '' ? prodname : undefined;
+  }
   const version = getMetaValue(metadata, FT_META.VERSION);
   return { product, version: version !== '' ? version : 'current' };
 }

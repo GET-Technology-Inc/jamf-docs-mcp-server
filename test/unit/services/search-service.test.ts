@@ -23,6 +23,7 @@ import {
   buildSearchFilters,
   transformFtSearchResult,
   searchDocumentation,
+  dedupeToLatestVersions,
 } from '../../../src/core/services/search-service.js';
 import { DOCS_BASE_URL, FT_API_BASE, DOC_TYPE_CONTENT_TYPE_MAP } from '../../../src/core/constants.js';
 import type {
@@ -143,25 +144,23 @@ function makeFtResponse(
 // ============================================================================
 
 describe('buildSearchFilters()', () => {
-  it('should add latestVersion=yes when no version specified', () => {
+  // NOTE: `latestVersion=yes` is intentionally NOT auto-added. Jamf's non-Pro
+  // products are unversioned (no latestVersion metadata), so that filter used to
+  // silently drop them. Jamf Pro version snapshots are collapsed client-side via
+  // dedupeToLatestVersions() instead.
+  it('should not add any filter when no version specified', () => {
     const filters = buildSearchFilters({});
-    expect(filters).toEqual([
-      { key: 'latestVersion', values: ['yes'] },
-    ]);
+    expect(filters).toEqual([]);
   });
 
-  it('should add latestVersion=yes when version is "current"', () => {
+  it('should not add a version filter when version is "current"', () => {
     const filters = buildSearchFilters({ version: 'current' });
-    expect(filters).toEqual([
-      { key: 'latestVersion', values: ['yes'] },
-    ]);
+    expect(filters).toEqual([]);
   });
 
-  it('should add latestVersion=yes when version is empty string', () => {
+  it('should not add a version filter when version is empty string', () => {
     const filters = buildSearchFilters({ version: '' });
-    expect(filters).toEqual([
-      { key: 'latestVersion', values: ['yes'] },
-    ]);
+    expect(filters).toEqual([]);
   });
 
   it('should add version filter when specific version provided', () => {
@@ -221,6 +220,81 @@ describe('buildSearchFilters()', () => {
       key: 'jamf:contentType',
       values: ['Technical Documentation'],
     });
+  });
+});
+
+// ============================================================================
+// dedupeToLatestVersions()
+// ============================================================================
+
+/** Build a TOPIC entry carrying a cluster id, version, and product label. */
+function makeVersionedEntry(
+  clusterId: string,
+  version: string,
+  product: string,
+  contentId: string
+): FtSearchEntry {
+  return makeTopicEntry({
+    contentId,
+    title: `${product} ${clusterId} ${version}`,
+    metadata: makeMetadata({
+      'ft:clusterId': [clusterId],
+      ...(version !== '' ? { version: [version] } : {}),
+      'zoominmetadata': [product],
+    }),
+  });
+}
+
+describe('dedupeToLatestVersions()', () => {
+  it('collapses Jamf Pro version snapshots of one topic to the latest version', () => {
+    const clusterId = 'jamf-pro-documentation-current/Enrollment_URL';
+    const cluster = makeCluster([
+      makeVersionedEntry(clusterId, '11.27.0', 'product-pro', 'c1'),
+      makeVersionedEntry(clusterId, '11.29.0', 'product-pro', 'c2'),
+      makeVersionedEntry(clusterId, '11.28.0', 'product-pro', 'c3'),
+    ]);
+
+    const deduped = dedupeToLatestVersions([cluster]);
+
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].topic?.contentId).toBe('c2'); // the 11.29.0 entry
+  });
+
+  it('preserves non-versioned non-Pro topics (distinct cluster ids)', () => {
+    const deduped = dedupeToLatestVersions([
+      makeCluster([makeVersionedEntry('jamf-pro-documentation-current/A', '11.29.0', 'product-pro', 'p')]),
+      makeCluster([makeVersionedEntry('jamf-school-documentation/Enrollment_Settings', '', 'product-school', 's')]),
+      makeCluster([makeVersionedEntry('jamf-connect-documentation/About', '', 'product-connect', 'c')]),
+    ]);
+
+    // One result per product — none dropped by version dedup.
+    expect(deduped).toHaveLength(3);
+    const products = deduped.map(
+      e => e.topic?.metadata.find(m => m.key === 'zoominmetadata')?.values[0]
+    );
+    expect(new Set(products)).toEqual(new Set(['product-pro', 'product-school', 'product-connect']));
+  });
+
+  it('preserves first-seen (relevance) order', () => {
+    const deduped = dedupeToLatestVersions([
+      makeCluster([makeVersionedEntry('school/X', '', 'product-school', 'first')]),
+      makeCluster([
+        makeVersionedEntry('pro/Y', '11.20.0', 'product-pro', 'second-old'),
+        makeVersionedEntry('pro/Y', '11.29.0', 'product-pro', 'second-new'),
+      ]),
+      makeCluster([makeVersionedEntry('connect/Z', '', 'product-connect', 'third')]),
+    ]);
+
+    expect(deduped.map(e => e.topic?.contentId)).toEqual(['first', 'second-new', 'third']);
+  });
+
+  it('keeps each entry that has no cluster id (cannot be version-deduped)', () => {
+    const noCluster1 = makeTopicEntry({ contentId: 'n1', metadata: makeMetadata({ 'zoominmetadata': ['product-pro'] }) });
+    const noCluster2 = makeTopicEntry({ contentId: 'n2', metadata: makeMetadata({ 'zoominmetadata': ['product-pro'] }) });
+
+    const deduped = dedupeToLatestVersions([makeCluster([noCluster1, noCluster2])]);
+
+    expect(deduped).toHaveLength(2);
   });
 });
 
@@ -427,19 +501,14 @@ describe('searchDocumentation()', () => {
     expect(result.pagination.totalItems).toBe(1);
   });
 
-  it('should pass latestVersion filter when no version specified', async () => {
+  it('should NOT pass a latestVersion filter when no version specified', async () => {
     mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test' });
 
-    expect(mockedPostJson).toHaveBeenCalledWith(
-      `${FT_API_BASE}/api/khub/clustered-search`,
-      expect.objectContaining({
-        filters: expect.arrayContaining([
-          { key: 'latestVersion', values: ['yes'] },
-        ]),
-      })
-    );
+    const body = mockedPostJson.mock.calls[0]?.[1] as { filters: { key: string }[] };
+    expect(body.filters).toEqual([]);
+    expect(body.filters.some(f => f.key === 'latestVersion')).toBe(false);
   });
 
   it('should pass version filter when version specified', async () => {
@@ -470,6 +539,33 @@ describe('searchDocumentation()', () => {
         ]),
       })
     );
+  });
+
+  it('returns results spanning multiple products and collapses Pro version snapshots', async () => {
+    // Mirrors the live API after Jamf's unversioned-non-Pro migration: a broad
+    // query returns many Jamf Pro version snapshots of the same topics plus
+    // single unversioned entries for non-Pro products. The service must surface
+    // every product (regression: latestVersion=yes used to hide non-Pro) while
+    // collapsing Pro snapshots to one result per topic.
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([
+        makeCluster([
+          makeVersionedEntry('jamf-pro-documentation-current/Enrollment', '11.27.0', 'product-pro', 'pro-old'),
+          makeVersionedEntry('jamf-pro-documentation-current/Enrollment', '11.29.0', 'product-pro', 'pro-new'),
+        ]),
+        makeCluster([makeVersionedEntry('jamf-school-documentation/Enrollment_Settings', '', 'product-school', 'school')]),
+        makeCluster([makeVersionedEntry('jamf-connect-documentation/Enrollment', '', 'product-connect', 'connect')]),
+      ])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'enrollment' });
+
+    const products = new Set(result.results.map(r => r.product));
+    expect(products).toEqual(new Set(['Jamf Pro', 'Jamf School', 'Jamf Connect']));
+    // Pro's two version snapshots collapse to one result (the latest, 11.29.0).
+    const proResults = result.results.filter(r => r.product === 'Jamf Pro');
+    expect(proResults).toHaveLength(1);
+    expect(proResults[0].contentId).toBe('pro-new');
   });
 
   it('should return empty results when API returns no clusters', async () => {
