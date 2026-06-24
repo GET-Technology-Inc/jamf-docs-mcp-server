@@ -1,3 +1,9 @@
+## [3.0.35](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.34...v3.0.35) (2026-06-24)
+
+### Dependencies
+
+* bump typescript-eslint from 8.61.1 to 8.62.0 ([#144](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/144)) ([55d73fa](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/55d73fa38624df7c6da8bdb3a26abe3f5f40b16b))
+
 ## [3.0.34](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.33...v3.0.34) (2026-06-17)
 
 ### Dependencies
