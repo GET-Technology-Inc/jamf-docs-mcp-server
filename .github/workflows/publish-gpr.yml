@@ -31,7 +31,13 @@ jobs:
 
       - name: Publish to GitHub Packages
         run: |
-          npm pkg set name="@${{ github.repository_owner }}/jamf-docs-mcp-server"
-          npm publish
+          # github.repository_owner is mixed-case (e.g. GET-Technology-Inc), but npm
+          # normalises package scopes to lowercase when resolving the registry. The
+          # mixed-case scope therefore failed to match the .npmrc registry mapping,
+          # so `npm publish` fell back to registry.npmjs.org and failed with
+          # ENEEDAUTH. Lowercase the scope and force the GitHub Packages registry.
+          owner_lc="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          npm pkg set name="@${owner_lc}/jamf-docs-mcp-server"
+          npm publish --registry=https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
