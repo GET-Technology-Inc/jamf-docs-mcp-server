@@ -1,3 +1,9 @@
+## [3.0.36](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.35...v3.0.36) (2026-06-24)
+
+### Bug Fixes
+
+* **deps:** patch undici and ip-address security advisories ([#147](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/147)) ([c5ea955](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c5ea9554feac34108562687e3009f0d70e0c1250))
+
 ## [3.0.35](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.34...v3.0.35) (2026-06-24)
 
 ### Dependencies
