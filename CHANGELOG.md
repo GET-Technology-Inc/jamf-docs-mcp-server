@@ -1,3 +1,9 @@
+## [3.0.42](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.41...v3.0.42) (2026-07-03)
+
+### Bug Fixes
+
+* **transport:** isolate McpServer per HTTP request to fix concurrency crash ([#156](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/156)) ([6349175](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6349175fec64c50b9e6d8ba43d81b5b70603787d))
+
 ## [3.0.41](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.40...v3.0.41) (2026-07-03)
 
 ### Bug Fixes
