@@ -135,11 +135,12 @@ async function startTestServer(
     return request.headers.get('x-real-ip') ?? 'unknown';
   };
 
-  // Minimal stub MCP server — health/CORS/rate-limit tests never reach /mcp
+  // Minimal stub MCP server — health/CORS/rate-limit tests never reach /mcp.
+  // Wrapped in a factory: createHttpHandler now builds a server per request.
   const stubMcpServer = { connect: async (): Promise<void> => { /* no-op */ } };
 
   const { handler, cleanup } = createHttpHandler(
-    stubMcpServer as never,
+    (() => stubMcpServer) as never,
     config,
     getClientIp,
   );

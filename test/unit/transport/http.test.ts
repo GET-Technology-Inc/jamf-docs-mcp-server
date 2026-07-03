@@ -173,18 +173,18 @@ describe('startHttpServer', () => {
 
   it('should resolve when the server starts listening', async () => {
     await expect(
-      startHttpServer(mockMcpServer as any, 3000, '127.0.0.1')
+      startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1')
     ).resolves.toBeUndefined();
   });
 
   it('should call listen with the given port and host', async () => {
-    await startHttpServer(mockMcpServer as any, 4321, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 4321, '127.0.0.1');
     expect(shared.httpServer.listen).toHaveBeenCalledWith(4321, '127.0.0.1', expect.any(Function));
   });
 
   it('should log security warning when binding to non-loopback host', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '0.0.0.0');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '0.0.0.0');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
       String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
@@ -195,7 +195,7 @@ describe('startHttpServer', () => {
 
   it('should NOT log security warning when binding to 127.0.0.1', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
       String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
@@ -206,7 +206,7 @@ describe('startHttpServer', () => {
 
   it('should NOT log security warning when binding to ::1', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '::1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '::1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
       String(args[0]).includes('Server is binding to') && String(args[0]).includes('WARNING')
@@ -216,7 +216,7 @@ describe('startHttpServer', () => {
   });
 
   it('should register an error handler on the HTTP server', async () => {
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
     expect(shared.httpServer.on).toHaveBeenCalledWith('error', expect.any(Function));
   });
 });
@@ -235,7 +235,7 @@ describe('/health endpoint', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should return 200 OK with status "ok" for GET /health', async () => {
@@ -272,7 +272,7 @@ describe('/llms.txt endpoint', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should return 200 with text/plain content type for GET /llms.txt', async () => {
@@ -338,7 +338,7 @@ describe('unknown path → 404', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should return 404 for an unknown path', async () => {
@@ -376,7 +376,7 @@ describe('/mcp endpoint — payload size', () => {
       new Response(null, { status: 200 })
     );
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should return 413 when body exceeds 1 MB', async () => {
@@ -421,7 +421,7 @@ describe('/mcp endpoint — valid requests', () => {
       })
     );
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should handle valid JSON-RPC POST to /mcp and return 200', async () => {
@@ -506,7 +506,7 @@ describe('/mcp endpoint — writeWebResponse', () => {
     );
     shared.httpServer.on.mockImplementation(() => {});
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should call res.end() directly for null-body response', async () => {
@@ -554,7 +554,7 @@ describe('Host Header Injection protection', () => {
       new Response(null, { status: 200 })
     );
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should route correctly regardless of Host header value', async () => {
@@ -596,7 +596,7 @@ describe('CORS headers', () => {
       new Response(null, { status: 200 })
     );
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should return 204 for OPTIONS preflight requests', async () => {
@@ -629,7 +629,7 @@ describe('Rate limiting', () => {
       new Response(null, { status: 200 })
     );
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
-    await startHttpServer(mockMcpServer as any, 3000, '127.0.0.1');
+    await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should allow normal request rate', async () => {

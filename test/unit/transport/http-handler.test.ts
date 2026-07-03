@@ -84,7 +84,7 @@ describe('createHttpHandler — return value', () => {
   it('should return an object with handler and cleanup functions', () => {
     // Arrange
     const { handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     );
@@ -100,7 +100,7 @@ describe('createHttpHandler — return value', () => {
   it('cleanup should clear the interval without throwing', () => {
     // Arrange
     const { cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     );
@@ -121,7 +121,7 @@ describe('/health endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ serverVersion: '9.9.9-test' }),
       alwaysLocalIp,
     ));
@@ -189,7 +189,7 @@ describe('Security headers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     ));
@@ -238,7 +238,7 @@ describe('CORS — no allowedOrigins', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: [] }),
       alwaysLocalIp,
     ));
@@ -281,7 +281,7 @@ describe('CORS — exact origin matching', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: allowedOrigins }),
       alwaysLocalIp,
     ));
@@ -354,7 +354,7 @@ describe('CORS — wildcard origin (*)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: ['*'] }),
       alwaysLocalIp,
     ));
@@ -406,7 +406,7 @@ describe('OPTIONS preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: ['https://app.example.com'] }),
       alwaysLocalIp,
     ));
@@ -468,7 +468,7 @@ describe('Rate limiting', () => {
   it('should allow requests under the rate limit', async () => {
     // Arrange: generous limit so tests never trip it
     const { handler, cleanup: c } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ rateLimitRpm: 100 }),
       alwaysLocalIp,
     );
@@ -484,7 +484,7 @@ describe('Rate limiting', () => {
   it('should return 429 when the rate limit is exceeded', async () => {
     // Arrange: limit of 2 RPM so we can exhaust quickly
     const { handler, cleanup: c } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ rateLimitRpm: 2 }),
       alwaysLocalIp,
     );
@@ -511,7 +511,7 @@ describe('Rate limiting', () => {
       return `10.0.0.${callCount}`;
     };
     const { handler, cleanup: c } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ rateLimitRpm: 1 }),
       rotatingIp,
     );
@@ -528,7 +528,7 @@ describe('Rate limiting', () => {
   it('should apply rate limiting BEFORE health check processing', async () => {
     // Arrange: limit of 1
     const { handler, cleanup: c } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ rateLimitRpm: 1 }),
       alwaysLocalIp,
     );
@@ -564,7 +564,7 @@ describe('/mcp — body size limit', () => {
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ maxBodySize: 100 }), // tiny limit for testing
       alwaysLocalIp,
     ));
@@ -655,7 +655,7 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
-      mockMcpServer as never,
+      (() => mockMcpServer) as never,
       makeConfig(),
       alwaysLocalIp,
     ));
@@ -830,7 +830,7 @@ describe('/mcp — CORS headers on transport response', () => {
     shared.mcpTransportInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: ['https://app.example.com'] }),
       alwaysLocalIp,
     ));
@@ -891,7 +891,7 @@ describe('/llms.txt endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     ));
@@ -929,7 +929,7 @@ describe('404 fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     ));
@@ -967,7 +967,7 @@ describe('Host Header Injection protection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ handler, cleanup } = createHttpHandler(
-      makeMockMcpServer() as never,
+      (() => makeMockMcpServer()) as never,
       makeConfig(),
       alwaysLocalIp,
     ));
