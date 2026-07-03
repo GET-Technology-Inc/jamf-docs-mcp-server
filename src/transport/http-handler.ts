@@ -130,7 +130,10 @@ function textResponse(
 /**
  * Create a platform-agnostic HTTP handler for the MCP server.
  *
- * @param mcpServer    - The MCP server instance to connect per-request transports to
+ * @param createServer - Factory that returns a fresh McpServer per request.
+ *   The MCP SDK requires one Protocol/Server instance per connection, so each
+ *   request gets its own server + transport rather than sharing a singleton.
+ *   Callers decide the server's lifecycle/state model (stateless, per-session, …).
  * @param config       - HTTP handler configuration
  * @param getClientIp  - Platform-specific function to extract client IP from a Request
  * @param logger       - Optional logger instance
@@ -139,7 +142,7 @@ function textResponse(
  *   - `cleanup`: function to stop the rate limiter cleanup interval
  */
 export function createHttpHandler(
-  mcpServer: McpServer,
+  createServer: () => McpServer,
   config: HttpHandlerConfig,
   getClientIp: ClientIpExtractor,
   logger?: Logger,
@@ -190,7 +193,7 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(request, mcpServer, config, corsHeaders, logger);
+      return await handleMcp(request, createServer, config, corsHeaders, logger);
     }
 
     // 404 fallback
@@ -206,7 +209,7 @@ export function createHttpHandler(
 
 async function handleMcp(
   request: Request,
-  mcpServer: McpServer,
+  createServer: () => McpServer,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
   logger?: Logger,
@@ -222,12 +225,17 @@ async function handleMcp(
     throw err;
   }
 
-  // Create a per-request transport (stateless mode)
+  // Create a fresh MCP server + transport for this request. The MCP SDK
+  // assigns one transport per Protocol/Server instance ("use a separate
+  // Protocol instance per connection"); reusing a single server across
+  // concurrent requests makes the second connect() throw "Already connected"
+  // and shares mutable per-connection state (e.g. logging levels).
+  const mcpServer = createServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     enableJsonResponse: config.enableJsonResponse,
   });
 
-  // Connect the MCP server to this transport
+  // Connect the per-request server to this transport
   await mcpServer.connect(transport);
 
   try {

@@ -46,17 +46,24 @@ const ctx: ServerContext = {
   topicResolver,
 };
 
-// Create the MCP server with all tools, resources, and prompts registered
-const server = createMcpServer(ctx);
-
 // Start server
 async function main(): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
 
   if (args.transport === 'http') {
     const { startHttpServer } = await import('./transport/http.js');
-    await startHttpServer(server, args.port, args.host);
+    // Stateless HTTP: build a fresh server per request, each with its own
+    // logger binding, so concurrent connections never share a transport or
+    // per-connection log-level state. Heavy providers (cache, registries)
+    // stay shared via the captured ctx.
+    await startHttpServer(
+      () => createMcpServer({ ...ctx, logger: new NodeLoggerFactory() }),
+      args.port,
+      args.host,
+    );
   } else {
+    // stdio is a single long-lived connection — one server for the process.
+    const server = createMcpServer(ctx);
     const transport = new StdioServerTransport();
     await server.connect(transport);
 

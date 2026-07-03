@@ -161,9 +161,13 @@ function buildConfig(): HttpHandlerConfig {
 
 /**
  * Create and start an HTTP server for the MCP server (Node.js platform).
+ *
+ * @param createServer - Factory returning a fresh McpServer per request
+ *   (see createHttpHandler); the HTTP transport is stateless, so each request
+ *   is served by its own server instance.
  */
 export async function startHttpServer(
-  mcpServer: McpServer,
+  mcpServerFactory: () => McpServer,
   port: number,
   host: string,
 ): Promise<void> {
@@ -175,7 +179,7 @@ export async function startHttpServer(
     return request.headers.get('x-real-ip') ?? 'unknown';
   };
 
-  const { handler, cleanup } = createHttpHandler(mcpServer, config, getClientIp, log);
+  const { handler, cleanup } = createHttpHandler(mcpServerFactory, config, getClientIp, log);
 
   const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
     void handleNodeRequest(req, res, handler, config);
