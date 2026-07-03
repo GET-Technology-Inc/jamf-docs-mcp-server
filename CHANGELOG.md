@@ -1,3 +1,9 @@
+## [3.0.41](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.40...v3.0.41) (2026-07-03)
+
+### Bug Fixes
+
+* **deps:** patch undici <6.27.0 bundled in npm (dependabot) ([#157](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/157)) ([137ed04](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/137ed0458587d9c341097267a2be8f73a31e4d0c))
+
 ## [3.0.40](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.39...v3.0.40) (2026-07-01)
 
 ### Dependencies
