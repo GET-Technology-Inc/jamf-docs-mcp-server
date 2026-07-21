@@ -1,3 +1,9 @@
+## [3.0.46](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.45...v3.0.46) (2026-07-21)
+
+### Dependencies
+
+* bump body-parser from 2.2.2 to 2.3.0 ([#173](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/173)) ([18847c0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/18847c00b3129e58c9fe96a6fbc5d302d4bb62ee))
+
 ## [3.0.45](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.44...v3.0.45) (2026-07-21)
 
 ### Dependencies
