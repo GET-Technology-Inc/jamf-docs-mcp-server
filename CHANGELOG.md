@@ -1,3 +1,9 @@
+## [3.0.45](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.44...v3.0.45) (2026-07-21)
+
+### Dependencies
+
+* bump brace-expansion from 5.0.6 to 5.0.7 ([#172](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/172)) ([ac6a12d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ac6a12d4412be06fc69502011e1abbed3aeb1844))
+
 ## [3.0.44](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.43...v3.0.44) (2026-07-15)
 
 ### Dependencies
