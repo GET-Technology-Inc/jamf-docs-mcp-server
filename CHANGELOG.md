@@ -1,3 +1,10 @@
+## [3.0.47](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.46...v3.0.47) (2026-07-22)
+
+### Dependencies
+
+* bump semantic-release from 25.0.7 to 25.0.8 ([#176](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/176)) ([fd8e5b2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/fd8e5b21d599e58eedc6031102ad2ad10734d192))
+* bump typescript-eslint from 8.64.0 to 8.65.0 ([#177](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/177)) ([469920e](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/469920e4d8e630205b8c0fdadf4f2ee148d7b9ea))
+
 ## [3.0.46](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.45...v3.0.46) (2026-07-21)
 
 ### Dependencies
