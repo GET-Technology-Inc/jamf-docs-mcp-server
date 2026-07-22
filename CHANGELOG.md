@@ -1,3 +1,10 @@
+## [3.0.48](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.47...v3.0.48) (2026-07-22)
+
+### Dependencies
+
+* bump fast-uri from 3.1.2 to 3.1.4 ([#179](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/179)) ([e0e1179](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e0e117995bda075a4b1d799be98a1bd31659c7c7))
+* bump hono from 4.12.25 to 4.12.31 ([#180](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/180)) ([625ff31](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/625ff310cbb7cbb7ed93a056791b73e3bff093ed))
+
 ## [3.0.47](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.46...v3.0.47) (2026-07-22)
 
 ### Dependencies
