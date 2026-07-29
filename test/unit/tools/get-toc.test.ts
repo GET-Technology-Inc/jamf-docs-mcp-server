@@ -373,6 +373,9 @@ describe('jamf_docs_get_toc tool', () => {
       expect(sc.page).toBe(1);
       expect(sc.totalPages).toBe(2);
       expect(sc.hasMore).toBe(true);
+      // The ID as well as the display name: paging needs something the
+      // `product` parameter will accept, and it only accepts IDs.
+      expect(sc.productId).toBe('jamf-pro');
       expect(Array.isArray(sc.entries)).toBe(true);
     });
 
@@ -571,6 +574,44 @@ describe('jamf_docs_get_toc tool', () => {
       expect(result.isError).toBe(true);
       const text = getTextContent(result);
       expect(text).toContain('not found');
+    });
+  });
+
+  // --- paging round-trip -----------------------------------------------------
+
+  describe('paging round-trip', () => {
+    it('should emit a productId the product parameter actually accepts', async () => {
+      // The MCP App's "Load more" button feeds structuredContent straight back
+      // into `jamf_docs_get_toc`. It used to send `product` — the display name
+      // — into a parameter that is an enum of IDs, so page 2 of any table of
+      // contents failed input validation before the handler ever ran. This
+      // asserts the round-trip, not just the field's presence.
+      vi.mocked(fetchTableOfContents).mockResolvedValue(
+        buildTocResponse({
+          pagination: createPaginationInfo({ page: 1, totalPages: 2, totalItems: 30, hasNext: true }),
+        })
+      );
+
+      const first = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-connect' },
+      });
+      const sc = first.structuredContent as Record<string, unknown>;
+
+      // Feeding the display name back is what used to happen, and it fails.
+      const withName = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: sc.product, page: 2 },
+      });
+      expect(withName.isError).toBe(true);
+      expect(getTextContent(withName)).toContain('Invalid');
+
+      // Feeding productId back is what the app does now, and it works.
+      const withId = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: sc.productId, page: 2 },
+      });
+      expect(withId.isError).toBeFalsy();
     });
   });
 });

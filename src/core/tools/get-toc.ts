@@ -169,7 +169,7 @@ function withVersionNote<T extends object>(content: T, versionNote: string | und
   if (versionNote !== undefined) {
     return { ...content, versionNote };
   }
-  return content as T & { versionNote?: string };
+  return content;
 }
 
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
@@ -256,6 +256,10 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         const structuredContent = {
           product: productInfo.name,
+          // The ID, not just the display name: a client paging through this
+          // TOC has to pass `product` back, and that parameter is an enum of
+          // IDs. Sending only the name made "next page" impossible.
+          productId: params.product,
           version,
           totalEntries: pagination.totalItems,
           page: pagination.page,
