@@ -73,7 +73,7 @@ async function fetchGlossaryToc(
   const terms: FtTocNode[] = [];
   for (const node of nodes) {
     // Skip non-term entries like "Glossary Revision History"
-    if (node.children && node.children.length > 0) {
+    if (node.children.length > 0) {
       for (const child of node.children) {
         if (!child.title.toLowerCase().includes('revision history')) {
           terms.push(child);
@@ -408,7 +408,7 @@ export async function lookupGlossaryTerm(
     maxTokens?: number | undefined;
   }
 ): Promise<GlossaryLookupResult> {
-  if (ctx.glossaryProvider) {
+  if (ctx.glossaryProvider !== undefined) {
     const provided = await ctx.glossaryProvider.lookup(params);
     if (provided !== null) {return provided;}
   }

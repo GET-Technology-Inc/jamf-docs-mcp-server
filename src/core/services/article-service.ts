@@ -52,13 +52,21 @@ interface CachedArticle {
   version: string;
 }
 
+/**
+ * Options accepted by {@link fetchArticleFromFt}: the caller-facing article
+ * options plus the cache TTL used when storing a freshly fetched article.
+ */
+export interface FetchArticleFromFtOptions extends FetchArticleOptions {
+  /** TTL (seconds) for the cached article entry; undefined uses the cache default. */
+  cacheTtl?: number;
+}
+
 export async function fetchArticleFromFt(
   cache: CacheProvider,
   mapId: string,
   contentId: string,
   articleUrl: string,
-  options: FetchArticleOptions,
-  cacheTtl?: number
+  options: FetchArticleFromFtOptions
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
@@ -76,12 +84,12 @@ export async function fetchArticleFromFt(
     const parsed = parseArticle(html, displayUrl, { includeRelated: true });
 
     // Metadata title is authoritative; parseArticle h1 is only a fallback
-    const title = (topicMeta.title !== undefined && topicMeta.title !== '')
+    const title = topicMeta.title !== ''
       ? topicMeta.title
       : parsed.title;
 
     cached = { title, parsed, displayUrl, product, version };
-    await cache.set(cacheKey, cached, cacheTtl);
+    await cache.set(cacheKey, cached, options.cacheTtl);
   }
 
   const { title, parsed, displayUrl, product, version } = cached;
@@ -152,8 +160,7 @@ export async function resolveAndFetchArticle(
   const articleUrl = input.url ?? '';
 
   // Step 1: Resolve mapId + contentId
-  let mapId = input.mapId;
-  let contentId = input.contentId;
+  let { mapId, contentId } = input;
   let resolvedLocale: string | undefined;
 
   if (mapId === undefined || contentId === undefined) {
@@ -184,7 +191,8 @@ export async function resolveAndFetchArticle(
 
   // Step 3: Default — fetch from FT API + parse
   const result = await fetchArticleFromFt(
-    cache, mapId, contentId, articleUrl, options, ctx.config.cacheTtl.article
+    cache, mapId, contentId, articleUrl,
+    { ...options, cacheTtl: ctx.config.cacheTtl.article }
   );
 
   if (resolvedLocale !== undefined && articleUrl !== '') {

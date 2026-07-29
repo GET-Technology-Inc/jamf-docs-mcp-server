@@ -64,6 +64,20 @@ function deriveBundleStem(metadata: FtMetadataEntry[]): string {
   return stripVersionSuffix(stripCurrentSuffix(candidate));
 }
 
+/** Convert an FT map payload into a registry entry. */
+function parseMap(map: FtMapInfo): MapEntry {
+  const { metadata } = map;
+  return {
+    mapId: map.id,
+    title: map.title,
+    bundleStem: deriveBundleStem(metadata),
+    version: getMetaValue(metadata, FT_META.VERSION),
+    locale: getMetaValue(metadata, FT_META.LOCALE),
+    isLatest: getMetaValue(metadata, FT_META.LATEST_VERSION) === 'yes',
+    bundleValues: getMetaValues(metadata, FT_META.BUNDLE),
+  };
+}
+
 // ─── Registry ───────────────────────────────────────────────────
 
 const CACHE_KEY = 'maps-registry';
@@ -132,23 +146,10 @@ export class MapsRegistry {
     const maps = this.mapsProvider !== undefined
       ? await this.mapsProvider.getMaps()
       : await this.fetchMapsFn();
-    this.entries = maps.map(m => this.parseMap(m));
+    this.entries = maps.map(m => parseMap(m));
     this.builtAt = Date.now();
 
     await this.cache.set(CACHE_KEY, this.entries, this.cacheTtl);
-  }
-
-  private parseMap(map: FtMapInfo): MapEntry {
-    const { metadata } = map;
-    return {
-      mapId: map.id,
-      title: map.title,
-      bundleStem: deriveBundleStem(metadata),
-      version: getMetaValue(metadata, FT_META.VERSION),
-      locale: getMetaValue(metadata, FT_META.LOCALE),
-      isLatest: getMetaValue(metadata, FT_META.LATEST_VERSION) === 'yes',
-      bundleValues: getMetaValues(metadata, FT_META.BUNDLE),
-    };
   }
 
   /**
@@ -216,7 +217,7 @@ export class MapsRegistry {
     const direct = this.entries.find(
       e => e.locale === loc && e.bundleValues.includes(bundleId)
     );
-    if (direct) {return direct.mapId;}
+    if (direct !== undefined) {return direct.mapId;}
 
     // Fallback: parse stem + version from bundleId
     const stripped = stripCurrentSuffix(bundleId);
@@ -263,7 +264,7 @@ export class MapsRegistry {
       if (entry.bundleStem === '') {continue;}
 
       const existing = productMap.get(entry.bundleStem);
-      if (existing) {
+      if (existing !== undefined) {
         if (entry.version !== '' && !existing.versions.includes(entry.version)) {
           existing.versions.push(entry.version);
         }

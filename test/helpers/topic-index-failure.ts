@@ -18,7 +18,7 @@ import type { MapsRegistry } from '../../src/core/services/maps-registry.js';
 const cache: CacheProvider = {
   get: async () => null,
   set: async () => undefined,
-  delete: async () => undefined,
+  delete: async () => false,
   clear: async () => undefined,
 };
 

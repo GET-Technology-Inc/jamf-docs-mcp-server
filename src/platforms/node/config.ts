@@ -70,12 +70,10 @@ function getValidatedCacheDir(): string {
         return DEFAULT_CACHE_DIR;
       }
     }
-  } else {
+  } else if (!resolved.startsWith(cwd)) {
     // Relative paths must resolve within cwd
-    if (!resolved.startsWith(cwd)) {
-      console.error(`[WARNING] [config] CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
-      return DEFAULT_CACHE_DIR;
-    }
+    console.error(`[WARNING] [config] CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
+    return DEFAULT_CACHE_DIR;
   }
 
   return raw;

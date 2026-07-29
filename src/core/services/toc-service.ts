@@ -97,7 +97,7 @@ export async function fetchTableOfContents(
 
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const locale = options.locale ?? DEFAULT_LOCALE as LocaleId;
+  const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
   const cacheKey = `ft-toc:${locale}:${product}:${version}`;
 
   let allToc = await ctx.cache.get<TocEntry[]>(cacheKey);

@@ -82,7 +82,7 @@ function matchTopics(title: string, snippet: string): TopicId[] {
 /** Pre-computed reverse lookup: product display name → ProductId */
 const PRODUCT_NAME_TO_ID: Record<string, ProductId> = Object.fromEntries(
   (Object.keys(JAMF_PRODUCTS) as ProductId[]).map(id => [JAMF_PRODUCTS[id].name, id])
-) as Record<string, ProductId>;
+);
 
 /**
  * Resolve a product display name (e.g. 'Jamf Pro') to its ProductId

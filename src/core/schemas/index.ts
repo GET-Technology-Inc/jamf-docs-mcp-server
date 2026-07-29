@@ -150,13 +150,13 @@ export const GetArticleInputSchema = z.object({
 
   mapId: z.string()
     .max(200)
-    .regex(/^[a-zA-Z0-9_~\-]+$/, 'Invalid mapId format')
+    .regex(/^[a-zA-Z0-9_~-]+$/, 'Invalid mapId format')
     .optional()
     .describe('Fluid Topics map ID (from search results or TOC). Use with contentId for direct fetch.'),
 
   contentId: z.string()
     .max(200)
-    .regex(/^[a-zA-Z0-9_~\-]+$/, 'Invalid contentId format')
+    .regex(/^[a-zA-Z0-9_~-]+$/, 'Invalid contentId format')
     .optional()
     .describe('Fluid Topics content ID (from search results or TOC). Use with mapId for direct fetch.'),
 
