@@ -1,3 +1,151 @@
+## [4.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.50...v4.0.0) (2026-07-29)
+
+### ⚠ BREAKING CHANGES
+
+* the `logging` capability is no longer declared and
+`LoggerFactory.setServer` / `LoggingService.setServer` are removed. SEP-2577
+deprecated the Logging feature in protocol revision 2026-07-28, and servers
+must no longer emit `notifications/message` for requests that did not opt in.
+Logs go to stderr on Node and to the platform sink on Workers. Implementations
+of `LoggerFactory` must drop their `setServer` method.
+
+`@modelcontextprotocol/sdk@1.x` cannot speak 2026-07-28 — its
+`LATEST_PROTOCOL_VERSION` is pinned at `2025-11-25` and it has no
+`server/discover`, no `resultType`, and no cache fields. This swaps it for
+`@modelcontextprotocol/server@2.0.0` (with `@modelcontextprotocol/client` for
+the test harness).
+
+What that buys, on the wire:
+
+- `server/discover` advertises `supportedVersions: ["2026-07-28"]`, with
+  `serverInfo` in the result `_meta` envelope where the revision moved it.
+- Cacheable results carry `ttlMs` / `cacheScope`. Everything served here is
+  public Jamf documentation, so all six cacheable operations get an hour at
+  `public` — the SDK default is `ttlMs: 0`, `cacheScope: 'private'`, i.e. no
+  caching at all.
+- Tools register from an explicit `TOOL_ORDER` array, so `tools/list` is
+  byte-stable across calls and deploys as the revision asks.
+
+Protocol eras are split explicitly at `/mcp`. The modern leg runs with
+`legacy: 'reject'` and 2025-era requests are routed by `isLegacyRequest` to the
+existing per-request transport. The SDK's built-in legacy fallback would have
+worked, but it always answers over SSE — that silently changes the response
+shape for clients and response caches built against `enableJsonResponse`.
+
+stdio moves to `serveStdio`, which owns the era decision for the connection
+and answers the `server/discover` probe that 2026-07-28 clients open with.
+
+Handler contexts changed shape: progress metadata and the outbound
+notification channel moved from `extra._meta` / `extra.sendNotification` to
+`ctx.mcpReq._meta` / `ctx.mcpReq.notify`. `reportProgress` absorbs this, so
+tool handlers are untouched. Progress remains valid — it is request-scoped and
+still travels on the response stream of its own request.
+
+Adds `test/integration/protocol-2026-07-28.test.ts`, which drives the real
+handler and asserts on bytes rather than internals: discovery, cache hints,
+tool ordering, envelope enforcement, and the 2025 handshake.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FFWq13wpqNjcmkz6T99dJi
+
+* fix(pkg): make @modelcontextprotocol/server a peer dependency
+
+This package hands `McpServer` instances to its consumers, and those consumers
+pass them to `createMcpHandler` from their own SDK copy. When the two resolve
+to different copies of the SDK the modern (2026-07-28) leg dies with an
+obscure `Cannot read properties of undefined (reading 'includes')` — the
+instance was built by one module's `Protocol` and inspected by another's.
+
+Caught while wiring the Cloudflare Workers deployment: a local `file:` link
+gave the two packages separate SDK copies and every 2026-07-28 request
+returned 500. A peer dependency makes the single-copy requirement explicit
+instead of relying on the consumer's tree happening to hoist.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FFWq13wpqNjcmkz6T99dJi
+
+* feat(apps): render search, TOC and articles in an MCP App
+
+Adds the MCP Apps extension (`io.modelcontextprotocol/ui`). Hosts that
+negotiate it render `jamf_docs_search`, `jamf_docs_get_toc` and
+`jamf_docs_get_article` results as an interactive viewer in the conversation:
+search hits are clickable through to the article, TOC entries open in place,
+and articles carry section navigation and a back stack. Hosts that don't
+negotiate it ignore the metadata and get exactly the markdown they got before,
+so this is purely additive.
+
+All three tools point at ONE `ui://jamf-docs/app.html`. The app picks its view
+from the shape of the structured content it is handed — `results` for a
+search, `entries` for a TOC, `content` for an article — which keeps a single
+~390 kB bundle on the wire instead of three near-identical copies. That size
+is the ext-apps `App` class; it is why sharing the resource matters.
+
+Hosts render `ui://` resources in a sandboxed iframe under a deny-by-default
+CSP, so the document has to carry its own script and styles — nothing external
+loads. And the resource is served from Cloudflare Workers as well as Node,
+which has no filesystem. Both constraints land on the same answer: bundle at
+build time and emit the HTML as a committed TypeScript module, so `tsc` alone
+still builds the package and consumers never need esbuild.
+
+Documentation text is escaped before any markup is applied; the markdown
+formatter only re-introduces tags it generated itself. External links are
+handed to the host via `sendOpenLink` rather than navigated, since the iframe
+cannot open tabs.
+
+The wire tests turned up a client-facing gotcha worth knowing: SEP-2243 binds
+`Mcp-Name` to the body, so `resources/read` and `tools/call` are rejected with
+`-32020` unless the header repeats `params.uri` / `params.name`. Covered by a
+negative test.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FFWq13wpqNjcmkz6T99dJi
+
+* test: account for the app resource in resources/list
+
+The MCP Apps commit added a third resource, so the two assertions that
+hard-coded "exactly the two jamf:// JSON resources" broke: one on the count,
+one on every resource being `application/json`.
+
+Split rather than loosened — the mime-type check now covers the `jamf://` data
+resources specifically, and the app resource gets its own assertion for
+`text/html;profile=mcp-app`. A blanket "some mime type is defined" would have
+stopped catching the thing the original test was for.
+
+Missed locally because this file only runs against a built `dist/`, which I
+had not rebuilt after the apps change.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FFWq13wpqNjcmkz6T99dJi
+
+* refactor(http): let the SDK own both protocol eras
+
+The previous wiring ran the entry with `legacy: 'reject'` and hand-routed
+2025-era traffic to its own transport, purely so legacy responses stayed a
+single JSON body instead of the SSE stream the SDK's fallback produces. That
+is not a protocol requirement — the 2025 Streamable HTTP binding already
+requires clients to accept `text/event-stream` — it was accommodation for
+tests that called `res.json()`.
+
+Dropping it removes the whole second serving path: `legacy: 'stateless'`, one
+factory, the SDK classifies the era. Tests now read the response the way a
+client does, via a shared `readJsonRpc` helper that handles either framing, so
+they assert on the JSON-RPC message rather than on the transport's choice.
+
+`HttpHandlerConfig.enableJsonResponse: boolean` becomes
+`responseMode: 'auto' | 'sse' | 'json'`, the vocabulary the SDK actually uses,
+and the default moves to `'auto'`. That is a behaviour improvement, not just a
+rename: `'json'` silently discards anything emitted before the result, so the
+old default was dropping every progress notification these tools report.
+`'auto'` sends a plain JSON body when there is nothing mid-call and upgrades
+to a stream when there is.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FFWq13wpqNjcmkz6T99dJi
+
+### Features
+
+* serve MCP 2026-07-28 via SDK v2 ([#187](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/187)) ([983b134](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/983b1342f72f5733842e2a7a79372bc177c77ce3))
+
 ## [3.0.50](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.49...v3.0.50) (2026-07-29)
 
 ### Dependencies
