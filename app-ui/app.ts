@@ -221,11 +221,31 @@ function chip(label: string): string {
   return `<span class="chip">${esc(label)}</span>`;
 }
 
+/**
+ * Whether a value is a string worth rendering.
+ *
+ * The interfaces in this file describe what the server sends, but `classify`
+ * casts an entirely unvalidated payload — `JSON.parse` of whatever the host
+ * relayed — after checking two fields. So an optional `string` really is
+ * `unknown` at runtime, and a plain nullish check would let `null` or a number
+ * through to `esc`, where `.replace` is not a function. A render that throws
+ * from `ontoolresult` is uncaught and kills the view.
+ */
+function renderableText(value: unknown): value is string {
+  return typeof value === 'string' && value !== '';
+}
+
 function crumbs(path: string[] | undefined): string {
-  if (path === undefined || path.length === 0) {
+  // Same reasoning as `renderableText`: `path` is only a `string[]` by
+  // declaration. Anything else renders as no breadcrumbs rather than throwing.
+  if (!Array.isArray(path)) {
     return '';
   }
-  return `<div class="crumbs">${path.map((c) => esc(c)).join(' <span aria-hidden="true">›</span> ')}</div>`;
+  const parts = path.filter(renderableText);
+  if (parts.length === 0) {
+    return '';
+  }
+  return `<div class="crumbs">${parts.map((c) => esc(c)).join(' <span aria-hidden="true">›</span> ')}</div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +255,7 @@ function crumbs(path: string[] | undefined): string {
 function renderSearch(v: SearchView): string {
   if (v.results.length === 0) {
     const tips =
-      v.suggestions !== undefined && v.suggestions.length > 0
+      Array.isArray(v.suggestions) && v.suggestions.length > 0
         ? `<p class="muted">Try: ${v.suggestions.map((s) => `<button class="link" data-search="${esc(s)}">${esc(s)}</button>`).join(', ')}</p>`
         : '';
     return `<header><h1>No results</h1><p class="muted">Nothing matched “${esc(v.query)}”.</p>${tips}</header>`;
@@ -248,7 +268,7 @@ function renderSearch(v: SearchView): string {
         ${crumbs(r.breadcrumb)}
         <h2>${esc(r.title)}</h2>
         <p class="snippet">${inline(esc(r.snippet))}</p>
-        <div class="meta">${chip(r.product)}${r.version !== undefined && r.version !== '' ? chip(r.version) : ''}</div>
+        <div class="meta">${chip(r.product)}${renderableText(r.version) ? chip(r.version) : ''}</div>
       </li>`,
     )
     .join('');
@@ -300,8 +320,8 @@ function renderArticle(v: ArticleView, canGoBack: boolean): string {
       ${crumbs(v.breadcrumb)}
       <h1>${esc(v.title)}</h1>
       <p class="muted">
-        ${v.product !== undefined && v.product !== '' ? chip(v.product) : ''}${v.version !== undefined && v.version !== '' ? chip(v.version) : ''}
-        ${v.lastUpdated !== undefined && v.lastUpdated !== '' ? `Updated ${esc(v.lastUpdated)}` : ''}
+        ${renderableText(v.product) ? chip(v.product) : ''}${renderableText(v.version) ? chip(v.version) : ''}
+        ${renderableText(v.lastUpdated) ? `Updated ${esc(v.lastUpdated)}` : ''}
         <a href="${esc(v.url)}" data-external class="link">Open on learn.jamf.com</a>
       </p>
     </header>

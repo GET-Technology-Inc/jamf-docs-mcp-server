@@ -540,6 +540,22 @@ describe('fetchArticleFromFt()', () => {
       // httpGetText should have been called twice total (once for failure, once for success)
       expect(mockedGetText).toHaveBeenCalledTimes(2);
     });
+
+    it('should fall back to the parsed heading when the topic payload has no title', async () => {
+      // `FtTopicInfo` is a bare cast over `response.json()` — no runtime
+      // validation — so a payload without `title` is a shape the type forbids
+      // and the network can still produce. Trusting the type here once cost the
+      // article its title entirely: `undefined !== ''` is true, so `undefined`
+      // won over the parsed `<h1>`.
+      const cache = createMockCache();
+      const { title: _omitted, ...withoutTitle } = currentTopicMetadata as Record<string, unknown>;
+      currentTopicMetadata = withoutTitle as typeof currentTopicMetadata;
+
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+
+      // The parsed `<h1>`, not `undefined`.
+      expect(result.title).toBe('MDM Profile Settings');
+    });
   });
 
   // ── Display URL derivation ────────────────────────────────────────────────

@@ -123,10 +123,15 @@ async function fetchAndBuildIndex(
       index.set(legacyName, topic.id);
     }
 
-    // Also index by title (normalized)
-    const titleKey = topic.title.replace(/\s+/g, '_');
-    if (!index.has(titleKey)) {
-      index.set(titleKey, topic.id);
+    // Also index by title (normalized). A topic Fluid Topics sent without one
+    // simply has no title key — it is still reachable by `legacy_topicname`
+    // above. Reading through blindly would throw and lose the entire index for
+    // that map, taking every other topic in it down with the one bad entry.
+    if (topic.title !== undefined) {
+      const titleKey = topic.title.replace(/\s+/g, '_');
+      if (!index.has(titleKey)) {
+        index.set(titleKey, topic.id);
+      }
     }
   }
 

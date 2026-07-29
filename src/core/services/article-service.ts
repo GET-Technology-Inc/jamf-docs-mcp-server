@@ -84,7 +84,7 @@ export async function fetchArticleFromFt(
     const parsed = parseArticle(html, displayUrl, { includeRelated: true });
 
     // Metadata title is authoritative; parseArticle h1 is only a fallback
-    const title = topicMeta.title !== ''
+    const title = (topicMeta.title !== undefined && topicMeta.title !== '')
       ? topicMeta.title
       : parsed.title;
 
