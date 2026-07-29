@@ -2,9 +2,10 @@
  * Shared types and constants for the HTTP transport layer.
  */
 
+import type { PerRequestResponseMode } from '@modelcontextprotocol/server';
 import type { Logger } from '../core/services/interfaces/index.js';
 
-export type { Logger };
+export type { Logger, PerRequestResponseMode };
 
 // ============================================================================
 // Configuration
@@ -16,7 +17,18 @@ export interface HttpHandlerConfig {
   trustProxy: boolean;
   rateLimitRpm: number;
   maxBodySize: number;
-  enableJsonResponse: boolean;
+  /**
+   * How responses are shaped.
+   *
+   * - `'auto'` (default) — a single JSON body, upgrading to an SSE stream only
+   *   when a handler emits something before its result. In practice that means
+   *   progress notifications reach the client instead of being discarded.
+   * - `'sse'` — always stream.
+   * - `'json'` — never stream, which silently drops mid-call notifications.
+   *   Choose it when a response cache in front of this handler stores a single
+   *   JSON body.
+   */
+  responseMode: PerRequestResponseMode;
   shutdownTimeoutMs: number;
 }
 
@@ -29,7 +41,7 @@ export const DEFAULT_HTTP_CONFIG: HttpHandlerConfig = {
   trustProxy: false,
   rateLimitRpm: 60,
   maxBodySize: 1_048_576,
-  enableJsonResponse: true,
+  responseMode: 'auto',
   shutdownTimeoutMs: 10_000,
 };
 

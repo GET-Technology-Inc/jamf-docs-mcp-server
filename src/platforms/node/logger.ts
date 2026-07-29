@@ -9,7 +9,6 @@
  * A future WorkersLoggerFactory could pass `console.log` or a no-op instead.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Logger, LoggerFactory, WriteStderrFn } from '../../core/services/interfaces/index.js';
 import { LoggingService } from '../../core/services/logging.js';
 
@@ -26,9 +25,5 @@ export class NodeLoggerFactory implements LoggerFactory {
 
   createLogger(name: string): Logger {
     return this.service.createLogger(name);
-  }
-
-  setServer(server: McpServer): void {
-    this.service.setServer(server);
   }
 }

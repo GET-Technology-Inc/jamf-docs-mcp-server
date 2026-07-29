@@ -1,16 +1,15 @@
 /**
- * Structured logging service for MCP protocol
+ * Structured logging service.
  *
- * Provides dual output: MCP notifications (visible to AI clients) + stderr (visible to developers).
- * Log level filtering for MCP notifications is handled by the SDK (logging/setLevel).
- *
- * LoggingService is a class that holds the MCP server reference as instance state,
- * avoiding module-level mutable singletons that are incompatible with
- * Cloudflare Workers (where module scope persists across requests).
+ * Output goes to stderr only. SEP-2577 deprecated the MCP Logging feature in
+ * protocol revision 2026-07-28 — `logging/setLevel` is gone and servers must
+ * not emit `notifications/message` for requests that did not opt in — and the
+ * suggested migration for a stdio server is exactly this: write to stderr.
+ * Platforms without a stderr stream (Cloudflare Workers) supply their own
+ * writer, which lands in the platform log sink.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { LoggingLevel } from '@modelcontextprotocol/sdk/types.js';
+import type { LoggingLevel } from '@modelcontextprotocol/server';
 import type { Logger, WriteStderrFn } from './interfaces/index.js';
 
 export type { Logger, WriteStderrFn };
@@ -53,19 +52,10 @@ function formatLogLine(
  *   platforms without stderr (e.g. Cloudflare Workers).
  */
 export class LoggingService {
-  private mcpServer: McpServer | null = null;
   private readonly writeStderr: WriteStderrFn;
 
   constructor(writeStderr?: WriteStderrFn) {
     this.writeStderr = writeStderr ?? defaultWriteStderr;
-  }
-
-  /**
-   * Register the MCP server instance for sending log notifications.
-   * Must be called after server creation but before tools are invoked.
-   */
-  setServer(server: McpServer): void {
-    this.mcpServer = server;
   }
 
   /**
@@ -88,18 +78,6 @@ export class LoggingService {
 
   private log(level: LoggingLevel, loggerName: string, data: unknown): void {
     this.writeStderr(formatLogLine(level, loggerName, data));
-    this.sendMcpLog(level, loggerName, data);
-  }
-
-  private sendMcpLog(level: LoggingLevel, loggerName: string, data: unknown): void {
-    if (this.mcpServer === null) {
-      return;
-    }
-
-    // Fire-and-forget: don't await, don't throw
-    this.mcpServer.sendLoggingMessage({ level, logger: loggerName, data }).catch(() => {
-      // Silently ignore send failures (server may not be connected yet)
-    });
   }
 }
 

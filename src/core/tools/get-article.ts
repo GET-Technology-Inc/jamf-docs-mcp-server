@@ -3,8 +3,9 @@
  * Retrieve the full content of a specific Jamf documentation article.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
+import { appToolMeta } from '../apps/index.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema } from '../schemas/output.js';
@@ -79,6 +80,9 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
       description: TOOL_DESCRIPTION,
       inputSchema: GetArticleInputSchema,
       outputSchema: ArticleOutputSchema,
+      // Hosts supporting the MCP Apps extension render this result in the
+      // shared viewer; others ignore the metadata and get the markdown.
+      _meta: appToolMeta(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

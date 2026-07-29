@@ -2,10 +2,15 @@
  * Progress notification utility
  */
 
-import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import type { ServerContext as McpToolContext } from '@modelcontextprotocol/server';
 
-type Extra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+/**
+ * The per-request context an MCP handler receives as its last argument.
+ *
+ * Aliased to keep it distinct from this package's own `ServerContext`
+ * (`core/types/context.ts`), which carries our providers and config.
+ */
+export type { McpToolContext };
 
 export interface ProgressOptions {
   progress: number;
@@ -17,18 +22,22 @@ export interface ProgressOptions {
  * Report progress to the client if a progressToken was provided.
  * No-op if the client didn't request progress notifications.
  * Fire-and-forget: notification failures are silently ignored.
+ *
+ * `notifications/progress` is request-scoped, so it survives the 2026-07-28
+ * removal of the server-to-client notification channel: it still travels on
+ * the response stream of the request it belongs to.
  */
 export async function reportProgress(
-  extra: Extra,
+  extra: McpToolContext,
   options: ProgressOptions
 ): Promise<void> {
-  const progressToken = extra._meta?.progressToken;
+  const progressToken = extra.mcpReq._meta?.progressToken;
   if (progressToken === undefined) {
     return;
   }
 
   try {
-    await extra.sendNotification({
+    await extra.mcpReq.notify({
       method: 'notifications/progress',
       params: {
         progressToken,

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { createHttpHandler } from '../../../src/transport/http-handler.js';
 import { DEFAULT_HTTP_CONFIG } from '../../../src/transport/http-types.js';
 import { createMcpServer } from '../../../src/core/create-server.js';

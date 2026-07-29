@@ -212,7 +212,13 @@ describe('CORS — wildcard mode', () => {
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     expect(res.headers.get('access-control-allow-methods')).toBe('GET, POST, OPTIONS');
-    expect(res.headers.get('access-control-allow-headers')).toBe('Content-Type');
+    // SEP-2243 (2026-07-28) makes Mcp-Method/Mcp-Name mandatory on POSTs, so a
+    // preflight that omits them locks out every conforming browser client.
+    const allowedHeaders = res.headers.get('access-control-allow-headers') ?? '';
+    expect(allowedHeaders).toContain('Content-Type');
+    expect(allowedHeaders).toContain('Mcp-Method');
+    expect(allowedHeaders).toContain('Mcp-Name');
+    expect(allowedHeaders).toContain('MCP-Protocol-Version');
   });
 
   it('does NOT set Vary: Origin when wildcard is configured', async () => {

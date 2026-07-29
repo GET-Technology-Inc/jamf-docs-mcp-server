@@ -3,8 +3,9 @@
  * Search Jamf documentation for articles matching a query.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
+import { appToolMeta } from '../apps/index.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
@@ -337,6 +338,9 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
       description: TOOL_DESCRIPTION,
       inputSchema: SearchInputSchema,
       outputSchema: SearchOutputSchema,
+      // Hosts supporting the MCP Apps extension render this result in the
+      // shared viewer; others ignore the metadata and get the markdown.
+      _meta: appToolMeta(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

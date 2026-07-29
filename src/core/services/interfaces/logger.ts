@@ -2,8 +2,6 @@
  * Logging interfaces for platform abstraction
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
 /**
  * Logger instance bound to a specific module name
  */
@@ -31,5 +29,4 @@ export type WriteStderrFn = (formatted: string) => void;
  */
 export interface LoggerFactory {
   createLogger: (name: string) => Logger;
-  setServer: (server: McpServer) => void;
 }

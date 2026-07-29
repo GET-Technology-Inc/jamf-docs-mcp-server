@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
+import { completable } from '@modelcontextprotocol/server';
 import {
   ResponseFormat,
   OutputMode,

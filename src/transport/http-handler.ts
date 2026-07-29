@@ -6,10 +6,8 @@
  * call the `handler` function returned by `createHttpHandler`.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import {
-  WebStandardStreamableHTTPServerTransport,
-} from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import type { McpServer, McpHttpHandler } from '@modelcontextprotocol/server';
+import { createMcpHandler } from '@modelcontextprotocol/server';
 
 import { RateLimiter } from './rate-limiter.js';
 import {
@@ -35,6 +33,28 @@ const SECURITY_HEADERS: Record<string, string> = {
 // CORS helper
 // ============================================================================
 
+/**
+ * Request headers a browser-based MCP client is allowed to send.
+ *
+ * `Mcp-Method` / `Mcp-Name` are mandatory on Streamable HTTP POSTs from
+ * protocol revision 2026-07-28 (SEP-2243) — omitting them from the preflight
+ * allowlist makes every cross-origin call from a conforming client fail before
+ * it reaches the handler. `MCP-Protocol-Version`, `Mcp-Session-Id` and
+ * `Last-Event-ID` are kept for the 2025-era clients this endpoint still serves.
+ */
+export const CORS_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'Mcp-Method',
+  'Mcp-Name',
+  'MCP-Protocol-Version',
+  'Mcp-Session-Id',
+  'Last-Event-ID',
+].join(', ');
+
+/** Response headers a browser-based MCP client is allowed to read. */
+export const CORS_EXPOSED_HEADERS = ['Mcp-Session-Id'].join(', ');
+
 function getCorsHeaders(
   origin: string | null,
   allowedOrigins: string[],
@@ -50,7 +70,8 @@ function getCorsHeaders(
   if (allowedOrigins.includes('*')) {
     headers['Access-Control-Allow-Origin'] = '*';
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    headers['Access-Control-Allow-Headers'] = CORS_ALLOWED_HEADERS;
+    headers['Access-Control-Expose-Headers'] = CORS_EXPOSED_HEADERS;
     return headers;
   }
 
@@ -58,7 +79,8 @@ function getCorsHeaders(
   if (origin !== null && allowedOrigins.includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    headers['Access-Control-Allow-Headers'] = CORS_ALLOWED_HEADERS;
+    headers['Access-Control-Expose-Headers'] = CORS_EXPOSED_HEADERS;
     headers['Access-Control-Max-Age'] = '86400';
     headers.Vary = 'Origin';
   }
@@ -132,7 +154,7 @@ function textResponse(
  *
  * @param createServer - Factory that returns a fresh McpServer per request.
  *   The MCP SDK requires one Protocol/Server instance per connection, so each
- *   request gets its own server + transport rather than sharing a singleton.
+ *   request gets its own server rather than sharing a singleton.
  *   Callers decide the server's lifecycle/state model (stateless, per-session, …).
  * @param config       - HTTP handler configuration
  * @param getClientIp  - Platform-specific function to extract client IP from a Request
@@ -150,6 +172,18 @@ export function createHttpHandler(
   const rateLimiter = new RateLimiter(config.rateLimitRpm, 60_000);
   const cleanupIntervalId = setInterval(() => { rateLimiter.cleanup(); }, 5 * 60_000);
 
+  // One entry serves both protocol eras from the same factory: 2026-07-28
+  // envelope traffic on the modern path, and 2025-era requests through the
+  // SDK's stateless legacy fallback. Legacy responses stream over SSE, which
+  // the 2025 Streamable HTTP binding already requires clients to accept.
+  const mcpHandler = createMcpHandler(() => createServer(), {
+    legacy: 'stateless',
+    responseMode: config.responseMode,
+    onerror: (err) => {
+      logger?.error(`MCP handler error: ${err.message}`);
+    },
+  });
+
   // Prevent the interval from keeping the process alive (Node.js-specific,
   // but calling .unref() is harmless on platforms that lack it).
   if (typeof cleanupIntervalId === 'object' && 'unref' in cleanupIntervalId) {
@@ -158,6 +192,7 @@ export function createHttpHandler(
 
   function cleanup(): void {
     clearInterval(cleanupIntervalId);
+    void mcpHandler.close();
   }
 
   async function handler(request: Request): Promise<Response> {
@@ -193,7 +228,7 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(request, createServer, config, corsHeaders, logger);
+      return await handleMcp(request, mcpHandler, config, corsHeaders, logger);
     }
 
     // 404 fallback
@@ -209,7 +244,7 @@ export function createHttpHandler(
 
 async function handleMcp(
   request: Request,
-  createServer: () => McpServer,
+  mcpHandler: McpHttpHandler,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
   logger?: Logger,
@@ -225,21 +260,9 @@ async function handleMcp(
     throw err;
   }
 
-  // Create a fresh MCP server + transport for this request. The MCP SDK
-  // assigns one transport per Protocol/Server instance ("use a separate
-  // Protocol instance per connection"); reusing a single server across
-  // concurrent requests makes the second connect() throw "Already connected"
-  // and shares mutable per-connection state (e.g. logging levels).
-  const mcpServer = createServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    enableJsonResponse: config.enableJsonResponse,
-  });
-
-  // Connect the per-request server to this transport
-  await mcpServer.connect(transport);
-
   try {
-    // Parse body if present
+    // Parse body if present. Reading it above consumed the request stream, so
+    // the parsed value must be handed to the MCP handler explicitly.
     let parsedBody: unknown;
     if (bodyText.length > 0) {
       try {
@@ -249,8 +272,9 @@ async function handleMcp(
       }
     }
 
-    // Handle the request via the MCP transport
-    const webRes = await transport.handleRequest(request, { parsedBody });
+    // The entry classifies the era itself and builds a fresh server per
+    // request from the factory it was given.
+    const webRes = await mcpHandler.fetch(request, { parsedBody });
 
     // Add CORS + security headers to the response
     for (const [key, value] of Object.entries(corsHeaders)) {
@@ -261,7 +285,5 @@ async function handleMcp(
   } catch (err) {
     logger?.error(`MCP handler error: ${err instanceof Error ? err.message : String(err)}`);
     return jsonResponse(500, { error: 'Internal server error' }, corsHeaders);
-  } finally {
-    await transport.close();
   }
 }

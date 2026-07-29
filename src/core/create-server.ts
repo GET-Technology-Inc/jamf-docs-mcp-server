@@ -6,7 +6,7 @@
  * returns a ready-to-connect McpServer.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from './types/context.js';
 import { SERVER_ICON } from './constants.js';
 
@@ -17,6 +17,7 @@ import { registerGetTocTool } from './tools/get-toc.js';
 import { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
 import { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
 import { registerResources } from './resources/index.js';
+import { registerApps, UI_EXTENSION_ID, APP_MIME_TYPE } from './apps/index.js';
 import { registerPrompts } from './prompts/index.js';
 
 /**
@@ -26,6 +27,23 @@ export interface CreateServerOptions {
   /** Tool name whitelist. When provided, only listed tools are registered. */
   tools?: string[];
 }
+
+/**
+ * Tool registration order.
+ *
+ * `tools/list` results are emitted in registration order, and protocol
+ * revision 2026-07-28 asks servers to keep that order deterministic so clients
+ * can cache the list and LLM prompt caches keep hitting. An ordered array (not
+ * an object literal) makes the guarantee explicit and testable.
+ */
+export const TOOL_ORDER = [
+  'jamf_docs_list_products',
+  'jamf_docs_search',
+  'jamf_docs_get_article',
+  'jamf_docs_get_toc',
+  'jamf_docs_glossary_lookup',
+  'jamf_docs_batch_get_articles',
+] as const;
 
 /** Tool name → registration function mapping */
 const TOOL_REGISTRY: Record<
@@ -39,6 +57,33 @@ const TOOL_REGISTRY: Record<
   jamf_docs_glossary_lookup: registerGlossaryLookupTool,
   jamf_docs_batch_get_articles: registerBatchGetArticlesTool,
 };
+
+/**
+ * Cache hints emitted on the `CacheableResult` operations of protocol
+ * revision 2026-07-28 (`ttlMs` / `cacheScope`).
+ *
+ * Everything this server returns is public Jamf documentation — there is no
+ * per-user or per-tenant content — so `public` is correct throughout and lets
+ * shared intermediaries cache alongside the client.
+ *
+ * The listing surfaces (tools, prompts, resources) only change when a new
+ * version of this package is deployed, so they get the full hour. Resource
+ * reads track upstream documentation and get the same hour, which is well
+ * inside the cadence at which Jamf publishes changes.
+ *
+ * Without these the SDK emits the conservative default (`ttlMs: 0`,
+ * `cacheScope: 'private'`), i.e. no caching at all.
+ */
+const ONE_HOUR_MS = 3_600_000;
+
+const CACHE_HINTS = {
+  'tools/list': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+  'prompts/list': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+  'resources/list': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+  'resources/templates/list': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+  'resources/read': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+  'server/discover': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
+} as const;
 
 const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect.
 
@@ -78,24 +123,37 @@ export function createMcpServer(ctx: ServerContext, options?: CreateServerOption
     },
     {
       instructions: SERVER_INSTRUCTIONS,
+      cacheHints: CACHE_HINTS,
       capabilities: {
-        logging: {},
+        // MCP Apps (SEP-2133 extensions framework). Hosts that negotiate this
+        // render search results, tables of contents and articles in the
+        // `ui://` viewer; hosts that do not simply get the markdown.
+        extensions: {
+          [UI_EXTENSION_ID]: { mimeTypes: [APP_MIME_TYPE] },
+        },
       },
     },
   );
 
-  ctx.logger.setServer(server);
+  // The `logging` capability is deliberately not declared: SEP-2577 deprecated
+  // the Logging feature in protocol revision 2026-07-28. Logs go to stderr on
+  // Node and to the platform log sink on Workers; request-scoped progress
+  // notifications are unaffected and still flow on the response stream.
 
-  // Register tools (all by default, or filtered by whitelist)
+  // Register tools in a fixed order (all by default, or filtered by whitelist)
   const toolWhitelist = options?.tools;
-  for (const [name, register] of Object.entries(TOOL_REGISTRY)) {
-    if (toolWhitelist === undefined || toolWhitelist.includes(name)) {
+  for (const name of TOOL_ORDER) {
+    const register = TOOL_REGISTRY[name];
+    if (register !== undefined && (toolWhitelist === undefined || toolWhitelist.includes(name))) {
       register(server, ctx);
     }
   }
 
   // Register resources
   registerResources(server, ctx);
+
+  // Register the MCP Apps viewer the tools above reference
+  registerApps(server);
 
   // Register prompts
   registerPrompts(server);

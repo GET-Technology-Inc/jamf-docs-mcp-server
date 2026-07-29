@@ -3,9 +3,9 @@
  * Guides AI through creating a setup guide from Jamf documentation.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
+import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
 
 export function registerSetupGuidePrompt(server: McpServer): void {

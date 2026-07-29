@@ -121,84 +121,35 @@ describe('logging before setServer', () => {
 // After setServer: log sends MCP notification AND stderr
 // ============================================================================
 
-describe('logging after setServer', () => {
-  it('should call sendLoggingMessage when server is set', () => {
+describe('MCP logging notifications (removed)', () => {
+  it('should not expose a setServer hook', () => {
+    // SEP-2577 deprecated the Logging feature in protocol revision
+    // 2026-07-28: `logging/setLevel` is gone and servers must not emit
+    // `notifications/message` for requests that did not opt in. The service
+    // therefore no longer holds a server reference at all.
     const service = new LoggingService();
-    const mockServer = {
-      sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    };
-    service.setServer(mockServer as never);
+    expect((service as unknown as Record<string, unknown>).setServer).toBeUndefined();
+  });
 
+  it('should write to stderr only', () => {
+    const service = new LoggingService();
     const log = service.createLogger('search');
     log.info('query executed');
 
     expect(stderrSpy).toHaveBeenCalledWith('[INFO] [search] query executed');
-    expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith({
-      level: 'info',
-      logger: 'search',
-      data: 'query executed',
-    });
-  });
-
-  it('should send structured data via MCP notification', () => {
-    const service = new LoggingService();
-    const mockServer = {
-      sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    };
-    service.setServer(mockServer as never);
-
-    const log = service.createLogger('metadata');
-    const data = { productId: 'jamf-pro', versions: ['11.0', '11.1'] };
-    log.debug(data);
-
-    expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith({
-      level: 'debug',
-      logger: 'metadata',
-      data,
-    });
-  });
-
-  it('should not throw if sendLoggingMessage rejects', () => {
-    const service = new LoggingService();
-    const mockServer = {
-      sendLoggingMessage: vi.fn().mockRejectedValue(new Error('not connected')),
-    };
-    service.setServer(mockServer as never);
-
-    const log = service.createLogger('server');
-    expect(() => { log.info('test'); }).not.toThrow();
-  });
-
-  it('should not call sendLoggingMessage after server is unset', () => {
-    const service = new LoggingService();
-    const mockServer = {
-      sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    };
-    service.setServer(mockServer as never);
-    service.setServer(null as never);
-
-    const log = service.createLogger('test');
-    log.info('msg');
-
-    expect(mockServer.sendLoggingMessage).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalledWith('[INFO] [test] msg');
+    expect(stderrSpy).toHaveBeenCalledTimes(1);
   });
 
   it('should not leak state between LoggingService instances', () => {
-    const service1 = new LoggingService();
-    const service2 = new LoggingService();
+    const writer1 = vi.fn();
+    const writer2 = vi.fn();
+    new LoggingService(writer1).createLogger('one').info('first');
+    new LoggingService(writer2).createLogger('two').info('second');
 
-    const mockServer = {
-      sendLoggingMessage: vi.fn().mockResolvedValue(undefined),
-    };
-    service1.setServer(mockServer as never);
-
-    // service2 never had setServer called — should not send MCP logs
-    const log2 = service2.createLogger('isolated');
-    log2.info('test');
-
-    expect(mockServer.sendLoggingMessage).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalledWith('[INFO] [isolated] test');
+    expect(writer1).toHaveBeenCalledWith('[INFO] [one] first');
+    expect(writer1).toHaveBeenCalledTimes(1);
+    expect(writer2).toHaveBeenCalledWith('[INFO] [two] second');
+    expect(writer2).toHaveBeenCalledTimes(1);
   });
 });
 
