@@ -10,6 +10,44 @@ An MCP server that gives AI assistants (Claude, Cursor, etc.) direct access to J
 
 [中文文件](docs/README.zh-TW.md)
 
+## Installation
+
+`@modelcontextprotocol/server` is a **peer dependency**, and the CLI imports it
+at startup (`dist/index.js` → `@modelcontextprotocol/server/stdio`). If it is
+missing from the install tree the process exits immediately with
+`ERR_MODULE_NOT_FOUND` — the install itself succeeds, so the failure only
+shows up when you run the server.
+
+Most install paths bring it in automatically:
+
+| Install method | Peer installed |
+| --- | --- |
+| `npx -y @get-technology-inc/jamf-docs-mcp-server` | Yes |
+| `npm install` (npm 7+, default settings) | Yes |
+| `pnpm add` (pnpm 10) | Yes |
+| `npm install --legacy-peer-deps` | **No** |
+| Yarn 1 (classic) | **No** |
+
+If you use one of the last two — or if you are vendoring the package — install
+the SDK alongside it:
+
+```bash
+npm install @get-technology-inc/jamf-docs-mcp-server @modelcontextprotocol/server@^2
+```
+
+**Why it is a peer dependency, not a regular one.** This package hands
+`McpServer` instances to its consumers, and those consumers pass them to
+`createMcpHandler` from their own SDK copy. If the two resolve to *different*
+copies of the SDK, an instance built by one module's `Protocol` is inspected by
+another's, and every 2026-07-28 request fails with
+`Cannot read properties of undefined (reading 'includes')` — an HTTP 500 with
+no useful diagnostic. Declaring the SDK as a peer states the single-copy
+requirement instead of relying on the consumer's tree happening to hoist it;
+listing it under `dependencies` as well would reintroduce exactly the duplicate
+it exists to prevent.
+
+Node.js 20 or newer is required.
+
 ## Quick Start
 
 ### Claude Desktop
@@ -242,6 +280,26 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 - **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated
 - **Search Suggestions**: Receive helpful suggestions when a search returns no results
 - **Token Management**: All tools accept a `maxTokens` parameter (100–20000, default 5000) to control response size
+
+## MCP Apps (interactive viewer)
+
+Hosts that negotiate the MCP Apps extension (`io.modelcontextprotocol/ui`) render
+`jamf_docs_search`, `jamf_docs_get_toc` and `jamf_docs_get_article` results as an
+interactive viewer instead of plain markdown: search hits are clickable through to
+the article, TOC entries open in place, and articles carry section navigation and a
+back stack. All three tools reference one self-contained `ui://jamf-docs/app.html`
+resource. Hosts that do not negotiate the extension ignore the metadata and get
+exactly the markdown they always did.
+
+> [!WARNING]
+> **The MCP Apps viewer is broken in 4.0.0 — upgrade past it.** The build step that
+> inlines the UI bundle into the HTML document used a replacement string, so every
+> `$` pattern in the minified JavaScript was expanded instead of copied. The
+> document that shipped is not parseable JavaScript, and a host that renders it gets
+> `SyntaxError: missing ) after argument list` and a blank panel. Nothing else in
+> 4.0.0 is affected — tools, resources and prompts return the same results either
+> way, since a host that cannot render the app falls back to the markdown. Fixed in
+> 4.0.1.
 
 ## HTTP/SSE Transport Mode
 

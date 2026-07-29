@@ -10,6 +10,37 @@
 
 [English](../README.md)
 
+## 安裝
+
+`@modelcontextprotocol/server` 是 **peer dependency**，而 CLI 在啟動時就會載入它
+(`dist/index.js` → `@modelcontextprotocol/server/stdio`)。若安裝樹中沒有它，程式會
+立刻以 `ERR_MODULE_NOT_FOUND` 結束——安裝本身是成功的，問題只在實際執行時才浮現。
+
+多數安裝方式會自動帶入：
+
+| 安裝方式 | 是否安裝 peer |
+| --- | --- |
+| `npx -y @get-technology-inc/jamf-docs-mcp-server` | 是 |
+| `npm install` (npm 7+，預設設定) | 是 |
+| `pnpm add` (pnpm 10) | 是 |
+| `npm install --legacy-peer-deps` | **否** |
+| Yarn 1 (classic) | **否** |
+
+若使用後兩者——或是自行 vendoring 本套件——請一併安裝 SDK：
+
+```bash
+npm install @get-technology-inc/jamf-docs-mcp-server @modelcontextprotocol/server@^2
+```
+
+**為什麼是 peer dependency 而不是一般 dependency。** 本套件會把 `McpServer` 實例交給
+使用者，而使用者再把它傳給自己那份 SDK 的 `createMcpHandler`。若兩者解析到**不同**份
+SDK，實例由某個模組的 `Protocol` 建立、卻被另一個模組檢查，每個 2026-07-28 請求都會以
+`Cannot read properties of undefined (reading 'includes')` 失敗——回傳 HTTP 500 且沒有
+可用的診斷資訊。把 SDK 宣告為 peer 是把「只能有一份」這個要求講明白，而不是寄望使用者的
+依賴樹剛好會 hoist；若同時列進 `dependencies`，就會重新製造出它本來要避免的那份重複。
+
+需要 Node.js 20 或更新版本。
+
 ## 快速開始
 
 ### Claude Desktop
@@ -265,6 +296,22 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 - **搜尋建議**：搜尋無結果時提供替代關鍵字與主題建議
 - **分頁支援**：大型搜尋結果與目錄支援分頁瀏覽
 - **自動補全**：產品、主題、版本參數支援 MCP 自動補全
+
+## MCP Apps (互動式檢視器)
+
+支援 MCP Apps 擴充 (`io.modelcontextprotocol/ui`) 的 host，會把
+`jamf_docs_search`、`jamf_docs_get_toc`、`jamf_docs_get_article` 的結果渲染成互動式
+檢視器，而不是純 markdown：搜尋結果可直接點進文章、目錄項目就地開啟、文章帶有段落
+導覽與返回堆疊。三個工具共用同一份自包含的 `ui://jamf-docs/app.html` 資源。不支援此
+擴充的 host 會忽略相關 metadata，拿到的就是原本的 markdown。
+
+> [!WARNING]
+> **4.0.0 的 MCP Apps 檢視器無法使用，請升級。** 把 UI bundle 內嵌進 HTML 文件的建置
+> 步驟使用了 replacement string，導致壓縮後 JavaScript 中的每個 `$` 樣式被展開而非
+> 原樣複製。實際發佈的文件不是合法的 JavaScript，host 渲染時會得到
+> `SyntaxError: missing ) after argument list` 與一片空白。4.0.0 的其他部分不受影響
+> ——工具、resources 與 prompts 的結果完全相同，因為無法渲染 app 的 host 會退回
+> markdown。已於 4.0.1 修正。
 
 ## 環境變數
 
