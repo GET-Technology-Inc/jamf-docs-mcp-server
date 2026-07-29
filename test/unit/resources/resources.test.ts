@@ -232,6 +232,49 @@ describe('products resource handler', () => {
     expect(() => JSON.parse(result.contents[0].text)).not.toThrow();
   });
 
+  it('should leave a healthy catalogue on the configured cache hint', async () => {
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    const result = await getHandler('products')(new URL('jamf://products'));
+
+    expect(result.ttlMs).toBeUndefined();
+    expect(result.cacheScope).toBeUndefined();
+  });
+
+  it('should mark a catalogue built from the static fallback as uncacheable', async () => {
+    // MapsRegistry was unreachable, so this is compiled-in constants standing
+    // in for the real catalogue. Offering it to shared caches under the
+    // configured one-hour *public* hint would freeze the outage in place long
+    // after it ended.
+    (getProductsResourceData as any).mockImplementationOnce(
+      (_ctx: unknown, status?: { degraded: boolean }) => {
+        if (status) { status.degraded = true; }
+        return Promise.resolve(FAKE_PRODUCTS_DATA);
+      },
+    );
+
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    const result = await getHandler('products')(new URL('jamf://products'));
+
+    expect(result.ttlMs).toBe(0);
+    expect(result.cacheScope).toBe('private');
+  });
+
+  it('should pass a degradation sink to the metadata service', async () => {
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    await getHandler('products')(new URL('jamf://products'));
+
+    expect(getProductsResourceData).toHaveBeenCalledWith(
+      expect.anything(),
+      { degraded: false },
+    );
+  });
+
   it('should include all 4 products in the response', async () => {
     const { server, getHandler } = makeFakeServer();
     registerResources(server, ctx);

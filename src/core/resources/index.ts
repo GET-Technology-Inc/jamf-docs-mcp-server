@@ -77,13 +77,18 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
       mimeType: 'application/json'
     },
     async () => {
-      const data = await getProductsResourceData(ctx);
+      const status = { degraded: false };
+      const data = await getProductsResourceData(ctx, status);
       return {
         contents: [{
           uri: 'jamf://products',
           mimeType: 'application/json',
           text: JSON.stringify(data, null, 2)
-        }]
+        }],
+        // MapsRegistry was unreachable and this is the compiled-in catalogue
+        // standing in for it. Let the next read try again rather than freezing
+        // the outage into shared caches for an hour.
+        ...(status.degraded ? NO_CACHE : {})
       };
     }
   );
@@ -97,6 +102,9 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
       description: 'Topic categories for filtering documentation searches. Combines official TOC structure with curated categories.',
       mimeType: 'application/json'
     },
+    // No degradation sink: the topic list is built from compiled-in constants
+    // with no upstream call behind it, so it has no fallback to report. The
+    // configured one-hour public hint is always the right answer here.
     async () => {
       const data = await getTopicsResourceData(ctx);
       return {

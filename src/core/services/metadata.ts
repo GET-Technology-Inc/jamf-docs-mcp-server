@@ -115,22 +115,55 @@ function buildFallbackMetadata(productId: ProductId): ProductMetadata {
 // ============================================================================
 
 /**
- * Get all products with their latest metadata.
- * Uses MapsRegistry to discover products and versions dynamically,
- * with fallback to static JAMF_PRODUCTS constants.
+ * What the products cache entry holds.
+ *
+ * The list alone is not enough: a caller has to be able to tell an answer
+ * built from the live registry apart from one the registry outage forced, and
+ * a 24-hour cache entry outlives the outage that produced it by a long way. So
+ * the flag is stored *with* the value — a cache hit reports its provenance as
+ * accurately as a miss does.
+ *
+ * The key carries a `:v2` suffix because entries written by earlier versions
+ * are a bare `ProductMetadata[]`. Bumping it retires those without any
+ * shape-sniffing on read; they simply expire unread.
  */
-export async function getProductsMetadata(ctx: ServerContext): Promise<ProductMetadata[]> {
-  const log = ctx.logger.createLogger('metadata');
-  const cacheKey = 'metadata:products';
+interface CachedProductsMetadata {
+  products: ProductMetadata[];
+  degraded: boolean;
+}
 
-  // Check cache
-  const cached = await ctx.cache.get<ProductMetadata[]>(cacheKey);
-  if (cached !== null) {
+const PRODUCTS_CACHE_KEY = 'metadata:products:v2';
+
+/**
+ * Whether a cache hit really holds what this module wrote.
+ *
+ * The cache is backed by JSON on disk on Node, so a truncated write or an
+ * entry from a future/older build can come back as anything. Treating a
+ * mismatch as a miss costs one upstream call; trusting it costs a
+ * `TypeError` in a request handler.
+ */
+function isCachedProductsMetadata(value: unknown): value is CachedProductsMetadata {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as { products?: unknown; degraded?: unknown };
+  return Array.isArray(candidate.products) && typeof candidate.degraded === 'boolean';
+}
+
+/**
+ * Build (or fetch from cache) the product catalogue and its provenance.
+ */
+async function loadProductsMetadata(ctx: ServerContext): Promise<CachedProductsMetadata> {
+  const log = ctx.logger.createLogger('metadata');
+
+  const cached = await ctx.cache.get<unknown>(PRODUCTS_CACHE_KEY);
+  if (isCachedProductsMetadata(cached)) {
     return cached;
   }
 
-  const products: ProductMetadata[] = [];
   const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
+  let products: ProductMetadata[];
+  let degraded = false;
 
   try {
     const registryProducts = await ctx.mapsRegistry.getProducts();
@@ -141,26 +174,54 @@ export async function getProductsMetadata(ctx: ServerContext): Promise<ProductMe
       registryMap.set(rp.bundleStem, rp);
     }
 
-    for (const productId of productIds) {
+    products = productIds.map((productId) => {
       const bundleStem = productIdToBundleStem(productId);
       const info = registryMap.get(bundleStem);
 
       if (info !== undefined) {
-        products.push(buildProductMetadata(productId, info));
-      } else {
-        log.debug(`No registry entry for ${productId} (stem=${bundleStem}), using fallback`);
-        products.push(buildFallbackMetadata(productId));
+        return buildProductMetadata(productId, info);
       }
-    }
+
+      // Not a degradation: the registry answered, and it has nothing for this
+      // product. That is a steady-state fact, identical on the next request,
+      // so it is as cacheable as any other answer.
+      log.debug(`No registry entry for ${productId} (stem=${bundleStem}), using fallback`);
+      return buildFallbackMetadata(productId);
+    });
   } catch (error) {
+    // This one *is* a degradation: the registry could not be reached at all,
+    // and the whole catalogue is compiled-in constants standing in for it.
     log.error(`MapsRegistry failed, using static fallback: ${String(error)}`);
-    for (const productId of productIds) {
-      products.push(buildFallbackMetadata(productId));
-    }
+    degraded = true;
+    products = productIds.map((productId) => buildFallbackMetadata(productId));
   }
 
+  const entry: CachedProductsMetadata = { products, degraded };
+
   // Cache for 24 hours
-  await ctx.cache.set(cacheKey, products, ctx.config.cacheTtl.article);
+  await ctx.cache.set(PRODUCTS_CACHE_KEY, entry, ctx.config.cacheTtl.article);
+
+  return entry;
+}
+
+/**
+ * Get all products with their latest metadata.
+ * Uses MapsRegistry to discover products and versions dynamically,
+ * with fallback to static JAMF_PRODUCTS constants.
+ *
+ * @param status - Optional sink; `degraded` is set when the returned catalogue
+ *   is the static fallback because MapsRegistry was unreachable. Reported on
+ *   cache hits too.
+ */
+export async function getProductsMetadata(
+  ctx: ServerContext,
+  status?: DegradationStatus
+): Promise<ProductMetadata[]> {
+  const { products, degraded } = await loadProductsMetadata(ctx);
+
+  if (degraded && status !== undefined) {
+    status.degraded = true;
+  }
 
   return products;
 }
@@ -244,6 +305,10 @@ export async function getAvailableVersions(
 /**
  * Get all topics. Returns manual topics from JAMF_TOPICS constants.
  * The manual topics serve as the authoritative topic category list.
+ *
+ * There is no {@link DegradationStatus} parameter here and there should not
+ * be: this reads compiled-in constants and makes no upstream call, so it has
+ * no failure mode to fall back from. Its answer is always the real one.
  */
 export async function getTopicsMetadata(ctx: ServerContext): Promise<TopicMetadata[]> {
   const cacheKey = 'metadata:topics';
@@ -321,8 +386,12 @@ export async function getProductAvailability(
 
 /**
  * Get products data formatted for resource response
+ *
+ * @param status - Optional sink; see {@link getProductsMetadata}. The
+ *   `jamf://products` resource passes one so it can withhold the standard
+ *   one-hour public cache hint from an answer the registry outage forced.
  */
-export async function getProductsResourceData(ctx: ServerContext): Promise<{
+export async function getProductsResourceData(ctx: ServerContext, status?: DegradationStatus): Promise<{
   description: string;
   products: {
     id: string;
@@ -335,7 +404,7 @@ export async function getProductsResourceData(ctx: ServerContext): Promise<{
   lastUpdated: string;
   usage: string;
 }> {
-  const products = await getProductsMetadata(ctx);
+  const products = await getProductsMetadata(ctx, status);
 
   return {
     description: 'Available Jamf products for documentation search',

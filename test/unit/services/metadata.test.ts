@@ -125,7 +125,7 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
       }
     ];
 
-    vi.mocked(ctx.cache.get).mockResolvedValue(cachedProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: false });
     getMockedRegistry().getProducts.mockClear();
 
     const products = await getProductsMetadata(ctx);
@@ -174,6 +174,101 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
 });
 
 // ============================================================================
+// getProductsMetadata — degradation reporting
+//
+// `jamf://products` is served with a one-hour *public* cache hint. A catalogue
+// that only exists because MapsRegistry was unreachable must not be offered to
+// shared caches under that hint, so the caller has to be able to tell the two
+// apart — including on a cache hit, since the entry outlives the outage that
+// produced it by 24 hours.
+// ============================================================================
+
+describe('getProductsMetadata - degradation reporting', () => {
+  beforeEach(() => {
+    vi.mocked(ctx.cache.get).mockResolvedValue(null);
+    vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
+  });
+
+  it('should report degraded when MapsRegistry is unreachable', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const status = { degraded: false };
+    await getProductsMetadata(ctx, status);
+
+    expect(status.degraded).toBe(true);
+  });
+
+  it('should NOT report degraded when the registry answers', async () => {
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const status = { degraded: false };
+    await getProductsMetadata(ctx, status);
+
+    expect(status.degraded).toBe(false);
+  });
+
+  it('should NOT report degraded when a single product is absent from the registry', async () => {
+    // The registry answered; it simply has no entry for most products. That is
+    // a steady-state fact, identical on the next request, so it stays as
+    // cacheable as any other answer — otherwise one permanently-absent product
+    // would make the resource permanently uncacheable.
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const status = { degraded: false };
+    const products = await getProductsMetadata(ctx, status);
+
+    expect(products.find(p => p.id === 'jamf-school')).toBeDefined();
+    expect(status.degraded).toBe(false);
+  });
+
+  it('should persist degradation alongside the cached value', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await getProductsMetadata(ctx);
+
+    const [, cachedValue] = vi.mocked(ctx.cache.set).mock.calls.at(-1) ?? [];
+    expect(cachedValue).toMatchObject({ degraded: true });
+    expect((cachedValue as { products: unknown[] }).products.length).toBeGreaterThan(0);
+  });
+
+  it('should still report degraded when the answer comes from cache', async () => {
+    const cachedProducts = [
+      {
+        id: 'jamf-pro',
+        name: 'Jamf Pro',
+        description: 'Cached',
+        bundleId: 'jamf-pro-documentation-11.0.0',
+        latestVersion: '11.0.0',
+        availableVersions: ['11.0.0'],
+        labelKey: 'product-pro'
+      }
+    ];
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: true });
+    getMockedRegistry().getProducts.mockClear();
+
+    const status = { degraded: false };
+    const products = await getProductsMetadata(ctx, status);
+
+    expect(products).toEqual(cachedProducts);
+    expect(status.degraded).toBe(true);
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
+  });
+
+  it('should treat a cache entry of the wrong shape as a miss', async () => {
+    // The Node cache is JSON on disk: a truncated write, or an entry written
+    // by a different build, can come back as anything. Trusting it would be a
+    // TypeError inside a request handler.
+    vi.mocked(ctx.cache.get).mockResolvedValue([{ id: 'jamf-pro' }]);
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const products = await getProductsMetadata(ctx);
+
+    expect(getMockedRegistry().getProducts).toHaveBeenCalled();
+    expect(products.find(p => p.id === 'jamf-pro')?.latestVersion).toBe('11.24.0');
+  });
+});
+
+// ============================================================================
 // getBundleIdForVersion tests
 // ============================================================================
 
@@ -195,7 +290,7 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'current');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
@@ -213,7 +308,7 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'latest');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
@@ -231,7 +326,7 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', undefined);
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
@@ -249,7 +344,7 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '11.23.0');
     expect(bundleId).toBe('jamf-pro-documentation-11.23.0');
@@ -267,7 +362,7 @@ describe('getBundleIdForVersion', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '10.0.0');
     expect(bundleId).toBeNull();
@@ -438,7 +533,7 @@ describe('getProductsResourceData', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const data = await getProductsResourceData(ctx);
 
@@ -464,7 +559,7 @@ describe('getProductsResourceData', () => {
         labelKey: 'product-pro'
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue(mockProducts);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
 
     const data = await getProductsResourceData(ctx);
     const product = data.products[0];
