@@ -46,12 +46,6 @@ vi.mock('node:http', () => ({
 
 vi.mock('@modelcontextprotocol/server', () => ({
   createMcpHandler: vi.fn(() => shared.mcpHandlerInstance),
-  // Classify everything as modern (2026-07-28); the era split itself is
-  // covered by the http-handler unit tests.
-  isLegacyRequest: vi.fn().mockResolvedValue(false),
-  WebStandardStreamableHTTPServerTransport: vi.fn(function () {
-    return { handleRequest: vi.fn(), close: vi.fn() };
-  }),
 }));
 
 vi.mock('../../../src/platforms/node/config.js', () => ({

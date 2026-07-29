@@ -17,6 +17,7 @@ import {
 } from '../../src/core/apps/index.js';
 import { DEFAULT_HTTP_CONFIG } from '../../src/transport/http-types.js';
 import { createMockContext } from '../helpers/mock-context.js';
+import { readJsonRpc } from '../helpers/streamable-http.js';
 
 const { handler, cleanup } = createHttpHandler(
   () => createMcpServer(createMockContext()),
@@ -63,7 +64,7 @@ async function rpc(
       body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
     }),
   );
-  return { status: res.status, body: JSON.parse(await res.text()) as Record<string, unknown> };
+  return { status: res.status, body: await readJsonRpc(res) };
 }
 
 function resultOf(body: Record<string, unknown>): Record<string, unknown> {
@@ -175,7 +176,7 @@ describe('request header binding', () => {
       }),
     );
 
-    const body = JSON.parse(await res.text()) as Record<string, unknown>;
+    const body = await readJsonRpc(res);
     expect((body.error as { code: number } | undefined)?.code).toBe(-32020);
   });
 });
@@ -203,9 +204,10 @@ describe('2025-era clients', () => {
     );
 
     expect(res.status).toBe(200);
-    // Legacy traffic keeps the JSON response shape it was built against
-    // rather than the SDK fallback's always-SSE stream.
-    const body = JSON.parse(await res.text()) as Record<string, unknown>;
+    // Served by the SDK's stateless legacy fallback, which streams. The 2025
+    // binding requires clients to accept `text/event-stream`, so the framing
+    // is the transport's business — the test reads it the way a client does.
+    const body = await readJsonRpc(res);
     const result = body.result as { serverInfo: { name: string } };
     expect(result.serverInfo.name).toBe('jamf-docs-mcp-server');
   });

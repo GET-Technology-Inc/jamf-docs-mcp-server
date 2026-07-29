@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { readJsonRpc } from '../helpers/streamable-http.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -343,9 +344,11 @@ describe('Jamf Docs MCP Server', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const data = await res.json();
+      const data = await readJsonRpc(res);
       expect(data.result).toBeDefined();
-      expect(data.result.serverInfo.name).toBe('jamf-docs-mcp-server');
+      expect((data.result as { serverInfo: { name: string } }).serverInfo.name).toBe(
+        'jamf-docs-mcp-server',
+      );
     });
   });
 

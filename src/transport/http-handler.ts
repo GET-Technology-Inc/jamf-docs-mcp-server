@@ -7,11 +7,7 @@
  */
 
 import type { McpServer, McpHttpHandler } from '@modelcontextprotocol/server';
-import {
-  createMcpHandler,
-  isLegacyRequest,
-  WebStandardStreamableHTTPServerTransport,
-} from '@modelcontextprotocol/server';
+import { createMcpHandler } from '@modelcontextprotocol/server';
 
 import { RateLimiter } from './rate-limiter.js';
 import {
@@ -176,17 +172,13 @@ export function createHttpHandler(
   const rateLimiter = new RateLimiter(config.rateLimitRpm, 60_000);
   const cleanupIntervalId = setInterval(() => { rateLimiter.cleanup(); }, 5 * 60_000);
 
-  // The modern (2026-07-28) leg. `legacy: 'reject'` keeps it strictly modern —
-  // 2025-era traffic is routed in user land below, because the SDK's built-in
-  // legacy fallback always streams SSE and would silently change the response
-  // shape for clients (and caches) that rely on `enableJsonResponse`.
-  //
-  // `responseMode: 'json'` never upgrades to SSE, which also means mid-call
-  // notifications (including progress) are dropped — matching what
-  // `enableJsonResponse` already did on the previous transport.
+  // One entry serves both protocol eras from the same factory: 2026-07-28
+  // envelope traffic on the modern path, and 2025-era requests through the
+  // SDK's stateless legacy fallback. Legacy responses stream over SSE, which
+  // the 2025 Streamable HTTP binding already requires clients to accept.
   const mcpHandler = createMcpHandler(() => createServer(), {
-    legacy: 'reject',
-    responseMode: config.enableJsonResponse ? 'json' : 'auto',
+    legacy: 'stateless',
+    responseMode: config.responseMode,
     onerror: (err) => {
       logger?.error(`MCP handler error: ${err.message}`);
     },
@@ -236,13 +228,7 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(
-        request,
-        { modern: mcpHandler, createServer },
-        config,
-        corsHeaders,
-        logger,
-      );
+      return await handleMcp(request, mcpHandler, config, corsHeaders, logger);
     }
 
     // 404 fallback
@@ -256,49 +242,9 @@ export function createHttpHandler(
 // MCP endpoint handler
 // ============================================================================
 
-/**
- * Serve one 2025-era request.
- *
- * Kept as an explicit branch rather than delegating to the SDK's built-in
- * legacy fallback: that fallback constructs its transport with only
- * `sessionIdGenerator: undefined`, so it always answers over SSE. Existing
- * clients (and the response caches in front of them) were built against
- * `enableJsonResponse`, so the old wiring is preserved verbatim here.
- */
-async function handleLegacyMcp(
-  request: Request,
-  parsedBody: unknown,
-  createServer: () => McpServer,
-  config: HttpHandlerConfig,
-): Promise<Response> {
-  // The MCP SDK assigns one transport per Protocol/Server instance ("use a
-  // separate Protocol instance per connection"); reusing a single server
-  // across concurrent requests makes the second connect() throw "Already
-  // connected" and shares mutable per-connection state.
-  const mcpServer = createServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    enableJsonResponse: config.enableJsonResponse,
-  });
-  await mcpServer.connect(transport);
-
-  try {
-    return await transport.handleRequest(request, { parsedBody });
-  } finally {
-    await transport.close();
-  }
-}
-
-/** The two serving legs `/mcp` dispatches between, one per protocol era. */
-interface McpServing {
-  /** The strict 2026-07-28 entry. */
-  modern: McpHttpHandler;
-  /** Factory used to build a per-request server for 2025-era traffic. */
-  createServer: () => McpServer;
-}
-
 async function handleMcp(
   request: Request,
-  serving: McpServing,
+  mcpHandler: McpHttpHandler,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
   logger?: Logger,
@@ -326,12 +272,9 @@ async function handleMcp(
       }
     }
 
-    // Route by protocol era. `isLegacyRequest` is the entry's own
-    // classification step exported as a predicate, so this branch can never
-    // disagree with what the modern handler would have decided.
-    const webRes = await isLegacyRequest(request, parsedBody)
-      ? await handleLegacyMcp(request, parsedBody, serving.createServer, config)
-      : await serving.modern.fetch(request, { parsedBody });
+    // The entry classifies the era itself and builds a fresh server per
+    // request from the factory it was given.
+    const webRes = await mcpHandler.fetch(request, { parsedBody });
 
     // Add CORS + security headers to the response
     for (const [key, value] of Object.entries(corsHeaders)) {

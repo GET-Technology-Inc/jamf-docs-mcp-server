@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { readJsonRpc } from '../helpers/streamable-http.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 
@@ -73,8 +74,7 @@ async function jsonRpc(
     return { status: res.status };
   }
 
-  const data = await res.json();
-  return data as Record<string, unknown>;
+  return readJsonRpc(res);
 }
 
 /**
