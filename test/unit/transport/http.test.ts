@@ -22,6 +22,10 @@ const shared = vi.hoisted(() => ({
     listen: vi.fn(),
     close: vi.fn(),
     on: vi.fn(),
+    // Part of `http.Server` since Node 18.2 and used by the shutdown path to
+    // release keep-alive sockets once the drain finishes. Mocked so this
+    // double cannot silently drift from the interface it stands in for.
+    closeIdleConnections: vi.fn(),
   },
   mcpHandlerInstance: {
     fetch: vi.fn(),
