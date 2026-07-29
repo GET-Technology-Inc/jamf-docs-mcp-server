@@ -50,6 +50,12 @@ vi.mock('node:http', () => ({
 
 vi.mock('@modelcontextprotocol/server', () => ({
   createMcpHandler: vi.fn(() => shared.mcpHandlerInstance),
+  // Shared between the handler's subscription and exchange legs; see
+  // http-handler.ts. The double only has to be constructible.
+  InMemoryServerEventBus: class {
+    publish(): void { /* no subscribers in these tests */ }
+    subscribe(): () => void { return () => undefined; }
+  },
 }));
 
 vi.mock('../../../src/platforms/node/config.js', () => ({

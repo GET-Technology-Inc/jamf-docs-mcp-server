@@ -28,6 +28,13 @@ const shared = vi.hoisted(() => ({
 
 vi.mock('@modelcontextprotocol/server', () => ({
   createMcpHandler: shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance),
+  // The handler builds one bus and shares it between its two entries — the
+  // subscription leg and the exchange leg — so shutdown can close them at
+  // different moments. The double only has to be constructible.
+  InMemoryServerEventBus: class {
+    publish(): void { /* no subscribers in these tests */ }
+    subscribe(): () => void { return () => undefined; }
+  },
 }));
 
 // Import the module under test AFTER all vi.mock() calls
@@ -756,12 +763,15 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
-  it('should close the MCP handler on cleanup', () => {
+  it('should close both MCP entries on cleanup', () => {
     // Act
     cleanup();
 
-    // Assert
-    expect(shared.mcpHandlerInstance.close).toHaveBeenCalledTimes(1);
+    // Assert: the subscription leg and the exchange leg are separate entries
+    // (so graceful shutdown can close them at different moments), and both
+    // have to go. The mock returns the same double for each `createMcpHandler`
+    // call, so one `close` per entry shows up as two calls on it.
+    expect(shared.mcpHandlerInstance.close).toHaveBeenCalledTimes(2);
   });
 
   it('should return 500 without closing the handler when fetch rejects', async () => {
