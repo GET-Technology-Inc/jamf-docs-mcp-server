@@ -223,7 +223,11 @@ describe('ArticleOutputSchema', () => {
 
 describe('TocOutputSchema', () => {
   const VALID_TOC_OUTPUT = {
-    product: 'jamf-pro',
+    // Display name and ID are distinct fields: the `product` parameter of
+    // `jamf_docs_get_toc` accepts only the ID, so a client paging through this
+    // result needs `productId`, not the name it renders.
+    product: 'Jamf Pro',
+    productId: 'jamf-pro',
     version: '11.5.0',
     totalEntries: 120,
     page: 1,

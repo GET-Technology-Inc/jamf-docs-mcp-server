@@ -20,7 +20,7 @@
     "test:all": "vitest run test/unit && vitest run test/integration && vitest run test/e2e",
     "test:coverage": "vitest run --coverage",
     "test:inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint 'src/**/*.ts' 'app-ui/**/*.ts' 'scripts/**/*.mjs'",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
@@ -86,7 +86,7 @@
     }
   },
   "engines": {
-    "node": ">=18.11.0"
+    "node": ">=20"
   },
   "files": [
     "dist",

@@ -9,7 +9,32 @@ export default tseslint.config(
     ignores: ['dist/**', 'node_modules/**', '.cache/**', 'coverage/**']
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts'],
+    // Build scripts are plain ESM with no TypeScript project behind them, so
+    // the type-aware rules have nothing to consult and crash the rule engine
+    // outright. They still get the syntactic rules, which is the point: this
+    // is where the released MCP Apps bundle was corrupted.
+    files: ['scripts/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      // Declared rather than pulled from `globals`, which is not a dependency
+      // here. Only what the build scripts actually reach for.
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
+        Buffer: 'readonly'
+      }
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      // These scripts report progress on stdout; that is their interface.
+      'no-console': 'off'
+    }
+  },
+  {
+    files: ['src/**/*.ts', 'test/**/*.ts', 'app-ui/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

@@ -24,7 +24,9 @@ import type {
  */
 function mapsUrl(mapId: string, ...segments: string[]): string {
   const base = `${FT_API_BASE}/api/khub/maps/${encodeURIComponent(mapId)}`;
-  if (segments.length === 0) return base;
+  if (segments.length === 0) {
+    return base;
+  }
   return `${base}/${segments.map(encodeURIComponent).join('/')}`;
 }
 

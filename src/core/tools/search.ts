@@ -170,9 +170,15 @@ export const SEARCH_EXAMPLES: readonly SearchExample[] = [
 
 function formatSearchExample(ex: SearchExample): string {
   const parts: string[] = [`query="${ex.query}"`];
-  if (ex.product !== undefined) parts.push(`product="${ex.product}"`);
-  if (ex.topic !== undefined) parts.push(`topic="${ex.topic}"`);
-  if (ex.page !== undefined) parts.push(`page=${ex.page}`);
+  if (ex.product !== undefined) {
+    parts.push(`product="${ex.product}"`);
+  }
+  if (ex.topic !== undefined) {
+    parts.push(`topic="${ex.topic}"`);
+  }
+  if (ex.page !== undefined) {
+    parts.push(`page=${ex.page}`);
+  }
   return `  - "${ex.label}" → ${parts.join(', ')}`;
 }
 
@@ -232,20 +238,63 @@ Note: Results are ranked by relevance. Use filters and pagination to navigate la
 /**
  * Build structured content for a search result set
  */
+/**
+ * The filters a result set was produced under.
+ *
+ * Echoed back in `structuredContent` so a client can request the next page of
+ * the *same* search. `product`, `docType` and `version` are sent upstream to
+ * Fluid Topics and `product`/`topic` are re-applied locally, so a page-2
+ * request that omits them queries a different population — silently, since it
+ * still returns plausible-looking results.
+ *
+ * `limit` is deliberately not here: it is the page size, reported alongside
+ * `page` and `totalPages` where it belongs, and it always has a value because
+ * the schema defaults it.
+ */
+interface ActiveSearchFilters {
+  product?: string;
+  topic?: string;
+  version?: string;
+  docType?: string;
+  language?: string;
+}
+
+function activeSearchFilters(params: {
+  product?: string | undefined;
+  topic?: string | undefined;
+  version?: string | undefined;
+  docType?: string | undefined;
+  language?: string | undefined;
+}): ActiveSearchFilters | undefined {
+  const filters: ActiveSearchFilters = {
+    ...(params.product !== undefined && { product: params.product }),
+    ...(params.topic !== undefined && { topic: params.topic }),
+    ...(params.version !== undefined && { version: params.version }),
+    ...(params.docType !== undefined && { docType: params.docType }),
+    ...(params.language !== undefined && { language: params.language }),
+  };
+
+  return Object.keys(filters).length > 0 ? filters : undefined;
+}
+
 function buildSearchStructuredContent(
   query: string,
   results: SearchResult[],
   pagination: PaginationInfo,
   extras?: {
+    filters?: ActiveSearchFilters | undefined;
+    limit?: number | undefined;
     filterRelaxation?: { removed: string[]; original: Record<string, string>; message: string } | undefined;
     truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
   }
 ): Record<string, unknown> {
   return {
     query,
+    ...(extras?.filters !== undefined ? { filters: extras.filters } : {}),
     totalResults: pagination.totalItems,
     page: pagination.page,
     totalPages: pagination.totalPages,
+    ...(extras?.limit !== undefined ? { limit: extras.limit } : {}),
     hasMore: pagination.hasNext,
     results: results.map(r => ({
       title: r.title,
@@ -428,7 +477,12 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         const structuredContent = buildSearchStructuredContent(
           params.query, results, pagination,
-          { filterRelaxation, truncatedContent }
+          {
+            filters: activeSearchFilters(params),
+            limit: params.limit,
+            filterRelaxation,
+            truncatedContent,
+          }
         );
 
         if (params.responseFormat === ResponseFormat.JSON) {

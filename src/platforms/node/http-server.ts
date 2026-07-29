@@ -179,7 +179,12 @@ export async function startHttpServer(
     return request.headers.get('x-real-ip') ?? 'unknown';
   };
 
-  const { handler, cleanup } = createHttpHandler(mcpServerFactory, config, getClientIp, log);
+  const { handler, shutdown: shutdownHandler } = createHttpHandler(
+    mcpServerFactory,
+    config,
+    getClientIp,
+    log,
+  );
 
   const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
     void handleNodeRequest(req, res, handler, config);
@@ -195,18 +200,35 @@ export async function startHttpServer(
     shuttingDown = true;
     log.info(`${signal} received, shutting down...`);
 
-    cleanup();
+    // Hard deadline: the drain window, plus the same again for sockets to go
+    // away. Reaching it means something is wedged, so the exit code says so.
+    const forceExit = setTimeout(() => {
+      log.warning('Shutdown timeout, forcing exit');
+      process.exit(1);
+    }, config.shutdownTimeoutMs * 2);
 
+    // Stop accepting new connections right away. The callback fires once every
+    // socket has gone, which the sequence below is what makes possible — it is
+    // the exit trigger, not a step other work waits on. Running the teardown
+    // *inside* this callback would deadlock instead: the subscription streams
+    // it closes are the very sockets keeping the callback from firing.
     httpServer.close(() => {
       log.info('HTTP server closed');
+      clearTimeout(forceExit);
       process.exit(0);
     });
 
-    // Force exit after timeout
-    setTimeout(() => {
-      log.warning('Shutdown timeout, forcing exit');
-      process.exit(1);
-    }, config.shutdownTimeoutMs);
+    void shutdownHandler(config.shutdownTimeoutMs).then(
+      () => {
+        // Idle keep-alive sockets carry no work but still hold `close()` open
+        // until the client's own timeout expires. Nothing is left to serve.
+        httpServer.closeIdleConnections();
+      },
+      (err: unknown) => {
+        log.error(`Shutdown error: ${err instanceof Error ? err.message : String(err)}`);
+        httpServer.closeIdleConnections();
+      },
+    );
   }
 
   process.on('SIGINT', () => { shutdown('SIGINT'); });

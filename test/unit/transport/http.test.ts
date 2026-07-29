@@ -22,6 +22,10 @@ const shared = vi.hoisted(() => ({
     listen: vi.fn(),
     close: vi.fn(),
     on: vi.fn(),
+    // Part of `http.Server` since Node 18.2 and used by the shutdown path to
+    // release keep-alive sockets once the drain finishes. Mocked so this
+    // double cannot silently drift from the interface it stands in for.
+    closeIdleConnections: vi.fn(),
   },
   mcpHandlerInstance: {
     fetch: vi.fn(),
@@ -46,6 +50,12 @@ vi.mock('node:http', () => ({
 
 vi.mock('@modelcontextprotocol/server', () => ({
   createMcpHandler: vi.fn(() => shared.mcpHandlerInstance),
+  // Shared between the handler's subscription and exchange legs; see
+  // http-handler.ts. The double only has to be constructible.
+  InMemoryServerEventBus: class {
+    publish(): void { /* no subscribers in these tests */ }
+    subscribe(): () => void { return () => undefined; }
+  },
 }));
 
 vi.mock('../../../src/platforms/node/config.js', () => ({
@@ -457,15 +467,12 @@ describe('/mcp endpoint — valid requests', () => {
     expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
-  it('should handle empty body (no parsedBody) without returning 400', async () => {
-    // Reset the transport to return null body for simplicity
-    shared.mcpHandlerInstance.fetch.mockResolvedValue(
-      new Response(null, { status: 200 })
-    );
-
+  it('should answer 400 for a POST with no body', async () => {
+    // Nothing to dispatch, and forwarding it would surface as a 500: the body
+    // has already been read, so the SDK's re-read clone throws.
     const result = await makeRequest({ method: 'POST', url: '/mcp' });
-    // Empty body skips JSON parse → calls transport → 200
-    expect(result.statusCode).toBe(200);
+    expect(result.statusCode).toBe(400);
+    expect(shared.mcpHandlerInstance.fetch).not.toHaveBeenCalled();
   });
 
   it('should handle requests with array-valued headers (exercises toWebRequest array path)', async () => {
@@ -513,7 +520,12 @@ describe('/mcp endpoint — writeWebResponse', () => {
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 204 })
     );
-    const result = await makeRequest({ method: 'POST', url: '/mcp' });
+    const result = await makeRequest({
+      method: 'POST',
+      url: '/mcp',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    });
     expect(result.statusCode).toBe(204);
   });
 

@@ -308,7 +308,16 @@ export interface FtMapInfo {
 }
 
 export interface FtTopicInfo {
-  title: string;
+  /**
+   * Optional because this shape is a bare cast over `response.json()`
+   * (`httpGetJson<FtTopicInfo>`) with no runtime validation behind it — it
+   * describes what Fluid Topics usually sends, not what it is obliged to.
+   * Declaring `title` required told the compiler a guard against a missing one
+   * was dead code, and removing that guard was how a titleless payload started
+   * producing an article with `undefined` for a title instead of falling back
+   * to the parsed `<h1>`.
+   */
+  title?: string;
   id: string;
   contentApiEndpoint: string;
   readerUrl?: string;

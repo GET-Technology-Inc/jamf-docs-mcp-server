@@ -45,9 +45,20 @@ export const TOOL_ORDER = [
   'jamf_docs_batch_get_articles',
 ] as const;
 
-/** Tool name → registration function mapping */
+/** A tool this server knows how to register. */
+export type ToolName = (typeof TOOL_ORDER)[number];
+
+/**
+ * Tool name → registration function mapping.
+ *
+ * Keyed by {@link ToolName} rather than `string` so the two structures cannot
+ * drift: registration walks `TOOL_ORDER`, so an entry that exists only here
+ * would never be registered and nothing would say so. With this type, omitting
+ * a name is a missing-property error and adding an unlisted one is an excess-
+ * property error — both at compile time.
+ */
 const TOOL_REGISTRY: Record<
-  string,
+  ToolName,
   (server: McpServer, ctx: ServerContext) => void
 > = {
   jamf_docs_list_products: registerListProductsTool,
@@ -70,6 +81,12 @@ const TOOL_REGISTRY: Record<
  * version of this package is deployed, so they get the full hour. Resource
  * reads track upstream documentation and get the same hour, which is well
  * inside the cadence at which Jamf publishes changes.
+ *
+ * These are the *healthy-path* defaults. A handler that answers with something
+ * it would not want frozen in a shared cache for an hour — an error body, or
+ * data it had to fall back to static constants for — returns its own
+ * `ttlMs` / `cacheScope` on the result, which the SDK prefers over anything
+ * configured here.
  *
  * Without these the SDK emits the conservative default (`ttlMs: 0`,
  * `cacheScope: 'private'`), i.e. no caching at all.
@@ -143,9 +160,8 @@ export function createMcpServer(ctx: ServerContext, options?: CreateServerOption
   // Register tools in a fixed order (all by default, or filtered by whitelist)
   const toolWhitelist = options?.tools;
   for (const name of TOOL_ORDER) {
-    const register = TOOL_REGISTRY[name];
-    if (register !== undefined && (toolWhitelist === undefined || toolWhitelist.includes(name))) {
-      register(server, ctx);
+    if (toolWhitelist === undefined || toolWhitelist.includes(name)) {
+      TOOL_REGISTRY[name](server, ctx);
     }
   }
 

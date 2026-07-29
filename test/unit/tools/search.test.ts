@@ -363,6 +363,52 @@ describe('jamf_docs_search tool', () => {
       expect(Array.isArray(sc.results)).toBe(true);
     });
 
+    it('should echo the active filters so a client can page the same search', async () => {
+      // The MCP App's "Load more" carries these forward. Without them page 2
+      // queried a different population — `product`, `docType` and `version` go
+      // upstream to Fluid Topics and `product`/`topic` are re-applied on the
+      // server — and returned plausible-looking but unfiltered results.
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({ results: [createSearchResult()] })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: {
+          query: 'config',
+          product: 'jamf-pro',
+          topic: 'enrollment',
+          docType: 'release-notes',
+          limit: 25,
+        },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.filters).toEqual({
+        product: 'jamf-pro',
+        topic: 'enrollment',
+        docType: 'release-notes',
+      });
+      // Page size travels alongside `page`/`totalPages`, not among the
+      // filters: it is not one, and the schema always gives it a value.
+      expect(sc.limit).toBe(25);
+    });
+
+    it('should omit filters entirely for an unfiltered search', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({ results: [createSearchResult()] })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'config' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.filters).toBeUndefined();
+      expect(sc.limit).toBe(10);
+    });
+
     it('should set product to empty string when result product is null', async () => {
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({

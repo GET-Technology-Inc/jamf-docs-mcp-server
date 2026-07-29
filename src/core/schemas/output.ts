@@ -22,9 +22,28 @@ export const ProductListOutputSchema = z.object({
 
 export const SearchOutputSchema = z.object({
   query: z.string(),
+  /**
+   * The filters this result set was produced under, echoed back so a client
+   * paging through it can ask for page 2 of the *same* search.
+   *
+   * Without this the MCP App could only carry the query forward, and page 2 of
+   * a filtered search silently returned unfiltered results — `product`,
+   * `docType` and `version` go upstream to Fluid Topics and `product`/`topic`
+   * are re-applied locally, so dropping them changes the population, not just
+   * the ordering.
+   */
+  filters: z.object({
+    product: z.string().optional(),
+    topic: z.string().optional(),
+    version: z.string().optional(),
+    docType: z.string().optional(),
+    language: z.string().optional(),
+  }).optional(),
   totalResults: z.number(),
   page: z.number(),
   totalPages: z.number(),
+  /** Page size, so a client asking for the next page keeps this one's. */
+  limit: z.number().optional(),
   hasMore: z.boolean(),
   results: z.array(z.object({
     title: z.string(),
@@ -104,7 +123,17 @@ export const BatchArticlesOutputSchema = z.object({
 });
 
 export const TocOutputSchema = z.object({
+  /** Display name, for rendering. */
   product: z.string(),
+  /**
+   * The product *ID* the entries were fetched under.
+   *
+   * `product` above is the human-readable name ("Jamf Pro"), which the
+   * `jamf_docs_get_toc` `product` parameter does not accept — it is an enum of
+   * IDs ("jamf-pro"). A client paging through a table of contents needs the ID
+   * to ask for page 2, so it is carried explicitly rather than inferred.
+   */
+  productId: z.string(),
   version: z.string(),
   totalEntries: z.number(),
   page: z.number(),

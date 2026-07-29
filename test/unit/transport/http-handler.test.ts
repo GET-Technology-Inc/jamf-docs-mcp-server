@@ -28,6 +28,13 @@ const shared = vi.hoisted(() => ({
 
 vi.mock('@modelcontextprotocol/server', () => ({
   createMcpHandler: shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance),
+  // The handler builds one bus and shares it between its two entries — the
+  // subscription leg and the exchange leg — so shutdown can close them at
+  // different moments. The double only has to be constructible.
+  InMemoryServerEventBus: class {
+    publish(): void { /* no subscribers in these tests */ }
+    subscribe(): () => void { return () => undefined; }
+  },
 }));
 
 // Import the module under test AFTER all vi.mock() calls
@@ -756,12 +763,15 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
-  it('should close the MCP handler on cleanup', () => {
+  it('should close both MCP entries on cleanup', () => {
     // Act
     cleanup();
 
-    // Assert
-    expect(shared.mcpHandlerInstance.close).toHaveBeenCalledTimes(1);
+    // Assert: the subscription leg and the exchange leg are separate entries
+    // (so graceful shutdown can close them at different moments), and both
+    // have to go. The mock returns the same double for each `createMcpHandler`
+    // call, so one `close` per entry shows up as two calls on it.
+    expect(shared.mcpHandlerInstance.close).toHaveBeenCalledTimes(2);
   });
 
   it('should return 500 without closing the handler when fetch rejects', async () => {
@@ -803,20 +813,23 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(body.error).toBe('Invalid JSON in request body');
   });
 
-  it('should forward empty body without a parsing error', async () => {
-    // Arrange: POST /mcp with no body (empty string body)
-    shared.mcpHandlerInstance.fetch.mockResolvedValueOnce(
-      new Response(null, { status: 200 })
-    );
-    const req = new Request('http://localhost/mcp', {
-      method: 'POST',
-    });
+  it('should reject a POST with no body as 400, not forward it', async () => {
+    // A bodyless POST carries no JSON-RPC message, so there is nothing to
+    // dispatch. It must also never reach the SDK: reading the body has already
+    // consumed the stream, and the entry answers a missing `parsedBody` by
+    // cloning the request to re-read it — which throws on a used body and
+    // surfaces as an opaque 500.
+    // `body: ''` is what the Node adapter builds for a bodyless POST. Omitting
+    // `body` leaves `request.body` null, which never becomes "used" and so
+    // would not reproduce the defect.
+    const req = new Request('http://localhost/mcp', { method: 'POST', body: '' });
 
-    // Act
     const res = await handler(req);
 
-    // Assert: empty body is handled gracefully (no 400)
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    const body = await parseJson(res);
+    expect(body.error).toBe('Empty request body');
+    expect(shared.mcpHandlerInstance.fetch).not.toHaveBeenCalled();
   });
 
   it('should return 500 when the MCP handler throws', async () => {

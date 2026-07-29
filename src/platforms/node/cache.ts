@@ -185,7 +185,7 @@ export class FileCache implements CacheProvider {
   /**
    * Set a value in cache
    */
-  async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+  async set(key: string, value: unknown, ttl?: number): Promise<void> {
     await this.ensureCacheDir();
 
     const entry: CacheEntry<unknown> = {

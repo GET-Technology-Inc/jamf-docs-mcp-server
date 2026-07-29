@@ -19,7 +19,9 @@ const ENGLISH_ONLY_WARNING =
   ' Showing English results.';
 
 function isNonEnglishLocale(language: string | undefined): boolean {
-  if (language === undefined) return false;
+  if (language === undefined) {
+    return false;
+  }
   const normalised = language.toLowerCase();
   return normalised !== 'en-us' && normalised !== 'en';
 }

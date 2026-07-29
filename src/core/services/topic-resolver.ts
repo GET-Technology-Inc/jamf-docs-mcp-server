@@ -56,12 +56,18 @@ type ParsedUrl = ParsedLegacyUrl | ParsedPrettyUrl;
  */
 function parseLegacyUrl(pathname: string): ParsedLegacyUrl | null {
   const match = /^\/([a-z]{2}-[A-Z]{2})\/bundle\/([^/]+)\/page\/([^/?#]+?)(?:\.html)?$/.exec(pathname);
-  if (!match?.[1] || !match[2] || !match[3]) {return null;}
+  if (match === null) {return null;}
+  const locale = match[1];
+  const bundleId = match[2];
+  const pageSlug = match[3];
+  if (locale === undefined || locale === '') {return null;}
+  if (bundleId === undefined || bundleId === '') {return null;}
+  if (pageSlug === undefined || pageSlug === '') {return null;}
   return {
     type: 'legacy',
-    locale: match[1],
-    bundleId: match[2],
-    pageSlug: match[3],
+    locale,
+    bundleId,
+    pageSlug,
   };
 }
 
@@ -71,12 +77,18 @@ function parseLegacyUrl(pathname: string): ParsedLegacyUrl | null {
  */
 function parsePrettyUrl(pathname: string): ParsedPrettyUrl | null {
   const match = /^\/r\/([a-z]{2}-[A-Z]{2})\/([^/]+)\/([^/?#]+)$/.exec(pathname);
-  if (!match?.[1] || !match[2] || !match[3]) {return null;}
+  if (match === null) {return null;}
+  const locale = match[1];
+  const productSlug = match[2];
+  const topicSlug = match[3];
+  if (locale === undefined || locale === '') {return null;}
+  if (productSlug === undefined || productSlug === '') {return null;}
+  if (topicSlug === undefined || topicSlug === '') {return null;}
   return {
     type: 'pretty',
-    locale: match[1],
-    productSlug: match[2],
-    topicSlug: match[3],
+    locale,
+    productSlug,
+    topicSlug,
   };
 }
 
@@ -111,10 +123,15 @@ async function fetchAndBuildIndex(
       index.set(legacyName, topic.id);
     }
 
-    // Also index by title (normalized)
-    const titleKey = topic.title.replace(/\s+/g, '_');
-    if (!index.has(titleKey)) {
-      index.set(titleKey, topic.id);
+    // Also index by title (normalized). A topic Fluid Topics sent without one
+    // simply has no title key — it is still reachable by `legacy_topicname`
+    // above. Reading through blindly would throw and lose the entire index for
+    // that map, taking every other topic in it down with the one bad entry.
+    if (topic.title !== undefined) {
+      const titleKey = topic.title.replace(/\s+/g, '_');
+      if (!index.has(titleKey)) {
+        index.set(titleKey, topic.id);
+      }
     }
   }
 
@@ -157,7 +174,7 @@ export class TopicResolver {
 
     // Return existing in-flight promise if one is already pending
     const pending = this.inflight.get(mapId);
-    if (pending) {
+    if (pending !== undefined) {
       return await pending;
     }
 
@@ -166,12 +183,23 @@ export class TopicResolver {
     );
     this.inflight.set(mapId, promise);
 
-    // Clean up the in-flight entry once the promise settles
-    promise.finally(() => {
+    // Clean up the in-flight entry once the promise settles.
+    //
+    // This has to be a `try`/`finally` around the await rather than
+    // `promise.finally(...)`. That call returns a *second* promise which
+    // rejects whenever `promise` does, and nothing ever handles it — so a
+    // single failed topic-index fetch became an unhandled rejection, which
+    // Node terminates the process on by default. The caller catching its own
+    // rejection does not help: the derived promise is a separate object with
+    // its own unhandled state.
+    //
+    // Concurrent callers take the `pending` branch above and never reach here,
+    // so the first caller owns the cleanup either way.
+    try {
+      return await promise;
+    } finally {
       this.inflight.delete(mapId);
-    });
-
-    return await promise;
+    }
   }
 
   /**
@@ -184,7 +212,10 @@ export class TopicResolver {
    */
   async resolve(input: TopicResolverInput): Promise<ResolvedTopic> {
     // Direct IDs — zero cost passthrough
-    if (input.mapId && input.contentId) {
+    if (
+      input.mapId !== undefined && input.mapId !== '' &&
+      input.contentId !== undefined && input.contentId !== ''
+    ) {
       const locale = input.locale !== undefined && input.locale !== ''
         ? toValidLocale(input.locale)
         : DEFAULT_LOCALE;
@@ -195,7 +226,7 @@ export class TopicResolver {
       };
     }
 
-    if (!input.url || input.url === '') {
+    if (input.url === undefined || input.url === '') {
       throw new JamfDocsError(
         'Either url or both mapId and contentId must be provided',
         JamfDocsErrorCode.INVALID_URL

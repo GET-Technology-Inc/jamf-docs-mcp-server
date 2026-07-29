@@ -192,6 +192,21 @@ describe('resolve — in-flight deduplication', () => {
     // fetchMapTopics must have been invoked exactly once despite two concurrent callers
     expect(mockedFetchMapTopics).toHaveBeenCalledTimes(1);
   });
+
+  it('should clear the in-flight entry after a failed fetch so the next call retries', async () => {
+    mockedFetchMapTopics.mockRejectedValueOnce(new Error('HTTP 503'));
+
+    const url = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/MDM_Profile_Settings.html';
+    await expect(resolver.resolve({ url })).rejects.toThrow();
+
+    // A stale in-flight entry would make this return the same rejected promise
+    // forever, so a transient outage would look permanent.
+    mockedFetchMapTopics.mockResolvedValueOnce(MOCK_TOPICS);
+    const retried = await resolver.resolve({ url });
+
+    expect(retried.contentId).toBe('content-mdm');
+    expect(mockedFetchMapTopics).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('buildDisplayUrl', () => {

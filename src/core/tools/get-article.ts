@@ -10,12 +10,52 @@ import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema } from '../schemas/output.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
-import type { ToolResult, ArticleResponse, FetchArticleOptions } from '../types.js';
+import type {
+  ToolResult,
+  ArticleResponse,
+  ArticleSection,
+  FetchArticleOptions,
+  FetchArticleResult,
+} from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
 
 const TOOL_NAME = 'jamf_docs_get_article';
+
+/**
+ * The machine-readable view of an article, for clients that render it — the
+ * MCP App, chiefly — rather than reading the markdown.
+ *
+ * Optional fields are omitted rather than emitted as `undefined`, so the
+ * payload stays a faithful JSON object. Extracted from the handler because
+ * those omissions are branches: inline, they were most of its cyclomatic
+ * complexity while saying nothing about how the request is served.
+ */
+function buildArticleStructuredContent(
+  article: FetchArticleResult,
+  sections: ArticleSection[],
+  truncated: boolean,
+): Record<string, unknown> {
+  return {
+    title: article.title,
+    url: article.url,
+    content: article.content,
+    ...(article.product !== undefined ? { product: article.product } : {}),
+    ...(article.version !== undefined ? { version: article.version } : {}),
+    ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
+    ...(article.breadcrumb !== undefined ? { breadcrumb: article.breadcrumb } : {}),
+    ...(article.mapId !== undefined ? { mapId: article.mapId } : {}),
+    ...(article.contentId !== undefined ? { contentId: article.contentId } : {}),
+    sections: sections.map(s => ({
+      id: s.id,
+      title: s.title,
+      level: s.level,
+      tokenCount: s.tokenCount
+    })),
+    truncated
+  };
+}
 
 const TOOL_DESCRIPTION = `Retrieve the full content of a specific Jamf documentation article.
 
@@ -145,24 +185,7 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
           sections
         };
 
-        const structuredContent = {
-          title: article.title,
-          url: article.url,
-          content: article.content,
-          ...(article.product !== undefined ? { product: article.product } : {}),
-          ...(article.version !== undefined ? { version: article.version } : {}),
-          ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
-          ...(article.breadcrumb !== undefined ? { breadcrumb: article.breadcrumb } : {}),
-          ...(article.mapId !== undefined ? { mapId: article.mapId } : {}),
-          ...(article.contentId !== undefined ? { contentId: article.contentId } : {}),
-          sections: sections.map(s => ({
-            id: s.id,
-            title: s.title,
-            level: s.level,
-            tokenCount: s.tokenCount
-          })),
-          truncated: tokenInfo.truncated
-        };
+        const structuredContent = buildArticleStructuredContent(article, sections, tokenInfo.truncated);
 
         if (params.responseFormat === ResponseFormat.JSON) {
           await reportProgress(extra, { progress: 4, total: 4 });
