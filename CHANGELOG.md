@@ -1,3 +1,9 @@
+## [4.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.0...v4.0.1) (2026-07-29)
+
+### Bug Fixes
+
+* unbreak the 4.0.0 MCP Apps viewer, the HTTP shutdown drain, and a server-killing rejection ([#188](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/188)) ([fa8c291](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/fa8c291e604bdf13e3a78ab0dcda624d25a42625))
+
 ## [4.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.50...v4.0.0) (2026-07-29)
 
 ### ⚠ BREAKING CHANGES
