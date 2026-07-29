@@ -1,3 +1,9 @@
+## [3.0.50](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.49...v3.0.50) (2026-07-29)
+
+### Dependencies
+
+* bump postcss from 8.5.16 to 8.5.24 ([#186](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/186)) ([91bed1c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/91bed1cb68f017f4ce4331cede1223a14ef85657))
+
 ## [3.0.49](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v3.0.48...v3.0.49) (2026-07-29)
 
 ### Dependencies
