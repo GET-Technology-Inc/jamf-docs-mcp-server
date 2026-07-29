@@ -29,9 +29,14 @@ import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
  *
  * The bundle escapes its own `</script>` occurrences as `<\/script>`, so the
  * first closing tag in the document is the real one and a lazy match is safe.
+ *
+ * Every tag pattern here is case-insensitive. HTML tag names are, so a check
+ * that only recognises the lower-case spelling would quietly pass on a shell
+ * that used `<SCRIPT>` — reporting a well-formed document that is nothing of
+ * the sort.
  */
 function inlinedScript(): string {
-  const match = /<script\b[^>]*>([\s\S]*?)<\/script>/.exec(APP_HTML);
+  const match = /<script\b[^>]*>([\s\S]*?)<\/script>/i.exec(APP_HTML);
   if (match === null) {
     throw new Error('APP_HTML contains no <script> element');
   }
@@ -44,7 +49,7 @@ function inlinedScript(): string {
 
 describe('generated MCP App bundle', () => {
   it('carries exactly one inlined script', () => {
-    const openings = APP_HTML.match(/<script\b/g) ?? [];
+    const openings = APP_HTML.match(/<script\b/gi) ?? [];
     expect(openings).toHaveLength(1);
     expect(inlinedScript().length).toBeGreaterThan(1000);
   });
@@ -60,8 +65,8 @@ describe('generated MCP App bundle', () => {
     const script = inlinedScript();
     // The exact fingerprint of the `$`-expansion bug.
     expect(script).not.toMatch(/<!DOCTYPE/i);
-    expect(script).not.toContain('<div id="root">');
-    expect(script).not.toContain('<script');
+    expect(script).not.toMatch(/<div id="root">/i);
+    expect(script).not.toMatch(/<script\b/i);
   });
 
   it('keeps the shell well-formed around the script', () => {
@@ -74,7 +79,7 @@ describe('generated MCP App bundle', () => {
   it('escapes closing script tags emitted by the bundle', () => {
     // Only the terminator may appear unescaped; anything else would end the
     // element early and dump the rest of the bundle into the document body.
-    const withoutTerminator = APP_HTML.replace(/<\/script>\s*<\/body>/, '</body>');
+    const withoutTerminator = APP_HTML.replace(/<\/script>\s*<\/body>/i, '</body>');
     expect(withoutTerminator).not.toMatch(/<\/script>/i);
   });
 });
