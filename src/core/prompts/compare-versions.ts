@@ -3,9 +3,9 @@
  * Guides AI through comparing documentation between two versions.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { completable } from '@modelcontextprotocol/sdk/server/completable.js';
+import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
 
 export function registerCompareVersionsPrompt(server: McpServer): void {

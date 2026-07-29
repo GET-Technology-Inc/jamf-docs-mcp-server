@@ -3,7 +3,7 @@
  * Get the table of contents for a Jamf product's documentation.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { GetTocInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';

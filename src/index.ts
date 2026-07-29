@@ -6,7 +6,7 @@
  * then delegates to the runtime-agnostic createMcpServer() factory.
  */
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 
 import { createMcpServer } from './core/create-server.js';
 import type { ServerContext } from './core/types/context.js';
@@ -62,10 +62,13 @@ async function main(): Promise<void> {
       args.host,
     );
   } else {
-    // stdio is a single long-lived connection — one server for the process.
-    const server = createMcpServer(ctx);
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
+    // stdio is a single long-lived connection. `serveStdio` owns the era
+    // decision: the opening exchange picks 2026-07-28 or the 2025 handshake,
+    // and one server from the factory is pinned for the connection lifetime.
+    serveStdio(() => createMcpServer(ctx), {
+      legacy: 'serve',
+      onerror: (err) => { log.error(`stdio error: ${err.message}`); },
+    });
 
     log.info('Jamf Docs MCP Server running on stdio');
     log.info('Available tools: jamf_docs_list_products, jamf_docs_search, jamf_docs_get_article, jamf_docs_get_toc, jamf_docs_glossary_lookup, jamf_docs_batch_get_articles');

@@ -3,7 +3,7 @@
  * Search Jamf documentation for articles matching a query.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';

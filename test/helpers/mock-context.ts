@@ -37,7 +37,6 @@ export function createMockLogger(): Logger {
 export function createMockLoggerFactory(): LoggerFactory {
   return {
     createLogger: vi.fn(() => createMockLogger()),
-    setServer: vi.fn(),
   };
 }
 

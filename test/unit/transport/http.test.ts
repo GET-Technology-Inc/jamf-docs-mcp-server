@@ -23,9 +23,11 @@ const shared = vi.hoisted(() => ({
     close: vi.fn(),
     on: vi.fn(),
   },
-  mcpTransportInstance: {
-    handleRequest: vi.fn(),
+  mcpHandlerInstance: {
+    fetch: vi.fn(),
     close: vi.fn(),
+    notify: {},
+    bus: {},
   },
 }));
 
@@ -42,10 +44,13 @@ vi.mock('node:http', () => ({
   ServerResponse: class {},
 }));
 
-vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
-  // Must use a regular function (not arrow) so `new` works correctly in Vitest v4
+vi.mock('@modelcontextprotocol/server', () => ({
+  createMcpHandler: vi.fn(() => shared.mcpHandlerInstance),
+  // Classify everything as modern (2026-07-28); the era split itself is
+  // covered by the http-handler unit tests.
+  isLegacyRequest: vi.fn().mockResolvedValue(false),
   WebStandardStreamableHTTPServerTransport: vi.fn(function () {
-    return shared.mcpTransportInstance;
+    return { handleRequest: vi.fn(), close: vi.fn() };
   }),
 }));
 
@@ -372,10 +377,10 @@ describe('/mcp endpoint — payload size', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -414,13 +419,13 @@ describe('/mcp endpoint — valid requests', () => {
     );
     shared.httpServer.on.mockImplementation(() => {});
     // Default transport response: 200 with JSON body (exercises writeWebResponse body path)
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -435,7 +440,7 @@ describe('/mcp endpoint — valid requests', () => {
     expect(result.statusCode).toBe(200);
   });
 
-  it('should connect McpServer to the transport before handling', async () => {
+  it('should forward the request to the MCP handler', async () => {
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
     await makeRequest({
       method: 'POST',
@@ -443,10 +448,11 @@ describe('/mcp endpoint — valid requests', () => {
       headers: { 'content-type': 'application/json' },
       body,
     });
-    expect(mockMcpServer.connect).toHaveBeenCalled();
+    expect(shared.mcpHandlerInstance.fetch).toHaveBeenCalled();
   });
 
-  it('should close the transport after handling the request', async () => {
+  it('should keep the MCP handler alive across requests', async () => {
+    // The handler is long-lived and builds a fresh server per request itself.
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
     await makeRequest({
       method: 'POST',
@@ -454,12 +460,12 @@ describe('/mcp endpoint — valid requests', () => {
       headers: { 'content-type': 'application/json' },
       body,
     });
-    expect(shared.mcpTransportInstance.close).toHaveBeenCalled();
+    expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
   it('should handle empty body (no parsedBody) without returning 400', async () => {
     // Reset the transport to return null body for simplicity
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
 
@@ -483,7 +489,7 @@ describe('/mcp endpoint — valid requests', () => {
   });
 
   it('should return 200 even for GET /mcp (no body → skips JSON parse)', async () => {
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
     const result = await makeRequest({ method: 'GET', url: '/mcp' });
@@ -505,12 +511,12 @@ describe('/mcp endpoint — writeWebResponse', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
   it('should call res.end() directly for null-body response', async () => {
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 204 })
     );
     const result = await makeRequest({ method: 'POST', url: '/mcp' });
@@ -519,7 +525,7 @@ describe('/mcp endpoint — writeWebResponse', () => {
 
   it('should stream response body via res.write() + res.end() for non-null body', async () => {
     const responseBody = JSON.stringify({ result: 'streamed' });
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(responseBody, {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -550,10 +556,10 @@ describe('Host Header Injection protection', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -592,10 +598,10 @@ describe('CORS headers', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -625,10 +631,10 @@ describe('Rate limiting', () => {
       (_port: number, _host: string, cb: () => void) => cb()
     );
     shared.httpServer.on.mockImplementation(() => {});
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 

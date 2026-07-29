@@ -3,7 +3,7 @@
  * Look up Jamf glossary terms and get their definitions.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { GlossaryLookupInputSchema } from '../schemas/index.js';
 import { GlossaryLookupOutputSchema } from '../schemas/output.js';

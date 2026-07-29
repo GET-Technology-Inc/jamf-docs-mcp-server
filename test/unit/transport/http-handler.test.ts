@@ -13,19 +13,32 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 // ============================================================================
 
 const shared = vi.hoisted(() => ({
-  mcpTransportInstance: {
+  mcpHandlerInstance: {
+    fetch: vi.fn(),
+    close: vi.fn(),
+    notify: {},
+    bus: {},
+  },
+  legacyTransportInstance: {
     handleRequest: vi.fn(),
     close: vi.fn(),
   },
+  createMcpHandler: vi.fn(),
+  isLegacyRequest: vi.fn(),
 }));
 
 // ============================================================================
-// Mock the MCP SDK transport — must be declared before importing handler
+// Mock the MCP SDK entry — must be declared before importing handler
 // ============================================================================
 
-vi.mock('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js', () => ({
+vi.mock('@modelcontextprotocol/server', () => ({
+  createMcpHandler: shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance),
+  // Default: classify as modern (2026-07-28). The legacy branch is exercised
+  // explicitly by the tests that need it.
+  isLegacyRequest: shared.isLegacyRequest.mockResolvedValue(false),
+  // Must use a regular function (not arrow) so `new` works correctly in Vitest v4
   WebStandardStreamableHTTPServerTransport: vi.fn(function () {
-    return shared.mcpTransportInstance;
+    return shared.legacyTransportInstance;
   }),
 }));
 
@@ -120,6 +133,8 @@ describe('/health endpoint', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig({ serverVersion: '9.9.9-test' }),
@@ -188,6 +203,8 @@ describe('Security headers', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig(),
@@ -237,6 +254,8 @@ describe('CORS — no allowedOrigins', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: [] }),
@@ -280,6 +299,8 @@ describe('CORS — exact origin matching', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: allowedOrigins }),
@@ -353,6 +374,8 @@ describe('CORS — wildcard origin (*)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: ['*'] }),
@@ -405,6 +428,8 @@ describe('OPTIONS preflight', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig({ corsAllowedOrigins: ['https://app.example.com'] }),
@@ -559,13 +584,15 @@ describe('/mcp — body size limit', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
@@ -648,15 +675,17 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     mockMcpServer = makeMockMcpServer();
 
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
       (() => mockMcpServer) as never,
@@ -686,7 +715,33 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(res.status).toBe(200);
   });
 
-  it('should call mcpServer.connect before forwarding the request', async () => {
+  it('should hand the already-read body to the MCP handler as parsedBody', async () => {
+    // The size check drains the request stream, so the parsed value has to be
+    // passed explicitly — the handler cannot re-read the body.
+    const payload = { jsonrpc: '2.0', method: 'tools/list', id: 1 };
+    const req = makeRequest({
+      method: 'POST',
+      path: '/mcp',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    // Act
+    await handler(req);
+
+    // Assert
+    const [, options] = shared.mcpHandlerInstance.fetch.mock.calls[0];
+    expect(options.parsedBody).toEqual(payload);
+  });
+
+  it('should configure the modern leg as strict', () => {
+    // 2025-era traffic is routed in user land to a transport wired for JSON
+    // responses, so the SDK's always-SSE legacy fallback stays off.
+    const [, options] = shared.createMcpHandler.mock.calls[0];
+    expect(options.legacy).toBe('reject');
+  });
+
+  it('should call the MCP handler to process the message', async () => {
     // Arrange
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
     const req = makeRequest({
@@ -700,11 +755,12 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     await handler(req);
 
     // Assert
-    expect(mockMcpServer.connect).toHaveBeenCalledTimes(1);
+    expect(shared.mcpHandlerInstance.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('should call transport.handleRequest to process the MCP message', async () => {
-    // Arrange
+  it('should NOT tear the MCP handler down per request', async () => {
+    // The entry is long-lived and builds a fresh server per request itself;
+    // closing it after one request would kill the endpoint.
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
     const req = makeRequest({
       method: 'POST',
@@ -717,29 +773,48 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     await handler(req);
 
     // Assert
-    expect(shared.mcpTransportInstance.handleRequest).toHaveBeenCalledTimes(1);
+    expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
-  it('should call transport.close after handling the request', async () => {
-    // Arrange
-    const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
+  it('should close the MCP handler on cleanup', () => {
+    // Act
+    cleanup();
+
+    // Assert
+    expect(shared.mcpHandlerInstance.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('should route 2025-era traffic to the legacy transport, not the modern handler', async () => {
+    // Arrange: classify this request as legacy.
+    shared.isLegacyRequest.mockResolvedValueOnce(true);
+    shared.legacyTransportInstance.handleRequest.mockResolvedValueOnce(
+      new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    shared.legacyTransportInstance.close.mockResolvedValue(undefined);
+
     const req = makeRequest({
       method: 'POST',
       path: '/mcp',
       headers: { 'content-type': 'application/json' },
-      body,
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 }),
     });
 
     // Act
-    await handler(req);
+    const res = await handler(req);
 
-    // Assert
-    expect(shared.mcpTransportInstance.close).toHaveBeenCalledTimes(1);
+    // Assert: served by the legacy transport, which is closed per request.
+    expect(res.status).toBe(200);
+    expect(shared.legacyTransportInstance.handleRequest).toHaveBeenCalledTimes(1);
+    expect(shared.legacyTransportInstance.close).toHaveBeenCalledTimes(1);
+    expect(shared.mcpHandlerInstance.fetch).not.toHaveBeenCalled();
   });
 
-  it('should close transport even after a handler error (finally block)', async () => {
-    // Arrange: transport.handleRequest throws
-    shared.mcpTransportInstance.handleRequest.mockRejectedValueOnce(
+  it('should return 500 without closing the handler when fetch rejects', async () => {
+    // Arrange
+    shared.mcpHandlerInstance.fetch.mockRejectedValueOnce(
       new Error('Transport failure')
     );
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
@@ -753,9 +828,9 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     // Act
     const res = await handler(req);
 
-    // Assert: 500 error returned AND transport was still closed
+    // Assert
     expect(res.status).toBe(500);
-    expect(shared.mcpTransportInstance.close).toHaveBeenCalledTimes(1);
+    expect(shared.mcpHandlerInstance.close).not.toHaveBeenCalled();
   });
 
   it('should return 400 for invalid JSON body', async () => {
@@ -776,9 +851,9 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(body.error).toBe('Invalid JSON in request body');
   });
 
-  it('should forward empty body to transport without parsing error', async () => {
+  it('should forward empty body without a parsing error', async () => {
     // Arrange: POST /mcp with no body (empty string body)
-    shared.mcpTransportInstance.handleRequest.mockResolvedValueOnce(
+    shared.mcpHandlerInstance.fetch.mockResolvedValueOnce(
       new Response(null, { status: 200 })
     );
     const req = new Request('http://localhost/mcp', {
@@ -792,9 +867,9 @@ describe('/mcp endpoint — JSON-RPC forwarding', () => {
     expect(res.status).toBe(200);
   });
 
-  it('should return 500 when transport.handleRequest throws', async () => {
+  it('should return 500 when the MCP handler throws', async () => {
     // Arrange
-    shared.mcpTransportInstance.handleRequest.mockRejectedValueOnce(
+    shared.mcpHandlerInstance.fetch.mockRejectedValueOnce(
       new Error('Unexpected transport error')
     );
     const body = JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 });
@@ -825,13 +900,15 @@ describe('/mcp — CORS headers on transport response', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    shared.mcpTransportInstance.handleRequest.mockResolvedValue(
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     );
-    shared.mcpTransportInstance.close.mockResolvedValue(undefined);
+    shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
 
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
@@ -894,6 +971,8 @@ describe('/llms.txt endpoint', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig(),
@@ -932,6 +1011,8 @@ describe('404 fallback', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig(),
@@ -970,6 +1051,8 @@ describe('Host Header Injection protection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    shared.isLegacyRequest.mockResolvedValue(false);
     ({ handler, cleanup } = createHttpHandler(
       (() => makeMockMcpServer()) as never,
       makeConfig(),

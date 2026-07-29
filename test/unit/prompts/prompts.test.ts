@@ -11,7 +11,7 @@ import { registerTroubleshootPrompt } from '../../../src/core/prompts/troublesho
 import { registerSetupGuidePrompt } from '../../../src/core/prompts/setup-guide.js';
 import { registerCompareVersionsPrompt } from '../../../src/core/prompts/compare-versions.js';
 import { registerPrompts } from '../../../src/core/prompts/index.js';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 
 // ---------------------------------------------------------------------------
 // Helpers

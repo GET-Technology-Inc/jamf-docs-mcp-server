@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/client';
 import { createTokenInfo } from '../../helpers/fixtures.js';
 
 // --- Mock service modules before importing the tool --------------------------
@@ -78,8 +78,10 @@ describe('jamf_docs_glossary_lookup', () => {
       });
 
       const text = getTextContent(result);
-      // MCP SDK validates schema before handler — error comes from SDK
-      expect(text).toContain('too_small');
+      // The SDK validates the schema before the handler runs and surfaces the
+      // schema's own message (SDK v2 reports messages, not zod issue codes).
+      expect(text).toContain('Input validation error');
+      expect(text).toContain('Term must be at least 2 characters');
     });
 
     it('should reject invalid product ID', async () => {
@@ -89,8 +91,10 @@ describe('jamf_docs_glossary_lookup', () => {
       });
 
       const text = getTextContent(result);
-      // MCP SDK validates enum before handler — error lists valid options
-      expect(text).toContain('invalid_value');
+      // The SDK validates the enum before the handler runs and lists the
+      // valid options in the message.
+      expect(text).toContain('Input validation error');
+      expect(text).toContain('jamf-pro');
     });
   });
 

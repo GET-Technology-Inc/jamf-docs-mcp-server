@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { Client } from '@modelcontextprotocol/client';
+import { InMemoryTransport } from '@modelcontextprotocol/client';
 import type { SearchResult, PaginationInfo, TokenInfo, FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
 import type { FetchArticleResult } from '../../src/core/types.js';
 

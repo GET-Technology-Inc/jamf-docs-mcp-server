@@ -3,7 +3,7 @@
  * Retrieve multiple Jamf documentation articles in a single request.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { GetBatchArticlesInputSchema } from '../schemas/index.js';
 import { BatchArticlesOutputSchema } from '../schemas/output.js';

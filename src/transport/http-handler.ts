@@ -6,10 +6,12 @@
  * call the `handler` function returned by `createHttpHandler`.
  */
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer, McpHttpHandler } from '@modelcontextprotocol/server';
 import {
+  createMcpHandler,
+  isLegacyRequest,
   WebStandardStreamableHTTPServerTransport,
-} from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+} from '@modelcontextprotocol/server';
 
 import { RateLimiter } from './rate-limiter.js';
 import {
@@ -156,7 +158,7 @@ function textResponse(
  *
  * @param createServer - Factory that returns a fresh McpServer per request.
  *   The MCP SDK requires one Protocol/Server instance per connection, so each
- *   request gets its own server + transport rather than sharing a singleton.
+ *   request gets its own server rather than sharing a singleton.
  *   Callers decide the server's lifecycle/state model (stateless, per-session, …).
  * @param config       - HTTP handler configuration
  * @param getClientIp  - Platform-specific function to extract client IP from a Request
@@ -174,6 +176,22 @@ export function createHttpHandler(
   const rateLimiter = new RateLimiter(config.rateLimitRpm, 60_000);
   const cleanupIntervalId = setInterval(() => { rateLimiter.cleanup(); }, 5 * 60_000);
 
+  // The modern (2026-07-28) leg. `legacy: 'reject'` keeps it strictly modern —
+  // 2025-era traffic is routed in user land below, because the SDK's built-in
+  // legacy fallback always streams SSE and would silently change the response
+  // shape for clients (and caches) that rely on `enableJsonResponse`.
+  //
+  // `responseMode: 'json'` never upgrades to SSE, which also means mid-call
+  // notifications (including progress) are dropped — matching what
+  // `enableJsonResponse` already did on the previous transport.
+  const mcpHandler = createMcpHandler(() => createServer(), {
+    legacy: 'reject',
+    responseMode: config.enableJsonResponse ? 'json' : 'auto',
+    onerror: (err) => {
+      logger?.error(`MCP handler error: ${err.message}`);
+    },
+  });
+
   // Prevent the interval from keeping the process alive (Node.js-specific,
   // but calling .unref() is harmless on platforms that lack it).
   if (typeof cleanupIntervalId === 'object' && 'unref' in cleanupIntervalId) {
@@ -182,6 +200,7 @@ export function createHttpHandler(
 
   function cleanup(): void {
     clearInterval(cleanupIntervalId);
+    void mcpHandler.close();
   }
 
   async function handler(request: Request): Promise<Response> {
@@ -217,7 +236,13 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(request, createServer, config, corsHeaders, logger);
+      return await handleMcp(
+        request,
+        { modern: mcpHandler, createServer },
+        config,
+        corsHeaders,
+        logger,
+      );
     }
 
     // 404 fallback
@@ -231,9 +256,49 @@ export function createHttpHandler(
 // MCP endpoint handler
 // ============================================================================
 
+/**
+ * Serve one 2025-era request.
+ *
+ * Kept as an explicit branch rather than delegating to the SDK's built-in
+ * legacy fallback: that fallback constructs its transport with only
+ * `sessionIdGenerator: undefined`, so it always answers over SSE. Existing
+ * clients (and the response caches in front of them) were built against
+ * `enableJsonResponse`, so the old wiring is preserved verbatim here.
+ */
+async function handleLegacyMcp(
+  request: Request,
+  parsedBody: unknown,
+  createServer: () => McpServer,
+  config: HttpHandlerConfig,
+): Promise<Response> {
+  // The MCP SDK assigns one transport per Protocol/Server instance ("use a
+  // separate Protocol instance per connection"); reusing a single server
+  // across concurrent requests makes the second connect() throw "Already
+  // connected" and shares mutable per-connection state.
+  const mcpServer = createServer();
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    enableJsonResponse: config.enableJsonResponse,
+  });
+  await mcpServer.connect(transport);
+
+  try {
+    return await transport.handleRequest(request, { parsedBody });
+  } finally {
+    await transport.close();
+  }
+}
+
+/** The two serving legs `/mcp` dispatches between, one per protocol era. */
+interface McpServing {
+  /** The strict 2026-07-28 entry. */
+  modern: McpHttpHandler;
+  /** Factory used to build a per-request server for 2025-era traffic. */
+  createServer: () => McpServer;
+}
+
 async function handleMcp(
   request: Request,
-  createServer: () => McpServer,
+  serving: McpServing,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
   logger?: Logger,
@@ -249,21 +314,9 @@ async function handleMcp(
     throw err;
   }
 
-  // Create a fresh MCP server + transport for this request. The MCP SDK
-  // assigns one transport per Protocol/Server instance ("use a separate
-  // Protocol instance per connection"); reusing a single server across
-  // concurrent requests makes the second connect() throw "Already connected"
-  // and shares mutable per-connection state (e.g. logging levels).
-  const mcpServer = createServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    enableJsonResponse: config.enableJsonResponse,
-  });
-
-  // Connect the per-request server to this transport
-  await mcpServer.connect(transport);
-
   try {
-    // Parse body if present
+    // Parse body if present. Reading it above consumed the request stream, so
+    // the parsed value must be handed to the MCP handler explicitly.
     let parsedBody: unknown;
     if (bodyText.length > 0) {
       try {
@@ -273,8 +326,12 @@ async function handleMcp(
       }
     }
 
-    // Handle the request via the MCP transport
-    const webRes = await transport.handleRequest(request, { parsedBody });
+    // Route by protocol era. `isLegacyRequest` is the entry's own
+    // classification step exported as a predicate, so this branch can never
+    // disagree with what the modern handler would have decided.
+    const webRes = await isLegacyRequest(request, parsedBody)
+      ? await handleLegacyMcp(request, parsedBody, serving.createServer, config)
+      : await serving.modern.fetch(request, { parsedBody });
 
     // Add CORS + security headers to the response
     for (const [key, value] of Object.entries(corsHeaders)) {
@@ -285,7 +342,5 @@ async function handleMcp(
   } catch (err) {
     logger?.error(`MCP handler error: ${err instanceof Error ? err.message : String(err)}`);
     return jsonResponse(500, { error: 'Internal server error' }, corsHeaders);
-  } finally {
-    await transport.close();
   }
 }
