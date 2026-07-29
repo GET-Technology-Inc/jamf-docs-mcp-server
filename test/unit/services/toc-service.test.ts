@@ -203,6 +203,84 @@ describe('transformFtTocToTocEntries()', () => {
       `${DOCS_BASE_URL}/ja-JP/bundle/jamf-pro-documentation/page/Test.html`,
     );
   });
+
+  // ── Payloads missing fields the type used to declare required ─────────────
+  //
+  // `FtTocNode` is a bare cast over `response.json()` with no runtime
+  // validation, and Fluid Topics omits `children` entirely on a leaf rather
+  // than sending `[]`. Reading `.length` through blindly threw
+  // `TypeError: Cannot read properties of undefined (reading 'length')`,
+  // which took the whole TOC down over one node.
+  describe('nodes missing optional payload fields', () => {
+    it('should treat a node with no children key as a leaf', () => {
+      const node = {
+        tocId: 't1',
+        contentId: 'c1',
+        title: 'Leaf',
+        prettyUrl: '/en-US/bundle/b/page/Leaf.html',
+      } as FtTocNode;
+
+      const result = transformFtTocToTocEntries([node]);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].title).toBe('Leaf');
+      expect(result[0].children).toBeUndefined();
+    });
+
+    it('should not lose sibling nodes when one has no children key', () => {
+      const nodes = [
+        { tocId: 't1', contentId: 'c1', title: 'Childless', prettyUrl: '/a.html' },
+        {
+          tocId: 't2',
+          contentId: 'c2',
+          title: 'Parent',
+          prettyUrl: '/b.html',
+          children: [
+            { tocId: 't3', contentId: 'c3', title: 'Child', prettyUrl: '/c.html', children: [] },
+          ],
+        },
+      ] as FtTocNode[];
+
+      const result = transformFtTocToTocEntries(nodes);
+
+      expect(result.map(e => e.title)).toEqual(['Childless', 'Parent']);
+      expect(result[1].children?.[0].title).toBe('Child');
+    });
+
+    it('should fall back to Untitled for a node with no title', () => {
+      const node = {
+        tocId: 't1',
+        contentId: 'c1',
+        prettyUrl: '/en-US/bundle/b/page/Thing.html',
+        children: [],
+      } as unknown as FtTocNode;
+
+      const result = transformFtTocToTocEntries([node]);
+
+      // Same fallback the search path uses for the same missing field.
+      expect(result[0].title).toBe('Untitled');
+    });
+
+    it('should recurse into a child that itself has no children key', () => {
+      const nodes = [
+        {
+          tocId: 't1',
+          contentId: 'c1',
+          title: 'Root',
+          prettyUrl: '/a.html',
+          children: [
+            { tocId: 't2', contentId: 'c2', title: 'Leaf', prettyUrl: '/b.html' },
+          ],
+        },
+      ] as FtTocNode[];
+
+      const result = transformFtTocToTocEntries(nodes);
+
+      expect(result[0].children).toHaveLength(1);
+      expect(result[0].children?.[0].title).toBe('Leaf');
+      expect(result[0].children?.[0].children).toBeUndefined();
+    });
+  });
 });
 
 // ============================================================================

@@ -50,8 +50,8 @@ describe('TopicResolver integration', () => {
         if (node.prettyUrl !== '') {
           return node.prettyUrl;
         }
-        if (node.children.length > 0) {
-          const found = findPrettyUrl(node.children);
+        if ((node.children ?? []).length > 0) {
+          const found = findPrettyUrl(node.children ?? []);
           if (found !== null && found !== '') {return found;}
         }
       }

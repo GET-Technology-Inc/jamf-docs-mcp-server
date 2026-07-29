@@ -255,14 +255,16 @@ export function transformFtSearchResult(
 
 /** Common fields extracted from either a TOPIC or MAP entry */
 interface EntryFields {
-  title: string;
+  /** Absent when Fluid Topics sent the entry without one — see FtSearchTopic.title. */
+  title?: string | undefined;
   url: string;
   htmlExcerpt: string;
   metadata: FtMetadataEntry[];
   mapId: string;
   contentId?: string;
   breadcrumb?: string[];
-  mapTitle?: string;
+  /** A MAP entry reuses its own (optional) title here. Guarded at the use site. */
+  mapTitle?: string | undefined;
 }
 
 /**
@@ -271,7 +273,12 @@ interface EntryFields {
  */
 function buildSearchResult(fields: EntryFields): SearchResult {
   const { metadata } = fields;
-  const title = fields.title !== '' ? fields.title : 'Untitled';
+  // Both the absent and the empty case fall back, matching how the article
+  // path picks its title (article-service.ts). Testing only `!== ''` let
+  // `undefined` through, because `undefined !== ''` is true.
+  const title = (fields.title !== undefined && fields.title !== '')
+    ? fields.title
+    : 'Untitled';
   const product = extractProductFromZoominMeta(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
   const versionValues = getMetaValues(metadata, FT_META.VERSION);

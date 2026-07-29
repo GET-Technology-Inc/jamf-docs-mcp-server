@@ -72,12 +72,18 @@ async function fetchGlossaryToc(
   // Flatten: collect all leaf terms (children of the root)
   const terms: FtTocNode[] = [];
   for (const node of nodes) {
-    // Skip non-term entries like "Glossary Revision History"
-    if (node.children.length > 0) {
-      for (const child of node.children) {
-        if (!child.title.toLowerCase().includes('revision history')) {
-          terms.push(child);
-        }
+    // A node that arrived without `children` is a leaf, so it carries no
+    // terms — the same as one with an empty list.
+    for (const child of node.children ?? []) {
+      // A glossary term *is* its title, so an entry that arrived without one
+      // is not usable. Skipping it loses that entry; reading through blindly
+      // would throw and lose every other term in the map with it.
+      if (child.title === undefined) {
+        continue;
+      }
+      // Skip non-term entries like "Glossary Revision History"
+      if (!child.title.toLowerCase().includes('revision history')) {
+        terms.push(child);
       }
     }
   }
@@ -460,7 +466,7 @@ export async function lookupGlossaryTerm(
   const matchedTocEntries = tocMatches.length > 0
     ? tocMatches.map(m => m.item)
     : tocEntries.filter(e =>
-        e.title.toLowerCase().includes(term.toLowerCase())
+        e.title?.toLowerCase().includes(term.toLowerCase()) === true
       );
 
   if (matchedTocEntries.length === 0) {
@@ -487,7 +493,9 @@ export async function lookupGlossaryTerm(
       const parsed = parseGlossaryEntries(html, displayUrl);
 
       // If parsing returned nothing, use TOC title + raw HTML as fallback
-      if (parsed.length === 0 && html.trim() !== '') {
+      // The TOC title is the only name this fallback has for the term, so
+      // an entry without one cannot be emitted here.
+      if (parsed.length === 0 && html.trim() !== '' && tocNode.title !== undefined) {
         const definition = htmlToMarkdown(html).trim();
         if (definition !== '') {
           return [{
@@ -501,7 +509,7 @@ export async function lookupGlossaryTerm(
       return parsed;
     } catch (error) {
       log.warning(
-        `Failed to fetch glossary entry "${tocNode.title}": ${
+        `Failed to fetch glossary entry "${tocNode.title ?? tocNode.contentId}": ${
         String(error)}`
       );
       return [];

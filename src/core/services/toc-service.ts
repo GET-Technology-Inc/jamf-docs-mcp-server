@@ -36,14 +36,18 @@ import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 export function transformFtTocToTocEntries(nodes: FtTocNode[]): TocEntry[] {
   return nodes.map((node): TocEntry => {
     const entry: TocEntry = {
-      title: node.title,
+      // Matches the search path's fallback for the same missing field, so a
+      // titleless node reads the same wherever it surfaces.
+      title: node.title ?? 'Untitled',
       url: buildDisplayUrl(node.prettyUrl),
       contentId: node.contentId,
       tocId: node.tocId,
     };
 
-    if (node.children.length > 0) {
-      entry.children = transformFtTocToTocEntries(node.children);
+    // Absent `children` means a leaf, the same as an empty list.
+    const children = node.children ?? [];
+    if (children.length > 0) {
+      entry.children = transformFtTocToTocEntries(children);
     }
 
     return entry;

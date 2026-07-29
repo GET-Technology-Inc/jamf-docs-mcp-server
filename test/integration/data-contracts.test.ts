@@ -88,7 +88,7 @@ describe('FT API data contracts', () => {
             const { mapId } = entry.topic;
 
             // Must be non-empty
-            expect(mapId, `mapId should be non-empty for topic "${entry.topic.title}"`).toBeTruthy();
+            expect(mapId, `mapId should be non-empty for topic "${entry.topic.title ?? '<no title>'}"`).toBeTruthy();
 
             // Must contain only URL-safe characters
             expect(
@@ -172,7 +172,7 @@ describe('FT API data contracts', () => {
           if (entry.type === 'TOPIC' && entry.topic !== undefined) {
             const { contentId } = entry.topic;
 
-            expect(contentId, `contentId should be non-empty for topic "${entry.topic.title}"`).toBeTruthy();
+            expect(contentId, `contentId should be non-empty for topic "${entry.topic.title ?? '<no title>'}"`).toBeTruthy();
 
             expect(
               OPAQUE_ID_RE.test(contentId),
@@ -272,7 +272,7 @@ describe('FT API data contracts', () => {
       const sample = maps.slice(0, 20);
       for (const map of sample) {
         expect(typeof map.title).toBe('string');
-        expect(map.title.length, `map "${map.id}" should have a non-empty title`).toBeGreaterThan(0);
+        expect((map.title ?? '').length, `map "${map.id}" should have a non-empty title`).toBeGreaterThan(0);
       }
     });
 
@@ -294,7 +294,7 @@ describe('FT API data contracts', () => {
     it('TOC nodes have non-empty title and contentId', () => {
       function validateNode(node: FtTocNode, depth: number): void {
         expect(node.title, `TOC node at depth ${depth} should have a title`).toBeTruthy();
-        expect(node.contentId, `TOC node "${node.title}" should have a contentId`).toBeTruthy();
+        expect(node.contentId, `TOC node "${node.title ?? '<no title>'}" should have a contentId`).toBeTruthy();
 
         // contentId must be in opaque hash format
         expect(
@@ -303,7 +303,7 @@ describe('FT API data contracts', () => {
         ).toBe(true);
 
         // Recurse into children but cap depth to avoid very deep traversal in tests
-        if (depth < 2 && node.children.length > 0) {
+        if (depth < 2 && node.children !== undefined && node.children.length > 0) {
           for (const child of node.children.slice(0, 3)) {
             validateNode(child, depth + 1);
           }
@@ -323,7 +323,7 @@ describe('FT API data contracts', () => {
             found.push(node);
           }
           if (found.length >= 3) {break;}
-          if (node.children.length > 0) {
+          if (node.children !== undefined && node.children.length > 0) {
             found.push(...findNodesWithPrettyUrl(node.children));
             if (found.length >= 3) {break;}
           }
@@ -353,7 +353,7 @@ describe('FT API data contracts', () => {
 
     it('TOC nodes have tocId field', () => {
       for (const root of proTocNodes.slice(0, 5)) {
-        expect(root.tocId, `Root TOC node "${root.title}" should have a tocId`).toBeTruthy();
+        expect(root.tocId, `Root TOC node "${root.title ?? '<no title>'}" should have a tocId`).toBeTruthy();
       }
     });
   });
@@ -365,8 +365,8 @@ describe('FT API data contracts', () => {
       // Find the first leaf node with a contentId from the TOC
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId !== '') {return node;}
-          const found = findLeaf(node.children);
+          if ((node.children ?? []).length === 0 && node.contentId !== '') {return node;}
+          const found = findLeaf(node.children ?? []);
           if (found !== null) {return found;}
         }
         return null;
@@ -391,8 +391,8 @@ describe('FT API data contracts', () => {
     it('topic content is valid HTML (not JSON or plain text)', async () => {
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId !== '') {return node;}
-          const found = findLeaf(node.children);
+          if ((node.children ?? []).length === 0 && node.contentId !== '') {return node;}
+          const found = findLeaf(node.children ?? []);
           if (found !== null) {return found;}
         }
         return null;

@@ -38,7 +38,7 @@ describe('ft-client integration', () => {
 
     // Should include known products
     const titles = maps.map(m => m.title);
-    expect(titles.some(t => t.includes('Jamf Pro'))).toBe(true);
+    expect(titles.some(t => t?.includes('Jamf Pro') === true)).toBe(true);
   }, 15000);
 
   let knownMapId: string;
@@ -81,7 +81,7 @@ describe('ft-client integration', () => {
 
     const toc = await fetchMapToc(knownMapId);
     // Find a leaf topic (not the root)
-    const leaf = toc[0].children.at(0);
+    const leaf = toc[0].children?.at(0);
     if (leaf === undefined) {return;}
 
     const html = await fetchTopicContent(knownMapId, leaf.contentId);
@@ -94,7 +94,7 @@ describe('ft-client integration', () => {
     if (knownMapId === '') {return;}
 
     const toc = await fetchMapToc(knownMapId);
-    const leaf = toc[0].children.at(0);
+    const leaf = toc[0].children?.at(0);
     if (leaf === undefined) {return;}
 
     const meta = await fetchTopicMetadata(knownMapId, leaf.contentId);
