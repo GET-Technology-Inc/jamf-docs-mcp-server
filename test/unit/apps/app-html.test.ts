@@ -27,8 +27,10 @@
 
 import { describe, it, expect } from 'vitest';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 
-import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
+import { APP_HTML, APP_HTML_HASH } from '../../../src/core/apps/generated/app-html.js';
+import { APP_RESOURCE_URI, appToolMeta } from '../../../src/core/apps/index.js';
 
 const LOWER = APP_HTML.toLowerCase();
 
@@ -115,5 +117,65 @@ describe('generated MCP App bundle', () => {
     expect(between.endsWith('>')).toBe(true);
     // Nothing but optional whitespace between the tag name and its `>`.
     expect(between.slice('</script'.length, -1).trim()).toBe('');
+  });
+});
+
+// ============================================================================
+// Cache identity
+// ============================================================================
+
+/**
+ * The `ui://` URI is the only cache key a host has for the bundle, and the
+ * resource is served with a 24-hour *public* hint. If the URI can name two
+ * different bundles over time, that hint freezes whichever one a host happened
+ * to read first — which is exactly what kept the unparseable 4.0.0 bundle
+ * alive on hosts that had already fetched it, for a day after 4.0.1 deployed.
+ *
+ * These tests assert the property that makes the long TTL safe: the cache
+ * identity is a function of the bundle's bytes.
+ */
+describe('app resource cache identity', () => {
+  it('should carry the bundle hash in the resource URI', () => {
+    expect(APP_RESOURCE_URI).toContain(APP_HTML_HASH);
+  });
+
+  it('should derive the hash from the bundle contents', () => {
+    // Recomputed rather than trusted: this is what ties the URI to the bytes.
+    // Editing the generated bundle without re-running `npm run build:app-ui`
+    // fails here, because the committed hash would no longer describe it.
+    const recomputed = createHash('sha256')
+      .update(APP_HTML, 'utf-8')
+      .digest('hex')
+      .slice(0, APP_HTML_HASH.length);
+
+    expect(APP_HTML_HASH).toBe(recomputed);
+  });
+
+  it('should produce a different URI for different bundle content', () => {
+    const other = createHash('sha256')
+      .update(`${APP_HTML}<!-- changed -->`, 'utf-8')
+      .digest('hex')
+      .slice(0, APP_HTML_HASH.length);
+
+    expect(other).not.toBe(APP_HTML_HASH);
+  });
+
+  it('should point both _meta spellings at the same content-addressed URI', () => {
+    // Older hosts read the flat key and newer ones read the nested one; if
+    // they disagreed, one population would fetch a URI the server no longer
+    // serves. Both derive from APP_RESOURCE_URI, so this pins that they stay
+    // derived from it.
+    const meta = appToolMeta();
+    const nested = (meta.ui as { resourceUri?: string } | undefined)?.resourceUri;
+
+    expect(nested).toBe(APP_RESOURCE_URI);
+    expect(meta['ui/resourceUri']).toBe(APP_RESOURCE_URI);
+  });
+
+  it('should keep the URI a well-formed ui:// resource identifier', () => {
+    expect(APP_RESOURCE_URI.startsWith('ui://jamf-docs/app-')).toBe(true);
+    expect(APP_RESOURCE_URI.endsWith('.html')).toBe(true);
+    // No characters that would need escaping in a URI.
+    expect(/^ui:\/\/[a-z0-9\-/.]+$/.test(APP_RESOURCE_URI)).toBe(true);
   });
 });
