@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject, resourceText } from '../helpers/fixtures.js';
+import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -732,7 +733,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(resourceUris).toContain('jamf://products');
       expect(resourceUris).toContain('jamf://topics');
       // The MCP Apps viewer the search/TOC/article tools reference.
-      expect(resourceUris).toContain('ui://jamf-docs/app.html');
+      expect(resourceUris).toContain(APP_RESOURCE_URI);
       expect(result.resources).toHaveLength(3);
     });
 
@@ -755,7 +756,7 @@ describe('Jamf Docs MCP Server', () => {
 
     it('should serve the app resource as an MCP Apps document', async () => {
       const result = await client.listResources();
-      const app = result.resources.find(r => r.uri === 'ui://jamf-docs/app.html');
+      const app = result.resources.find(r => r.uri === APP_RESOURCE_URI);
 
       expect(app?.mimeType).toBe('text/html;profile=mcp-app');
     });
