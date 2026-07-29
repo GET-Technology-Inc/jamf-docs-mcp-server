@@ -556,7 +556,13 @@ describe('product-versions resource handler', () => {
     const handler = getHandler('product-versions');
     await handler(new URL('jamf://products/jamf-pro/versions'), { productId: 'jamf-pro' });
 
-    expect(getAvailableVersions).toHaveBeenCalledWith(expect.anything(), 'jamf-pro');
+    // The third argument is the degradation sink the handler reads afterwards
+    // to decide whether the result may be cached.
+    expect(getAvailableVersions).toHaveBeenCalledWith(
+      expect.anything(),
+      'jamf-pro',
+      { degraded: false },
+    );
   });
 
   it('should return error response for invalid product ID', async () => {
@@ -569,6 +575,60 @@ describe('product-versions resource handler', () => {
 
     expect(result.contents[0].text).toContain('Invalid product ID');
     expect(result.contents[0].text).toContain('not-a-product');
+  });
+
+  // The server configures `resources/read` with a one-hour *public* cache
+  // hint. That is right for documentation and wrong for an error body or for
+  // a static fallback produced by an upstream outage — a handler-supplied
+  // ttlMs/cacheScope wins over the configured hint, so these paths supply one.
+  it('should mark the invalid-product-ID error as uncacheable', async () => {
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    const handler = getHandler('product-versions');
+    const result = await handler(
+      new URL('jamf://products/not-a-product/versions'),
+      { productId: 'not-a-product' },
+    );
+
+    expect(result.ttlMs).toBe(0);
+    expect(result.cacheScope).toBe('private');
+  });
+
+  it('should mark a degraded version list as uncacheable', async () => {
+    // `Once`, so the healthy-path test below is not affected by ordering.
+    (getAvailableVersions as any).mockImplementationOnce(
+      (_ctx: unknown, _id: string, status?: { degraded: boolean }) => {
+        if (status) { status.degraded = true; }
+        return Promise.resolve(['11.0.0']);
+      },
+    );
+
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    const handler = getHandler('product-versions');
+    const result = await handler(
+      new URL('jamf://products/jamf-pro/versions'),
+      { productId: 'jamf-pro' },
+    );
+
+    expect(result.ttlMs).toBe(0);
+    expect(result.cacheScope).toBe('private');
+  });
+
+  it('should leave a healthy version list on the configured cache hint', async () => {
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    const handler = getHandler('product-versions');
+    const result = await handler(
+      new URL('jamf://products/jamf-pro/versions'),
+      { productId: 'jamf-pro' },
+    );
+
+    expect(result.ttlMs).toBeUndefined();
+    expect(result.cacheScope).toBeUndefined();
   });
 
   it('should set uri.href in returned contents', async () => {

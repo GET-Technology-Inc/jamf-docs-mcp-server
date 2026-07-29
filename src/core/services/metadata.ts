@@ -17,6 +17,19 @@ import type { ServerContext } from '../types/context.js';
 // Types
 // ============================================================================
 
+/**
+ * Out-parameter for reporting that a lookup answered from static constants
+ * because the upstream registry was unavailable.
+ *
+ * Callers that care — chiefly MCP resource handlers, which must not let a
+ * transient upstream failure be cached publicly for an hour — pass one in and
+ * read `degraded` afterwards. Callers that do not care pass nothing, so this
+ * stays additive at every existing call site.
+ */
+export interface DegradationStatus {
+  degraded: boolean;
+}
+
 export interface ProductMetadata {
   id: string;
   name: string;
@@ -200,7 +213,8 @@ export async function getBundleIdForVersion(
  */
 export async function getAvailableVersions(
   ctx: ServerContext,
-  productId: ProductId
+  productId: ProductId,
+  status?: DegradationStatus
 ): Promise<string[]> {
   const log = ctx.logger.createLogger('metadata');
   const bundleStem = productIdToBundleStem(productId);
@@ -217,6 +231,9 @@ export async function getAvailableVersions(
   }
 
   // Fallback: return the static latestVersion from constants
+  if (status !== undefined) {
+    status.degraded = true;
+  }
   return [JAMF_PRODUCTS[productId].latestVersion];
 }
 

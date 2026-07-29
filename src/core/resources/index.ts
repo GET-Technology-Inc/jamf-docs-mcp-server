@@ -18,10 +18,31 @@ import {
 import { fetchTableOfContents } from '../services/toc-service.js';
 import { completeProduct } from '../completions.js';
 
+/**
+ * Cache fields for a `resources/read` result that must not be reused.
+ *
+ * The server configures `resources/read` with a one-hour public hint, which is
+ * right for real documentation and wrong for an error body or for data that
+ * only exists because the upstream registry was unreachable. A handler-supplied
+ * `ttlMs` / `cacheScope` wins over the configured hint, so returning these
+ * keeps a transient failure out of shared caches instead of freezing it there
+ * for an hour.
+ */
+const NO_CACHE = { ttlMs: 0, cacheScope: 'private' } as const;
+
+interface ResourceContents {
+  // The SDK's read-result type carries an index signature so handlers can
+  // supply protocol extras such as the cache fields; mirror it here.
+  [key: string]: unknown;
+  contents: { uri: string; mimeType: string; text: string }[];
+  ttlMs?: number;
+  cacheScope?: 'public' | 'private';
+}
+
 function validateProductId(
   productId: string | string[] | number | undefined,
   uri: URL
-): { valid: true; id: ProductId } | { valid: false; errorResponse: { contents: { uri: string; mimeType: string; text: string }[] } } {
+): { valid: true; id: ProductId } | { valid: false; errorResponse: ResourceContents } {
   const productIdStr = String(productId);
   if (productIdStr in JAMF_PRODUCTS) {
     return { valid: true, id: productIdStr as ProductId };
@@ -35,6 +56,7 @@ function validateProductId(
         mimeType: 'text/plain',
         text: `Invalid product ID: "${productIdStr}". Valid products: ${validIds}`,
       }],
+      ...NO_CACHE,
     },
   };
 }
@@ -140,7 +162,8 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
         return validation.errorResponse;
       }
 
-      const versions = await getAvailableVersions(ctx, validation.id);
+      const status = { degraded: false };
+      const versions = await getAvailableVersions(ctx, validation.id, status);
       return {
         contents: [{
           uri: uri.href,
@@ -152,6 +175,9 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
             latestVersion: JAMF_PRODUCTS[validation.id].latestVersion,
           }, null, 2),
         }],
+        // The registry was unreachable and this is the compiled-in fallback,
+        // not the real version list. Let the next read try again.
+        ...(status.degraded ? NO_CACHE : {}),
       };
     }
   );
