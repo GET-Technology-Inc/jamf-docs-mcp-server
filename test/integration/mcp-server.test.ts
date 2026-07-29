@@ -716,11 +716,12 @@ describe('Jamf Docs MCP Server', () => {
     it('should list all resources', async () => {
       const result = await client.listResources();
 
-      expect(result.resources).toHaveLength(2);
-
       const resourceUris = result.resources.map(r => r.uri);
       expect(resourceUris).toContain('jamf://products');
       expect(resourceUris).toContain('jamf://topics');
+      // The MCP Apps viewer the search/TOC/article tools reference.
+      expect(resourceUris).toContain('ui://jamf-docs/app.html');
+      expect(result.resources).toHaveLength(3);
     });
 
     it('should have proper resource metadata', async () => {
@@ -729,8 +730,22 @@ describe('Jamf Docs MCP Server', () => {
       for (const resource of result.resources) {
         expect(resource.name).toBeDefined();
         expect(resource.uri).toBeDefined();
-        expect(resource.mimeType).toBe('application/json');
       }
+    });
+
+    it('should serve jamf:// data resources as JSON', async () => {
+      const result = await client.listResources();
+
+      for (const resource of result.resources.filter(r => r.uri.startsWith('jamf://'))) {
+        expect(resource.mimeType, resource.uri).toBe('application/json');
+      }
+    });
+
+    it('should serve the app resource as an MCP Apps document', async () => {
+      const result = await client.listResources();
+      const app = result.resources.find(r => r.uri === 'ui://jamf-docs/app.html');
+
+      expect(app?.mimeType).toBe('text/html;profile=mcp-app');
     });
   });
 
