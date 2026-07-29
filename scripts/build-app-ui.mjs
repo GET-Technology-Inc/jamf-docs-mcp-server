@@ -41,10 +41,15 @@ const shell = await readFile(path.join(uiDir, 'app.html'), 'utf-8');
 
 // `</script>` inside the bundle would close the tag early. Escaping the slash
 // is inert to the JS parser and keeps the HTML well-formed.
-const inlined = shell.replace(
-  '</body>',
-  `  <script type="module">${script.replace(/<\/script>/gi, '<\\/script>')}</script>\n  </body>`,
-);
+const scriptTag =
+  `  <script type="module">${script.replace(/<\/script>/gi, '<\\/script>')}</script>\n  </body>`;
+
+// A *function* replacer, not a string one. A replacement string expands `$`
+// patterns, and a minified bundle is full of them — `$\`` alone (emitted by
+// zod's regex builders) splices the whole document prefix in at every
+// occurrence, producing a syntactically invalid script. A function's return
+// value is inserted verbatim.
+const inlined = shell.replace('</body>', () => scriptTag);
 
 const module = `/**
  * GENERATED FILE — do not edit.
