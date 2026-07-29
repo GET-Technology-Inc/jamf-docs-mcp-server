@@ -12,7 +12,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/client';
 import { registerGlossaryLookupTool } from '../../src/core/tools/glossary-lookup.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;

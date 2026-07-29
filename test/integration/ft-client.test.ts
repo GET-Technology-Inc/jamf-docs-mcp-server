@@ -57,7 +57,7 @@ describe('ft-client integration', () => {
   }, 15000);
 
   it('fetchMapToc() should return a TOC tree', async () => {
-    if (!knownMapId) return;
+    if (knownMapId === '') {return;}
 
     const toc = await fetchMapToc(knownMapId);
 
@@ -67,7 +67,7 @@ describe('ft-client integration', () => {
   }, 15000);
 
   it('fetchMapTopics() should return flat topic list', async () => {
-    if (!knownMapId) return;
+    if (knownMapId === '') {return;}
 
     const topics = await fetchMapTopics(knownMapId);
 
@@ -77,12 +77,12 @@ describe('ft-client integration', () => {
   }, 15000);
 
   it('fetchTopicContent() should return HTML', async () => {
-    if (!knownMapId) return;
+    if (knownMapId === '') {return;}
 
     const toc = await fetchMapToc(knownMapId);
     // Find a leaf topic (not the root)
-    const leaf = toc[0].children?.[0];
-    if (!leaf) return;
+    const leaf = toc[0].children.at(0);
+    if (leaf === undefined) {return;}
 
     const html = await fetchTopicContent(knownMapId, leaf.contentId);
 
@@ -91,11 +91,11 @@ describe('ft-client integration', () => {
   }, 15000);
 
   it('fetchTopicMetadata() should return metadata', async () => {
-    if (!knownMapId) return;
+    if (knownMapId === '') {return;}
 
     const toc = await fetchMapToc(knownMapId);
-    const leaf = toc[0].children?.[0];
-    if (!leaf) return;
+    const leaf = toc[0].children.at(0);
+    if (leaf === undefined) {return;}
 
     const meta = await fetchTopicMetadata(knownMapId, leaf.contentId);
 

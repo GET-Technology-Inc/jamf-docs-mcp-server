@@ -196,7 +196,7 @@ describe('HTML stripping truncation', () => {
 
   it('should truncate input that exceeds MAX_SNIPPET_LENGTH * 2 before stripping', () => {
     // Build input that is 2 000 chars – well above the 1 000-char threshold.
-    const oversized = '<p>' + 'x'.repeat(2000) + '</p>';
+    const oversized = `<p>${  'x'.repeat(2000)  }</p>`;
     const result = stripHtml(oversized);
     // After truncation the text content is at most 1000 chars (minus tag chars).
     expect(result.length).toBeLessThanOrEqual(MAX_INPUT_LENGTH);

@@ -47,7 +47,7 @@ describe('section ID generation with realistic fixtures', () => {
     const sections = extractSections(markdown);
 
     const ssoSection = sections.find(s => s.title.includes('SSO') || s.title.includes('Sign-On'));
-    if (ssoSection) {
+    if (ssoSection !== undefined) {
       expect(ssoSection.id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
       expect(ssoSection.id).not.toContain('(');
       expect(ssoSection.id).not.toContain(')');

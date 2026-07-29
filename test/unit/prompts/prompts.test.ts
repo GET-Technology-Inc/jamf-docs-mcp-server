@@ -95,35 +95,35 @@ describe('registerTroubleshootPrompt', () => {
   it('should include the problem text in the message', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'MDM enrollment failing' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('MDM enrollment failing');
   });
 
   it('should include jamf_docs_search tool reference in the message', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'test issue' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_search');
   });
 
   it('should include jamf_docs_get_article tool reference in the message', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'test issue' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_get_article');
   });
 
   it('should include a product filter when product is provided', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'test issue', product: 'jamf-pro' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf-pro');
   });
 
   it('should not include a product filter when product is undefined', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'test issue', product: undefined });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     // Should not contain a product: "..." filter expression
     expect(text).not.toMatch(/product: "jamf-/);
   });
@@ -131,14 +131,14 @@ describe('registerTroubleshootPrompt', () => {
   it('should not include a product filter when product is an empty string', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'test issue', product: '' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).not.toMatch(/product: ""/);
   });
 
   it('should repeat the problem description at the end of the message', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const result = cb({ problem: 'Device enrollment error code 500' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     // Problem appears twice: once in the intro, once in the footer
     const occurrences = text.split('Device enrollment error code 500').length - 1;
     expect(occurrences).toBeGreaterThanOrEqual(1);
@@ -148,7 +148,7 @@ describe('registerTroubleshootPrompt', () => {
     const cb = callbacks.get('jamf_troubleshoot')!;
     const problem = 'Error: "ECONNRESET" & timeout <500ms>';
     const result = cb({ problem });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain(problem);
   });
 });
@@ -192,42 +192,42 @@ describe('registerSetupGuidePrompt', () => {
   it('should include the feature text in the message', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Smart Groups' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('Smart Groups');
   });
 
   it('should include jamf_docs_search tool reference', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Push Certificates' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_search');
   });
 
   it('should include jamf_docs_get_article tool reference', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Push Certificates' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_get_article');
   });
 
   it('should include a product filter when product is provided', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Enrollment', product: 'jamf-school' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf-school');
   });
 
   it('should not include a product filter when product is omitted', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Enrollment', product: undefined });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).not.toMatch(/product: "jamf-/);
   });
 
   it('should not include a product filter when product is empty string', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'Enrollment', product: '' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).not.toMatch(/product: ""/);
   });
 
@@ -241,7 +241,7 @@ describe('registerSetupGuidePrompt', () => {
   it('should repeat the feature name at the end of the message', () => {
     const cb = callbacks.get('jamf_setup_guide')!;
     const result = cb({ feature: 'APNS Certificate' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     const occurrences = text.split('APNS Certificate').length - 1;
     expect(occurrences).toBeGreaterThanOrEqual(1);
   });
@@ -286,42 +286,42 @@ describe('registerCompareVersionsPrompt', () => {
   it('should include version_a in the message', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('11.5.0');
   });
 
   it('should include version_b in the message', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('11.12.0');
   });
 
   it('should include the product in the message', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-connect', version_a: '2.0', version_b: '3.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf-connect');
   });
 
   it('should reference jamf_docs_get_toc in the message', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_get_toc');
   });
 
   it('should reference jamf_docs_get_article for reviewing changed articles', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     expect(text).toContain('jamf_docs_get_article');
   });
 
   it('should include both version strings in the summary section', () => {
     const cb = callbacks.get('jamf_compare_versions')!;
     const result = cb({ product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' });
-    const text = result.messages[0].content.text;
+    const {text} = result.messages[0].content;
     // Both should appear at least twice (instructions + footer)
     expect(text.split('11.5.0').length - 1).toBeGreaterThanOrEqual(1);
     expect(text.split('11.12.0').length - 1).toBeGreaterThanOrEqual(1);
@@ -333,7 +333,7 @@ describe('registerCompareVersionsPrompt', () => {
 
     for (const product of products) {
       const result = cb({ product, version_a: '1.0', version_b: '2.0' });
-      const text = result.messages[0].content.text;
+      const {text} = result.messages[0].content;
       expect(text).toContain(product);
     }
   });

@@ -94,7 +94,7 @@ describe('search product filtering with real API data', () => {
     }
   }, 30000);
 
-  it('product field comes from zoominmetadata, not from mapId', async () => {
+  it('product field comes from zoominmetadata, not from mapId', () => {
     // Use the pre-fetched unfiltered results; pick results whose product is 'Jamf Pro'.
     const proResults = proSearchResults.filter(r => r.product === 'Jamf Pro');
 
@@ -116,7 +116,7 @@ describe('search product filtering with real API data', () => {
       // If this assertion fails it means the API changed and mapIds became slugs —
       // which would make the original bug latent again.
       if (r.mapId !== undefined) {
-        const mapId = r.mapId;
+        const {mapId} = r;
         // A slug would look like 'jamf-pro-documentation-...' (contains hyphens and
         // known bundle stems). An opaque hash has NO product name in it.
         // We assert that it does NOT start with 'jamf-pro' as a slug would.
@@ -156,7 +156,7 @@ describe('search product filtering with real API data', () => {
     }
   }, 30000);
 
-  it('each result has a non-empty URL pointing to learn.jamf.com', async () => {
+  it('each result has a non-empty URL pointing to learn.jamf.com', () => {
     expect(proSearchResults.length).toBeGreaterThan(0);
 
     for (const r of proSearchResults) {
@@ -182,9 +182,16 @@ describe('search → article fetch chain', () => {
       return;
     }
 
+    // `.find()` filtered on both ids being present, but that does not narrow
+    // `candidate`; destructure and re-check so the call site is typed.
+    const { mapId, contentId } = candidate;
+    if (mapId === undefined || contentId === undefined) {
+      throw new Error('search result lost its mapId/contentId after filtering');
+    }
+
     const article = await resolveAndFetchArticle(
       ctx,
-      { url: candidate.url, mapId: candidate.mapId, contentId: candidate.contentId },
+      { url: candidate.url, mapId, contentId },
       { maxTokens: 2000 },
     );
 
@@ -206,9 +213,16 @@ describe('search → article fetch chain', () => {
       return;
     }
 
+    // `.find()` filtered on both ids being present, but that does not narrow
+    // `candidate`; destructure and re-check so the call site is typed.
+    const { mapId, contentId } = candidate;
+    if (mapId === undefined || contentId === undefined) {
+      throw new Error('search result lost its mapId/contentId after filtering');
+    }
+
     const article = await resolveAndFetchArticle(
       ctx,
-      { url: candidate.url, mapId: candidate.mapId, contentId: candidate.contentId },
+      { url: candidate.url, mapId, contentId },
       { maxTokens: 1000 },
     );
 
@@ -277,7 +291,7 @@ describe('MapsRegistry → TOC → TopicResolver chain', () => {
     expect(mapId).not.toMatch(/^jamf-pro-documentation/);
   }, 15000);
 
-  it('TOC entries have valid learn.jamf.com URLs', async () => {
+  it('TOC entries have valid learn.jamf.com URLs', () => {
     expect(proTocEntries.length).toBeGreaterThan(0);
 
     const flatEntries = flattenToc(proTocEntries);
@@ -291,7 +305,7 @@ describe('MapsRegistry → TOC → TopicResolver chain', () => {
   }, 15000);
 
   it('can fetch TOC for multiple products', async () => {
-    const products: Array<'jamf-connect' | 'jamf-protect'> = ['jamf-connect', 'jamf-protect'];
+    const products: ('jamf-connect' | 'jamf-protect')[] = ['jamf-connect', 'jamf-protect'];
 
     for (const product of products) {
       const tocResult = await fetchTableOfContents(ctx, product, 'current', { maxTokens: 5000 });

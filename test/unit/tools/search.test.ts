@@ -15,6 +15,7 @@ import {
   createPaginationInfo,
   createTokenInfo,
 } from '../../helpers/fixtures.js';
+import { createMockContext } from '../../helpers/mock-context.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
@@ -44,10 +45,11 @@ vi.mock('../../../src/core/services/search-suggestions.js', () => ({
 // Import AFTER mocks are set up
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../../src/core/tools/search.js';
+import type { SearchResult, PaginationInfo, TokenInfo } from '../../../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -58,7 +60,7 @@ function buildSearchResponse(overrides?: {
   results?: ReturnType<typeof createSearchResult>[];
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
-}) {
+}): { results: SearchResult[]; pagination: PaginationInfo; tokenInfo: TokenInfo } {
   const results = overrides?.results ?? [createSearchResult()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: results.length, totalPages: 1, hasNext: false });
   const tokenInfo = overrides?.tokenInfo ?? createTokenInfo();
@@ -73,7 +75,7 @@ describe('jamf_docs_search tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerSearchTool(server);
+    registerSearchTool(server, createMockContext());
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -419,7 +421,7 @@ describe('jamf_docs_search tool', () => {
       const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
 
       const sc = result.structuredContent as Record<string, unknown>;
-      const results = sc.results as Array<Record<string, unknown>>;
+      const results = sc.results as Record<string, unknown>[];
       expect(results[0].product).toBe('');
     });
 
@@ -433,7 +435,7 @@ describe('jamf_docs_search tool', () => {
       const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
 
       const sc = result.structuredContent as Record<string, unknown>;
-      const results = sc.results as Array<Record<string, unknown>>;
+      const results = sc.results as Record<string, unknown>[];
       expect(results[0].version).toBe('11.5.0');
     });
 
@@ -447,7 +449,7 @@ describe('jamf_docs_search tool', () => {
       const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
 
       const sc = result.structuredContent as Record<string, unknown>;
-      const results = sc.results as Array<Record<string, unknown>>;
+      const results = sc.results as Record<string, unknown>[];
       expect(Object.prototype.hasOwnProperty.call(results[0], 'version')).toBe(false);
     });
   });

@@ -84,7 +84,7 @@ describe('FT API data contracts', () => {
 
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
-          if (entry.type === 'TOPIC' && entry.topic) {
+          if (entry.type === 'TOPIC' && entry.topic !== undefined) {
             const { mapId } = entry.topic;
 
             // Must be non-empty
@@ -113,10 +113,10 @@ describe('FT API data contracts', () => {
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
           const metadata = entry.type === 'TOPIC' ? entry.topic?.metadata : entry.map?.metadata;
-          if (!metadata) continue;
+          if (metadata === undefined) {continue;}
 
           const zoomin = metadata.find(m => m.key === 'zoominmetadata');
-          if (zoomin) {
+          if (zoomin !== undefined) {
             foundZoomin = true;
             expect(zoomin.values.length).toBeGreaterThan(0);
             // zoominmetadata values are plain strings (e.g. "content-techdocs", "jamf-pro")
@@ -138,10 +138,10 @@ describe('FT API data contracts', () => {
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
           const metadata = entry.type === 'TOPIC' ? entry.topic?.metadata : entry.map?.metadata;
-          if (!metadata) continue;
+          if (metadata === undefined) {continue;}
 
           const prettyUrlEntry = metadata.find(m => m.key === 'ft:prettyUrl');
-          if (prettyUrlEntry && prettyUrlEntry.values.length > 0) {
+          if (prettyUrlEntry !== undefined && prettyUrlEntry.values.length > 0) {
             foundPrettyUrl = true;
             const prettyUrl = prettyUrlEntry.values[0];
             // prettyUrl can be:
@@ -149,7 +149,7 @@ describe('FT API data contracts', () => {
             //   - root-relative: "/r/..." or "/en-US/..."
             //   - path-relative: "en-US/..." (no leading slash)
             // All must be non-empty strings that look like URL paths or URLs
-            expect(prettyUrl.length, `ft:prettyUrl must be a non-empty string`).toBeGreaterThan(0);
+            expect(prettyUrl.length, 'ft:prettyUrl must be a non-empty string').toBeGreaterThan(0);
             const isAbsolute = prettyUrl.startsWith('https://');
             const isRootRelative = prettyUrl.startsWith('/');
             const isPathRelative = /^[a-zA-Z]/.test(prettyUrl);
@@ -169,7 +169,7 @@ describe('FT API data contracts', () => {
 
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
-          if (entry.type === 'TOPIC' && entry.topic) {
+          if (entry.type === 'TOPIC' && entry.topic !== undefined) {
             const { contentId } = entry.topic;
 
             expect(contentId, `contentId should be non-empty for topic "${entry.topic.title}"`).toBeTruthy();
@@ -319,13 +319,13 @@ describe('FT API data contracts', () => {
       function findNodesWithPrettyUrl(nodes: FtTocNode[]): FtTocNode[] {
         const found: FtTocNode[] = [];
         for (const node of nodes) {
-          if (node.prettyUrl && node.prettyUrl !== '') {
+          if (node.prettyUrl !== '') {
             found.push(node);
           }
-          if (found.length >= 3) break;
+          if (found.length >= 3) {break;}
           if (node.children.length > 0) {
             found.push(...findNodesWithPrettyUrl(node.children));
-            if (found.length >= 3) break;
+            if (found.length >= 3) {break;}
           }
         }
         return found;
@@ -340,7 +340,7 @@ describe('FT API data contracts', () => {
       for (const node of nodesWithUrls) {
         const url = node.prettyUrl;
         // prettyUrl can be absolute, root-relative, or path-relative (no leading slash)
-        expect(url.length, `TOC node prettyUrl must be non-empty`).toBeGreaterThan(0);
+        expect(url.length, 'TOC node prettyUrl must be non-empty').toBeGreaterThan(0);
         const isAbsolute = url.startsWith('https://');
         const isRootRelative = url.startsWith('/');
         const isPathRelative = /^[a-zA-Z]/.test(url);
@@ -365,9 +365,9 @@ describe('FT API data contracts', () => {
       // Find the first leaf node with a contentId from the TOC
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId) return node;
+          if (node.children.length === 0 && node.contentId !== '') {return node;}
           const found = findLeaf(node.children);
-          if (found) return found;
+          if (found !== null) {return found;}
         }
         return null;
       }
@@ -391,9 +391,9 @@ describe('FT API data contracts', () => {
     it('topic content is valid HTML (not JSON or plain text)', async () => {
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId) return node;
+          if (node.children.length === 0 && node.contentId !== '') {return node;}
           const found = findLeaf(node.children);
-          if (found) return found;
+          if (found !== null) {return found;}
         }
         return null;
       }
@@ -445,7 +445,7 @@ describe('FT API data contracts', () => {
       expect(
         missing,
         `searchLabel(s) no longer present in live zoominmetadata: ${JSON.stringify(missing)}. ` +
-        `Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).`
+        'Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).'
       ).toEqual([]);
     });
 
@@ -500,7 +500,7 @@ describe('FT API data contracts', () => {
         .flatMap(c => c.entries)
         .filter(e => e.topic?.metadata.some(
           m => m.key === 'zoominmetadata' && m.values.includes('product-pro')
-        ));
+        ) === true);
       expect(proEntries.length, 'expected Jamf Pro topics in the enrollment search').toBeGreaterThan(0);
 
       const clusterIds: string[] = [];

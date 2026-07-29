@@ -32,7 +32,9 @@ function stripHtml(html: string): string {
 
 describe('snippet quality with realistic fixtures', () => {
   const fixtureData = createRealisticSearchResponse();
-  const results = fixtureData.Results.filter(r => r.leading_result);
+  const results = fixtureData.Results.filter(
+    r => r.leading_result !== null && r.leading_result !== undefined
+  );
 
   it('should have realistic fixture data to work with', () => {
     expect(results.length).toBeGreaterThan(10);
@@ -43,7 +45,7 @@ describe('snippet quality with realistic fixtures', () => {
     for (const wrapper of results) {
       const lr = wrapper.leading_result!;
       const rawSnippet = stripHtml(lr.snippet).slice(0, 500);
-      const product = lr.publication_title || 'Jamf';
+      const product = lr.publication_title !== '' ? lr.publication_title : 'Jamf';
       const cleaned = cleanSnippet(rawSnippet, lr.title, product);
 
       expect(cleaned.length).toBeGreaterThanOrEqual(10);
@@ -59,10 +61,10 @@ describe('snippet quality with realistic fixtures', () => {
     });
 
     // If fixture has a short snippet, verify fallback is applied
-    if (shortResult) {
+    if (shortResult !== undefined) {
       const lr = shortResult.leading_result!;
       const rawSnippet = stripHtml(lr.snippet).slice(0, 500);
-      const product = lr.publication_title || 'Jamf';
+      const product = lr.publication_title !== '' ? lr.publication_title : 'Jamf';
       const cleaned = cleanSnippet(rawSnippet, lr.title, product);
 
       // Fallback format: "Title" or "Title — Product"

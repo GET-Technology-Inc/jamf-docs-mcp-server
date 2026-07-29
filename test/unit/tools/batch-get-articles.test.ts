@@ -26,14 +26,14 @@ vi.mock('../../../src/core/services/cache.js', () => ({
 
 // Import AFTER mocks are set up
 import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-articles.js';
-import { createMockContext } from '../../helpers/mock-context.js';
+import { createMockContext, type MockArticleProvider } from '../../helpers/mock-context.js';
 
 import { distributeTokenBudget } from '../../../src/core/tools/batch-get-articles.js';
 import { limitConcurrency } from '../../../src/core/utils/concurrency.js';
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -71,9 +71,9 @@ describe('limitConcurrency', () => {
   it('should execute all tasks and preserve order', async () => {
     const results = await limitConcurrency(
       [
-        () => Promise.resolve('a'),
-        () => Promise.resolve('b'),
-        () => Promise.resolve('c'),
+        async () => await Promise.resolve('a'),
+        async () => await Promise.resolve('b'),
+        async () => await Promise.resolve('c'),
       ],
       2
     );
@@ -116,7 +116,12 @@ describe('limitConcurrency', () => {
  * Each call to getArticleByIds pops the next result from the queue.
  * When the queue is empty, returns `repeatingResult` (if set) or null.
  */
-function createMockProvider() {
+function createMockProvider(): {
+  provider: MockArticleProvider;
+  setResults: (...results: (FetchArticleResult | Error | null)[]) => void;
+  setRepeating: (result: FetchArticleResult | Error | null) => void;
+  reset: () => void;
+} {
   let resultQueue: (FetchArticleResult | Error | null)[] = [];
   let repeatingResult: FetchArticleResult | Error | null = null;
 
@@ -128,12 +133,15 @@ function createMockProvider() {
       _contentId: string,
       _options?: FetchArticleOptions,
     ): Promise<FetchArticleResult | null> => {
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
       if (resultQueue.length > 0) {
         const next = resultQueue.shift()!;
-        if (next instanceof Error) throw next;
+        if (next instanceof Error) {throw next;}
         return next;
       }
-      if (repeatingResult instanceof Error) throw repeatingResult;
+      if (repeatingResult instanceof Error) {throw repeatingResult;}
       return repeatingResult;
     }
   );
@@ -171,9 +179,12 @@ describe('jamf_docs_batch_get_articles tool', () => {
     const ctx = createMockContext({ articleProvider: mock.provider });
     // Override topicResolver.resolve to return deterministic IDs per URL
     ctx.topicResolver.resolve = vi.fn(async (input: { url?: string }) => {
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
       const url = input.url ?? '';
       const slug = url.split('/').pop()?.replace('.html', '') ?? 'unknown';
-      return { mapId: `map-${slug}`, contentId: `content-${slug}`, locale: 'en-US' };
+      return { mapId: `map-${slug}`, contentId: `content-${slug}`, locale: 'en-US' as const };
     });
 
     server = new McpServer({ name: 'test-server', version: '0.0.1' });

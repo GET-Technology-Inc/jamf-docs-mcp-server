@@ -24,8 +24,14 @@ import { registerPrompts } from './prompts/index.js';
  * Options for createMcpServer
  */
 export interface CreateServerOptions {
-  /** Tool name whitelist. When provided, only listed tools are registered. */
-  tools?: string[];
+  /**
+   * Tool name whitelist. When provided, only listed tools are registered.
+   *
+   * Explicitly `| undefined` so callers can forward an optional value —
+   * `createMcpServer(ctx, { tools: argv.tools })` — under the
+   * `exactOptionalPropertyTypes` this project compiles with.
+   */
+  tools?: string[] | undefined;
 }
 
 /**

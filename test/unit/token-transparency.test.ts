@@ -9,7 +9,7 @@ import { TOKEN_CONFIG } from '../../src/core/constants.js';
 describe('truncateToTokenLimit transparency', () => {
   it('should return remainingSections when content is truncated', () => {
     // Create content with multiple sections that exceeds a low token limit
-    const content = '## Section One\n' + 'A'.repeat(200) + '\n## Section Two\n' + 'B'.repeat(200) + '\n## Section Three\n' + 'C'.repeat(200);
+    const content = `## Section One\n${  'A'.repeat(200)  }\n## Section Two\n${  'B'.repeat(200)  }\n## Section Three\n${  'C'.repeat(200)}`;
 
     const result = truncateToTokenLimit(content, 100);
 
@@ -32,7 +32,7 @@ describe('truncateToTokenLimit transparency', () => {
   });
 
   it('should include truncation notice in content when truncated', () => {
-    const content = '## Section One\n' + 'A'.repeat(400) + '\n## Section Two\n' + 'B'.repeat(400);
+    const content = `## Section One\n${  'A'.repeat(400)  }\n## Section Two\n${  'B'.repeat(400)}`;
     const result = truncateToTokenLimit(content, 100);
 
     expect(result.content).toContain('Content truncated due to token limit');

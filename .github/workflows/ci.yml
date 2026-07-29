@@ -65,6 +65,12 @@ jobs:
       - name: Type check (app-ui)
         run: npm run typecheck:app-ui
 
+      # test/ is likewise outside the root tsconfig, which only includes src/**.
+      # Without this step no test file is ever type-checked, and eslint's
+      # type-aware rules have no project to consult for them either.
+      - name: Type check (test)
+        run: npm run typecheck:test
+
       - name: Lint
         run: npm run lint
 

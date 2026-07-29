@@ -13,15 +13,15 @@ import { createMockContext } from '../helpers/mock-context.js';
 
 const ctx = createMockContext();
 
-const mockSearchDocumentation = vi.fn().mockImplementation((_ctx: ServerContext, params: SearchParams) => {
+const mockSearchDocumentation = vi.fn().mockImplementation(async (_ctx: ServerContext, params: SearchParams) => {
   const isVersionMismatch = params.version !== undefined
     && params.version !== 'current'
     && params.version !== '';
-  return Promise.resolve({
+  return await Promise.resolve({
     results: [{ title: 'Test', url: 'https://learn.jamf.com/test.html', snippet: 'Test snippet content for version transparency', product: 'Jamf Pro', version: isVersionMismatch ? 'current' : (params.version ?? 'current'), docType: 'documentation' }],
     pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
     tokenInfo: { tokenCount: 50, truncated: false, maxTokens: 5000 },
-    ...(isVersionMismatch ? { versionNote: `Version "${params.version}" was not available for some results. Showing the latest version instead.` } : {}),
+    ...(isVersionMismatch ? { versionNote: `Version "${String(params.version)}" was not available for some results. Showing the latest version instead.` } : {}),
   });
 });
 
@@ -31,7 +31,7 @@ vi.mock('../../src/core/services/search-service.js', () => ({
 
 import { registerSearchTool } from '../../src/core/tools/search.js';
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 describe('Version filter transparency', () => {
   let client: Client;
@@ -59,7 +59,7 @@ describe('Version filter transparency', () => {
       arguments: { query: 'enrollment', version: '99.0.0' },
     });
 
-    const text = (result.content[0] as TextContent).text;
+    const {text} = (result.content[0] as TextContent);
     // The realistic fixture has specific versions — 99.0.0 doesn't exist, so note should appear
     expect(text).toContain('Version Note');
   });
@@ -70,7 +70,7 @@ describe('Version filter transparency', () => {
       arguments: { query: 'enrollment', version: 'current' },
     });
 
-    const text = (result.content[0] as TextContent).text;
+    const {text} = (result.content[0] as TextContent);
     expect(text).not.toContain('Version Note');
   });
 
@@ -80,7 +80,7 @@ describe('Version filter transparency', () => {
       arguments: { query: 'enrollment' },
     });
 
-    const text = (result.content[0] as TextContent).text;
+    const {text} = (result.content[0] as TextContent);
     expect(text).not.toContain('Version Note');
   });
 
@@ -101,7 +101,7 @@ describe('Version filter transparency', () => {
       arguments: { query: 'enrollment' },
     });
 
-    const text = (result.content[0] as TextContent).text;
+    const {text} = (result.content[0] as TextContent);
     expect(text).not.toContain('relevanceNote');
   });
 });

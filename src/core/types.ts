@@ -156,6 +156,8 @@ export interface FetchTocResult {
   toc: TocEntry[];
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
 }
 
 /**
@@ -168,6 +170,8 @@ export interface SearchDocumentationResult {
   filterRelaxation?: FilterRelaxation;
   versionNote?: string;
   truncatedContent?: TruncatedContentInfo;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
   /** Set when the upstream search call failed; results will be empty. */
   searchError?: string;
 }

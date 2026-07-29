@@ -31,7 +31,7 @@ import {
   createMockContext,
   createMockArticleProvider,
 } from '../../helpers/mock-context.js';
-import { loadFixture, createFetchArticleResult } from '../../helpers/fixtures.js';
+import { loadFixture, createFetchArticleResult, omitKey } from '../../helpers/fixtures.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../../../src/core/types.js';
 import type { FtTopicInfo } from '../../../src/core/types.js';
 
@@ -48,7 +48,7 @@ const ARTICLE_URL =
   'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/MDM_Profile_Settings.html';
 
 /** Default topic metadata fixture (from ft-topic-metadata.json) */
-const defaultMetadata = loadFixture<FtTopicInfo>('ft-topic-metadata.json');
+const defaultMetadata = loadFixture('ft-topic-metadata.json') as FtTopicInfo;
 
 /** Simple HTML that the real content-parser can process */
 const DEFAULT_HTML = [
@@ -71,17 +71,23 @@ let currentArticleHtml: string;
 
 function setupHttpRouting(): void {
   mockedGetJson.mockImplementation(async (url: string) => {
+    // Awaits a resolved promise so this stands in for a real async call —
+    // it yields to the microtask queue the way the code it replaces does.
+    await Promise.resolve();
     if (url.endsWith('/api/khub/maps')) {
       return loadFixture('ft-maps-list.json');
     }
     // /api/khub/maps/{mapId}/topics/{contentId} -> topic metadata
-    if (url.match(/\/topics\/[^/]+$/) && !url.includes('/content')) {
+    if (/\/topics\/[^/]+$/.exec(url) !== null && !url.includes('/content')) {
       return currentTopicMetadata;
     }
     throw new Error(`Unexpected GET JSON: ${url}`);
   });
 
   mockedGetText.mockImplementation(async (url: string) => {
+    // Awaits a resolved promise so this stands in for a real async call —
+    // it yields to the microtask queue the way the code it replaces does.
+    await Promise.resolve();
     if (url.includes('/content')) {
       return currentArticleHtml;
     }
@@ -548,8 +554,7 @@ describe('fetchArticleFromFt()', () => {
       // article its title entirely: `undefined !== ''` is true, so `undefined`
       // won over the parsed `<h1>`.
       const cache = createMockCache();
-      const { title: _omitted, ...withoutTitle } = currentTopicMetadata as Record<string, unknown>;
-      currentTopicMetadata = withoutTitle as typeof currentTopicMetadata;
+      currentTopicMetadata = omitKey(currentTopicMetadata, 'title');
 
       const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
 
@@ -626,30 +631,32 @@ describe('resolveAndFetchArticle()', () => {
       const ctx = createMockContext({
         articleProvider: createMockArticleProvider(() => createFetchArticleResult()),
       });
-      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+      const resolveSpy = vi.fn().mockResolvedValue({
         mapId: MAP_ID,
         contentId: CONTENT_ID,
         locale: 'en-US',
       });
+      ctx.topicResolver.resolve = resolveSpy;
 
       await resolveAndFetchArticle(ctx, { url: ARTICLE_URL, contentId: CONTENT_ID }, {});
 
-      expect(ctx.topicResolver.resolve).toHaveBeenCalledWith({ url: ARTICLE_URL });
+      expect(resolveSpy).toHaveBeenCalledWith({ url: ARTICLE_URL });
     });
 
     it('should call topicResolver.resolve when contentId is missing', async () => {
       const ctx = createMockContext({
         articleProvider: createMockArticleProvider(() => createFetchArticleResult()),
       });
-      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+      const resolveSpy = vi.fn().mockResolvedValue({
         mapId: MAP_ID,
         contentId: CONTENT_ID,
         locale: 'en-US',
       });
+      ctx.topicResolver.resolve = resolveSpy;
 
       await resolveAndFetchArticle(ctx, { url: ARTICLE_URL, mapId: MAP_ID }, {});
 
-      expect(ctx.topicResolver.resolve).toHaveBeenCalledWith({ url: ARTICLE_URL });
+      expect(resolveSpy).toHaveBeenCalledWith({ url: ARTICLE_URL });
     });
   });
 

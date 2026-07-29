@@ -33,7 +33,7 @@ import { createMockContext, createMockArticleProvider } from '../../helpers/mock
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -457,7 +457,7 @@ describe('jamf_docs_get_article tool', () => {
       expect(text).toContain(VALID_URL);
       // Verify structuredContent includes section metadata from the tool's mapping logic
       const sc = result.structuredContent as Record<string, unknown>;
-      const sections = sc.sections as Array<{ id: string; title: string }>;
+      const sections = sc.sections as { id: string; title: string }[];
       expect(sections).toHaveLength(2);
       expect(sections[0].id).toBe('prerequisites');
       expect(sections[1].id).toBe('configuration');

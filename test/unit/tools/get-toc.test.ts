@@ -17,6 +17,7 @@ import {
   createTokenInfo,
 } from '../../helpers/fixtures.js';
 import type { TocEntry } from '../../../src/core/types.js';
+import { createMockContext } from '../../helpers/mock-context.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
@@ -39,10 +40,11 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 // Import AFTER mocks are set up
 import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
+import type { PaginationInfo, TokenInfo } from '../../../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -53,7 +55,7 @@ function buildTocResponse(overrides?: {
   toc?: TocEntry[];
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
-}) {
+}): { toc: TocEntry[]; pagination: PaginationInfo; tokenInfo: TokenInfo } {
   const toc = overrides?.toc ?? [createTocEntry()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: toc.length, totalPages: 1, hasNext: false });
   const tokenInfo = overrides?.tokenInfo ?? createTokenInfo();
@@ -68,7 +70,7 @@ describe('jamf_docs_get_toc tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerGetTocTool(server);
+    registerGetTocTool(server, createMockContext());
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -401,7 +403,7 @@ describe('jamf_docs_get_toc tool', () => {
       });
 
       const sc = result.structuredContent as Record<string, unknown>;
-      const entries = sc.entries as Array<{ title: string; url: string }>;
+      const entries = sc.entries as { title: string; url: string }[];
       // flattenTocEntries should produce 3 entries: parent + 2 children
       expect(entries).toHaveLength(3);
       expect(entries[0].title).toBe('Parent');

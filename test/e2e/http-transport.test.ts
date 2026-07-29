@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
+import { asJsonObject } from '../helpers/fixtures.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 
@@ -18,7 +19,7 @@ import path from 'path';
 
 const HTTP_PORT = 13580; // Different from integration test port (13579)
 const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
-let httpProcess: ChildProcess;
+let httpProcess: ChildProcess | undefined;
 
 // Track session state for JSON-RPC
 let requestId = 0;
@@ -41,7 +42,7 @@ async function jsonRpc(
     method,
   };
 
-  if (!options?.isNotification) {
+  if (options?.isNotification !== true) {
     body.id = nextId();
   }
 
@@ -70,11 +71,11 @@ async function jsonRpc(
     sessionId = sid;
   }
 
-  if (options?.isNotification) {
+  if (options?.isNotification === true) {
     return { status: res.status };
   }
 
-  return readJsonRpc(res);
+  return await readJsonRpc(res);
 }
 
 /**
@@ -111,25 +112,26 @@ async function callTool(
 describe('HTTP Transport E2E', { timeout: 60000 }, () => {
   beforeAll(async () => {
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
-    httpProcess = spawn(
+    const proc = spawn(
       'node',
       [serverPath, '--transport', 'http', '--port', String(HTTP_PORT)],
       { stdio: ['pipe', 'pipe', 'pipe'] }
     );
+    httpProcess = proc;
 
     // Wait for server to start
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(
-        () => reject(new Error('HTTP server start timeout')),
+        () => { reject(new Error('HTTP server start timeout')); },
         10000
       );
-      httpProcess.stderr!.on('data', (data: Buffer) => {
+      proc.stderr.on('data', (data: Buffer) => {
         if (data.toString().includes('running on http://')) {
           clearTimeout(timeout);
           resolve();
         }
       });
-      httpProcess.on('error', reject);
+      proc.on('error', reject);
     });
 
     // Establish MCP session
@@ -148,7 +150,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
     it('should respond to /health alongside MCP session', async () => {
       const res = await fetch(`${BASE_URL}/health`);
       expect(res.status).toBe(200);
-      const data = await res.json();
+      const data = asJsonObject(await res.json());
       expect(data.status).toBe('ok');
       expect(data.version).toBeDefined();
     });
@@ -163,7 +165,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       const result = await callTool('jamf_docs_list_products', { responseFormat: 'json' });
 
       expect(result.isError).toBeUndefined();
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       expect(content).toHaveLength(1);
 
       const json = JSON.parse(content[0].text);
@@ -187,7 +189,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       const json = JSON.parse(content[0].text);
 
       expect(json.results).toBeDefined();
@@ -208,7 +210,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
         limit: 1,
         responseFormat: 'json',
       });
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       const json = JSON.parse(content[0].text);
       articleUrl = json.results[0]?.url
         ?? 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Policies.html';
@@ -221,7 +223,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       const json = JSON.parse(content[0].text);
 
       expect(json.title).toBeDefined();
@@ -238,7 +240,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       const json = JSON.parse(content[0].text);
 
       expect(json.product).toContain('Jamf Pro');
@@ -258,7 +260,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       });
 
       expect(result.isError).toBe(true);
-      const content = result.content as Array<{ type: string; text: string }>;
+      const content = result.content as { type: string; text: string }[];
       expect(content[0].text).toContain('must be from');
     });
 
@@ -278,7 +280,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
 
       // MCP SDK may return JSON-RPC error or tool-level error
       const hasError = response.error !== undefined
-        || (response.result as Record<string, unknown>)?.isError === true;
+        || (response.result as Record<string, unknown>).isError === true;
       expect(hasError).toBe(true);
     });
   });
@@ -299,7 +301,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
         responseFormat: 'json',
       });
       expect(result2.isError).toBeUndefined();
-      const content = result2.content as Array<{ type: string; text: string }>;
+      const content = result2.content as { type: string; text: string }[];
       const json = JSON.parse(content[0].text);
       expect(json.results.length).toBeGreaterThan(0);
     });

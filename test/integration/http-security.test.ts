@@ -48,7 +48,7 @@ async function handleNodeRequest(
   req: IncomingMessage,
   res: ServerResponse,
   handler: (request: Request) => Promise<Response>,
-  config: HttpHandlerConfig,
+  _config: HttpHandlerConfig,
   trustProxy: boolean,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -159,15 +159,15 @@ async function startTestServer(
     throw new Error('Unexpected server address format');
   }
 
-  const port = address.port;
+  const {port} = address;
 
   return {
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    close: (): Promise<void> =>
-      new Promise<void>((resolve, reject) => {
-        httpServer.close((err) => { err ? reject(err) : resolve(); });
-      }),
+    close: async (): Promise<void> =>
+      { await new Promise<void>((resolve, reject) => {
+        httpServer.close((err) => { if (err === undefined) { resolve(); } else { reject(err); } });
+      }); },
     cleanup,
   };
 }

@@ -7,11 +7,11 @@
  * - List products with hasContent
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
-import type { SearchResult, PaginationInfo, TokenInfo, FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
+import type { FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
 import type { FetchArticleResult } from '../../src/core/types.js';
 
 // Mock services
@@ -54,7 +54,7 @@ import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
 import { registerListProductsTool } from '../../src/core/tools/list-products.js';
 import { createMockContext, createMockArticleProvider } from '../helpers/mock-context.js';
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getText(result: { content: unknown[] }): string {
   return (result.content[0] as TextContent).text;

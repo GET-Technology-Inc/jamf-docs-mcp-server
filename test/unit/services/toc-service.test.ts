@@ -44,6 +44,9 @@ let currentMapsResponse: FtMapInfo[];
  */
 function installUrlRouter(): void {
   mockedGetJson.mockImplementation(async (url: string) => {
+    // Awaits a resolved promise so this stands in for a real async call —
+    // it yields to the microtask queue the way the code it replaces does.
+    await Promise.resolve();
     if (url === `${FT_API_BASE}/api/khub/maps`) {
       return currentMapsResponse;
     }
@@ -141,25 +144,25 @@ describe('transformFtTocToTocEntries()', () => {
 
     expect(result).toHaveLength(1);
 
-    const parent = result[0]!;
+    const parent = result[0];
     expect(parent.title).toBe('Parent Section');
     expect(parent.contentId).toBe('parent-content');
     expect(parent.tocId).toBe('parent-toc');
     expect(parent.children).toHaveLength(2);
 
-    const child1 = parent.children![0]!;
+    const child1 = parent.children![0];
     expect(child1.title).toBe('Child One');
     expect(child1.contentId).toBe('child-content-1');
     expect(child1.tocId).toBe('child-toc-1');
     expect(child1.children).toHaveLength(1);
 
-    const grandchild = child1.children![0]!;
+    const grandchild = child1.children![0];
     expect(grandchild.title).toBe('Grandchild');
     expect(grandchild.contentId).toBe('grandchild-content');
     expect(grandchild.tocId).toBe('grandchild-toc');
     expect(grandchild.children).toBeUndefined();
 
-    const child2 = parent.children![1]!;
+    const child2 = parent.children![1];
     expect(child2.title).toBe('Child Two');
     expect(child2.children).toBeUndefined();
   });
@@ -181,7 +184,7 @@ describe('transformFtTocToTocEntries()', () => {
     ];
 
     const result = transformFtTocToTocEntries(nodes);
-    expect(result[0]!.children).toBeUndefined();
+    expect(result[0].children).toBeUndefined();
   });
 
   it('should prefix url with DOCS_BASE_URL', () => {
@@ -196,7 +199,7 @@ describe('transformFtTocToTocEntries()', () => {
     ];
 
     const result = transformFtTocToTocEntries(nodes);
-    expect(result[0]!.url).toBe(
+    expect(result[0].url).toBe(
       `${DOCS_BASE_URL}/ja-JP/bundle/jamf-pro-documentation/page/Test.html`,
     );
   });
@@ -316,11 +319,11 @@ describe('fetchTableOfContents()', () => {
     const tocUrl = `${FT_API_BASE}/api/khub/maps/test-map-123/toc`;
     expect(mockedGetJson).toHaveBeenCalledWith(tocUrl);
     expect(result.toc).toHaveLength(2);
-    expect(result.toc[0]!.title).toBe('Overview');
-    expect(result.toc[0]!.contentId).toBe('content-1');
-    expect(result.toc[0]!.tocId).toBe('toc-1');
-    expect(result.toc[0]!.children).toHaveLength(1);
-    expect(result.toc[1]!.title).toBe('Installation');
+    expect(result.toc[0].title).toBe('Overview');
+    expect(result.toc[0].contentId).toBe('content-1');
+    expect(result.toc[0].tocId).toBe('toc-1');
+    expect(result.toc[0].children).toHaveLength(1);
+    expect(result.toc[1].title).toBe('Installation');
   });
 
   it('should return correct pagination info', async () => {
@@ -376,7 +379,7 @@ describe('fetchTableOfContents()', () => {
       ([url]) => typeof url === 'string' && url.endsWith('/toc'),
     ).length;
     expect(tocCallCountAfter).toBe(1);
-    expect(result2.toc[0]!.title).toBe(result1.toc[0]!.title);
+    expect(result2.toc[0].title).toBe(result1.toc[0].title);
   });
 
   it('should respect maxTokens option and truncate when needed', async () => {
@@ -436,7 +439,7 @@ describe('fetchTableOfContents()', () => {
     // Verify the correct TOC URL was constructed with the ja-JP map
     const tocUrl = `${FT_API_BASE}/api/khub/maps/pro-ja-map/toc`;
     expect(mockedGetJson).toHaveBeenCalledWith(tocUrl);
-    expect(result.toc[0]!.title).toBe('概要');
+    expect(result.toc[0].title).toBe('概要');
   });
 
   it('should paginate top-level entries', async () => {
@@ -490,7 +493,7 @@ describe('fetchTableOfContents()', () => {
     expect(result.pagination.totalPages).toBe(1);
 
     // paginationNote should exist and mention the requested page
-    const note = (result as Record<string, unknown>).paginationNote as string;
+    const { paginationNote: note } = result;
     expect(note).toBeDefined();
     expect(note).toContain('50');
     expect(note).toContain('1'); // total pages
@@ -514,7 +517,7 @@ describe('fetchTableOfContents()', () => {
     });
 
     expect(result.pagination.page).toBe(2);
-    const note = (result as Record<string, unknown>).paginationNote;
+    const { paginationNote: note } = result;
     expect(note).toBeUndefined();
   });
 });

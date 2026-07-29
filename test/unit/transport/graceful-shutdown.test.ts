@@ -180,7 +180,7 @@ async function startFixture(): Promise<ChildProcess> {
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { reject(new Error('fixture start timed out')); }, 30_000);
-    child.stderr?.on('data', (chunk: Buffer) => {
+    child.stderr.on('data', (chunk: Buffer) => {
       if (chunk.toString().includes('running on http://')) {
         clearTimeout(timer);
         resolve();

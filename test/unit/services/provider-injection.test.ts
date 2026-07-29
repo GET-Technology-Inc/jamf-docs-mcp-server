@@ -35,21 +35,20 @@ const mockArticleResult: FetchArticleResult = {
   url: 'https://learn.jamf.com/bundle/jamf-pro-documentation/page/test.html',
   content: 'Test content',
   product: 'jamf-pro',
-  bundleId: 'jamf-pro-documentation',
-  tokenInfo: { inputTokens: 0, outputTokens: 10, totalTokens: 10, maxTokens: 5000, truncated: false },
+  tokenInfo: { tokenCount: 10, maxTokens: 5000, truncated: false },
   sections: [],
 };
 
 const mockTocResult: FetchTocResult = {
   toc: [{ title: 'Chapter 1', url: '/page/chapter1.html' }],
-  pagination: { currentPage: 1, pageSize: 10, totalResults: 1, totalPages: 1 },
-  tokenInfo: { inputTokens: 0, outputTokens: 10, totalTokens: 10, maxTokens: 5000, truncated: false },
+  pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
+  tokenInfo: { tokenCount: 10, maxTokens: 5000, truncated: false },
 };
 
 const mockGlossaryResult: GlossaryLookupResult = {
   entries: [{ term: 'MDM', definition: 'Mobile Device Management', url: 'https://learn.jamf.com/glossary' }],
   totalMatches: 1,
-  tokenInfo: { inputTokens: 0, outputTokens: 10, totalTokens: 10, maxTokens: 5000, truncated: false },
+  tokenInfo: { tokenCount: 10, maxTokens: 5000, truncated: false },
 };
 
 // ============================================================================
@@ -60,7 +59,7 @@ describe('SearchProvider injection', () => {
   it('should pass provider results through core post-processing pipeline', async () => {
     const results = makeSearchResults(3);
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => results),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -78,7 +77,7 @@ describe('SearchProvider injection', () => {
   it('should paginate provider results correctly', async () => {
     const results = makeSearchResults(15);
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => results),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -102,7 +101,7 @@ describe('SearchProvider injection', () => {
   it('should token-truncate provider results', async () => {
     const results = makeSearchResults(20);
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => results),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -134,7 +133,7 @@ describe('SearchProvider injection', () => {
       },
     ];
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => results),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -158,7 +157,7 @@ describe('SearchProvider injection', () => {
       },
     ];
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => results),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -171,7 +170,7 @@ describe('SearchProvider injection', () => {
 
   it('should handle provider returning empty array', async () => {
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => []),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue([]),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -184,18 +183,19 @@ describe('SearchProvider injection', () => {
 
   it('should fall through when provider returns null', async () => {
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => null),
+      search: vi.fn<SearchProvider['search']>().mockResolvedValue(null),
     };
     const ctx = createMockContext({ searchProvider });
 
     // Will attempt default implementation (which calls API).
     // We verify the provider was checked by calling it directly.
+    expect(ctx.searchProvider).toBe(searchProvider);
     expect(searchProvider.search).not.toHaveBeenCalled();
     const provided = await searchProvider.search({ query: 'test' });
     expect(provided).toBeNull();
   });
 
-  it('should skip provider check when not configured', async () => {
+  it('should skip provider check when not configured', () => {
     const ctx = createMockContext();
     expect(ctx.searchProvider).toBeUndefined();
   });
@@ -208,7 +208,7 @@ describe('SearchProvider injection', () => {
 describe('ArticleProvider injection', () => {
   it('should return provider result when non-null (ID-based primary)', async () => {
     const articleProvider: ArticleProvider = {
-      getArticleByIds: vi.fn(async () => mockArticleResult),
+      getArticleByIds: vi.fn<ArticleProvider['getArticleByIds']>().mockResolvedValue(mockArticleResult),
     };
 
     const result = await articleProvider.getArticleByIds(
@@ -221,7 +221,7 @@ describe('ArticleProvider injection', () => {
 
   it('should receive mapId, contentId, and options', async () => {
     const articleProvider: ArticleProvider = {
-      getArticleByIds: vi.fn(async () => mockArticleResult),
+      getArticleByIds: vi.fn<ArticleProvider['getArticleByIds']>().mockResolvedValue(mockArticleResult),
     };
     const options = { maxTokens: 1000, summaryOnly: true };
 
@@ -234,7 +234,7 @@ describe('ArticleProvider injection', () => {
 
   it('should return null to signal fall-through', async () => {
     const articleProvider: ArticleProvider = {
-      getArticleByIds: vi.fn(async () => null),
+      getArticleByIds: vi.fn<ArticleProvider['getArticleByIds']>().mockResolvedValue(null),
     };
 
     const provided = await articleProvider.getArticleByIds('test-map', 'test-content');
@@ -243,8 +243,8 @@ describe('ArticleProvider injection', () => {
 
   it('should support optional URL-based fallback', async () => {
     const articleProvider: ArticleProvider = {
-      getArticleByIds: vi.fn(async () => null),
-      getArticle: vi.fn(async () => mockArticleResult),
+      getArticleByIds: vi.fn<ArticleProvider['getArticleByIds']>().mockResolvedValue(null),
+      getArticle: vi.fn<NonNullable<ArticleProvider['getArticle']>>().mockResolvedValue(mockArticleResult),
     };
 
     const byIds = await articleProvider.getArticleByIds('test-map', 'test-content');
@@ -264,7 +264,7 @@ describe('ArticleProvider injection', () => {
 describe('GlossaryProvider injection', () => {
   it('should use provider result when non-null', async () => {
     const glossaryProvider: GlossaryProvider = {
-      lookup: vi.fn(async () => mockGlossaryResult),
+      lookup: vi.fn<GlossaryProvider['lookup']>().mockResolvedValue(mockGlossaryResult),
     };
     const ctx = createMockContext({ glossaryProvider });
 
@@ -276,7 +276,7 @@ describe('GlossaryProvider injection', () => {
 
   it('should pass full params to provider', async () => {
     const glossaryProvider: GlossaryProvider = {
-      lookup: vi.fn(async () => mockGlossaryResult),
+      lookup: vi.fn<GlossaryProvider['lookup']>().mockResolvedValue(mockGlossaryResult),
     };
     const ctx = createMockContext({ glossaryProvider });
     const params = { term: 'MDM', product: 'jamf-pro' as const, maxTokens: 2000 };
@@ -288,7 +288,7 @@ describe('GlossaryProvider injection', () => {
 
   it('should fall through when provider returns null', async () => {
     const glossaryProvider: GlossaryProvider = {
-      lookup: vi.fn(async () => null),
+      lookup: vi.fn<GlossaryProvider['lookup']>().mockResolvedValue(null),
     };
 
     const provided = await glossaryProvider.lookup({ term: 'test' });
@@ -303,7 +303,7 @@ describe('GlossaryProvider injection', () => {
 describe('TocProvider injection', () => {
   it('should use provider result when non-null', async () => {
     const tocProvider: TocProvider = {
-      getTableOfContents: vi.fn(async () => mockTocResult),
+      getTableOfContents: vi.fn<TocProvider['getTableOfContents']>().mockResolvedValue(mockTocResult),
     };
     const ctx = createMockContext({ tocProvider });
 
@@ -315,7 +315,7 @@ describe('TocProvider injection', () => {
 
   it('should pass product, version, and options to provider', async () => {
     const tocProvider: TocProvider = {
-      getTableOfContents: vi.fn(async () => mockTocResult),
+      getTableOfContents: vi.fn<TocProvider['getTableOfContents']>().mockResolvedValue(mockTocResult),
     };
     const ctx = createMockContext({ tocProvider });
     const options = { page: 2, maxTokens: 3000 };
@@ -327,7 +327,7 @@ describe('TocProvider injection', () => {
 
   it('should fall through when provider returns null', async () => {
     const tocProvider: TocProvider = {
-      getTableOfContents: vi.fn(async () => null),
+      getTableOfContents: vi.fn<TocProvider['getTableOfContents']>().mockResolvedValue(null),
     };
 
     const provided = await tocProvider.getTableOfContents('jamf-pro', 'current');
@@ -342,7 +342,7 @@ describe('TocProvider injection', () => {
 describe('Provider error propagation', () => {
   it('should propagate search provider errors', async () => {
     const searchProvider: SearchProvider = {
-      search: vi.fn(async () => { throw new Error('Search backend down'); }),
+      search: vi.fn<SearchProvider['search']>().mockRejectedValue(new Error('Search backend down')),
     };
     const ctx = createMockContext({ searchProvider });
 
@@ -353,7 +353,7 @@ describe('Provider error propagation', () => {
 
   it('should propagate article provider errors', async () => {
     const articleProvider: ArticleProvider = {
-      getArticleByIds: vi.fn(async () => { throw new Error('R2 unavailable'); }),
+      getArticleByIds: vi.fn<ArticleProvider['getArticleByIds']>().mockRejectedValue(new Error('R2 unavailable')),
     };
 
     await expect(articleProvider.getArticleByIds(
@@ -363,7 +363,7 @@ describe('Provider error propagation', () => {
 
   it('should propagate glossary provider errors', async () => {
     const glossaryProvider: GlossaryProvider = {
-      lookup: vi.fn(async () => { throw new Error('D1 connection failed'); }),
+      lookup: vi.fn<GlossaryProvider['lookup']>().mockRejectedValue(new Error('D1 connection failed')),
     };
     const ctx = createMockContext({ glossaryProvider });
 
@@ -373,7 +373,7 @@ describe('Provider error propagation', () => {
 
   it('should propagate toc provider errors', async () => {
     const tocProvider: TocProvider = {
-      getTableOfContents: vi.fn(async () => { throw new Error('TOC fetch failed'); }),
+      getTableOfContents: vi.fn<TocProvider['getTableOfContents']>().mockRejectedValue(new Error('TOC fetch failed')),
     };
     const ctx = createMockContext({ tocProvider });
 

@@ -20,12 +20,13 @@
     "test:all": "vitest run test/unit && vitest run test/integration && vitest run test/e2e",
     "test:coverage": "vitest run --coverage",
     "test:inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "lint": "eslint 'src/**/*.ts' 'app-ui/**/*.ts' 'scripts/**/*.mjs'",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' 'app-ui/**/*.ts' 'scripts/**/*.mjs'",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
     "build:app-ui": "node scripts/build-app-ui.mjs",
-    "typecheck:app-ui": "tsc --noEmit -p app-ui/tsconfig.json"
+    "typecheck:app-ui": "tsc --noEmit -p app-ui/tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p test/tsconfig.json"
   },
   "keywords": [
     "mcp",

@@ -31,7 +31,7 @@ export function parseSseMessages(body: string): Record<string, unknown>[] {
  */
 export async function readJsonRpcMessages(res: Response): Promise<Record<string, unknown>[]> {
   const text = await res.text();
-  if (text.trim().length === 0) return [];
+  if (text.trim().length === 0) {return [];}
   return res.headers.get('content-type')?.includes('text/event-stream') === true
     ? parseSseMessages(text)
     : [JSON.parse(text) as Record<string, unknown>];
@@ -44,7 +44,7 @@ export async function readJsonRpcMessages(res: Response): Promise<Record<string,
 export async function readJsonRpc(res: Response): Promise<Record<string, unknown>> {
   const messages = await readJsonRpcMessages(res);
   const response = messages.filter((m) => 'result' in m || 'error' in m).pop();
-  if (!response) {
+  if (response === undefined) {
     throw new Error(`No JSON-RPC response in body (${messages.length} message(s))`);
   }
   return response;

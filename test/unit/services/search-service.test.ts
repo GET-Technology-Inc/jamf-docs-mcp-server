@@ -25,7 +25,7 @@ import {
   searchDocumentation,
   dedupeToLatestVersions,
 } from '../../../src/core/services/search-service.js';
-import { DOCS_BASE_URL, FT_API_BASE, DOC_TYPE_CONTENT_TYPE_MAP } from '../../../src/core/constants.js';
+import { DOCS_BASE_URL, FT_API_BASE } from '../../../src/core/constants.js';
 import type {
   FtSearchEntry,
   FtSearchCluster,
@@ -225,7 +225,7 @@ describe('buildSearchFilters()', () => {
   });
 
   it('should map training docType to Technical Documentation', () => {
-    const filters = buildSearchFilters({ docType: 'training' as never });
+    const filters = buildSearchFilters({ docType: 'training' });
     const contentTypeFilter = filters.find(f => f.key === 'jamf:contentType');
     expect(contentTypeFilter).toEqual({
       key: 'jamf:contentType',
@@ -878,7 +878,7 @@ describe('searchDocumentation()', () => {
     expect(result.pagination.totalPages).toBe(1);
 
     // paginationNote should exist and mention the requested page number
-    const note = (result as Record<string, unknown>).paginationNote as string;
+    const { paginationNote: note } = result;
     expect(note).toBeDefined();
     expect(note).toContain('99');
     expect(note).toContain('1'); // total pages
@@ -907,7 +907,7 @@ describe('searchDocumentation()', () => {
     });
 
     expect(result.pagination.page).toBe(2);
-    const note = (result as Record<string, unknown>).paginationNote;
+    const { paginationNote: note } = result;
     expect(note).toBeUndefined();
   });
 

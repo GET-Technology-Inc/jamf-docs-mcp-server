@@ -108,13 +108,20 @@ const FAKE_TOPICS_DATA = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Mirrors the `ResourceContents` shape the handlers in src/core/resources
+// actually return. The cache fields are part of that contract — a handler
+// returns `ttlMs: 0` / `cacheScope: 'private'` to keep an error body or a
+// degraded catalogue out of shared caches — so they belong here; the tests
+// below assert on them.
 type ResourceHandler = (uri: URL, params?: Record<string, unknown>) => Promise<{
   contents: { uri: string; mimeType: string; text: string }[];
+  ttlMs?: number;
+  cacheScope?: 'public' | 'private';
 }>;
 
 type RegisterResourceCall = [
   name: string,
-  uriOrTemplate: string | unknown,
+  uriOrTemplate: unknown,
   metadata: unknown,
   handler: ResourceHandler,
 ];
@@ -158,7 +165,7 @@ describe('registerResources', () => {
 
   it('should not throw when called with a compatible server', () => {
     const { server } = makeFakeServer();
-    expect(() => registerResources(server, ctx)).not.toThrow();
+    expect(() => { registerResources(server, ctx); }).not.toThrow();
   });
 
   it('should call server.registerResource at least once', () => {
@@ -248,9 +255,9 @@ describe('products resource handler', () => {
     // configured one-hour *public* hint would freeze the outage in place long
     // after it ended.
     (getProductsResourceData as any).mockImplementationOnce(
-      (_ctx: unknown, status?: { degraded: boolean }) => {
-        if (status) { status.degraded = true; }
-        return Promise.resolve(FAKE_PRODUCTS_DATA);
+      async (_ctx: unknown, status?: { degraded: boolean }) => {
+        if (status !== undefined) { status.degraded = true; }
+        return await Promise.resolve(FAKE_PRODUCTS_DATA);
       },
     );
 
@@ -486,7 +493,7 @@ describe('product-toc resource handler', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(fetchTableOfContents).mockResolvedValue(FAKE_TOC_RESULT as any);
+    vi.mocked(fetchTableOfContents).mockResolvedValue(FAKE_TOC_RESULT);
     vi.mocked(getProductsResourceData).mockResolvedValue(FAKE_PRODUCTS_DATA);
     vi.mocked(getTopicsResourceData).mockResolvedValue(FAKE_TOPICS_DATA);
   });
@@ -641,9 +648,9 @@ describe('product-versions resource handler', () => {
   it('should mark a degraded version list as uncacheable', async () => {
     // `Once`, so the healthy-path test below is not affected by ordering.
     (getAvailableVersions as any).mockImplementationOnce(
-      (_ctx: unknown, _id: string, status?: { degraded: boolean }) => {
-        if (status) { status.degraded = true; }
-        return Promise.resolve(['11.0.0']);
+      async (_ctx: unknown, _id: string, status?: { degraded: boolean }) => {
+        if (status !== undefined) { status.degraded = true; }
+        return await Promise.resolve(['11.0.0']);
       },
     );
 
