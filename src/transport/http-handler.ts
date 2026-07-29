@@ -146,8 +146,123 @@ function textResponse(
 }
 
 // ============================================================================
+// Request classification helpers
+// ============================================================================
+
+/**
+ * Whether a parsed body is a `subscriptions/listen` request.
+ *
+ * These are long-lived SSE streams, not exchanges: they never complete on
+ * their own, so shutdown ends them rather than waiting for them.
+ */
+function isSubscriptionListen(parsedBody: unknown): boolean {
+  return (
+    typeof parsedBody === 'object'
+    && parsedBody !== null
+    && (parsedBody as { method?: unknown }).method === 'subscriptions/listen'
+  );
+}
+
+/**
+ * Re-issue a request carrying an abort signal the caller controls.
+ *
+ * Only used for `subscriptions/listen`, whose body the SDK never reads — the
+ * already-parsed body is handed to `mcpHandler.fetch` separately — so a
+ * bodyless copy is equivalent for that path.
+ */
+function withSignal(request: Request, signal: AbortSignal): Request {
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    signal,
+  });
+}
+
+/**
+ * Decrement the in-flight count only once the response body has been fully
+ * consumed (or cancelled).
+ *
+ * In `'auto'`/`'sse'` response mode the SDK resolves `fetch` as soon as the
+ * first frame is ready and keeps writing the result into the stream, and the
+ * per-request server stays registered as in-flight until that stream ends.
+ * Counting only up to `fetch` resolving would therefore let shutdown tear the
+ * server down mid-stream and truncate the response.
+ */
+function trackBody(response: Response, done: () => void): Response {
+  const source = response.body;
+  if (source === null) {
+    done();
+    return response;
+  }
+
+  // `Response.body` is typed as `ReadableStream<any>` in the ambient lib, so
+  // the element type has to be re-stated for the pass-through to stay typed.
+  const reader = source.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const tracked = new ReadableStream<Uint8Array>({
+    async pull(controller): Promise<void> {
+      try {
+        const { done: finished, value } = await reader.read();
+        if (finished) {
+          controller.close();
+          done();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (err) {
+        done();
+        controller.error(err);
+      }
+    },
+    async cancel(reason): Promise<void> {
+      done();
+      await reader.cancel(reason);
+    },
+  });
+
+  return new Response(tracked, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+// ============================================================================
 // Factory
 // ============================================================================
+
+/**
+ * The handler plus its lifecycle hooks.
+ */
+export interface HttpHandlerHandle {
+  /** Serve one Web Standard `Request`. */
+  handler: (request: Request) => Promise<Response>;
+  /**
+   * Immediate teardown: stops the rate-limiter interval and closes the MCP
+   * handler at once, aborting anything still in flight. Suitable for tests
+   * and for callers with nothing to drain; use {@link shutdown} to serve a
+   * graceful signal.
+   */
+  cleanup: () => void;
+  /**
+   * Graceful teardown, in the only order that works:
+   *
+   * 1. End the `subscriptions/listen` streams. They are long-lived by design
+   *    and would otherwise hold their sockets open forever, so nothing that
+   *    waits on connections closing — `http.Server.close()`, most obviously —
+   *    could ever complete.
+   * 2. Let in-flight exchanges finish, bounded by `timeoutMs`.
+   * 3. Close the MCP handler.
+   *
+   * Step 3 cannot be hoisted: `McpHttpHandler.close()` aborts every in-flight
+   * modern exchange and maps it to HTTP 499, which is exactly the drain window
+   * being skipped. Nor can steps 1 and 3 be merged and deferred, because step
+   * 1 only happens inside `close()` — deferring it deadlocks the caller.
+   *
+   * @param timeoutMs - Drain budget for step 2. Defaults to the configured
+   *   `shutdownTimeoutMs`.
+   */
+  shutdown: (timeoutMs?: number) => Promise<void>;
+}
 
 /**
  * Create a platform-agnostic HTTP handler for the MCP server.
@@ -159,16 +274,13 @@ function textResponse(
  * @param config       - HTTP handler configuration
  * @param getClientIp  - Platform-specific function to extract client IP from a Request
  * @param logger       - Optional logger instance
- * @returns An object with:
- *   - `handler`: async function that takes a Web Standard Request and returns a Response
- *   - `cleanup`: function to stop the rate limiter cleanup interval
  */
 export function createHttpHandler(
   createServer: () => McpServer,
   config: HttpHandlerConfig,
   getClientIp: ClientIpExtractor,
   logger?: Logger,
-): { handler: (request: Request) => Promise<Response>; cleanup: () => void } {
+): HttpHandlerHandle {
   const rateLimiter = new RateLimiter(config.rateLimitRpm, 60_000);
   const cleanupIntervalId = setInterval(() => { rateLimiter.cleanup(); }, 5 * 60_000);
 
@@ -190,9 +302,71 @@ export function createHttpHandler(
     (cleanupIntervalId as { unref: () => void }).unref();
   }
 
+  // ------------------------------------------------------------------------
+  // Shutdown bookkeeping
+  // ------------------------------------------------------------------------
+
+  /** Aborted to end `subscriptions/listen` streams; nothing else observes it. */
+  const listenStreams = new AbortController();
+
+  /** Exchanges past dispatch whose response body has not been consumed yet. */
+  let inFlight = 0;
+  const drainWaiters = new Set<() => void>();
+
+  function enterExchange(): () => void {
+    inFlight++;
+    let left = false;
+    return () => {
+      if (left) { return; }
+      left = true;
+      inFlight--;
+      if (inFlight === 0) {
+        for (const wake of drainWaiters) { wake(); }
+        drainWaiters.clear();
+      }
+    };
+  }
+
+  /** Resolves `true` once nothing is in flight, `false` if `timeoutMs` runs out. */
+  async function drain(timeoutMs: number): Promise<boolean> {
+    if (inFlight === 0) { return true; }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => { resolve(false); }, timeoutMs);
+    });
+    const drained = new Promise<boolean>((resolve) => {
+      drainWaiters.add(() => { resolve(true); });
+    });
+
+    try {
+      return await Promise.race([drained, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function cleanup(): void {
     clearInterval(cleanupIntervalId);
     void mcpHandler.close();
+  }
+
+  async function shutdown(timeoutMs: number = config.shutdownTimeoutMs): Promise<void> {
+    clearInterval(cleanupIntervalId);
+
+    // 1. Long-lived subscription streams end now — they would never drain.
+    listenStreams.abort();
+
+    // 2. Give exchanges already past dispatch their window to answer.
+    if (!(await drain(timeoutMs))) {
+      logger?.warning(
+        `Shutdown drain timed out after ${String(timeoutMs)}ms with ${String(inFlight)} request(s) in flight`,
+      );
+    }
+
+    // 3. Only now may the handler go: this is the step that would have
+    //    answered 499 to everything still running.
+    await mcpHandler.close();
   }
 
   async function handler(request: Request): Promise<Response> {
@@ -228,27 +402,42 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(request, mcpHandler, config, corsHeaders, logger);
+      return await handleMcp(request, mcpHandler, config, corsHeaders, {
+        listenSignal: listenStreams.signal,
+        enterExchange,
+        ...(logger !== undefined && { logger }),
+      });
     }
 
     // 404 fallback
     return jsonResponse(404, { error: 'Not found' }, corsHeaders);
   }
 
-  return { handler, cleanup };
+  return { handler, cleanup, shutdown };
 }
 
 // ============================================================================
 // MCP endpoint handler
 // ============================================================================
 
+/** Shutdown wiring handed to the MCP endpoint by the factory. */
+interface McpDeps {
+  /** Aborts `subscriptions/listen` streams when shutdown begins. */
+  listenSignal: AbortSignal;
+  /** Registers an exchange as in-flight; returns its release function. */
+  enterExchange: () => () => void;
+  logger?: Logger;
+}
+
 async function handleMcp(
   request: Request,
   mcpHandler: McpHttpHandler,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
-  logger?: Logger,
+  deps: McpDeps,
 ): Promise<Response> {
+  const { logger } = deps;
+
   // Read body (with size enforcement)
   let bodyText: string;
   try {
@@ -272,16 +461,30 @@ async function handleMcp(
       }
     }
 
-    // The entry classifies the era itself and builds a fresh server per
-    // request from the factory it was given.
-    const webRes = await mcpHandler.fetch(request, { parsedBody });
+    // A subscription stream is not an exchange: it stays open until the client
+    // or the server ends it, so it is excluded from the drain and given the
+    // shutdown signal instead. The SDK's listen router tears a stream down
+    // when the request it was opened with aborts.
+    const listen = isSubscriptionListen(parsedBody);
+    const forwarded = listen ? withSignal(request, deps.listenSignal) : request;
+    const release = listen ? undefined : deps.enterExchange();
+
+    let webRes: Response;
+    try {
+      // The entry classifies the era itself and builds a fresh server per
+      // request from the factory it was given.
+      webRes = await mcpHandler.fetch(forwarded, { parsedBody });
+    } catch (err) {
+      release?.();
+      throw err;
+    }
 
     // Add CORS + security headers to the response
     for (const [key, value] of Object.entries(corsHeaders)) {
       webRes.headers.set(key, value);
     }
 
-    return webRes;
+    return release === undefined ? webRes : trackBody(webRes, release);
   } catch (err) {
     logger?.error(`MCP handler error: ${err instanceof Error ? err.message : String(err)}`);
     return jsonResponse(500, { error: 'Internal server error' }, corsHeaders);
