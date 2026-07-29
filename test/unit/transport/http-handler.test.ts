@@ -444,7 +444,11 @@ describe('OPTIONS preflight', () => {
     const res = await handler(req);
     expect(res.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
     expect(res.headers.get('access-control-allow-methods')).toBe('GET, POST, OPTIONS');
-    expect(res.headers.get('access-control-allow-headers')).toBe('Content-Type');
+    const allowedHeaders = res.headers.get('access-control-allow-headers') ?? '';
+    expect(allowedHeaders).toContain('Content-Type');
+    // Mandatory on Streamable HTTP POSTs from protocol revision 2026-07-28.
+    expect(allowedHeaders).toContain('Mcp-Method');
+    expect(allowedHeaders).toContain('Mcp-Name');
   });
 
   it('should handle OPTIONS to /health as well', async () => {

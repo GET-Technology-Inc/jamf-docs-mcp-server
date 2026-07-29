@@ -35,6 +35,28 @@ const SECURITY_HEADERS: Record<string, string> = {
 // CORS helper
 // ============================================================================
 
+/**
+ * Request headers a browser-based MCP client is allowed to send.
+ *
+ * `Mcp-Method` / `Mcp-Name` are mandatory on Streamable HTTP POSTs from
+ * protocol revision 2026-07-28 (SEP-2243) — omitting them from the preflight
+ * allowlist makes every cross-origin call from a conforming client fail before
+ * it reaches the handler. `MCP-Protocol-Version`, `Mcp-Session-Id` and
+ * `Last-Event-ID` are kept for the 2025-era clients this endpoint still serves.
+ */
+export const CORS_ALLOWED_HEADERS = [
+  'Content-Type',
+  'Authorization',
+  'Mcp-Method',
+  'Mcp-Name',
+  'MCP-Protocol-Version',
+  'Mcp-Session-Id',
+  'Last-Event-ID',
+].join(', ');
+
+/** Response headers a browser-based MCP client is allowed to read. */
+export const CORS_EXPOSED_HEADERS = ['Mcp-Session-Id'].join(', ');
+
 function getCorsHeaders(
   origin: string | null,
   allowedOrigins: string[],
@@ -50,7 +72,8 @@ function getCorsHeaders(
   if (allowedOrigins.includes('*')) {
     headers['Access-Control-Allow-Origin'] = '*';
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    headers['Access-Control-Allow-Headers'] = CORS_ALLOWED_HEADERS;
+    headers['Access-Control-Expose-Headers'] = CORS_EXPOSED_HEADERS;
     return headers;
   }
 
@@ -58,7 +81,8 @@ function getCorsHeaders(
   if (origin !== null && allowedOrigins.includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Content-Type';
+    headers['Access-Control-Allow-Headers'] = CORS_ALLOWED_HEADERS;
+    headers['Access-Control-Expose-Headers'] = CORS_EXPOSED_HEADERS;
     headers['Access-Control-Max-Age'] = '86400';
     headers.Vary = 'Origin';
   }
