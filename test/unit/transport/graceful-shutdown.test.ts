@@ -31,7 +31,7 @@ import path from 'node:path';
 import { createHttpHandler } from '../../../src/transport/http-handler.js';
 import { DEFAULT_HTTP_CONFIG } from '../../../src/transport/http-types.js';
 import { createSlowServer } from '../../helpers/slow-server.js';
-import { readJsonRpc } from '../../helpers/streamable-http.js';
+import { readJsonRpc, parseSseMessages } from '../../helpers/streamable-http.js';
 
 const localIp = (): string => '127.0.0.1';
 
@@ -121,7 +121,19 @@ describe('createHttpHandler().shutdown()', () => {
     expect(Date.now() - started).toBeLessThan(2_000);
 
     // The stream is finite now — reading it to EOF must not hang.
-    await expect(listen.text()).resolves.toContain('subscriptions/acknowledged');
+    const frames = await listen.text();
+    expect(frames).toContain('subscriptions/acknowledged');
+
+    // And it must be *completed*, not merely dropped. Serving subscriptions
+    // from their own handler is what buys this: closing that handler runs the
+    // SDK's graceful teardown, which writes the terminal result frame. Cutting
+    // the socket instead would leave the client unable to tell an orderly
+    // shutdown from a crash.
+    const messages = parseSseMessages(frames);
+    const terminal = messages.find((m) => 'result' in m);
+    expect(terminal).toBeDefined();
+    expect(terminal?.id).toBe('sub-1');
+    expect((terminal?.result as { resultType?: string }).resultType).toBe('complete');
   });
 
   it('gives up after the drain budget rather than hanging', async () => {
@@ -248,7 +260,10 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
 
       // Draining the stream to EOF proves the server ended it; if the socket
       // stayed open this await would sit here until the test timeout.
-      await expect(listen.text()).resolves.toContain('subscriptions/acknowledged');
+      const frames = await listen.text();
+      expect(frames).toContain('subscriptions/acknowledged');
+      // Ended properly, not dropped — see the in-process case above.
+      expect(frames).toContain('"resultType":"complete"');
 
       const code = await new Promise<number | null>((resolve) => {
         child.on('exit', resolve);

@@ -7,7 +7,7 @@
  */
 
 import type { McpServer, McpHttpHandler } from '@modelcontextprotocol/server';
-import { createMcpHandler } from '@modelcontextprotocol/server';
+import { createMcpHandler, InMemoryServerEventBus } from '@modelcontextprotocol/server';
 
 import { RateLimiter } from './rate-limiter.js';
 import {
@@ -164,21 +164,6 @@ function isSubscriptionListen(parsedBody: unknown): boolean {
 }
 
 /**
- * Re-issue a request carrying an abort signal the caller controls.
- *
- * Only used for `subscriptions/listen`, whose body the SDK never reads — the
- * already-parsed body is handed to `mcpHandler.fetch` separately — so a
- * bodyless copy is equivalent for that path.
- */
-function withSignal(request: Request, signal: AbortSignal): Request {
-  return new Request(request.url, {
-    method: request.method,
-    headers: request.headers,
-    signal,
-  });
-}
-
-/**
  * Decrement the in-flight count only once the response body has been fully
  * consumed (or cancelled).
  *
@@ -246,17 +231,20 @@ export interface HttpHandlerHandle {
   /**
    * Graceful teardown, in the only order that works:
    *
-   * 1. End the `subscriptions/listen` streams. They are long-lived by design
-   *    and would otherwise hold their sockets open forever, so nothing that
-   *    waits on connections closing — `http.Server.close()`, most obviously —
-   *    could ever complete.
+   * 1. Close the subscription leg. Its streams are long-lived by design and
+   *    would otherwise hold their sockets open forever, so nothing that waits
+   *    on connections closing — `http.Server.close()`, most obviously — could
+   *    ever complete. Each open subscription is completed properly, with the
+   *    `resultType: 'complete'` frame the spec defines.
    * 2. Let in-flight exchanges finish, bounded by `timeoutMs`.
-   * 3. Close the MCP handler.
+   * 3. Close the exchange leg.
    *
-   * Step 3 cannot be hoisted: `McpHttpHandler.close()` aborts every in-flight
+   * Step 3 cannot be hoisted: closing that handler aborts every in-flight
    * modern exchange and maps it to HTTP 499, which is exactly the drain window
-   * being skipped. Nor can steps 1 and 3 be merged and deferred, because step
-   * 1 only happens inside `close()` — deferring it deadlocks the caller.
+   * being skipped. Nor can steps 1 and 3 be merged and deferred, because step 1
+   * is what releases the sockets a deferring caller would be waiting on —
+   * deferring deadlocks. Splitting the two legs across two handlers is what
+   * lets both happen at the right moment.
    *
    * @param timeoutMs - Drain budget for step 2. Defaults to the configured
    *   `shutdownTimeoutMs`.
@@ -284,17 +272,42 @@ export function createHttpHandler(
   const rateLimiter = new RateLimiter(config.rateLimitRpm, 60_000);
   const cleanupIntervalId = setInterval(() => { rateLimiter.cleanup(); }, 5 * 60_000);
 
-  // One entry serves both protocol eras from the same factory: 2026-07-28
-  // envelope traffic on the modern path, and 2025-era requests through the
-  // SDK's stateless legacy fallback. Legacy responses stream over SSE, which
-  // the 2025 Streamable HTTP binding already requires clients to accept.
-  const mcpHandler = createMcpHandler(() => createServer(), {
+  const handlerOptions = {
     legacy: 'stateless',
     responseMode: config.responseMode,
-    onerror: (err) => {
+    onerror: (err: Error) => {
       logger?.error(`MCP handler error: ${err.message}`);
     },
+  } as const;
+
+  // Two entries over one factory and one event bus, split by lifetime rather
+  // than by protocol era.
+  //
+  // `McpHttpHandler.close()` does two things at once: it completes the open
+  // `subscriptions/listen` streams, and it aborts every in-flight modern
+  // exchange (which the client sees as HTTP 499). Graceful shutdown needs the
+  // first immediately — those sockets are what would otherwise keep
+  // `http.Server.close()` from ever returning — and the second only after the
+  // drain window. One handler cannot offer both moments, and the SDK exposes no
+  // narrower door: `bus` is shared configuration, the listen router behind it
+  // is not reachable on its own.
+  //
+  // So subscriptions get their own entry. Sharing `bus` keeps them subscribed
+  // to the same change-event stream the exchange leg publishes on, which is
+  // what makes the split invisible to clients.
+  const bus = new InMemoryServerEventBus((err) => {
+    logger?.error(`MCP event bus error: ${err.message}`);
   });
+
+  // Ordinary traffic: 2026-07-28 envelope requests on the modern path, and
+  // 2025-era requests through the SDK's stateless legacy fallback. Legacy
+  // responses stream over SSE, which the 2025 Streamable HTTP binding already
+  // requires clients to accept.
+  const exchanges = createMcpHandler(() => createServer(), { ...handlerOptions, bus });
+
+  // `subscriptions/listen` only. Same factory, same bus, same options — it
+  // differs solely in when it is closed.
+  const subscriptions = createMcpHandler(() => createServer(), { ...handlerOptions, bus });
 
   // Prevent the interval from keeping the process alive (Node.js-specific,
   // but calling .unref() is harmless on platforms that lack it).
@@ -305,9 +318,6 @@ export function createHttpHandler(
   // ------------------------------------------------------------------------
   // Shutdown bookkeeping
   // ------------------------------------------------------------------------
-
-  /** Aborted to end `subscriptions/listen` streams; nothing else observes it. */
-  const listenStreams = new AbortController();
 
   /** Exchanges past dispatch whose response body has not been consumed yet. */
   let inFlight = 0;
@@ -348,14 +358,18 @@ export function createHttpHandler(
 
   function cleanup(): void {
     clearInterval(cleanupIntervalId);
-    void mcpHandler.close();
+    void subscriptions.close();
+    void exchanges.close();
   }
 
   async function shutdown(timeoutMs: number = config.shutdownTimeoutMs): Promise<void> {
     clearInterval(cleanupIntervalId);
 
-    // 1. Long-lived subscription streams end now — they would never drain.
-    listenStreams.abort();
+    // 1. Subscription streams end now — they would never drain on their own.
+    //    Closing their handler completes each one properly rather than just
+    //    dropping the socket, and frees the connections the HTTP server is
+    //    waiting on.
+    await subscriptions.close();
 
     // 2. Give exchanges already past dispatch their window to answer.
     if (!(await drain(timeoutMs))) {
@@ -364,9 +378,9 @@ export function createHttpHandler(
       );
     }
 
-    // 3. Only now may the handler go: this is the step that would have
+    // 3. Only now may the exchange leg go: this is the step that would have
     //    answered 499 to everything still running.
-    await mcpHandler.close();
+    await exchanges.close();
   }
 
   async function handler(request: Request): Promise<Response> {
@@ -402,8 +416,9 @@ export function createHttpHandler(
 
     // MCP endpoint
     if (pathname === '/mcp') {
-      return await handleMcp(request, mcpHandler, config, corsHeaders, {
-        listenSignal: listenStreams.signal,
+      return await handleMcp(request, config, corsHeaders, {
+        exchanges,
+        subscriptions,
         enterExchange,
         ...(logger !== undefined && { logger }),
       });
@@ -420,10 +435,12 @@ export function createHttpHandler(
 // MCP endpoint handler
 // ============================================================================
 
-/** Shutdown wiring handed to the MCP endpoint by the factory. */
+/** The two MCP entries plus the drain hook, handed over by the factory. */
 interface McpDeps {
-  /** Aborts `subscriptions/listen` streams when shutdown begins. */
-  listenSignal: AbortSignal;
+  /** Serves everything except `subscriptions/listen`; closed last. */
+  exchanges: McpHttpHandler;
+  /** Serves `subscriptions/listen` only; closed first. */
+  subscriptions: McpHttpHandler;
   /** Registers an exchange as in-flight; returns its release function. */
   enterExchange: () => () => void;
   logger?: Logger;
@@ -431,7 +448,6 @@ interface McpDeps {
 
 async function handleMcp(
   request: Request,
-  mcpHandler: McpHttpHandler,
   config: HttpHandlerConfig,
   corsHeaders: Record<string, string>,
   deps: McpDeps,
@@ -471,18 +487,18 @@ async function handleMcp(
     }
 
     // A subscription stream is not an exchange: it stays open until the client
-    // or the server ends it, so it is excluded from the drain and given the
-    // shutdown signal instead. The SDK's listen router tears a stream down
-    // when the request it was opened with aborts.
+    // or the server ends it. It goes to the entry that shutdown closes first,
+    // and it is excluded from the drain — waiting on something that never
+    // finishes would burn the whole window.
     const listen = isSubscriptionListen(parsedBody);
-    const forwarded = listen ? withSignal(request, deps.listenSignal) : request;
+    const entry = listen ? deps.subscriptions : deps.exchanges;
     const release = listen ? undefined : deps.enterExchange();
 
     let webRes: Response;
     try {
       // The entry classifies the era itself and builds a fresh server per
       // request from the factory it was given.
-      webRes = await mcpHandler.fetch(forwarded, { parsedBody });
+      webRes = await entry.fetch(request, { parsedBody });
     } catch (err) {
       release?.();
       throw err;
