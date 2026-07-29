@@ -24,6 +24,11 @@ jobs:
             code:
               - 'src/**'
               - 'test/**'
+              # app-ui/ and scripts/ produce src/core/apps/generated/app-html.ts,
+              # which ships in dist/. A change to either is a change to the
+              # published artifact and must run the same gate.
+              - 'app-ui/**'
+              - 'scripts/**'
               - 'package.json'
               - 'package-lock.json'
               - 'tsconfig*.json'
@@ -54,8 +59,25 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      # app-ui/ has its own tsconfig (DOM lib, bundler resolution) and is not
+      # covered by the root one. esbuild only strips types, so without this
+      # step the bundle's sources are never type-checked at all.
+      - name: Type check (app-ui)
+        run: npm run typecheck:app-ui
+
       - name: Lint
         run: npm run lint
+
+      # src/core/apps/generated/app-html.ts is committed but generated. Rebuild
+      # it and fail if the result differs, so the artifact can never drift from
+      # app-ui/ + scripts/build-app-ui.mjs.
+      #
+      # This must stay ahead of the Build step below: `npm run build` runs
+      # `build:app-ui` too, and would overwrite the evidence before it is read.
+      - name: App UI bundle is up to date
+        run: |
+          npm run build:app-ui
+          git diff --exit-code -- src/core/apps/generated/app-html.ts
 
       - name: Build
         run: npm run build
