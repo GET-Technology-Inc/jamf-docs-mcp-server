@@ -449,6 +449,15 @@ async function handleMcp(
     throw err;
   }
 
+  // A POST with no body is a client error, but it cannot be left to the SDK to
+  // say so: reading the body above consumed the stream, and the entry answers
+  // an absent `parsedBody` by cloning the request to re-read it — which throws
+  // on a used body and surfaces as 500. GET and DELETE carry no body by
+  // design and are unaffected.
+  if (request.method === 'POST' && bodyText.length === 0) {
+    return jsonResponse(400, { error: 'Empty request body' }, corsHeaders);
+  }
+
   try {
     // Parse body if present. Reading it above consumed the request stream, so
     // the parsed value must be handed to the MCP handler explicitly.

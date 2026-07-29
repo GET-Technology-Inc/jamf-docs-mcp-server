@@ -283,3 +283,50 @@ describe('MCP Apps extension', () => {
     expect(result.cacheScope).toBe('public');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Malformed requests
+// ---------------------------------------------------------------------------
+
+describe('malformed POSTs', () => {
+  it('should answer 400 for a POST with an empty body', async () => {
+    // The handler reads the body itself and hands the parsed value to the SDK.
+    // With nothing to hand over, the SDK re-reads the request by cloning it —
+    // which throws on an already-consumed body and used to surface as an
+    // opaque 500. Driven here against the real entry, not a mock.
+    //
+    // `body: ''` matters: it is what the Node adapter builds for a bodyless
+    // POST (`init.body = Buffer.alloc(0)`). Omitting `body` entirely leaves
+    // `request.body` null, which `text()` never marks as used and `clone()`
+    // therefore still accepts — so it would not reproduce the defect.
+    const res = await handler(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'tools/list',
+        },
+        body: '',
+      }),
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it('should answer 400 for a POST whose body is not JSON', async () => {
+    const res = await handler(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'tools/list',
+        },
+        body: '{not json',
+      }),
+    );
+
+    expect(res.status).toBe(400);
+  });
+});
