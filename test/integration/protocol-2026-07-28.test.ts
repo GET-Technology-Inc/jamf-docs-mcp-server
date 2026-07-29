@@ -10,6 +10,11 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { createHttpHandler } from '../../src/transport/http-handler.js';
 import { createMcpServer, TOOL_ORDER } from '../../src/core/create-server.js';
+import {
+  APP_RESOURCE_URI,
+  APP_MIME_TYPE,
+  UI_EXTENSION_ID,
+} from '../../src/core/apps/index.js';
 import { DEFAULT_HTTP_CONFIG } from '../../src/transport/http-types.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
@@ -42,6 +47,10 @@ async function rpc(
   params: Record<string, unknown>,
   id = 1,
 ): Promise<RpcResult> {
+  // SEP-2243: a request naming an entity must repeat that name in `Mcp-Name`,
+  // and the entry rejects a mismatch with -32020 before dispatch.
+  const name = (params.uri ?? params.name) as string | undefined;
+
   const res = await handler(
     new Request('http://localhost/mcp', {
       method: 'POST',
@@ -49,6 +58,7 @@ async function rpc(
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
         'Mcp-Method': method,
+        ...(name !== undefined ? { 'Mcp-Name': name } : {}),
       },
       body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
     }),
@@ -143,6 +153,33 @@ describe('envelope enforcement', () => {
   });
 });
 
+describe('request header binding', () => {
+  it('should reject a named request whose Mcp-Name disagrees with the body', async () => {
+    // SEP-2243 binds the header to the body so an intermediary cannot route on
+    // a name the payload does not actually carry.
+    const res = await handler(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'resources/read',
+          'Mcp-Name': 'ui://jamf-docs/something-else.html',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'resources/read',
+          params: { uri: APP_RESOURCE_URI, _meta: modernMeta() },
+        }),
+      }),
+    );
+
+    const body = JSON.parse(await res.text()) as Record<string, unknown>;
+    expect((body.error as { code: number } | undefined)?.code).toBe(-32020);
+  });
+});
+
 describe('2025-era clients', () => {
   it('should still answer the initialize handshake', async () => {
     const res = await handler(
@@ -171,5 +208,76 @@ describe('2025-era clients', () => {
     const body = JSON.parse(await res.text()) as Record<string, unknown>;
     const result = body.result as { serverInfo: { name: string } };
     expect(result.serverInfo.name).toBe('jamf-docs-mcp-server');
+  });
+});
+
+describe('MCP Apps extension', () => {
+  it('should advertise the ui extension in server/discover', async () => {
+    const result = resultOf((await rpc('server/discover', { _meta: modernMeta() })).body);
+    const extensions = (result.capabilities as { extensions?: Record<string, unknown> })
+      .extensions;
+
+    expect(extensions?.[UI_EXTENSION_ID]).toMatchObject({
+      mimeTypes: [APP_MIME_TYPE],
+    });
+  });
+
+  it('should point the view-bearing tools at the shared app resource', async () => {
+    const result = resultOf((await rpc('tools/list', { _meta: modernMeta() })).body);
+    const tools = result.tools as { name: string; _meta?: Record<string, unknown> }[];
+
+    // One resource serves all three: the app picks its view from the shape of
+    // the structured content, so there is no need for three bundles.
+    for (const name of ['jamf_docs_search', 'jamf_docs_get_toc', 'jamf_docs_get_article']) {
+      const tool = tools.find((t) => t.name === name);
+      expect(tool, name).toBeDefined();
+      expect((tool!._meta?.ui as { resourceUri?: string } | undefined)?.resourceUri).toBe(
+        APP_RESOURCE_URI,
+      );
+      // Older hosts read the flat key; the two must agree.
+      expect(tool!._meta?.['ui/resourceUri']).toBe(APP_RESOURCE_URI);
+    }
+  });
+
+  it('should not attach app metadata to tools with nothing to render', async () => {
+    const result = resultOf((await rpc('tools/list', { _meta: modernMeta() })).body);
+    const tools = result.tools as { name: string; _meta?: Record<string, unknown> }[];
+    const listProducts = tools.find((t) => t.name === 'jamf_docs_list_products');
+
+    expect(listProducts?._meta?.ui).toBeUndefined();
+  });
+
+  it('should list the app resource with the MCP Apps mime type', async () => {
+    const result = resultOf((await rpc('resources/list', { _meta: modernMeta() })).body);
+    const resources = result.resources as { uri: string; mimeType?: string }[];
+    const app = resources.find((r) => r.uri === APP_RESOURCE_URI);
+
+    expect(app).toBeDefined();
+    expect(app!.mimeType).toBe(APP_MIME_TYPE);
+  });
+
+  it('should serve a self-contained document', async () => {
+    const result = resultOf(
+      (await rpc('resources/read', { uri: APP_RESOURCE_URI, _meta: modernMeta() })).body,
+    );
+    const contents = result.contents as { mimeType: string; text: string }[];
+    const html = contents[0]!.text;
+
+    expect(contents[0]!.mimeType).toBe(APP_MIME_TYPE);
+    // Hosts render this in a sandboxed iframe under a deny-by-default CSP, so
+    // anything loaded from another origin would silently fail.
+    expect(html).toContain('<script type="module">');
+    expect(html).not.toMatch(/<script[^>]+\bsrc=/i);
+    expect(html).not.toMatch(/<link[^>]+rel=["']?stylesheet/i);
+  });
+
+  it('should let hosts cache the app bundle', async () => {
+    const result = resultOf(
+      (await rpc('resources/read', { uri: APP_RESOURCE_URI, _meta: modernMeta() })).body,
+    );
+
+    // The bundle only changes on release.
+    expect(result.ttlMs).toBeGreaterThan(0);
+    expect(result.cacheScope).toBe('public');
   });
 });

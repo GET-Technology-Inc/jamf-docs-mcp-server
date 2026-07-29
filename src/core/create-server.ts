@@ -17,6 +17,7 @@ import { registerGetTocTool } from './tools/get-toc.js';
 import { registerGlossaryLookupTool } from './tools/glossary-lookup.js';
 import { registerBatchGetArticlesTool } from './tools/batch-get-articles.js';
 import { registerResources } from './resources/index.js';
+import { registerApps, UI_EXTENSION_ID, APP_MIME_TYPE } from './apps/index.js';
 import { registerPrompts } from './prompts/index.js';
 
 /**
@@ -123,6 +124,14 @@ export function createMcpServer(ctx: ServerContext, options?: CreateServerOption
     {
       instructions: SERVER_INSTRUCTIONS,
       cacheHints: CACHE_HINTS,
+      capabilities: {
+        // MCP Apps (SEP-2133 extensions framework). Hosts that negotiate this
+        // render search results, tables of contents and articles in the
+        // `ui://` viewer; hosts that do not simply get the markdown.
+        extensions: {
+          [UI_EXTENSION_ID]: { mimeTypes: [APP_MIME_TYPE] },
+        },
+      },
     },
   );
 
@@ -142,6 +151,9 @@ export function createMcpServer(ctx: ServerContext, options?: CreateServerOption
 
   // Register resources
   registerResources(server, ctx);
+
+  // Register the MCP Apps viewer the tools above reference
+  registerApps(server);
 
   // Register prompts
   registerPrompts(server);

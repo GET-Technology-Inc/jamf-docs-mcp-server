@@ -5,6 +5,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
+import { appToolMeta } from '../apps/index.js';
 import { GetTocInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
@@ -179,6 +180,9 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
       description: TOOL_DESCRIPTION,
       inputSchema: GetTocInputSchema,
       outputSchema: TocOutputSchema,
+      // Hosts supporting the MCP Apps extension render this result in the
+      // shared viewer; others ignore the metadata and get the markdown.
+      _meta: appToolMeta(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
