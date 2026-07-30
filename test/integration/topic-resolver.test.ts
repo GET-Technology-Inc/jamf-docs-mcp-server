@@ -30,10 +30,10 @@ describe('TopicResolver integration', () => {
     // Discover a real prettyUrl from the FT API
     const maps = await fetchMaps();
     const proMap = maps.find(m =>
-      m.metadata.some(
+      m.metadata?.some(
         meta => meta.key === 'version_bundle_stem'
           && meta.values[0] === 'jamf-pro-documentation'
-      )
+      ) === true
       && m.metadata.some(
         meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
       )
@@ -47,12 +47,12 @@ describe('TopicResolver integration', () => {
     // Find a topic with a non-empty prettyUrl (walk children if needed)
     function findPrettyUrl(nodes: typeof toc): string | null {
       for (const node of nodes) {
-        if (node.prettyUrl && node.prettyUrl !== '') {
+        if (node.prettyUrl !== '') {
           return node.prettyUrl;
         }
-        if (node.children.length > 0) {
-          const found = findPrettyUrl(node.children);
-          if (found) return found;
+        if ((node.children ?? []).length > 0) {
+          const found = findPrettyUrl(node.children ?? []);
+          if (found !== null && found !== '') {return found;}
         }
       }
       return null;
@@ -64,7 +64,7 @@ describe('TopicResolver integration', () => {
     // Build the full URL from the prettyUrl path
     const fullUrl = prettyUrl!.startsWith('http')
       ? prettyUrl!
-      : `https://learn.jamf.com${prettyUrl}`;
+      : `https://learn.jamf.com${prettyUrl!}`;
 
     const result = await resolver.resolve({ url: fullUrl });
 

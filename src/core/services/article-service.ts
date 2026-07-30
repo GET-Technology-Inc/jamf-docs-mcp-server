@@ -224,7 +224,7 @@ function deriveDisplayUrl(
 }
 
 function extractProductVersion(
-  metadata: FtMetadataEntry[]
+  metadata: FtMetadataEntry[] | undefined
 ): { product: string | undefined; version: string } {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
   // Versioned products (Jamf Pro family) carry version_bundle_stem; non-Pro

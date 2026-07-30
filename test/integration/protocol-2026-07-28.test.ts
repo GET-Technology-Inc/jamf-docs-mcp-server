@@ -216,8 +216,7 @@ describe('2025-era clients', () => {
 describe('MCP Apps extension', () => {
   it('should advertise the ui extension in server/discover', async () => {
     const result = resultOf((await rpc('server/discover', { _meta: modernMeta() })).body);
-    const extensions = (result.capabilities as { extensions?: Record<string, unknown> })
-      .extensions;
+    const {extensions} = (result.capabilities as { extensions?: Record<string, unknown> });
 
     expect(extensions?.[UI_EXTENSION_ID]).toMatchObject({
       mimeTypes: [APP_MIME_TYPE],
@@ -226,7 +225,7 @@ describe('MCP Apps extension', () => {
 
   it('should point the view-bearing tools at the shared app resource', async () => {
     const result = resultOf((await rpc('tools/list', { _meta: modernMeta() })).body);
-    const tools = result.tools as { name: string; _meta?: Record<string, unknown> }[];
+    const tools = result.tools as ({ name: string } & Partial<Record<'_meta', Record<string, unknown>>>)[];
 
     // One resource serves all three: the app picks its view from the shape of
     // the structured content, so there is no need for three bundles.
@@ -243,7 +242,7 @@ describe('MCP Apps extension', () => {
 
   it('should not attach app metadata to tools with nothing to render', async () => {
     const result = resultOf((await rpc('tools/list', { _meta: modernMeta() })).body);
-    const tools = result.tools as { name: string; _meta?: Record<string, unknown> }[];
+    const tools = result.tools as ({ name: string } & Partial<Record<'_meta', Record<string, unknown>>>)[];
     const listProducts = tools.find((t) => t.name === 'jamf_docs_list_products');
 
     expect(listProducts?._meta?.ui).toBeUndefined();
@@ -263,9 +262,9 @@ describe('MCP Apps extension', () => {
       (await rpc('resources/read', { uri: APP_RESOURCE_URI, _meta: modernMeta() })).body,
     );
     const contents = result.contents as { mimeType: string; text: string }[];
-    const html = contents[0]!.text;
+    const html = contents[0].text;
 
-    expect(contents[0]!.mimeType).toBe(APP_MIME_TYPE);
+    expect(contents[0].mimeType).toBe(APP_MIME_TYPE);
     // Hosts render this in a sandboxed iframe under a deny-by-default CSP, so
     // anything loaded from another origin would silently fail.
     expect(html).toContain('<script type="module">');

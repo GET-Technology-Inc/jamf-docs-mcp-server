@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
+import { createMockContext } from '../../helpers/mock-context.js';
 
 const mockGetProductAvailability = vi.fn().mockResolvedValue({});
 
@@ -21,7 +22,7 @@ import { registerListProductsTool } from '../../../src/core/tools/list-products.
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -36,7 +37,7 @@ describe('jamf_docs_list_products tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerListProductsTool(server);
+    registerListProductsTool(server, createMockContext());
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 

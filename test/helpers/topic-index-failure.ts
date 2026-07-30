@@ -15,24 +15,30 @@ import { TopicResolver } from '../../src/core/services/topic-resolver.js';
 import type { CacheProvider } from '../../src/core/services/interfaces/index.js';
 import type { MapsRegistry } from '../../src/core/services/maps-registry.js';
 
+// Always-empty cache. Each method awaits an already-resolved promise so it is
+// a genuine async function rather than an `async` keyword with nothing behind
+// it; the `CacheProvider` contract requires thenables.
 const cache: CacheProvider = {
-  get: async () => null,
-  set: async () => undefined,
-  delete: async () => false,
-  clear: async () => undefined,
+  get: async () => await Promise.resolve(null),
+  set: async () => { await Promise.resolve(); },
+  delete: async () => await Promise.resolve(false),
+  clear: async () => { await Promise.resolve(); },
+  // Never reached: this fixture only drives the topic-index path.
+  stats: async () => await Promise.resolve({ memoryEntries: 0, totalEntries: 0 }),
+  prune: async () => await Promise.resolve(0),
 };
 
 let upstreamCalls = 0;
-const alwaysFails = (): Promise<never> => {
+const alwaysFails = async (): Promise<never> => {
   upstreamCalls++;
-  return Promise.reject(new Error('HTTP 503 Service Unavailable'));
+  return await Promise.reject(new Error('HTTP 503 Service Unavailable'));
 };
 
 // The registry is never reached: this exercises the topic-index path only.
 const resolver = new TopicResolver(
   {} as MapsRegistry,
   cache,
-  alwaysFails as never,
+  alwaysFails,
 );
 
 // `getTopicIndex` is private. The fixture is about its promise wiring rather

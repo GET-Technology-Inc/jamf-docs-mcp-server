@@ -11,6 +11,7 @@ vi.mock('../../../src/core/services/ft-client.js', () => ({
 import { fetchMaps } from '../../../src/core/services/ft-client.js';
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
 import { createMockCache } from '../../helpers/mock-context.js';
+import type { FtMapInfo } from '../../../src/core/types.js';
 
 const mockedFetchMaps = vi.mocked(fetchMaps);
 
@@ -18,7 +19,7 @@ function makeMeta(entries: Record<string, string[]>): { key: string; label: stri
   return Object.entries(entries).map(([key, values]) => ({ key, label: key, values }));
 }
 
-function makeMap(id: string, title: string, meta: Record<string, string[]>) {
+function makeMap(id: string, title: string, meta: Record<string, string[]>): FtMapInfo {
   return { id, title, mapApiEndpoint: `/api/khub/maps/${id}`, metadata: makeMeta(meta) };
 }
 

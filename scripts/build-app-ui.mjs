@@ -17,6 +17,7 @@
  */
 
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +52,15 @@ const scriptTag =
 // value is inserted verbatim.
 const inlined = shell.replace('</body>', () => scriptTag);
 
+// The `ui://` resource URI is built from this hash, so a host's cache key for
+// the bundle changes exactly when the bundle does. Computed here rather than at
+// runtime because Workers has no guaranteed node:crypto.
+// Hex, so it is emitted with single quotes directly rather than through
+// JSON.stringify: the repo lints its own generated file, and `quotes` only
+// tolerates double quotes on a string that would otherwise need escaping —
+// which APP_HTML above does, and a bare hash does not.
+const hash = createHash('sha256').update(inlined, 'utf-8').digest('hex').slice(0, 12);
+
 const module = `/**
  * GENERATED FILE — do not edit.
  *
@@ -60,10 +70,13 @@ const module = `/**
  */
 
 export const APP_HTML = ${JSON.stringify(inlined)};
+
+/** First 12 hex chars of the SHA-256 of {@link APP_HTML}. */
+export const APP_HTML_HASH = '${hash}';
 `;
 
 await mkdir(path.dirname(outFile), { recursive: true });
 await writeFile(outFile, module, 'utf-8');
 
 const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
-console.log(`app-ui → ${path.relative(repo, outFile)} (${kb(inlined.length)} inlined)`);
+console.log(`app-ui → ${path.relative(repo, outFile)} (${kb(inlined.length)} inlined, hash ${hash})`);

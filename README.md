@@ -287,9 +287,15 @@ Hosts that negotiate the MCP Apps extension (`io.modelcontextprotocol/ui`) rende
 `jamf_docs_search`, `jamf_docs_get_toc` and `jamf_docs_get_article` results as an
 interactive viewer instead of plain markdown: search hits are clickable through to
 the article, TOC entries open in place, and articles carry section navigation and a
-back stack. All three tools reference one self-contained `ui://jamf-docs/app.html`
-resource. Hosts that do not negotiate the extension ignore the metadata and get
-exactly the markdown they always did.
+back stack. All three tools reference one self-contained `ui://` resource, whose
+URI carries a hash of the bundle it names (`ui://jamf-docs/app-<hash>.html`).
+Hosts that do not negotiate the extension ignore the metadata and get exactly the
+markdown they always did.
+
+The resource is served with a 24-hour public cache hint, which is safe precisely
+because the URI is content-addressed: a given URI names one exact bundle forever,
+and a new bundle arrives under a new URI rather than replacing an old one. Hosts
+pick up a changed viewer on their next `tools/list` refresh.
 
 > [!WARNING]
 > **The MCP Apps viewer is broken in 4.0.0 — upgrade past it.** The build step that
@@ -300,6 +306,15 @@ exactly the markdown they always did.
 > 4.0.0 is affected — tools, resources and prompts return the same results either
 > way, since a host that cannot render the app falls back to the markdown. Fixed in
 > 4.0.1.
+>
+> **4.0.1 alone did not reach every host.** Up to and including 4.0.1 the resource
+> lived at a fixed `ui://jamf-docs/app.html` with a 24-hour public cache hint, so a
+> host that had read the broken 4.0.0 bundle kept serving it from cache for up to a
+> day after the server was upgraded — the corrected bundle was published under the
+> same URI and never fetched. Upgrading past 4.0.1 fixes the distribution as well as
+> the bundle: the URI now changes with the content, so a host holding the 4.0.0 copy
+> simply stops asking for it. No manual cache clearing is needed, and the remaining
+> delay is the one-hour `tools/list` hint rather than 24 hours.
 
 ## HTTP/SSE Transport Mode
 

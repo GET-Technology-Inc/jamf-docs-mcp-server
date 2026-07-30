@@ -91,7 +91,7 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
     // All products from static list should appear
     const staticIds = Object.keys(JAMF_PRODUCTS);
     const resultIds = products.map(p => p.id);
-    staticIds.forEach(id => expect(resultIds).toContain(id));
+    staticIds.forEach(id => { expect(resultIds).toContain(id); });
   });
 
   it('should use static bundleId as fallback when MapsRegistry fails', async () => {
@@ -441,7 +441,10 @@ describe('getTopicsMetadata', () => {
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const }
     ];
     vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return cachedTopics;
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
+      if (key === 'metadata:topics') {return cachedTopics;}
       return null;
     });
 
@@ -593,7 +596,10 @@ describe('getTopicsResourceData', () => {
       { id: 'security', name: 'Security', source: 'manual' as const, articleCount: 10 },
     ];
     vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return cachedTopics;
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
+      if (key === 'metadata:topics') {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -612,7 +618,10 @@ describe('getTopicsResourceData', () => {
       { id: 'enrollment', name: 'Enrollment & Onboarding', source: 'manual' as const },
     ];
     vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return cachedTopics;
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
+      if (key === 'metadata:topics') {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -630,7 +639,10 @@ describe('getTopicsResourceData', () => {
       { id: 'enrollment', name: 'Enrollment', source: 'toc' as const, articleCount: 42 },
     ];
     vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return cachedTopics;
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
+      if (key === 'metadata:topics') {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -644,7 +656,10 @@ describe('getTopicsResourceData', () => {
       { id: 'enrollment', name: 'Enrollment', source: 'manual' as const },
     ];
     vi.mocked(ctx.cache.get).mockImplementation(async (key) => {
-      if (key === 'metadata:topics') return cachedTopics;
+      // Awaits a resolved promise so this stands in for a real async call —
+      // it yields to the microtask queue the way the code it replaces does.
+      await Promise.resolve();
+      if (key === 'metadata:topics') {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);

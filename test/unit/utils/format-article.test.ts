@@ -633,7 +633,7 @@ describe('formatArticleCompact()', () => {
     // At ~4 chars/token, 3000 chars ≈ 750 tokens — clearly exceeds the preview.
     function makeLongContent(): string {
       const paragraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ';
-      return Array.from({ length: 60 }, () => paragraph).join('') + '\n\n'
+      return `${Array.from({ length: 60 }, () => paragraph).join('')  }\n\n`
         + '## Deep Section\n\nMore detailed content that should not appear in preview.';
     }
 

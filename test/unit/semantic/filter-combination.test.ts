@@ -66,7 +66,7 @@ describe('multi-filter combination behavior', () => {
       docType: 'release-notes',
     });
 
-    if (result.filterRelaxation) {
+    if (result.filterRelaxation !== undefined) {
       expect(result.filterRelaxation.removed.length).toBeGreaterThan(0);
       expect(result.filterRelaxation.message).toContain('Removed filter');
       // docType should be removed first per relaxation order
@@ -94,7 +94,7 @@ describe('multi-filter combination behavior', () => {
       docType: 'training',
     });
 
-    if (result.filterRelaxation) {
+    if (result.filterRelaxation !== undefined) {
       const { removed } = result.filterRelaxation;
       // Verify relaxation order: docType first, then topic, then product
       if (removed.length >= 2) {
@@ -127,7 +127,7 @@ describe('multi-filter combination behavior', () => {
       docType: 'training',
     });
 
-    if (result.filterRelaxation) {
+    if (result.filterRelaxation !== undefined) {
       expect(result.filterRelaxation.original).toBeDefined();
       for (const filterName of result.filterRelaxation.removed) {
         expect(result.filterRelaxation.original[filterName]).toBeDefined();

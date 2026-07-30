@@ -38,7 +38,9 @@ interface ZoominResponse {
 async function writeFixture(name: string, data: unknown): Promise<CapturedFixture> {
   const filePath = path.join(FIXTURES_DIR, name);
   const json = JSON.stringify(data, null, 2);
-  fs.writeFileSync(filePath, json, 'utf-8');
+  // Every caller already awaits this; write through the promise API so the
+  // async signature is real rather than a sync write wearing an `async`.
+  await fs.promises.writeFile(filePath, json, 'utf-8');
   const size = Buffer.byteLength(json, 'utf-8');
   return { name, path: filePath, size };
 }
@@ -57,11 +59,11 @@ async function captureSearchResponse(): Promise<{ fixture: CapturedFixture; data
 async function captureArticleHtml(searchData: ZoominResponse): Promise<CapturedFixture> {
   // Discover a valid article URL from search results (pick a documentation article, not release notes)
   const docResult = searchData.Results.find(
-    (r) => r.leading_result && r.leading_result.bundle_id.includes('-documentation')
+    (r) => r.leading_result?.bundle_id.includes('-documentation') === true
   );
   const articleUrl = docResult?.leading_result?.url ?? searchData.Results[0]?.leading_result?.url;
 
-  if (!articleUrl) {
+  if (articleUrl === undefined || articleUrl === '') {
     throw new Error('No valid article URL found in search results');
   }
 
@@ -70,7 +72,7 @@ async function captureArticleHtml(searchData: ZoominResponse): Promise<CapturedF
     timeout: 30000,
     headers: { Accept: 'text/html' },
   });
-  return writeFixture('article-html.json', {
+  return await writeFixture('article-html.json', {
     url: articleUrl,
     html,
   });
@@ -81,7 +83,7 @@ async function captureTocResponse(searchData: ZoominResponse): Promise<CapturedF
 
   // Discover the actual versioned bundle ID from search results
   const docResult = searchData.Results.find(
-    (r) => r.leading_result && r.leading_result.bundle_id.startsWith('jamf-pro-documentation')
+    (r) => r.leading_result?.bundle_id.startsWith('jamf-pro-documentation') === true
   );
   const proBundleId = docResult?.leading_result?.bundle_id ?? 'jamf-pro-documentation';
 
@@ -141,4 +143,4 @@ async function main(): Promise<void> {
   console.error(`\nTotal: ${captured.length} fixture(s) captured.`);
 }
 
-main();
+void main();

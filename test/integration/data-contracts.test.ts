@@ -17,7 +17,7 @@ import {
   fetchMapToc,
   fetchTopicContent,
 } from '../../src/core/services/ft-client.js';
-import type { FtSearchCluster, FtMapInfo, FtTocNode } from '../../src/core/types.js';
+import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
 
@@ -29,6 +29,16 @@ import type { ProductId } from '../../src/core/constants.js';
  * Must NOT look like a human-readable bundle stem (e.g. "jamf-pro-documentation").
  */
 const OPAQUE_ID_RE = /^[a-zA-Z0-9_~-]+$/;
+
+/**
+ * Metadata as an array. Every FT payload type declares `metadata` optional,
+ * because the shapes are bare casts over `response.json()` with no validation —
+ * a payload without it reads as "no keys present", which is what these contract
+ * assertions already treat as a failure.
+ */
+function metaOf(m: { metadata?: FtMetadataEntry[] }): FtMetadataEntry[] {
+  return m.metadata ?? [];
+}
 
 /**
  * Readable bundle stem pattern — what we must NOT see as a mapId.
@@ -57,13 +67,13 @@ beforeAll(async () => {
 
   // Find the Jamf Pro latest English map to use for TOC and content tests
   const proMap = maps.find(m =>
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
     ) &&
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
     ) &&
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US'
     )
   );
@@ -84,11 +94,11 @@ describe('FT API data contracts', () => {
 
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
-          if (entry.type === 'TOPIC' && entry.topic) {
+          if (entry.type === 'TOPIC' && entry.topic !== undefined) {
             const { mapId } = entry.topic;
 
             // Must be non-empty
-            expect(mapId, `mapId should be non-empty for topic "${entry.topic.title}"`).toBeTruthy();
+            expect(mapId, `mapId should be non-empty for topic "${entry.topic.title ?? '<no title>'}"`).toBeTruthy();
 
             // Must contain only URL-safe characters
             expect(
@@ -113,10 +123,10 @@ describe('FT API data contracts', () => {
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
           const metadata = entry.type === 'TOPIC' ? entry.topic?.metadata : entry.map?.metadata;
-          if (!metadata) continue;
+          if (metadata === undefined) {continue;}
 
           const zoomin = metadata.find(m => m.key === 'zoominmetadata');
-          if (zoomin) {
+          if (zoomin !== undefined) {
             foundZoomin = true;
             expect(zoomin.values.length).toBeGreaterThan(0);
             // zoominmetadata values are plain strings (e.g. "content-techdocs", "jamf-pro")
@@ -138,10 +148,10 @@ describe('FT API data contracts', () => {
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
           const metadata = entry.type === 'TOPIC' ? entry.topic?.metadata : entry.map?.metadata;
-          if (!metadata) continue;
+          if (metadata === undefined) {continue;}
 
           const prettyUrlEntry = metadata.find(m => m.key === 'ft:prettyUrl');
-          if (prettyUrlEntry && prettyUrlEntry.values.length > 0) {
+          if (prettyUrlEntry !== undefined && prettyUrlEntry.values.length > 0) {
             foundPrettyUrl = true;
             const prettyUrl = prettyUrlEntry.values[0];
             // prettyUrl can be:
@@ -149,7 +159,7 @@ describe('FT API data contracts', () => {
             //   - root-relative: "/r/..." or "/en-US/..."
             //   - path-relative: "en-US/..." (no leading slash)
             // All must be non-empty strings that look like URL paths or URLs
-            expect(prettyUrl.length, `ft:prettyUrl must be a non-empty string`).toBeGreaterThan(0);
+            expect(prettyUrl.length, 'ft:prettyUrl must be a non-empty string').toBeGreaterThan(0);
             const isAbsolute = prettyUrl.startsWith('https://');
             const isRootRelative = prettyUrl.startsWith('/');
             const isPathRelative = /^[a-zA-Z]/.test(prettyUrl);
@@ -169,10 +179,10 @@ describe('FT API data contracts', () => {
 
       for (const cluster of searchClusters) {
         for (const entry of cluster.entries) {
-          if (entry.type === 'TOPIC' && entry.topic) {
+          if (entry.type === 'TOPIC' && entry.topic !== undefined) {
             const { contentId } = entry.topic;
 
-            expect(contentId, `contentId should be non-empty for topic "${entry.topic.title}"`).toBeTruthy();
+            expect(contentId, `contentId should be non-empty for topic "${entry.topic.title ?? '<no title>'}"`).toBeTruthy();
 
             expect(
               OPAQUE_ID_RE.test(contentId),
@@ -228,14 +238,14 @@ describe('FT API data contracts', () => {
     it('maps contain expected metadata keys for product identification', () => {
       // Find the Jamf Pro current map and verify its metadata structure
       const proMaps = maps.filter(m =>
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
         )
       );
       expect(proMaps.length, 'Expected at least one Jamf Pro map').toBeGreaterThan(0);
 
       const proMapSample = proMaps[0];
-      const metaKeys = proMapSample.metadata.map(m => m.key);
+      const metaKeys = metaOf(proMapSample).map(m => m.key);
 
       // These keys are essential for MapsRegistry to correctly identify and route maps
       expect(metaKeys).toContain('version_bundle_stem');
@@ -245,10 +255,10 @@ describe('FT API data contracts', () => {
 
     it('maps contain latestVersion metadata to distinguish current from historical', () => {
       const latestProMaps = maps.filter(m =>
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
         ) &&
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
         )
       );
@@ -260,7 +270,7 @@ describe('FT API data contracts', () => {
 
       // There should be exactly one English latest map for Jamf Pro
       const latestEnMaps = latestProMaps.filter(m =>
-        m.metadata.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
+        metaOf(m).some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
       );
       expect(
         latestEnMaps.length,
@@ -272,7 +282,7 @@ describe('FT API data contracts', () => {
       const sample = maps.slice(0, 20);
       for (const map of sample) {
         expect(typeof map.title).toBe('string');
-        expect(map.title.length, `map "${map.id}" should have a non-empty title`).toBeGreaterThan(0);
+        expect((map.title ?? '').length, `map "${map.id}" should have a non-empty title`).toBeGreaterThan(0);
       }
     });
 
@@ -294,7 +304,7 @@ describe('FT API data contracts', () => {
     it('TOC nodes have non-empty title and contentId', () => {
       function validateNode(node: FtTocNode, depth: number): void {
         expect(node.title, `TOC node at depth ${depth} should have a title`).toBeTruthy();
-        expect(node.contentId, `TOC node "${node.title}" should have a contentId`).toBeTruthy();
+        expect(node.contentId, `TOC node "${node.title ?? '<no title>'}" should have a contentId`).toBeTruthy();
 
         // contentId must be in opaque hash format
         expect(
@@ -303,7 +313,7 @@ describe('FT API data contracts', () => {
         ).toBe(true);
 
         // Recurse into children but cap depth to avoid very deep traversal in tests
-        if (depth < 2 && node.children.length > 0) {
+        if (depth < 2 && node.children !== undefined && node.children.length > 0) {
           for (const child of node.children.slice(0, 3)) {
             validateNode(child, depth + 1);
           }
@@ -319,13 +329,13 @@ describe('FT API data contracts', () => {
       function findNodesWithPrettyUrl(nodes: FtTocNode[]): FtTocNode[] {
         const found: FtTocNode[] = [];
         for (const node of nodes) {
-          if (node.prettyUrl && node.prettyUrl !== '') {
+          if (node.prettyUrl !== '') {
             found.push(node);
           }
-          if (found.length >= 3) break;
-          if (node.children.length > 0) {
+          if (found.length >= 3) {break;}
+          if (node.children !== undefined && node.children.length > 0) {
             found.push(...findNodesWithPrettyUrl(node.children));
-            if (found.length >= 3) break;
+            if (found.length >= 3) {break;}
           }
         }
         return found;
@@ -340,7 +350,7 @@ describe('FT API data contracts', () => {
       for (const node of nodesWithUrls) {
         const url = node.prettyUrl;
         // prettyUrl can be absolute, root-relative, or path-relative (no leading slash)
-        expect(url.length, `TOC node prettyUrl must be non-empty`).toBeGreaterThan(0);
+        expect(url.length, 'TOC node prettyUrl must be non-empty').toBeGreaterThan(0);
         const isAbsolute = url.startsWith('https://');
         const isRootRelative = url.startsWith('/');
         const isPathRelative = /^[a-zA-Z]/.test(url);
@@ -353,7 +363,7 @@ describe('FT API data contracts', () => {
 
     it('TOC nodes have tocId field', () => {
       for (const root of proTocNodes.slice(0, 5)) {
-        expect(root.tocId, `Root TOC node "${root.title}" should have a tocId`).toBeTruthy();
+        expect(root.tocId, `Root TOC node "${root.title ?? '<no title>'}" should have a tocId`).toBeTruthy();
       }
     });
   });
@@ -365,9 +375,9 @@ describe('FT API data contracts', () => {
       // Find the first leaf node with a contentId from the TOC
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId) return node;
-          const found = findLeaf(node.children);
-          if (found) return found;
+          if ((node.children ?? []).length === 0 && node.contentId !== '') {return node;}
+          const found = findLeaf(node.children ?? []);
+          if (found !== null) {return found;}
         }
         return null;
       }
@@ -391,9 +401,9 @@ describe('FT API data contracts', () => {
     it('topic content is valid HTML (not JSON or plain text)', async () => {
       function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
         for (const node of nodes) {
-          if (node.children.length === 0 && node.contentId) return node;
-          const found = findLeaf(node.children);
-          if (found) return found;
+          if ((node.children ?? []).length === 0 && node.contentId !== '') {return node;}
+          const found = findLeaf(node.children ?? []);
+          if (found !== null) {return found;}
         }
         return null;
       }
@@ -427,7 +437,7 @@ describe('FT API data contracts', () => {
       // Collect every live `product-*` zoominmetadata value from the maps registry.
       const liveLabels = new Set<string>();
       for (const map of maps) {
-        for (const meta of map.metadata) {
+        for (const meta of metaOf(map)) {
           if (meta.key === 'zoominmetadata') {
             for (const v of meta.values) {
               if (v.startsWith('product-')) { liveLabels.add(v); }
@@ -445,7 +455,7 @@ describe('FT API data contracts', () => {
       expect(
         missing,
         `searchLabel(s) no longer present in live zoominmetadata: ${JSON.stringify(missing)}. ` +
-        `Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).`
+        'Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).'
       ).toEqual([]);
     });
 
@@ -453,19 +463,19 @@ describe('FT API data contracts', () => {
       // deriveBundleStem now depends ENTIRELY on the bundle value for non-Pro
       // products, because they no longer carry version_bundle_stem.
       const schoolMap = maps.find(m =>
-        m.metadata.some(meta => meta.key === 'bundle'
+        metaOf(m).some(meta => meta.key === 'bundle'
           && meta.values.some(v => v.startsWith('jamf-school-documentation')))
-        && m.metadata.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
+        && m.metadata?.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US') === true
       );
       expect(schoolMap, 'expected at least one en-US Jamf School map').toBeDefined();
 
-      const bundle = schoolMap!.metadata.find(meta => meta.key === 'bundle');
+      const bundle = schoolMap!.metadata?.find(meta => meta.key === 'bundle');
       expect(bundle?.values[0], 'non-Pro map must carry a bundle value to derive its stem').toBeTruthy();
 
       // Document the unversioned contract: these keys are EXPECTED to be absent.
       // If Jamf re-adds them, that is a meaningful upstream change worth noticing.
-      const hasLatest = schoolMap!.metadata.some(meta => meta.key === 'latestVersion');
-      const hasVersion = schoolMap!.metadata.some(meta => meta.key === 'version');
+      const hasLatest = schoolMap!.metadata?.some(meta => meta.key === 'latestVersion') === true;
+      const hasVersion = schoolMap!.metadata?.some(meta => meta.key === 'version') === true;
       expect(
         { hasLatest, hasVersion },
         'Jamf School map unexpectedly carries version metadata — the unversioned ' +
@@ -498,14 +508,14 @@ describe('FT API data contracts', () => {
       // duplicate version snapshots.
       const proEntries = searchClusters
         .flatMap(c => c.entries)
-        .filter(e => e.topic?.metadata.some(
+        .filter(e => e.topic?.metadata?.some(
           m => m.key === 'zoominmetadata' && m.values.includes('product-pro')
-        ));
+        ) === true);
       expect(proEntries.length, 'expected Jamf Pro topics in the enrollment search').toBeGreaterThan(0);
 
       const clusterIds: string[] = [];
       for (const entry of proEntries) {
-        const md = entry.topic!.metadata;
+        const md = entry.topic!.metadata ?? [];
         const clusterId = md.find(m => m.key === 'ft:clusterId')?.values[0] ?? '';
         const version = md.find(m => m.key === 'version')?.values[0] ?? '';
         expect(clusterId, 'Pro entry missing ft:clusterId — version dedup would break').toBeTruthy();

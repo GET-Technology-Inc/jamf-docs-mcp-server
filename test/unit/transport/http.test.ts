@@ -44,8 +44,6 @@ vi.mock('node:http', () => ({
     shared.capturedHandler = handler;
     return shared.httpServer;
   }),
-  IncomingMessage: class {},
-  ServerResponse: class {},
 }));
 
 vi.mock('@modelcontextprotocol/server', () => ({
@@ -81,7 +79,11 @@ function createMockReq(options: {
 } = {}): IncomingMessage {
   const { method = 'GET', url = '/', headers = {}, body, largeBody = false } = options;
 
-  const readable = new Readable({ read() {} });
+  const readable = new Readable({
+    read() {
+      // Intentionally empty: the body is pushed below, not produced on demand.
+    },
+  });
   Object.defineProperty(readable, 'method', { value: method, writable: true });
   Object.defineProperty(readable, 'url', { value: url, writable: true });
   Object.defineProperty(readable, 'headers', {
@@ -122,7 +124,7 @@ function createCapturingRes(): { res: ServerResponse; done: Promise<CapturedResp
   const res = {
     writeHead: vi.fn((code: number, hdrs?: Record<string, string>) => {
       statusCode = code;
-      if (hdrs) Object.assign(headers, hdrs);
+      if (hdrs !== undefined) {Object.assign(headers, hdrs);}
     }),
     write: vi.fn((data: Buffer | string | Uint8Array) => {
       if (typeof data === 'string') {
@@ -132,7 +134,7 @@ function createCapturingRes(): { res: ServerResponse; done: Promise<CapturedResp
       }
     }),
     end: vi.fn((data?: string | Buffer | Uint8Array) => {
-      if (data !== undefined && data !== null) {
+      if (data !== undefined) {
         body += typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
       }
       endResolve({ statusCode, headers, body });
@@ -159,7 +161,7 @@ async function makeRequest(options: {
   const req = createMockReq(options);
   const { res, done } = createCapturingRes();
   shared.capturedHandler(req, res);
-  return done;
+  return await done;
 }
 
 // ============================================================================
@@ -175,9 +177,11 @@ describe('startHttpServer', () => {
 
     // Simulate successful bind: listen calls its callback synchronously
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
   });
 
   it('should resolve when the server starts listening', async () => {
@@ -192,7 +196,9 @@ describe('startHttpServer', () => {
   });
 
   it('should log security warning when binding to non-loopback host', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+      // Intentionally empty: swallow the output, the spy records the calls.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '0.0.0.0');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
@@ -203,7 +209,9 @@ describe('startHttpServer', () => {
   });
 
   it('should NOT log security warning when binding to 127.0.0.1', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+      // Intentionally empty: swallow the output, the spy records the calls.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
@@ -214,7 +222,9 @@ describe('startHttpServer', () => {
   });
 
   it('should NOT log security warning when binding to ::1', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+      // Intentionally empty: swallow the output, the spy records the calls.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '::1');
 
     const warningLogged = consoleSpy.mock.calls.some((args) =>
@@ -241,9 +251,11 @@ describe('/health endpoint', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -278,9 +290,11 @@ describe('/llms.txt endpoint', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -344,9 +358,11 @@ describe('unknown path → 404', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
 
@@ -378,9 +394,11 @@ describe('/mcp endpoint — payload size', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
@@ -419,9 +437,11 @@ describe('/mcp endpoint — valid requests', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     // Default transport response: 200 with JSON body (exercises writeWebResponse body path)
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }), {
@@ -509,9 +529,11 @@ describe('/mcp endpoint — writeWebResponse', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     shared.mcpHandlerInstance.close.mockResolvedValue(undefined);
     await startHttpServer((() => mockMcpServer) as any, 3000, '127.0.0.1');
   });
@@ -559,9 +581,11 @@ describe('Host Header Injection protection', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
@@ -601,9 +625,11 @@ describe('CORS headers', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );
@@ -634,9 +660,11 @@ describe('Rate limiting', () => {
     vi.clearAllMocks();
     mockMcpServer = { connect: vi.fn().mockResolvedValue(undefined) };
     shared.httpServer.listen.mockImplementation(
-      (_port: number, _host: string, cb: () => void) => cb()
+      (_port: number, _host: string, cb: () => void) => { cb(); }
     );
-    shared.httpServer.on.mockImplementation(() => {});
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
     shared.mcpHandlerInstance.fetch.mockResolvedValue(
       new Response(null, { status: 200 })
     );

@@ -10,6 +10,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
 import { createTokenInfo } from '../../helpers/fixtures.js';
+import { createMockContext } from '../../helpers/mock-context.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
@@ -32,7 +33,7 @@ import { registerGlossaryLookupTool } from '../../../src/core/tools/glossary-loo
 
 // ---------------------------------------------------------------------------
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
@@ -48,7 +49,7 @@ let client: Client;
 
 beforeAll(async () => {
   server = new McpServer({ name: 'test', version: '0.0.1' });
-  registerGlossaryLookupTool(server);
+  registerGlossaryLookupTool(server, createMockContext());
 
   client = new Client({ name: 'test-client', version: '0.0.1' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

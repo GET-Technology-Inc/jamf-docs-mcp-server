@@ -28,7 +28,7 @@ export function createFsReadFileMock(
       err.code = 'ENOENT';
       throw err;
     }
-    return content;
+    return await Promise.resolve(content);
   });
 }
 

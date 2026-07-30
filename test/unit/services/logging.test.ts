@@ -10,7 +10,9 @@ import type { Logger } from '../../../src/core/services/interfaces/index.js';
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+    // Intentionally empty: swallow the output, the spy records the calls.
+  });
 });
 
 afterEach(() => {

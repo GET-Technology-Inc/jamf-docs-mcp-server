@@ -69,7 +69,7 @@ describe('TOOL_DESCRIPTION', () => {
     const matches = [...TOOL_DESCRIPTION.matchAll(/topic="([^"]+)"/g)];
     expect(matches.length, 'TOOL_DESCRIPTION should mention at least one topic example').toBeGreaterThan(0);
     for (const m of matches) {
-      const id = m[1] as string;
+      const id = m[1];
       expect(JAMF_TOPICS, `TOOL_DESCRIPTION references unknown topic "${id}"`).toHaveProperty(id);
     }
   });
@@ -78,7 +78,7 @@ describe('TOOL_DESCRIPTION', () => {
     const matches = [...TOOL_DESCRIPTION.matchAll(/product="([^"]+)"/g)];
     expect(matches.length, 'TOOL_DESCRIPTION should mention at least one product example').toBeGreaterThan(0);
     for (const m of matches) {
-      const id = m[1] as string;
+      const id = m[1];
       expect(JAMF_PRODUCTS, `TOOL_DESCRIPTION references unknown product "${id}"`).toHaveProperty(id);
     }
   });

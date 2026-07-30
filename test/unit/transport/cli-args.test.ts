@@ -9,8 +9,8 @@ describe('parseCliArgs', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((_code?: number | string) => {
-      throw new Error(`process.exit(${_code})`);
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((_code?: string | number | null) => {
+      throw new Error(`process.exit(${String(_code)})`);
     });
   });
 

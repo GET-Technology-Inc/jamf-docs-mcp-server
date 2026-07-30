@@ -5,6 +5,8 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
+import { asJsonObject, resourceText } from '../helpers/fixtures.js';
+import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -66,14 +68,14 @@ describe('Jamf Docs MCP Server', () => {
 
     it('should have icon with data:image/png;base64 format', () => {
       const serverVersion = client.getServerVersion() as Record<string, unknown>;
-      const icons = serverVersion.icons as Array<{ src: string }>;
+      const icons = serverVersion.icons as { src: string }[];
       expect(icons.length).toBeGreaterThan(0);
       expect(icons[0].src).toMatch(/^data:image\/png;base64,/);
     });
 
     it('should have icon data URI under 10240 characters', () => {
       const serverVersion = client.getServerVersion() as Record<string, unknown>;
-      const icons = serverVersion.icons as Array<{ src: string }>;
+      const icons = serverVersion.icons as { src: string }[];
       expect(icons[0].src.length).toBeLessThan(10240);
     });
   });
@@ -130,9 +132,11 @@ describe('Jamf Docs MCP Server', () => {
       });
       const searchJson = JSON.parse(
         (searchResult.content[0] as { type: 'text'; text: string }).text
-      );
-      const url = searchJson.results[0]?.url
-        || 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
+      ) as { results?: { url?: string }[] };
+      const firstUrl = searchJson.results?.[0]?.url;
+      const url = firstUrl !== undefined && firstUrl !== ''
+        ? firstUrl
+        : 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
 
       const result = await client.callTool({
         name: 'jamf_docs_get_article',
@@ -196,7 +200,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(result.messages).toBeDefined();
       expect(result.messages.length).toBeGreaterThan(0);
       expect(result.messages[0].role).toBe('user');
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('MDM enrollment failing');
       expect(text).toContain('jamf_docs_search');
     });
@@ -207,7 +211,7 @@ describe('Jamf Docs MCP Server', () => {
         arguments: { feature: 'FileVault', product: 'jamf-pro' }
       });
       expect(result.messages.length).toBeGreaterThan(0);
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('FileVault');
       expect(text).toContain('jamf-pro');
     });
@@ -218,7 +222,7 @@ describe('Jamf Docs MCP Server', () => {
         arguments: { product: 'jamf-pro', version_a: '11.5.0', version_b: '11.12.0' }
       });
       expect(result.messages.length).toBeGreaterThan(0);
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('11.5.0');
       expect(text).toContain('11.12.0');
     });
@@ -239,7 +243,7 @@ describe('Jamf Docs MCP Server', () => {
       });
       expect(result.contents).toHaveLength(1);
       expect(result.contents[0].mimeType).toBe('application/json');
-      const data = JSON.parse(result.contents[0].text!);
+      const data = JSON.parse(resourceText(result.contents));
       expect(data.product).toBe('Jamf Pro');
       expect(data.versions).toBeDefined();
       expect(Array.isArray(data.versions)).toBe(true);
@@ -250,8 +254,8 @@ describe('Jamf Docs MCP Server', () => {
         uri: 'jamf://products/invalid-product/versions'
       });
       expect(result.contents).toHaveLength(1);
-      expect(result.contents[0].text).toContain('Invalid product ID');
-      expect(result.contents[0].text).toContain('jamf-pro');
+      expect(resourceText(result.contents)).toContain('Invalid product ID');
+      expect(resourceText(result.contents)).toContain('jamf-pro');
     });
 
     it('should preserve existing static resources', async () => {
@@ -286,25 +290,26 @@ describe('Jamf Docs MCP Server', () => {
   });
 
   describe('http transport', () => {
-    let httpProcess: ChildProcess;
+    let httpProcess: ChildProcess | undefined;
     const httpPort = 13579; // Use a non-standard port to avoid conflicts
 
     beforeAll(async () => {
       const serverPath = path.resolve(process.cwd(), 'dist/index.js');
-      httpProcess = spawn('node', [serverPath, '--transport', 'http', '--port', String(httpPort)], {
+      const proc = spawn('node', [serverPath, '--transport', 'http', '--port', String(httpPort)], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      httpProcess = proc;
 
       // Wait for the server to start
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => { reject(new Error('HTTP server start timeout')); }, 10000);
-        httpProcess.stderr!.on('data', (data: Buffer) => {
+        proc.stderr.on('data', (data: Buffer) => {
           if (data.toString().includes('running on http://')) {
             clearTimeout(timeout);
             resolve();
           }
         });
-        httpProcess.on('error', reject);
+        proc.on('error', reject);
       });
     });
 
@@ -315,7 +320,7 @@ describe('Jamf Docs MCP Server', () => {
     it('should respond to health check', async () => {
       const res = await fetch(`http://127.0.0.1:${httpPort}/health`);
       expect(res.status).toBe(200);
-      const data = await res.json();
+      const data = asJsonObject(await res.json());
       expect(data.status).toBe('ok');
       expect(data.version).toBeDefined();
     });
@@ -388,7 +393,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Jamf Pro');
       expect(text).toContain('Jamf School');
       expect(text).toContain('Jamf Connect');
@@ -401,7 +406,7 @@ describe('Jamf Docs MCP Server', () => {
         arguments: { responseFormat: 'json' }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       const json = JSON.parse(text);
 
       expect(json.products).toBeDefined();
@@ -435,7 +440,7 @@ describe('Jamf Docs MCP Server', () => {
         arguments: { outputMode: 'compact' }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       // Compact mode should be shorter and simpler
       expect(text).toContain('## Products');
@@ -550,7 +555,7 @@ describe('Jamf Docs MCP Server', () => {
         arguments: { query: 'script' }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       expect(text).toContain('Search Results');
       expect(text).not.toMatch(/^\{/); // Not JSON
@@ -565,7 +570,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       // Compact mode uses numbered list format
       expect(text).toMatch(/^\d+\. \[/m);
@@ -581,7 +586,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       expect(text).toContain('No results found');
       expect(text).toContain('Search Suggestions');
@@ -602,8 +607,13 @@ describe('Jamf Docs MCP Server', () => {
           responseFormat: 'json'
         }
       });
-      const searchJson = JSON.parse((searchResult.content[0] as { type: 'text'; text: string }).text);
-      validArticleUrl = searchJson.results[0]?.url || 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
+      const searchJson = JSON.parse(
+        (searchResult.content[0] as { type: 'text'; text: string }).text
+      ) as { results?: { url?: string }[] };
+      const firstUrl = searchJson.results?.[0]?.url;
+      validArticleUrl = firstUrl !== undefined && firstUrl !== ''
+        ? firstUrl
+        : 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
     });
 
     it('should fetch article content', async () => {
@@ -662,7 +672,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('must be from');
     });
 
@@ -674,7 +684,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).not.toMatch(/^\{/); // Not JSON
     });
 
@@ -687,7 +697,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       // Summary mode should contain summary section and outline
       expect(text).toContain('## Summary');
@@ -705,7 +715,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       // Compact mode should have content but shorter footer
       expect(text).toContain('# ');
@@ -723,7 +733,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(resourceUris).toContain('jamf://products');
       expect(resourceUris).toContain('jamf://topics');
       // The MCP Apps viewer the search/TOC/article tools reference.
-      expect(resourceUris).toContain('ui://jamf-docs/app.html');
+      expect(resourceUris).toContain(APP_RESOURCE_URI);
       expect(result.resources).toHaveLength(3);
     });
 
@@ -746,7 +756,7 @@ describe('Jamf Docs MCP Server', () => {
 
     it('should serve the app resource as an MCP Apps document', async () => {
       const result = await client.listResources();
-      const app = result.resources.find(r => r.uri === 'ui://jamf-docs/app.html');
+      const app = result.resources.find(r => r.uri === APP_RESOURCE_URI);
 
       expect(app?.mimeType).toBe('text/html;profile=mcp-app');
     });
@@ -759,7 +769,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(result.contents).toHaveLength(1);
       expect(result.contents[0].mimeType).toBe('application/json');
 
-      const json = JSON.parse(result.contents[0].text as string);
+      const json = JSON.parse(resourceText(result.contents));
       expect(json.products).toBeDefined();
       // Resource uses metadata service which may cache results; at minimum all core products present
       expect(json.products.length).toBeGreaterThanOrEqual(4);
@@ -777,7 +787,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(result.contents).toHaveLength(1);
       expect(result.contents[0].mimeType).toBe('application/json');
 
-      const json = JSON.parse(result.contents[0].text as string);
+      const json = JSON.parse(resourceText(result.contents));
       expect(json.topics).toBeDefined();
       expect(json.totalTopics).toBeGreaterThan(30);
 
@@ -874,7 +884,7 @@ describe('Jamf Docs MCP Server', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text.toLowerCase()).toContain('invalid');
     });
 
@@ -886,7 +896,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Table of Contents');
       expect(text).not.toMatch(/^\{/); // Not JSON
     });
@@ -900,7 +910,7 @@ describe('Jamf Docs MCP Server', () => {
         }
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
 
       // Compact mode should have simpler header
       expect(text).toContain('## Jamf Pro TOC');

@@ -9,6 +9,7 @@ import {
   TocOutputSchema,
   ProductListOutputSchema,
 } from '../../../src/core/schemas/output.js';
+import { omitKey } from '../../helpers/fixtures.js';
 
 // ---------------------------------------------------------------------------
 // SearchOutputSchema
@@ -39,7 +40,7 @@ describe('SearchOutputSchema', () => {
   });
 
   it('should accept SearchOutputSchema without optional suggestions', () => {
-    const { suggestions: _s, ...withoutSuggestions } = VALID_SEARCH_OUTPUT;
+    const withoutSuggestions = omitKey(VALID_SEARCH_OUTPUT, 'suggestions');
     const result = SearchOutputSchema.safeParse(withoutSuggestions);
     expect(result.success).toBe(true);
   });
@@ -68,13 +69,13 @@ describe('SearchOutputSchema', () => {
   });
 
   it('should fail when query is missing', () => {
-    const { query: _q, ...withoutQuery } = VALID_SEARCH_OUTPUT;
+    const withoutQuery = omitKey(VALID_SEARCH_OUTPUT, 'query');
     const result = SearchOutputSchema.safeParse(withoutQuery);
     expect(result.success).toBe(false);
   });
 
   it('should fail when results is missing', () => {
-    const { results: _r, ...withoutResults } = VALID_SEARCH_OUTPUT;
+    const withoutResults = omitKey(VALID_SEARCH_OUTPUT, 'results');
     const result = SearchOutputSchema.safeParse(withoutResults);
     expect(result.success).toBe(false);
   });
@@ -162,31 +163,31 @@ describe('ArticleOutputSchema', () => {
   });
 
   it('should fail when title is missing', () => {
-    const { title: _t, ...withoutTitle } = VALID_ARTICLE_OUTPUT;
+    const withoutTitle = omitKey(VALID_ARTICLE_OUTPUT, 'title');
     const result = ArticleOutputSchema.safeParse(withoutTitle);
     expect(result.success).toBe(false);
   });
 
   it('should fail when url is missing', () => {
-    const { url: _u, ...withoutUrl } = VALID_ARTICLE_OUTPUT;
+    const withoutUrl = omitKey(VALID_ARTICLE_OUTPUT, 'url');
     const result = ArticleOutputSchema.safeParse(withoutUrl);
     expect(result.success).toBe(false);
   });
 
   it('should fail when content is missing', () => {
-    const { content: _c, ...withoutContent } = VALID_ARTICLE_OUTPUT;
+    const withoutContent = omitKey(VALID_ARTICLE_OUTPUT, 'content');
     const result = ArticleOutputSchema.safeParse(withoutContent);
     expect(result.success).toBe(false);
   });
 
   it('should fail when sections is missing', () => {
-    const { sections: _s, ...withoutSections } = VALID_ARTICLE_OUTPUT;
+    const withoutSections = omitKey(VALID_ARTICLE_OUTPUT, 'sections');
     const result = ArticleOutputSchema.safeParse(withoutSections);
     expect(result.success).toBe(false);
   });
 
   it('should fail when truncated is missing', () => {
-    const { truncated: _t, ...withoutTruncated } = VALID_ARTICLE_OUTPUT;
+    const withoutTruncated = omitKey(VALID_ARTICLE_OUTPUT, 'truncated');
     const result = ArticleOutputSchema.safeParse(withoutTruncated);
     expect(result.success).toBe(false);
   });
@@ -253,19 +254,19 @@ describe('TocOutputSchema', () => {
   });
 
   it('should fail when product is missing', () => {
-    const { product: _p, ...withoutProduct } = VALID_TOC_OUTPUT;
+    const withoutProduct = omitKey(VALID_TOC_OUTPUT, 'product');
     const result = TocOutputSchema.safeParse(withoutProduct);
     expect(result.success).toBe(false);
   });
 
   it('should fail when version is missing', () => {
-    const { version: _v, ...withoutVersion } = VALID_TOC_OUTPUT;
+    const withoutVersion = omitKey(VALID_TOC_OUTPUT, 'version');
     const result = TocOutputSchema.safeParse(withoutVersion);
     expect(result.success).toBe(false);
   });
 
   it('should fail when entries is missing', () => {
-    const { entries: _e, ...withoutEntries } = VALID_TOC_OUTPUT;
+    const withoutEntries = omitKey(VALID_TOC_OUTPUT, 'entries');
     const result = TocOutputSchema.safeParse(withoutEntries);
     expect(result.success).toBe(false);
   });
@@ -350,13 +351,13 @@ describe('ProductListOutputSchema', () => {
   });
 
   it('should fail when products is missing', () => {
-    const { products: _p, ...withoutProducts } = VALID_PRODUCT_LIST_OUTPUT;
+    const withoutProducts = omitKey(VALID_PRODUCT_LIST_OUTPUT, 'products');
     const result = ProductListOutputSchema.safeParse(withoutProducts);
     expect(result.success).toBe(false);
   });
 
   it('should fail when topics is missing', () => {
-    const { topics: _t, ...withoutTopics } = VALID_PRODUCT_LIST_OUTPUT;
+    const withoutTopics = omitKey(VALID_PRODUCT_LIST_OUTPUT, 'topics');
     const result = ProductListOutputSchema.safeParse(withoutTopics);
     expect(result.success).toBe(false);
   });

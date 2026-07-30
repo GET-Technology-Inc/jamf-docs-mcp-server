@@ -19,7 +19,7 @@ describe('estimateTokens', () => {
   });
 
   it('should return 0 for null/undefined', () => {
-    expect(estimateTokens(null as unknown as string)).toBe(0);
+    expect(estimateTokens(null)).toBe(0);
     expect(estimateTokens(undefined as unknown as string)).toBe(0);
   });
 
@@ -257,13 +257,13 @@ const a = 1;
 const b = 2;
 const c = 3;
 // many more lines
-${'const x = ' + Math.random() + ';\n'.repeat(500)}
+const x = ${  Math.random()  }${';\n'.repeat(500)}
 \`\`\``;
 
     const result = truncateToTokenLimit(content, 100);
 
     // Count code block markers
-    const openBlocks = (result.content.match(/```/g) || []).length;
+    const openBlocks = (result.content.match(/```/g) ?? []).length;
     expect(openBlocks % 2).toBe(0); // Should be even (all blocks closed)
   });
 
@@ -350,7 +350,7 @@ describe('truncateItemsToTokenLimit', () => {
     { id: 5, text: 'final item' }
   ];
 
-  const itemToString = (item: { id: number; text: string }) =>
+  const itemToString = (item: { id: number; text: string }): string =>
     JSON.stringify(item);
 
   it('should return items within token limit', () => {
@@ -536,7 +536,7 @@ describe('truncateToTokenLimit - more than 10 remaining sections', () => {
     if (result.tokenInfo.truncated) {
       const match = /\.\.\.and (\d+) more sections/.exec(result.content);
       if (match !== null) {
-        const moreCount = parseInt(match[1] ?? '0', 10);
+        const moreCount = parseInt(match.at(1) ?? '0', 10);
         expect(moreCount).toBeGreaterThan(0);
       }
     }

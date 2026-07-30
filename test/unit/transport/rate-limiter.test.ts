@@ -355,7 +355,7 @@ describe('RateLimiter.cleanup', () => {
     const limiter = new RateLimiter(5, 1000);
 
     // Act & Assert: should not throw
-    expect(() => limiter.cleanup()).not.toThrow();
+    expect(() => { limiter.cleanup(); }).not.toThrow();
   });
 
   it('should remove multiple stale entries in one cleanup pass', () => {

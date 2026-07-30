@@ -9,18 +9,27 @@
  *   - HttpError: constructor properties, isRetryable logic
  */
 
-import { vi, describe, it, expect, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach, type Mock } from 'vitest';
 import { httpGetText, httpGetJson, httpPostJson, HttpError } from '../../../src/core/http-client.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mockFetchOk(body: string, headers?: HeadersInit): typeof fetch {
-  return vi.fn().mockResolvedValue(new Response(body, { status: 200, statusText: 'OK', headers }));
+// Returned as a `Mock` rather than `typeof fetch` so the assertions below can
+// reach `.mock.calls` and inspect the RequestInit the client built. `Mock` is
+// still assignable to `fetch` for `vi.stubGlobal`.
+function mockFetchOk(body: string, headers?: Record<string, string>): Mock<typeof fetch> {
+  return vi.fn().mockResolvedValue(
+    new Response(body, {
+      status: 200,
+      statusText: 'OK',
+      ...(headers !== undefined ? { headers } : {}),
+    }),
+  );
 }
 
-function mockFetchStatus(status: number, statusText: string): typeof fetch {
+function mockFetchStatus(status: number, statusText: string): Mock<typeof fetch> {
   return vi.fn().mockResolvedValue(
     new Response(null, { status, statusText })
   );
@@ -86,10 +95,13 @@ describe('httpGetText', () => {
   it('should throw on timeout when fetch never resolves', async () => {
     // Mock fetch that respects the AbortSignal so the timeout actually fires.
     const slowFetch = vi.fn().mockImplementation(
-      (_url: string, init?: RequestInit) =>
-        new Promise((_resolve, reject) => {
+      async (_url: string, init?: RequestInit) =>
+        await new Promise((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => {
-            reject(init.signal!.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+            const { reason } = init.signal!;
+            reject(reason instanceof Error
+              ? reason
+              : new DOMException('The operation was aborted.', 'AbortError'));
           });
         })
     );
@@ -152,7 +164,7 @@ describe('httpGetJson', () => {
 
     const calledInit = (mock as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
     const headers = calledInit.headers as Record<string, string>;
-    expect(headers['Accept']).toBe('application/json');
+    expect(headers.Accept).toBe('application/json');
   });
 
   it('should throw a non-HttpError when response body is invalid JSON', async () => {
@@ -186,7 +198,7 @@ describe('httpPostJson', () => {
     expect(result).toEqual(responsePayload);
     expect(mock).toHaveBeenCalledOnce();
 
-    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    const calledInit = mock.mock.calls[0][1]!;
     expect(calledInit.method).toBe('POST');
     expect(calledInit.body).toBe(JSON.stringify({ name: 'test', value: 123 }));
   });
@@ -197,9 +209,9 @@ describe('httpPostJson', () => {
 
     await httpPostJson('https://example.com/api', { q: 'jamf' });
 
-    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    const calledInit = mock.mock.calls[0][1]!;
     const headers = calledInit.headers as Record<string, string>;
-    expect(headers['Accept']).toBe('application/json');
+    expect(headers.Accept).toBe('application/json');
     expect(headers['Content-Type']).toBe('application/json');
   });
 
@@ -222,21 +234,21 @@ describe('httpPostJson', () => {
       headers: { 'X-Request-Id': 'abc-123' },
     });
 
-    const calledInit = mock.mock.calls[0][1] as RequestInit;
+    const calledInit = mock.mock.calls[0][1]!;
     const headers = calledInit.headers as Record<string, string>;
-    expect(headers['Accept']).toBe('application/json');
+    expect(headers.Accept).toBe('application/json');
     expect(headers['Content-Type']).toBe('application/json');
     expect(headers['X-Request-Id']).toBe('abc-123');
   });
 
   it('should serialize body once and reuse on retry', async () => {
     let callCount = 0;
-    const mock = vi.fn().mockImplementation(() => {
+    const mock = vi.fn().mockImplementation(async () => {
       callCount++;
       if (callCount === 1) {
-        return Promise.resolve(new Response(null, { status: 500, statusText: 'Server Error' }));
+        return await Promise.resolve(new Response(null, { status: 500, statusText: 'Server Error' }));
       }
-      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      return await Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     });
     vi.stubGlobal('fetch', mock);
 

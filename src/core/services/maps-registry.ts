@@ -47,7 +47,7 @@ export interface RegistryProductInfo {
  * Derive bundleStem from metadata.
  * Prefers `version_bundle_stem` (clean stem), otherwise parses `bundle` values.
  */
-function deriveBundleStem(metadata: FtMetadataEntry[]): string {
+function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): string {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
   if (stem !== '') {return stem;}
 
@@ -69,7 +69,11 @@ function parseMap(map: FtMapInfo): MapEntry {
   const { metadata } = map;
   return {
     mapId: map.id,
-    title: map.title,
+    // '' is this type's existing sentinel for an absent value (see `version`
+    // and `locale` below). Nothing renders this field today — product names
+    // come from the compiled-in JAMF_PRODUCTS — so there is no user-visible
+    // fallback to choose.
+    title: map.title ?? '',
     bundleStem: deriveBundleStem(metadata),
     version: getMetaValue(metadata, FT_META.VERSION),
     locale: getMetaValue(metadata, FT_META.LOCALE),

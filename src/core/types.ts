@@ -156,6 +156,8 @@ export interface FetchTocResult {
   toc: TocEntry[];
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
 }
 
 /**
@@ -168,6 +170,8 @@ export interface SearchDocumentationResult {
   filterRelaxation?: FilterRelaxation;
   versionNote?: string;
   truncatedContent?: TruncatedContentInfo;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
   /** Set when the upstream search call failed; results will be empty. */
   searchError?: string;
 }
@@ -223,10 +227,22 @@ export interface GlossaryLookupResult {
 export interface FtTocNode {
   tocId: string;
   contentId: string;
-  title: string;
+  /**
+   * Optional for the same reason as {@link FtTopicInfo.title}: this shape is a
+   * bare cast over `response.json()` (`httpGetJson<FtTocNode | FtTocNode[]>`)
+   * with no runtime validation behind it.
+   */
+  title?: string;
   prettyUrl: string;
   hasRating?: boolean;
-  children: FtTocNode[];
+  /**
+   * Optional for the same reason as `title`. Fluid Topics omits the key
+   * entirely on leaf nodes rather than sending `[]`. Declaring it required
+   * told the compiler that `if (node.children && ...)` was dead code, and
+   * removing that guard in 4.0.1 turned a leaf node into
+   * `TypeError: Cannot read properties of undefined (reading 'length')`.
+   */
+  children?: FtTocNode[];
 }
 
 export interface FtMetadataEntry {
@@ -239,22 +255,26 @@ export interface FtSearchTopic {
   mapId: string;
   contentId: string;
   tocId: string;
-  title: string;
+  /** Optional for the same reason as {@link FtTopicInfo.title}. */
+  title?: string;
   htmlTitle: string;
   mapTitle: string;
   breadcrumb: string[];
   htmlExcerpt: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 export interface FtSearchMap {
   mapId: string;
   mapUrl: string;
   readerUrl: string;
-  title: string;
+  /** Optional for the same reason as {@link FtTopicInfo.title}. */
+  title?: string;
   htmlTitle: string;
   htmlExcerpt: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
   editorialType: string;
   lastEditionDate?: string;
   lastPublicationDate?: string;
@@ -301,10 +321,12 @@ export interface FtSearchRequest {
 }
 
 export interface FtMapInfo {
-  title: string;
+  /** Optional for the same reason as {@link FtTopicInfo.title}. */
+  title?: string;
   id: string;
   mapApiEndpoint: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 export interface FtTopicInfo {
@@ -322,7 +344,8 @@ export interface FtTopicInfo {
   contentApiEndpoint: string;
   readerUrl?: string;
   breadcrumb?: string[];
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 // TOC types

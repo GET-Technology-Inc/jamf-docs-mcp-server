@@ -13,7 +13,7 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/server';
-import { APP_HTML } from './generated/app-html.js';
+import { APP_HTML, APP_HTML_HASH } from './generated/app-html.js';
 
 /** Extension identifier used for capability negotiation. */
 export const UI_EXTENSION_ID = 'io.modelcontextprotocol/ui';
@@ -21,8 +21,24 @@ export const UI_EXTENSION_ID = 'io.modelcontextprotocol/ui';
 /** MIME type identifying an MCP Apps HTML resource. */
 export const APP_MIME_TYPE = 'text/html;profile=mcp-app';
 
-/** URI of the shared app resource. */
-export const APP_RESOURCE_URI = 'ui://jamf-docs/app.html';
+/**
+ * URI of the shared app resource, content-addressed by the bundle's hash.
+ *
+ * The hash is not decoration — it is what makes the cache hint below safe. A
+ * fixed `ui://jamf-docs/app.html` carries no identity for *which* bundle it
+ * names, so a host that fetched it under one release kept serving that copy
+ * for the full TTL after the server had deployed a different one. 4.0.0
+ * shipped a bundle that never parsed and 4.0.1 replaced it wholesale; every
+ * host that had read the resource in between held the broken copy for up to a
+ * day, and the fix could not reach them.
+ *
+ * With the hash in the URI a changed bundle is a different resource, so the
+ * stale entry is simply never asked for again and the host fetches the new one
+ * on its next `tools/list`. That also bounds the residual staleness to the
+ * one-hour `tools/list` / `resources/list` hint in create-server.ts rather
+ * than this resource's own 24 hours.
+ */
+export const APP_RESOURCE_URI = `ui://jamf-docs/app-${APP_HTML_HASH}.html`;
 
 /**
  * `_meta` to attach to a tool whose result the app can render.
@@ -55,7 +71,10 @@ export function registerApps(server: McpServer): void {
       description:
         'Interactive viewer for Jamf documentation search results, tables of contents, and articles.',
       mimeType: APP_MIME_TYPE,
-      // The bundle is inert between releases, so hosts may hold it for a day.
+      // Safe because APP_RESOURCE_URI is content-addressed: this URI names one
+      // exact bundle and will never name a different one, so a host holding it
+      // for a day is holding something that genuinely cannot go stale. A new
+      // bundle arrives under a new URI rather than replacing this one.
       cacheHint: { ttlMs: 86_400_000, cacheScope: 'public' },
     },
     () => ({

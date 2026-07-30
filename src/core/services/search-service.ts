@@ -97,7 +97,7 @@ function productNameToId(name: string | null): ProductId | null {
  * Extract product ID (e.g. 'jamf-pro') from a legacy metadata value
  * like 'product-pro'. Falls back to scanning known searchLabel values.
  */
-function extractProductFromZoominMeta(metadata: FtMetadataEntry[]): string | null {
+function extractProductFromZoominMeta(metadata: FtMetadataEntry[] | undefined): string | null {
   const values = getMetaValues(metadata, FT_META.ZOOMIN_METADATA);
   for (const val of values) {
     // Match against known searchLabels in JAMF_PRODUCTS
@@ -121,7 +121,7 @@ function extractProductFromZoominMeta(metadata: FtMetadataEntry[]): string | nul
  * lookup always returns 'documentation' for any of those types. This is
  * a known FT API limitation — there is no metadata to distinguish them.
  */
-function docTypeFromFtMetadata(metadata: FtMetadataEntry[]): DocTypeId {
+function docTypeFromFtMetadata(metadata: FtMetadataEntry[] | undefined): DocTypeId {
   const values = getMetaValues(metadata, FT_META.CONTENT_TYPE);
   if (values.length > 0) {
     // Reverse-lookup DOC_TYPE_CONTENT_TYPE_MAP
@@ -255,14 +255,16 @@ export function transformFtSearchResult(
 
 /** Common fields extracted from either a TOPIC or MAP entry */
 interface EntryFields {
-  title: string;
+  /** Absent when Fluid Topics sent the entry without one — see FtSearchTopic.title. */
+  title?: string | undefined;
   url: string;
   htmlExcerpt: string;
-  metadata: FtMetadataEntry[];
+  metadata?: FtMetadataEntry[] | undefined;
   mapId: string;
   contentId?: string;
   breadcrumb?: string[];
-  mapTitle?: string;
+  /** A MAP entry reuses its own (optional) title here. Guarded at the use site. */
+  mapTitle?: string | undefined;
 }
 
 /**
@@ -271,7 +273,12 @@ interface EntryFields {
  */
 function buildSearchResult(fields: EntryFields): SearchResult {
   const { metadata } = fields;
-  const title = fields.title !== '' ? fields.title : 'Untitled';
+  // Both the absent and the empty case fall back, matching how the article
+  // path picks its title (article-service.ts). Testing only `!== ''` let
+  // `undefined` through, because `undefined !== ''` is true.
+  const title = (fields.title !== undefined && fields.title !== '')
+    ? fields.title
+    : 'Untitled';
   const product = extractProductFromZoominMeta(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
   const versionValues = getMetaValues(metadata, FT_META.VERSION);

@@ -25,7 +25,7 @@ import {
   searchDocumentation,
   dedupeToLatestVersions,
 } from '../../../src/core/services/search-service.js';
-import { DOCS_BASE_URL, FT_API_BASE, DOC_TYPE_CONTENT_TYPE_MAP } from '../../../src/core/constants.js';
+import { DOCS_BASE_URL, FT_API_BASE } from '../../../src/core/constants.js';
 import type {
   FtSearchEntry,
   FtSearchCluster,
@@ -225,7 +225,7 @@ describe('buildSearchFilters()', () => {
   });
 
   it('should map training docType to Technical Documentation', () => {
-    const filters = buildSearchFilters({ docType: 'training' as never });
+    const filters = buildSearchFilters({ docType: 'training' });
     const contentTypeFilter = filters.find(f => f.key === 'jamf:contentType');
     expect(contentTypeFilter).toEqual({
       key: 'jamf:contentType',
@@ -281,7 +281,7 @@ describe('dedupeToLatestVersions()', () => {
     // One result per product — none dropped by version dedup.
     expect(deduped).toHaveLength(3);
     const products = deduped.map(
-      e => e.topic?.metadata.find(m => m.key === 'zoominmetadata')?.values[0]
+      e => e.topic?.metadata?.find(m => m.key === 'zoominmetadata')?.values[0]
     );
     expect(new Set(products)).toEqual(new Set(['product-pro', 'product-school', 'product-connect']));
   });
@@ -485,6 +485,52 @@ describe('transformFtSearchResult()', () => {
       const entry = makeMapEntry({ title: 'Jamf Protect Docs' });
       const result = transformFtSearchResult(entry);
       expect(result.mapTitle).toBe('Jamf Protect Docs');
+    });
+  });
+
+  // ── Titleless payloads ────────────────────────────────────────────────────
+  //
+  // `FtSearchTopic.title` / `FtSearchMap.title` come from a bare cast over
+  // `response.json()` with no runtime validation, so a payload without a title
+  // is a shape the type forbids and the network can still produce. The guard
+  // used to read `fields.title !== ''`, and `undefined !== ''` is true — so the
+  // 'Untitled' fallback never fired and `undefined` reached SearchResult.title,
+  // which is declared `string`.
+  describe('entries with no title', () => {
+    it('should fall back to Untitled for a TOPIC with no title', () => {
+      const entry = makeTopicEntry();
+      delete entry.topic?.title;
+
+      const result = transformFtSearchResult(entry);
+
+      expect(result.title).toBe('Untitled');
+    });
+
+    it('should fall back to Untitled for a MAP with no title', () => {
+      const entry = makeMapEntry();
+      delete entry.map?.title;
+
+      const result = transformFtSearchResult(entry);
+
+      expect(result.title).toBe('Untitled');
+    });
+
+    it('should still fall back to Untitled for an empty-string title', () => {
+      const entry = makeTopicEntry({ title: '' });
+      const result = transformFtSearchResult(entry);
+      expect(result.title).toBe('Untitled');
+    });
+
+    it('should keep the literal string "undefined" out of the snippet', () => {
+      // cleanSnippet() falls back to `${title} — ${product}` for a short
+      // snippet, so an undefined title used to render as "undefined — Jamf Pro".
+      const entry = makeTopicEntry({ htmlExcerpt: '<b>hi</b>' });
+      delete entry.topic?.title;
+
+      const result = transformFtSearchResult(entry);
+
+      expect(result.snippet).not.toContain('undefined');
+      expect(result.snippet).toContain('Untitled');
     });
   });
 });
@@ -878,7 +924,7 @@ describe('searchDocumentation()', () => {
     expect(result.pagination.totalPages).toBe(1);
 
     // paginationNote should exist and mention the requested page number
-    const note = (result as Record<string, unknown>).paginationNote as string;
+    const { paginationNote: note } = result;
     expect(note).toBeDefined();
     expect(note).toContain('99');
     expect(note).toContain('1'); // total pages
@@ -907,7 +953,7 @@ describe('searchDocumentation()', () => {
     });
 
     expect(result.pagination.page).toBe(2);
-    const note = (result as Record<string, unknown>).paginationNote;
+    const { paginationNote: note } = result;
     expect(note).toBeUndefined();
   });
 

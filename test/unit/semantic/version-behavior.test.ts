@@ -17,11 +17,11 @@ import type { SearchParams } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 
 const mockSearchDocumentation = vi.fn().mockImplementation(
-  (_ctx: ServerContext, params: SearchParams) => {
+  async (_ctx: ServerContext, params: SearchParams) => {
     const isVersionMismatch = params.version !== undefined
       && params.version !== 'current'
       && params.version !== '';
-    return Promise.resolve({
+    return await Promise.resolve({
       results: [
         {
           title: 'Configuration Profiles',
@@ -43,7 +43,7 @@ const mockSearchDocumentation = vi.fn().mockImplementation(
       pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 2, hasNext: false, hasPrev: false },
       tokenInfo: { tokenCount: 100, truncated: false, maxTokens: 5000 },
       ...(isVersionMismatch ? {
-        versionNote: `Version "${params.version}" was not available for some results. Showing the latest version instead.`,
+        versionNote: `Version "${String(params.version)}" was not available for some results. Showing the latest version instead.`,
       } : {}),
     });
   }
@@ -59,7 +59,7 @@ import { createMockContext } from '../../helpers/mock-context.js';
 
 const ctx = createMockContext();
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -138,7 +138,7 @@ describe('version parameter — tool layer (no versionNote)', () => {
       arguments: { query: 'jamf pro', version: '99.0.0' },
     });
 
-    const text = (result.content[0] as TextContent).text;
+    const {text} = (result.content[0] as TextContent);
     expect(text).toContain('Version Note');
   });
 });

@@ -51,7 +51,7 @@ describe('Search filter fallback', () => {
     expect(result.results).toHaveLength(1);
     expect(result.filterRelaxation).toBeDefined();
     expect(result.filterRelaxation!.removed).toContain('docType');
-    expect(result.filterRelaxation!.original['docType']).toBe('release-notes');
+    expect(result.filterRelaxation!.original.docType).toBe('release-notes');
   });
 
   it('should relax single filter when it matches nothing', async () => {

@@ -7,10 +7,12 @@ import { reportProgress, type McpToolContext } from '../../src/core/utils/progre
 
 type Extra = McpToolContext;
 
-interface ExtraOverrides {
-  _meta?: Record<string, unknown>;
+// `_meta` is the MCP protocol's own field name, so it cannot be renamed to
+// satisfy naming-convention's typeProperty format. Declaring it through
+// `Record` keeps the key a string literal rather than a declared property.
+type ExtraOverrides = Partial<Record<'_meta', Record<string, unknown> | undefined>> & {
   notify?: (notification: unknown) => unknown;
-}
+};
 
 /**
  * Build a per-request handler context. Progress metadata and the outbound

@@ -57,7 +57,7 @@ function collectTocUrls(entries: TocEntry[]): string[] {
   return urls;
 }
 
-type TextContent = { type: 'text'; text: string };
+interface TextContent { type: 'text'; text: string }
 
 function getText(result: { content: unknown[] }): string {
   return (result.content[0] as TextContent).text;
@@ -66,7 +66,7 @@ function getText(result: { content: unknown[] }): string {
 // ─── Mock setup ────────────────────────────────────────────────────
 
 vi.mock('../../src/core/services/search-service.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../src/core/services/search-service.js')>();
+  const original = await importOriginal<typeof SearchServiceModule>();
   return {
     ...original,
     searchDocumentation: vi.fn(),
@@ -74,7 +74,7 @@ vi.mock('../../src/core/services/search-service.js', async (importOriginal) => {
 });
 
 vi.mock('../../src/core/services/toc-service.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../src/core/services/toc-service.js')>();
+  const original = await importOriginal<typeof TocServiceModule>();
   return {
     ...original,
     fetchTableOfContents: vi.fn(),
@@ -83,6 +83,8 @@ vi.mock('../../src/core/services/toc-service.js', async (importOriginal) => {
 
 import { searchDocumentation } from '../../src/core/services/search-service.js';
 import { fetchTableOfContents } from '../../src/core/services/toc-service.js';
+import type * as SearchServiceModule from '../../src/core/services/search-service.js';
+import type * as TocServiceModule from '../../src/core/services/toc-service.js';
 
 // ─── buildDisplayUrl: direct defence tests ─────────────────────────
 
@@ -216,7 +218,7 @@ describe('transformFtSearchResult URL safety', () => {
         productLabel: 'product-pro',
       },
     ]);
-    const entry = response.results[0]!.entries[0]!;
+    const entry = response.results[0].entries[0];
     const result: SearchResult = transformFtSearchResult(entry);
     assertSafeUrl(result.url);
   });
@@ -437,7 +439,7 @@ describe('MCP tool layer: search result URL safety', () => {
     const json = JSON.parse(getText(result));
     expect(json.results.length).toBeGreaterThan(0);
 
-    for (const searchResult of json.results as Array<{ url: string }>) {
+    for (const searchResult of json.results as { url: string }[]) {
       assertSafeUrl(searchResult.url);
     }
   });
@@ -465,7 +467,7 @@ describe('MCP tool layer: search result URL safety', () => {
     const json = JSON.parse(getText(result));
     expect(json.results.length).toBeGreaterThan(0);
 
-    for (const searchResult of json.results as Array<{ url: string }>) {
+    for (const searchResult of json.results as { url: string }[]) {
       assertSafeUrl(searchResult.url);
     }
   });
@@ -494,7 +496,7 @@ describe('MCP tool layer: search result URL safety', () => {
     });
 
     const json = JSON.parse(getText(result));
-    for (const searchResult of json.results as Array<{ url: string }>) {
+    for (const searchResult of json.results as { url: string }[]) {
       assertSafeUrl(searchResult.url);
     }
   });

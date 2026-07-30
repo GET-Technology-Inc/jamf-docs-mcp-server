@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
+import { resourceText } from '../helpers/fixtures.js';
 
 // ---------------------------------------------------------------------------
 // Mock service modules BEFORE importing tools/resources
@@ -248,9 +249,9 @@ describe('E2E: MCP Server Response Schema', () => {
     vi.mocked(getBundleIdForVersion).mockResolvedValue('jamf-pro-documentation');
 
     // Re-set article provider mock for get-article tool
-    nextArticleResult = MOCK_ARTICLE_RESULT as FetchArticleResult;
+    nextArticleResult = MOCK_ARTICLE_RESULT;
     mockArticleProvider.getArticleByIds.mockImplementation(
-      async () => nextArticleResult
+      async () => await Promise.resolve(nextArticleResult)
     );
     mockArticleProvider.getArticle.mockResolvedValue(null);
   });
@@ -315,7 +316,7 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Jamf Pro');
       expect(text).toContain('Jamf School');
       expect(text).toContain('Jamf Connect');
@@ -329,7 +330,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       const json = JSON.parse(text);
 
       expect(Array.isArray(json.products)).toBe(true);
@@ -368,7 +369,7 @@ describe('E2E: MCP Server Response Schema', () => {
         arguments: { outputMode: 'compact' },
       });
 
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('## Products');
       expect(text).toContain('## Topics');
       // Compact mode should not show verbose descriptions
@@ -400,7 +401,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content).toHaveLength(1);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Configuration Profiles Overview');
     });
 
@@ -449,7 +450,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       // Empty query should trigger a validation error
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toBeTruthy();
     });
 
@@ -489,7 +490,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('No results');
     });
   });
@@ -509,7 +510,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content).toHaveLength(1);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Configuration Profiles');
     });
 
@@ -534,7 +535,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('must be from');
     });
 
@@ -609,7 +610,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('Getting Started');
     });
 
@@ -634,7 +635,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text.toLowerCase()).toContain('invalid');
     });
 
@@ -662,7 +663,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBeUndefined();
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text).toContain('## Jamf Pro TOC');
     });
 
@@ -700,7 +701,7 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(result.contents).toHaveLength(1);
       expect(result.contents[0].mimeType).toBe('application/json');
 
-      const data = JSON.parse(result.contents[0].text!);
+      const data = JSON.parse(resourceText(result.contents));
       expect(Array.isArray(data.products)).toBe(true);
       expect(data.products).toHaveLength(12);
     });
@@ -711,7 +712,7 @@ describe('E2E: MCP Server Response Schema', () => {
       expect(result.contents).toHaveLength(1);
       expect(result.contents[0].mimeType).toBe('application/json');
 
-      const data = JSON.parse(result.contents[0].text!);
+      const data = JSON.parse(resourceText(result.contents));
       expect(Array.isArray(data.topics)).toBe(true);
       expect(data.topics.length).toBeGreaterThan(0);
     });
@@ -730,7 +731,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       expect(result.messages.length).toBeGreaterThan(0);
       expect(result.messages[0].role).toBe('user');
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('MDM enrollment failing');
       expect(text).toContain('jamf_docs_search');
     });
@@ -742,7 +743,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.messages.length).toBeGreaterThan(0);
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('FileVault');
       expect(text).toContain('jamf-pro');
     });
@@ -754,7 +755,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.messages.length).toBeGreaterThan(0);
-      const text = (result.messages[0].content as { type: 'text'; text: string }).text;
+      const {text} = (result.messages[0].content as { type: 'text'; text: string });
       expect(text).toContain('11.5.0');
       expect(text).toContain('11.12.0');
     });
@@ -801,7 +802,7 @@ describe('E2E: MCP Server Response Schema', () => {
       });
 
       expect(result.isError).toBe(true);
-      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      const {text} = (result.content[0] as { type: 'text'; text: string });
       expect(text.length).toBeGreaterThan(0);
     });
 

@@ -20,13 +20,21 @@ export const FT_META = {
   PRODNAME: 'prodname',
 } as const;
 
-export function getMetaValue(metadata: FtMetadataEntry[], key: string): string {
-  const entry = metadata.find(m => m.key === key);
+/**
+ * `metadata` is optional on every FT payload type for the same reason their
+ * `title` fields are: the shapes are bare casts over `response.json()` with no
+ * runtime validation. Every metadata read in the codebase goes through these
+ * two helpers, so tolerating an absent array here covers all of them at once —
+ * and "no metadata at all" collapses naturally onto the same "key not found"
+ * default they already return.
+ */
+export function getMetaValue(metadata: FtMetadataEntry[] | undefined, key: string): string {
+  const entry = metadata?.find(m => m.key === key);
   return entry?.values[0] ?? '';
 }
 
-export function getMetaValues(metadata: FtMetadataEntry[], key: string): string[] {
-  const entry = metadata.find(m => m.key === key);
+export function getMetaValues(metadata: FtMetadataEntry[] | undefined, key: string): string[] {
+  const entry = metadata?.find(m => m.key === key);
   return entry?.values ?? [];
 }
 

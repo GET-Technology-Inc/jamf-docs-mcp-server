@@ -1,0 +1,33 @@
+{
+  // Tests were never type-checked: the root tsconfig only includes src/**.
+  // This project exists so `tsc --noEmit -p test/tsconfig.json` covers them and
+  // so eslint's type-aware rules have a program for test/**/*.ts.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // The root config emits from src/; this one only checks, so widen rootDir
+    // to the repo and turn off every emit-related option.
+    "rootDir": "..",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node", "vitest/globals"],
+
+    // Deliberately relaxed for tests only; src/ keeps it on.
+    //
+    // With it on, tests report 311 errors; 216 of those are TS2532/TS18048 on
+    // assertions like `expect(result.content[0].text).toContain(...)`, where the
+    // array was built two lines earlier by the test itself. The flag exists to
+    // catch indexing into data of unknown length; a fixture the test just
+    // constructed is not that. Satisfying it would mean ~216 `!` or `?.` edits
+    // spread through the assertions, which makes them harder to read while
+    // catching nothing — and would blunt failures, since `a?.b` on a missing
+    // element reports `undefined` instead of the index being absent.
+    //
+    // Turning it off leaves 95 errors, all real, and those are fixed rather
+    // than suppressed. The config already leans this way: no-non-null-assertion
+    // is off for tests in eslint.config.js.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["**/*.ts", "**/*.json"]
+}

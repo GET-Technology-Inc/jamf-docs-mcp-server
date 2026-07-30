@@ -75,13 +75,13 @@ function makeRequest(options: {
   return new Request(`http://localhost${path}`, {
     method,
     headers,
-    body: body !== undefined ? body : undefined,
+    ...(body !== undefined ? { body } : {}),
   });
 }
 
 /** Convenience: parse the JSON response body */
 async function parseJson(res: Response): Promise<Record<string, unknown>> {
-  return res.json() as Promise<Record<string, unknown>>;
+  return await (res.json() as Promise<Record<string, unknown>>);
 }
 
 // ============================================================================
@@ -114,7 +114,7 @@ describe('createHttpHandler — return value', () => {
     );
 
     // Act & Assert: no error thrown
-    expect(() => cleanup()).not.toThrow();
+    expect(() => { cleanup(); }).not.toThrow();
   });
 });
 
@@ -480,7 +480,7 @@ describe('Rate limiting', () => {
   let cleanup: () => void;
 
   afterEach(() => {
-    cleanup?.();
+    cleanup();
   });
 
   it('should allow requests under the rate limit', async () => {
