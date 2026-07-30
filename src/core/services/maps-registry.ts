@@ -47,7 +47,7 @@ export interface RegistryProductInfo {
  * Derive bundleStem from metadata.
  * Prefers `version_bundle_stem` (clean stem), otherwise parses `bundle` values.
  */
-function deriveBundleStem(metadata: FtMetadataEntry[]): string {
+function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): string {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
   if (stem !== '') {return stem;}
 

@@ -17,7 +17,7 @@ import {
   fetchMapToc,
   fetchTopicContent,
 } from '../../src/core/services/ft-client.js';
-import type { FtSearchCluster, FtMapInfo, FtTocNode } from '../../src/core/types.js';
+import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
 
@@ -29,6 +29,16 @@ import type { ProductId } from '../../src/core/constants.js';
  * Must NOT look like a human-readable bundle stem (e.g. "jamf-pro-documentation").
  */
 const OPAQUE_ID_RE = /^[a-zA-Z0-9_~-]+$/;
+
+/**
+ * Metadata as an array. Every FT payload type declares `metadata` optional,
+ * because the shapes are bare casts over `response.json()` with no validation —
+ * a payload without it reads as "no keys present", which is what these contract
+ * assertions already treat as a failure.
+ */
+function metaOf(m: { metadata?: FtMetadataEntry[] }): FtMetadataEntry[] {
+  return m.metadata ?? [];
+}
 
 /**
  * Readable bundle stem pattern — what we must NOT see as a mapId.
@@ -57,13 +67,13 @@ beforeAll(async () => {
 
   // Find the Jamf Pro latest English map to use for TOC and content tests
   const proMap = maps.find(m =>
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
     ) &&
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
     ) &&
-    m.metadata.some(
+    metaOf(m).some(
       meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US'
     )
   );
@@ -228,14 +238,14 @@ describe('FT API data contracts', () => {
     it('maps contain expected metadata keys for product identification', () => {
       // Find the Jamf Pro current map and verify its metadata structure
       const proMaps = maps.filter(m =>
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
         )
       );
       expect(proMaps.length, 'Expected at least one Jamf Pro map').toBeGreaterThan(0);
 
       const proMapSample = proMaps[0];
-      const metaKeys = proMapSample.metadata.map(m => m.key);
+      const metaKeys = metaOf(proMapSample).map(m => m.key);
 
       // These keys are essential for MapsRegistry to correctly identify and route maps
       expect(metaKeys).toContain('version_bundle_stem');
@@ -245,10 +255,10 @@ describe('FT API data contracts', () => {
 
     it('maps contain latestVersion metadata to distinguish current from historical', () => {
       const latestProMaps = maps.filter(m =>
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation'
         ) &&
-        m.metadata.some(
+        metaOf(m).some(
           meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
         )
       );
@@ -260,7 +270,7 @@ describe('FT API data contracts', () => {
 
       // There should be exactly one English latest map for Jamf Pro
       const latestEnMaps = latestProMaps.filter(m =>
-        m.metadata.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
+        metaOf(m).some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
       );
       expect(
         latestEnMaps.length,
@@ -427,7 +437,7 @@ describe('FT API data contracts', () => {
       // Collect every live `product-*` zoominmetadata value from the maps registry.
       const liveLabels = new Set<string>();
       for (const map of maps) {
-        for (const meta of map.metadata) {
+        for (const meta of metaOf(map)) {
           if (meta.key === 'zoominmetadata') {
             for (const v of meta.values) {
               if (v.startsWith('product-')) { liveLabels.add(v); }
@@ -453,19 +463,19 @@ describe('FT API data contracts', () => {
       // deriveBundleStem now depends ENTIRELY on the bundle value for non-Pro
       // products, because they no longer carry version_bundle_stem.
       const schoolMap = maps.find(m =>
-        m.metadata.some(meta => meta.key === 'bundle'
+        metaOf(m).some(meta => meta.key === 'bundle'
           && meta.values.some(v => v.startsWith('jamf-school-documentation')))
-        && m.metadata.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US')
+        && m.metadata?.some(meta => meta.key === 'ft:locale' && meta.values[0] === 'en-US') === true
       );
       expect(schoolMap, 'expected at least one en-US Jamf School map').toBeDefined();
 
-      const bundle = schoolMap!.metadata.find(meta => meta.key === 'bundle');
+      const bundle = schoolMap!.metadata?.find(meta => meta.key === 'bundle');
       expect(bundle?.values[0], 'non-Pro map must carry a bundle value to derive its stem').toBeTruthy();
 
       // Document the unversioned contract: these keys are EXPECTED to be absent.
       // If Jamf re-adds them, that is a meaningful upstream change worth noticing.
-      const hasLatest = schoolMap!.metadata.some(meta => meta.key === 'latestVersion');
-      const hasVersion = schoolMap!.metadata.some(meta => meta.key === 'version');
+      const hasLatest = schoolMap!.metadata?.some(meta => meta.key === 'latestVersion') === true;
+      const hasVersion = schoolMap!.metadata?.some(meta => meta.key === 'version') === true;
       expect(
         { hasLatest, hasVersion },
         'Jamf School map unexpectedly carries version metadata — the unversioned ' +
@@ -498,14 +508,14 @@ describe('FT API data contracts', () => {
       // duplicate version snapshots.
       const proEntries = searchClusters
         .flatMap(c => c.entries)
-        .filter(e => e.topic?.metadata.some(
+        .filter(e => e.topic?.metadata?.some(
           m => m.key === 'zoominmetadata' && m.values.includes('product-pro')
         ) === true);
       expect(proEntries.length, 'expected Jamf Pro topics in the enrollment search').toBeGreaterThan(0);
 
       const clusterIds: string[] = [];
       for (const entry of proEntries) {
-        const md = entry.topic!.metadata;
+        const md = entry.topic!.metadata ?? [];
         const clusterId = md.find(m => m.key === 'ft:clusterId')?.values[0] ?? '';
         const version = md.find(m => m.key === 'version')?.values[0] ?? '';
         expect(clusterId, 'Pro entry missing ft:clusterId — version dedup would break').toBeTruthy();

@@ -30,10 +30,10 @@ describe('TopicResolver integration', () => {
     // Discover a real prettyUrl from the FT API
     const maps = await fetchMaps();
     const proMap = maps.find(m =>
-      m.metadata.some(
+      m.metadata?.some(
         meta => meta.key === 'version_bundle_stem'
           && meta.values[0] === 'jamf-pro-documentation'
-      )
+      ) === true
       && m.metadata.some(
         meta => meta.key === 'latestVersion' && meta.values[0] === 'yes'
       )

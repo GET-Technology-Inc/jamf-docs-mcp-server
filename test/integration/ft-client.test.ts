@@ -46,10 +46,10 @@ describe('ft-client integration', () => {
   it('fetchMaps() should contain a glossary map', async () => {
     const maps = await fetchMaps();
     const glossary = maps.find(m =>
-      m.metadata.some(
+      m.metadata?.some(
         md => (md.key === 'bundle' || md.key === 'version_bundle_stem') &&
         md.values.some(v => v.includes('jamf-technical-glossary'))
-      )
+      ) === true
     );
 
     expect(glossary).toBeDefined();
@@ -100,6 +100,6 @@ describe('ft-client integration', () => {
     const meta = await fetchTopicMetadata(knownMapId, leaf.contentId);
 
     expect(meta.title).toBeTruthy();
-    expect(meta.metadata.length).toBeGreaterThan(0);
+    expect((meta.metadata ?? []).length).toBeGreaterThan(0);
   }, 15000);
 });

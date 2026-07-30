@@ -261,7 +261,8 @@ export interface FtSearchTopic {
   mapTitle: string;
   breadcrumb: string[];
   htmlExcerpt: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 export interface FtSearchMap {
@@ -272,7 +273,8 @@ export interface FtSearchMap {
   title?: string;
   htmlTitle: string;
   htmlExcerpt: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
   editorialType: string;
   lastEditionDate?: string;
   lastPublicationDate?: string;
@@ -323,7 +325,8 @@ export interface FtMapInfo {
   title?: string;
   id: string;
   mapApiEndpoint: string;
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 export interface FtTopicInfo {
@@ -341,7 +344,8 @@ export interface FtTopicInfo {
   contentApiEndpoint: string;
   readerUrl?: string;
   breadcrumb?: string[];
-  metadata: FtMetadataEntry[];
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
 }
 
 // TOC types

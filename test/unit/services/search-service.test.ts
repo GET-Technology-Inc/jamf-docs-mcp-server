@@ -281,7 +281,7 @@ describe('dedupeToLatestVersions()', () => {
     // One result per product — none dropped by version dedup.
     expect(deduped).toHaveLength(3);
     const products = deduped.map(
-      e => e.topic?.metadata.find(m => m.key === 'zoominmetadata')?.values[0]
+      e => e.topic?.metadata?.find(m => m.key === 'zoominmetadata')?.values[0]
     );
     expect(new Set(products)).toEqual(new Set(['product-pro', 'product-school', 'product-connect']));
   });
