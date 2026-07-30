@@ -34,10 +34,25 @@ coverage/
 *.tmp
 *.temp
 
-# Claude Code (personal configuration)
-.claude/
+# Claude Code
+#
+# The directory is ignored by default so personal overrides never land in a
+# commit; the shared, reviewed pieces are whitelisted back in below. Keep new
+# entries specific — a bare `!.claude/` would start tracking local settings.
+#
+# `.claude/*` and not `.claude/`: git refuses to re-include a path whose parent
+# directory is itself excluded, so ignoring the *directory* would make every `!`
+# line below silently dead. Ignoring its *contents* leaves them re-includable.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/skills/
+!.claude/docs/
+
+# Personal, never shared: settings.local.json holds per-developer overrides and
+# .mcp.json can carry credentials.
+.claude/settings.local.json
 .mcp.json
-CLAUDE.md
 
 # AI tooling configuration
 .codex/
