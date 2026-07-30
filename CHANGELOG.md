@@ -1,3 +1,9 @@
+## [4.0.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.1...v4.0.2) (2026-07-30)
+
+### Bug Fixes
+
+* repair three 4.0.x defects, and bring test/ under typecheck and lint ([#189](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/189)) ([3012935](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/301293571b85d0ca9a58e4e485b37015a941846f))
+
 ## [4.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.0...v4.0.1) (2026-07-29)
 
 ### Bug Fixes
