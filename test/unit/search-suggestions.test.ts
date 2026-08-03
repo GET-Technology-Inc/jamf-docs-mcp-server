@@ -253,6 +253,59 @@ describe('formatSearchSuggestions - filters active output', () => {
   });
 });
 
+// ============================================================================
+// Zero-result help must not point back at what the caller already ran
+// ============================================================================
+
+describe('generateSearchSuggestions - suggestions must differ from the query', () => {
+  it('should not suggest a simplified query identical to a 3-keyword query', () => {
+    // "configure sso login" has no stop words, so slice(0, 3) reproduces it.
+    const query = 'configure sso login';
+    const result = generateSearchSuggestions(query);
+    expect(result.simplifiedQuery).toBeNull();
+  });
+
+  it('should not suggest a simplified query identical to a 3-keyword query with punctuation', () => {
+    const result = generateSearchSuggestions('Smart, Groups, Configuration');
+    expect(result.simplifiedQuery).toBeNull();
+  });
+
+  it('should still simplify when stop words are actually removed', () => {
+    // Same three keywords, but the query contains a stop word — dropping it is
+    // a real simplification, so the suggestion must survive.
+    const result = generateSearchSuggestions('configure the sso login');
+    expect(result.simplifiedQuery).toBe('configure sso login');
+  });
+
+  it('should still simplify when keywords are actually dropped', () => {
+    const result = generateSearchSuggestions('configure sso login settings');
+    expect(result.simplifiedQuery).toBe('configure sso login');
+  });
+
+  it('should not offer a multi-word alternative that is the query itself', () => {
+    // "group" maps to ["groups", "smart group", "static group"]; the exact
+    // query "smart group" came back as one of its own alternatives.
+    const result = generateSearchSuggestions('smart group');
+    expect(result.alternativeKeywords).not.toContain('smart group');
+    expect(result.alternativeKeywords).toContain('static group');
+  });
+
+  it('should not echo the query back in formatted output', () => {
+    const query = 'smart group';
+    const suggestions = generateSearchSuggestions(query);
+    const output = formatSearchSuggestions(query, suggestions);
+    // The heading legitimately quotes the query; the advice below must not.
+    const advice = output.slice(output.indexOf('## Search Suggestions'));
+    expect(advice).not.toContain('smart group');
+  });
+
+  it('should keep alternatives that merely share a word with the query', () => {
+    // "groups" contains "group" but is not present in the query as a phrase.
+    const result = generateSearchSuggestions('smart group');
+    expect(result.alternativeKeywords).toContain('groups');
+  });
+});
+
 describe('generateSearchSuggestions - query with quotes', () => {
   it('should include tip to remove quotes when query contains double quotes', () => {
     const result = generateSearchSuggestions('"exact phrase search"');

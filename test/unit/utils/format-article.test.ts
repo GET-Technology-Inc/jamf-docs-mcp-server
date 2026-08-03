@@ -469,6 +469,101 @@ describe('formatArticleFull()', () => {
     });
   });
 
+  // ── Truncation advice must be actionable ────────────────────────────────────
+
+  describe('sections list advice (formatSectionAdvice)', () => {
+    it('should not advise the `section` parameter when no section fits maxTokens', () => {
+      // Arrange — the reported case: one 402-token section, budget of 100.
+      const article = makeArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 100, maxTokens: 100 }),
+      });
+      const sections = [
+        createArticleSection({ id: 'smart-groups', title: 'Smart Groups', level: 2, tokenCount: 402 }),
+      ];
+
+      // Act
+      const output = formatArticleFull(article, { sections });
+
+      // Assert — the list still helps, the advice must not point at `section`
+      expect(output).toContain('## Available Sections');
+      expect(output).toContain('~402 tokens');
+      expect(output).not.toContain('Use `section` parameter to retrieve a specific section.');
+      expect(output).toContain('No section fits within `maxTokens`');
+      expect(output).toContain('`summaryOnly`');
+    });
+
+    it('should not advise the `section` parameter when every section is over budget', () => {
+      // Arrange — several sections, all larger than the budget
+      const article = makeArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 200, maxTokens: 200 }),
+      });
+      const sections = [
+        createArticleSection({ id: 'a', title: 'Alpha', level: 2, tokenCount: 900 }),
+        createArticleSection({ id: 'b', title: 'Beta', level: 2, tokenCount: 350 }),
+      ];
+
+      // Act
+      const output = formatArticleFull(article, { sections });
+
+      // Assert — smallest section is named so the caller knows the budget to set
+      expect(output).not.toContain('Use `section` parameter to retrieve a specific section.');
+      expect(output).toContain('the smallest is ~350 tokens');
+    });
+
+    it('should advise the `section` parameter when at least one section fits', () => {
+      // Arrange — Beta fits inside the 400-token budget
+      const article = makeArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 400, maxTokens: 400 }),
+      });
+      const sections = [
+        createArticleSection({ id: 'a', title: 'Alpha', level: 2, tokenCount: 900 }),
+        createArticleSection({ id: 'b', title: 'Beta', level: 2, tokenCount: 350 }),
+      ];
+
+      // Act
+      const output = formatArticleFull(article, { sections });
+
+      // Assert
+      expect(output).toContain('Use `section` parameter to retrieve a specific section.');
+      expect(output).not.toContain('No section fits');
+    });
+
+    it('should not imply a choice when there is only one section to pick', () => {
+      // Arrange — the lone section fits, so `section` works, but nothing to choose
+      const article = makeArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 5000, maxTokens: 5000 }),
+      });
+      const sections = [
+        createArticleSection({ id: 'only', title: 'Overview', level: 2, tokenCount: 402 }),
+      ];
+
+      // Act
+      const output = formatArticleFull(article, { sections });
+
+      // Assert — mentions `section`, but not as a selection among several
+      expect(output).not.toContain('Use `section` parameter to retrieve a specific section.');
+      expect(output).toContain('the one listed section');
+      expect(output).toContain('`maxTokens`');
+    });
+
+    it('should treat a section exactly at the budget as fitting', () => {
+      // Arrange — boundary: tokenCount === maxTokens
+      const article = makeArticle({
+        tokenInfo: createTokenInfo({ truncated: true, tokenCount: 500, maxTokens: 500 }),
+      });
+      const sections = [
+        createArticleSection({ id: 'a', title: 'Alpha', level: 2, tokenCount: 500 }),
+        createArticleSection({ id: 'b', title: 'Beta', level: 2, tokenCount: 900 }),
+      ];
+
+      // Act
+      const output = formatArticleFull(article, { sections });
+
+      // Assert
+      expect(output).toContain('Use `section` parameter to retrieve a specific section.');
+    });
+  });
+
   // ── briefFooter option ──────────────────────────────────────────────────────
 
   describe('briefFooter option', () => {
