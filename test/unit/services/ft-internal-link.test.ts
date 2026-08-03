@@ -21,6 +21,7 @@ import { httpGetJson } from '../../../src/core/http-client.js';
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
+  fetchTopicAncestors,
 } from '../../../src/core/services/ft-internal-link.js';
 import { createMockCache, createMockLogger } from '../../helpers/mock-context.js';
 import type { FtTocNode } from '../../../src/core/types.js';
@@ -140,5 +141,77 @@ describe('buildInternalLinkResolver()', () => {
     expect(resolve(MAP_ID, '8Tflt44ylUo_Jo99tcQj5w')).toBeDefined();
     expect(resolve(OTHER_MAP_ID, '8Tflt44ylUo_Jo99tcQj5w')).toBeUndefined();
     expect(logger.warning).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchTopicAncestors', () => {
+  /**
+   * The breadcrumb has no other source. FT's `/content` fragment is the
+   * article body, and a breadcrumb belongs to the reader shell around it, so
+   * the parser's selector never matches on a topic fetched this way. The map
+   * TOC is the only place the hierarchy is published.
+   */
+  it('reports where a topic sits, nearest root first', async () => {
+    const cache = createMockCache();
+
+    const ancestors = await fetchTopicAncestors({
+      cache,
+      mapId: MAP_ID,
+      contentId: 'vccKyPVSh7VrXvknBiPQgQ',
+    });
+
+    // 'Computers' only — the topic's own title is not part of its breadcrumb.
+    expect(ancestors).toEqual(['Computers']);
+  });
+
+  it('gives a root-level topic an empty chain, not its own title', async () => {
+    const cache = createMockCache();
+
+    expect(
+      await fetchTopicAncestors({
+        cache,
+        mapId: MAP_ID,
+        contentId: 'C149PhXe7uzceHuULOnLfA',
+      }),
+    ).toEqual([]);
+  });
+
+  it('shares the TOC fetch with internal-link resolution', async () => {
+    // One index serves both lookups. Fetching twice would double the cost of
+    // every article in a map, since both run on the same fetch path.
+    const cache = createMockCache();
+
+    await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
+    await fetchTopicAncestors({ cache, mapId: MAP_ID, contentId: 'vccKyPVSh7VrXvknBiPQgQ' });
+
+    const tocFetches = mockedGetJson.mock.calls.filter(([url]) => url.endsWith('/toc'));
+    expect(tocFetches).toHaveLength(1);
+  });
+
+  it('returns an empty chain when the TOC will not load', async () => {
+    // A partial or invented breadcrumb reads as a real path to somewhere that
+    // does not exist, so the failure has to be visible as absence.
+    mockedGetJson.mockRejectedValue(new Error('upstream down'));
+    const logger = createMockLogger();
+
+    const ancestors = await fetchTopicAncestors({
+      cache: createMockCache(),
+      mapId: MAP_ID,
+      contentId: 'vccKyPVSh7VrXvknBiPQgQ',
+      logger,
+    });
+
+    expect(ancestors).toEqual([]);
+    expect(logger.warning).toHaveBeenCalled();
+  });
+
+  it('is silent about a topic the TOC does not list', async () => {
+    expect(
+      await fetchTopicAncestors({
+        cache: createMockCache(),
+        mapId: MAP_ID,
+        contentId: 'not-in-this-map',
+      }),
+    ).toEqual([]);
   });
 });

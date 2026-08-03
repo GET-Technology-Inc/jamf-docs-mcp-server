@@ -44,6 +44,8 @@ const mockedGetText = vi.mocked(httpGetText);
 
 const MAP_ID = 'jamf-pro-documentation';
 const CONTENT_ID = 'MDM_Profile_Settings';
+/** A second topic in the same map, for asserting the TOC index is shared. */
+const OTHER_CONTENT_ID = 'Computer_Reports';
 const ARTICLE_URL =
   'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/MDM_Profile_Settings.html';
 
@@ -169,7 +171,9 @@ describe('fetchArticleFromFt()', () => {
       await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
 
       // httpGetJson called once for metadata, httpGetText once for content
-      expect(mockedGetJson).toHaveBeenCalledOnce();
+      // Two JSON gets now: the topic metadata, and the map TOC the breadcrumb
+      // is read from. The content is the one text get.
+      expect(mockedGetJson).toHaveBeenCalledTimes(2);
       expect(mockedGetText).toHaveBeenCalledOnce();
       // Verify the correct URLs were requested
       expect(mockedGetJson).toHaveBeenCalledWith(
@@ -394,14 +398,22 @@ describe('fetchArticleFromFt()', () => {
       );
     });
 
-    it('should not fetch a TOC for a topic with no internal links', async () => {
+    it('fetches the map TOC once and reuses it for every topic in that map', async () => {
+      // This used to assert that a topic with no internal links fetched no TOC
+      // at all. It cannot any more: the breadcrumb has no source but the map
+      // TOC, so every topic needs it. What keeps that affordable is the index
+      // being cached per map, not per topic — so the property worth pinning is
+      // that the second topic in a map is free, not that the first one is.
       const cache = createMockCache();
-      // DEFAULT_HTML carries no ft-internal-link spans
+      // DEFAULT_HTML carries no ft-internal-link spans.
 
       await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true });
+      await fetchArticleFromFt(cache, MAP_ID, OTHER_CONTENT_ID, ARTICLE_URL, {
+        includeRelated: true,
+      });
 
       const tocCalls = mockedGetJson.mock.calls.filter(([url]) => url.endsWith('/toc'));
-      expect(tocCalls).toHaveLength(0);
+      expect(tocCalls).toHaveLength(1);
     });
 
     it('should still serve the article when the map TOC will not load', async () => {
