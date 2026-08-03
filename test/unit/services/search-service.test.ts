@@ -31,7 +31,9 @@ import type {
   FtSearchCluster,
   FtClusteredSearchResponse,
   FtMetadataEntry,
+  SearchResult,
 } from '../../../src/core/types.js';
+import type { ServerContext } from '../../../src/core/types/context.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const mockedPostJson = vi.mocked(httpPostJson);
@@ -955,6 +957,95 @@ describe('searchDocumentation()', () => {
     expect(result.pagination.page).toBe(2);
     const { paginationNote: note } = result;
     expect(note).toBeUndefined();
+  });
+
+  // ==========================================================================
+  // versionNote — a `version` filter the provider path did not enforce
+  // ==========================================================================
+
+  function providerCtx(results: SearchResult[]): ServerContext {
+    return createMockContext({
+      searchProvider: { search: vi.fn().mockResolvedValue(results) },
+    });
+  }
+
+  const providerResult = (version?: string): SearchResult => ({
+    title: 'Configuration Profiles',
+    url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Config.html',
+    snippet: 'Configuration profiles let you manage settings on managed devices.',
+    product: 'Jamf Pro',
+    ...(version !== undefined ? { version } : {}),
+  });
+
+  it('should include versionNote when a SearchProvider returns other versions than the one requested', async () => {
+    // The provider is handed `params` and its results are taken as given —
+    // nothing in the service enforces `version` on this path. A result stamped
+    // 11.20.0 proves the filter did not hold, and the tool would otherwise echo
+    // filters.version back as though it had.
+    const result = await searchDocumentation(
+      providerCtx([providerResult('11.20.0')]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    const { versionNote: note } = result;
+    expect(note).toBeDefined();
+    expect(note).toContain('11.5.0');
+  });
+
+  it('should NOT include versionNote when the provider honoured the requested version', async () => {
+    const result = await searchDocumentation(
+      providerCtx([providerResult('11.5.0')]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    expect(result.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote for provider results that carry no version at all', async () => {
+    // The unversioned products (School, Connect, Protect, …) have no version
+    // metadata. Silence there says nothing either way, so it must not be read
+    // as a mismatch.
+    const result = await searchDocumentation(
+      providerCtx([providerResult()]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    expect(result.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote when version is "current" or omitted', async () => {
+    const ctxWithProvider = providerCtx([providerResult('11.20.0')]);
+
+    const currentVersion = await searchDocumentation(ctxWithProvider, {
+      query: 'profiles', version: 'current',
+    });
+    const noVersion = await searchDocumentation(ctxWithProvider, { query: 'profiles' });
+
+    expect(currentVersion.versionNote).toBeUndefined();
+    expect(noVersion.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote on the FT path, where the filter goes upstream', async () => {
+    // buildSearchFilters sends `version` to Fluid Topics, so the API enforces
+    // it; whatever version metadata comes back is authoritative.
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([makeCluster([
+        makeTopicEntry({
+          title: 'Configuration Profiles',
+          contentId: 'topic-vn-ft',
+          metadata: makeMetadata({
+            'zoominmetadata': ['product-pro'],
+            'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/vn-ft.html'],
+            'version': ['11.20.0'],
+          }),
+        }),
+      ])])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'profiles', version: '11.5.0' });
+
+    expect(mockedPostJson).toHaveBeenCalled();
+    expect(result.versionNote).toBeUndefined();
   });
 
   // ==========================================================================
