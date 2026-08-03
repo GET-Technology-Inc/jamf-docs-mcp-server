@@ -45,12 +45,45 @@ export const DOC_TYPE_LABEL_MAP: Record<DocTypeId, string> = Object.fromEntries(
 ) as Record<DocTypeId, string>;
 
 /**
+ * Reverse mapping: Fluid Topics `content-*` label key -> docType id.
+ *
+ * FT publishes these under the `zoominmetadata` key on every topic, and the
+ * vocabulary is exactly the {@link DOC_TYPES} labelKey set. That makes it —
+ * not `jamf:contentType` — the authoritative answer to "what kind of document
+ * is this", and unlike `jamf:contentType` it is not many-to-one.
+ */
+export const LABEL_KEY_DOC_TYPE_MAP: Record<string, DocTypeId> = Object.fromEntries(
+  Object.entries(DOC_TYPES).map(([id, dt]) => [dt.labelKey, id])
+) as Record<string, DocTypeId>;
+
+/**
+ * Order in which a topic's several `content-*` labels collapse into the single
+ * docType a search result reports.
+ *
+ * A topic legitimately carries more than one: every Jamf Pro release note is
+ * tagged both `content-techdocs` and `content-releasenotes`, and solution
+ * guides and getting-started pages are likewise tagged alongside techdocs.
+ * `content-techdocs` sits on ~93% of all topics, so it is the least
+ * informative label and ranks last; anything else out-describes it.
+ *
+ * Must list every {@link DocTypeId} — enforced by unit test.
+ */
+export const DOC_TYPE_PRECEDENCE: readonly DocTypeId[] = [
+  'release-notes',
+  'glossary',
+  'training',
+  'solution-guide',
+  'getting-started',
+  'documentation',
+];
+
+/**
  * Forward mapping: docType -> Fluid Topics `jamf:contentType` metadata value.
  *
- * Note: The FT API uses 'Technical Documentation' for multiple doc types
- * (documentation, training, solution-guide, getting-started), so reverse
- * lookup (contentType -> docType) will always return 'documentation' for
- * these entries. This is a known FT API limitation.
+ * Used only to narrow the upstream FT query. The FT API uses 'Technical
+ * Documentation' for multiple doc types (documentation, training,
+ * solution-guide, getting-started), so this direction is many-to-one and
+ * cannot be reversed — use {@link LABEL_KEY_DOC_TYPE_MAP} to go the other way.
  */
 export const DOC_TYPE_CONTENT_TYPE_MAP: Record<string, string> = {
   'documentation': 'Technical Documentation',

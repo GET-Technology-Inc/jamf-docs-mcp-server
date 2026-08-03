@@ -20,6 +20,8 @@ import {
   JAMF_TOPICS,
   DOC_TYPE_CONTENT_TYPE_MAP,
   DOC_TYPE_LABEL_MAP,
+  DOC_TYPE_PRECEDENCE,
+  LABEL_KEY_DOC_TYPE_MAP,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
@@ -111,27 +113,44 @@ function extractProductFromZoominMeta(metadata: FtMetadataEntry[] | undefined): 
   return null;
 }
 
+/** The metadata array of whichever payload an FT search entry actually carries. */
+function entryMetadata(entry: FtSearchEntry): FtMetadataEntry[] | undefined {
+  return entry.type === 'MAP' ? entry.map?.metadata : entry.topic?.metadata;
+}
+
 /**
- * Derive docType from FT metadata `jamf:contentType`.
- * Falls back to 'documentation'.
+ * Collect every docType label key a topic carries.
  *
- * Note: The FT API uses 'Technical Documentation' for multiple doc types
- * (documentation, training, solution-guide, getting-started). Because
- * DOC_TYPE_CONTENT_TYPE_MAP is iterated in insertion order, this reverse
- * lookup always returns 'documentation' for any of those types. This is
- * a known FT API limitation — there is no metadata to distinguish them.
+ * Fluid Topics ships them under `zoominmetadata` as `content-*` values, whose
+ * vocabulary is exactly DOC_TYPES' labelKey set. A topic legitimately carries
+ * several — every Jamf Pro release note is tagged both `content-techdocs` and
+ * `content-releasenotes` — so all of them are kept and the docType post-filter
+ * matches on any one of them.
+ *
+ * This replaces a reverse lookup through DOC_TYPE_CONTENT_TYPE_MAP, which is
+ * many-to-one ('Technical Documentation' covers four docTypes) and was walked
+ * in object-literal insertion order: a release note matched `documentation`
+ * first, was labelled `content-techdocs`, and was then dropped by its own
+ * `docType: 'release-notes'` filter.
  */
-function docTypeFromFtMetadata(metadata: FtMetadataEntry[] | undefined): DocTypeId {
-  const values = getMetaValues(metadata, FT_META.CONTENT_TYPE);
-  if (values.length > 0) {
-    // Reverse-lookup DOC_TYPE_CONTENT_TYPE_MAP
-    for (const [docType, contentType] of Object.entries(DOC_TYPE_CONTENT_TYPE_MAP)) {
-      if (values.includes(contentType)) {
-        return docType as DocTypeId;
-      }
-    }
-  }
-  return 'documentation';
+function docTypeLabelKeys(metadata: FtMetadataEntry[] | undefined): string[] {
+  return getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
+    .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined);
+}
+
+/**
+ * Collapse label keys to the single most specific docType.
+ *
+ * Returns undefined when the topic carries no recognised `content-*` label
+ * (Jamf's glossary topics ship with no metadata at all). "Unknown" must stay
+ * unknown: reporting `documentation` there is a positive assertion nothing
+ * backs, and it makes the docType filter drop the topic from every search
+ * except `docType: 'documentation'`.
+ */
+function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
+  return DOC_TYPE_PRECEDENCE.find(
+    docType => labelKeys.includes(DOC_TYPE_LABEL_MAP[docType])
+  );
 }
 
 // ─── Filter Construction ───────────────────────────────────────
@@ -282,15 +301,18 @@ function buildSearchResult(fields: EntryFields): SearchResult {
   const product = extractProductFromZoominMeta(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
   const versionValues = getMetaValues(metadata, FT_META.VERSION);
-  const docType = docTypeFromFtMetadata(metadata);
+  const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata));
 
   const result: SearchResult = {
     title,
     url: fields.url,
     snippet,
     product,
-    docType,
     mapId: fields.mapId,
+    // Omitted rather than set to undefined when the topic carries no
+    // `content-*` label — `docType` is declared optional and the config has
+    // exactOptionalPropertyTypes on.
+    ...(docType !== undefined ? { docType } : {}),
   };
 
   if (fields.contentId !== undefined) {
@@ -503,6 +525,7 @@ function truncateSearchResults(
 function toSearchResultWithMeta(
   result: SearchResult,
   needsTopicMatching: boolean,
+  ftLabelKeys?: string[],
 ): SearchResultWithMeta {
   // Derive bundleSlug from the product display name (extracted from
   // zoominmetadata). Do NOT use result.mapId — FT API mapIds are
@@ -510,9 +533,14 @@ function toSearchResultWithMeta(
   // bundle stems.
   const bundleSlug = productNameToId(result.product);
 
-  const labelKeys: string[] = result.docType !== undefined
-    ? [DOC_TYPE_LABEL_MAP[result.docType]]
-    : [];
+  // Prefer the full label set read off FT metadata: a topic carries several
+  // and `result.docType` is only the most specific one, so re-deriving from it
+  // would narrow a release note back down to release-notes alone. A
+  // SearchProvider hands us a flat SearchResult with no metadata to read, so
+  // there the single docType is all there is.
+  const labelKeys: string[] = ftLabelKeys ?? (
+    result.docType !== undefined ? [DOC_TYPE_LABEL_MAP[result.docType]] : []
+  );
 
   return {
     result,
@@ -667,7 +695,11 @@ async function resolveSearchResults(
   for (const entry of dedupeToLatestVersions(ftResponse.results)) {
     const searchResult = transformFtSearchResult(entry);
     if (searchResult.url !== '') {
-      results.push(toSearchResultWithMeta(searchResult, needsTopicMatching));
+      results.push(toSearchResultWithMeta(
+        searchResult,
+        needsTopicMatching,
+        docTypeLabelKeys(entryMetadata(entry)),
+      ));
     }
   }
 

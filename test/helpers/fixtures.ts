@@ -197,6 +197,13 @@ export function createRealisticTocResponse(
  * Build a minimal FT clustered search response containing TOPIC entries.
  *
  * Shared across filter-fallback, filter-combination, and similar tests.
+ *
+ * `contentLabels` are the `content-*` values FT publishes under
+ * `zoominmetadata` alongside the product label — the vocabulary the docType
+ * post-filter reads. `contentType` is the separate `jamf:contentType` metadata,
+ * which only ever narrows the upstream FT query; an entry that needs a docType
+ * has to declare `contentLabels`, because the two are not interchangeable
+ * ('Technical Documentation' covers four docTypes).
  */
 export function makeFtSearchResponse(
   entries: {
@@ -205,6 +212,7 @@ export function makeFtSearchResponse(
     contentId?: string;
     snippet?: string;
     productLabel?: string;
+    contentLabels?: string[];
     contentType?: string;
   }[]
 ): FtClusteredSearchResponse {
@@ -229,11 +237,15 @@ export function makeFtSearchResponse(
             ],
           },
         ];
-        if (e.productLabel !== undefined && e.productLabel !== '') {
+        const zoominValues = [
+          ...(e.productLabel !== undefined && e.productLabel !== '' ? [e.productLabel] : []),
+          ...(e.contentLabels ?? []),
+        ];
+        if (zoominValues.length > 0) {
           metadata.push({
             key: 'zoominmetadata',
             label: 'zoominmetadata',
-            values: [e.productLabel],
+            values: zoominValues,
           });
         }
         if (e.contentType !== undefined && e.contentType !== '') {
