@@ -42,7 +42,7 @@ function getTextContent(result: { content: unknown[] }): string {
   return first.text;
 }
 
-const VALID_URL ='https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html';
+const VALID_URL = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html';
 
 // ---------------------------------------------------------------------------
 

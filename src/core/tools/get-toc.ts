@@ -156,8 +156,8 @@ Returns:
   {
     "product": string,
     "version": string,
-    "mapId": string,
-    "toc": [...],   // each entry carries title, url and contentId
+    "mapId": string,   // omitted when the map could not be resolved
+    "toc": [...],      // each entry carries title, url and contentId
     "tokenInfo": {
       "tokenCount": number,
       "truncated": boolean,

@@ -255,8 +255,10 @@ Errors:
   - "Invalid product ID" if product parameter is not recognized
 
 Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
-Each result carries a mapId + contentId pair; pass both to jamf_docs_get_article
-to fetch that article directly instead of resolving its URL.`;
+Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article
+to fetch that article directly instead of resolving its URL. The pair is omitted
+when a result comes from a source that does not resolve one — fall back to the
+URL in that case.`;
 
 /**
  * Build structured content for a search result set
