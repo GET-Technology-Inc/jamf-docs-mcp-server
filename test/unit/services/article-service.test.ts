@@ -410,7 +410,7 @@ describe('fetchArticleFromFt()', () => {
       mockedGetJson.mockImplementation(async (url: string) => {
         await Promise.resolve();
         if (url.endsWith('/toc')) {
-          throw new HttpError('TOC unavailable', 503);
+          throw new HttpError(503, 'Service Unavailable', url);
         }
         return currentTopicMetadata;
       });
