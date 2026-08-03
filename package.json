@@ -103,5 +103,9 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/server": "^2.0.0"
+  },
+  "overrides": {
+    "js-yaml": "^4.3.0",
+    "brace-expansion": "^5.0.8"
   }
 }

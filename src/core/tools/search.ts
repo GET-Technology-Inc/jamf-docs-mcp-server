@@ -125,6 +125,18 @@ function formatSearchResultsAsCompact(
   });
 
   markdown += formatPaginationFooter(pagination, tokenInfo, true);
+
+  // Compact is one line per result by design, so the mapId + contentId pair
+  // stays out of it — printing both on every line roughly doubles the output
+  // this mode exists to avoid. The full path renders them inline; say where
+  // they are rather than leaving the documented workflow looking unavailable.
+  // Same trade get_toc already makes for its per-entry contentIds.
+  if (results.some((r) => r.mapId !== undefined && r.contentId !== undefined)) {
+    markdown +=
+      '*The `mapId` + `contentId` pair `jamf_docs_get_article` accepts is omitted here; ' +
+      'use `outputMode="full"` or read `structuredContent`.*\n';
+  }
+
   return markdown;
 }
 

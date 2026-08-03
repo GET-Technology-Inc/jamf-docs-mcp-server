@@ -308,6 +308,44 @@ describe('jamf_docs_search tool', () => {
       expect(text).toContain('...');
     });
 
+    it('points at where the mapId + contentId pair is, instead of omitting it silently', async () => {
+      // get_article's description tells callers to take the pair "from search
+      // results". Compact is one line per result by design, so printing both on
+      // every line would roughly double the output this mode exists to avoid —
+      // but saying nothing leaves the documented workflow looking unavailable.
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult({ mapId: 'map-1', contentId: 'topic-1' })],
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'test', outputMode: 'compact' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('outputMode="full"');
+      // Still compact: the ids themselves stay out of the body.
+      expect(text).not.toContain('mapId=map-1');
+    });
+
+    it('says nothing about ids when no result carries the pair', async () => {
+      // The note must not appear for a result set that has no ids to offer —
+      // pointing at a fuller format that would show nothing is worse than
+      // silence.
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({ results: [createSearchResult({})] })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_search',
+        arguments: { query: 'test', outputMode: 'compact' },
+      });
+
+      expect(getTextContent(result)).not.toContain('outputMode="full"');
+    });
+
     it('should include compact pagination footer with page/totalPages', async () => {
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({
