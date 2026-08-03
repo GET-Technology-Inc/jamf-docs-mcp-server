@@ -1,3 +1,9 @@
+## [4.0.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.4...v4.0.5) (2026-08-03)
+
+### Dependencies
+
+* bump @semantic-release/changelog from 6.0.3 to 7.0.0 ([#174](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/174)) ([1226e5b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1226e5bf4aa515fbc690b9fc82b59db489a198c8))
+
 ## [4.0.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.3...v4.0.4) (2026-08-03)
 
 ### Dependencies
