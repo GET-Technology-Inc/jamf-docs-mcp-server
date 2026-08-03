@@ -47,7 +47,17 @@ jobs:
       # major: label for manual review
       - name: Label major updates for review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        run: gh pr edit "$PR_URL" --add-label "major-update"
+        # `gh pr edit --add-label` exits 1 with "'major-update' not found" when the
+        # label is absent from the repo, and it never existed here. That failed this
+        # job on every single major bump — the label was never applied, and each PR
+        # carried a red Auto-Merge check that read like a defect in the bump itself.
+        # Create the label first; `--force` makes it idempotent across runs.
+        run: |
+          gh label create "major-update" \
+            --color "D93F0B" \
+            --description "Dependabot major version bump — needs manual review" \
+            --force
+          gh pr edit "$PR_URL" --add-label "major-update"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
