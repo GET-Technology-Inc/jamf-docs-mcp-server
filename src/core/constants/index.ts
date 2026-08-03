@@ -35,6 +35,8 @@ export {
   DOC_TYPES,
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_CONTENT_TYPE_MAP,
+  LABEL_KEY_DOC_TYPE_MAP,
+  DOC_TYPE_PRECEDENCE,
   DOC_TYPE_IDS,
 } from './doc-types.js';
 export type { DocTypeId } from './doc-types.js';
