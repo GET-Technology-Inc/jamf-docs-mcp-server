@@ -1,3 +1,9 @@
+## [4.0.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.3...v4.0.4) (2026-08-03)
+
+### Dependencies
+
+* bump @semantic-release/git from 10.0.1 to 11.0.1 ([#185](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/185)) ([0315f33](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0315f33240293f2ce5d8f597a93ec4bedf7d21b1))
+
 ## [4.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.2...v4.0.3) (2026-08-03)
 
 ### Bug Fixes
