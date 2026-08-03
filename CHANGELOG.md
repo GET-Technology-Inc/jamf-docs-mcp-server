@@ -1,3 +1,9 @@
+## [4.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.7...v4.1.0) (2026-08-03)
+
+### Features
+
+* read the breadcrumb from the map TOC, the only place it exists ([#205](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/205)) ([a8192e3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/a8192e3c09f3555908d353b50ce34bb64f62872e))
+
 ## [4.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.6...v4.0.7) (2026-08-03)
 
 ### Bug Fixes
