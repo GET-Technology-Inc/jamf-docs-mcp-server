@@ -15,6 +15,11 @@ import { fetchMapTopics } from './ft-client.js';
 import type { CacheProvider } from './interfaces/index.js';
 import { getMetaValue, FT_META } from '../utils/ft-metadata.js';
 import { isAllowedHostname } from '../utils/url.js';
+import {
+  extractVersionFromBundleId,
+  stripCurrentSuffix,
+  stripVersionSuffix,
+} from '../utils/bundle.js';
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -285,8 +290,33 @@ export class TopicResolver {
   ): Promise<ResolvedTopic> {
     const locale = localeOverride ?? toValidLocale(parsed.locale);
 
+    // The slug in a pretty URL is a bundle id, not a bare stem — `toc-service`
+    // builds these from Fluid Topics' own `node.prettyUrl`, so a versioned TOC
+    // hands back `/r/en-US/jamf-pro-documentation-11.15.0/<Slug>`. Passing that
+    // straight to `resolveMapId` only ever stripped `-current`, and
+    // `bundleStem` is version-stripped, so the version stayed glued to the stem
+    // and matched nothing: every versioned pretty URL threw, while the legacy
+    // `/bundle/{bundleId}/page/{slug}.html` spelling of the same page resolved.
+    // Split the version off and forward it, exactly as `resolveFromBundleId`
+    // does for the legacy shape.
+    //
+    // Two things this deliberately does not do:
+    //  - rewrite the slug to `-current`. A version with no map of its own is an
+    //    error, not an invitation to serve current content under the requested
+    //    version's name.
+    //  - delegate to `resolveFromBundleId`. Its first branch matches a map by
+    //    raw `bundle` metadata, and `{stem}-current` is not exclusive to the
+    //    current map: every jamf-pro-release-notes map carries
+    //    `jamf-pro-release-notes-current` in its bundle values, so that branch
+    //    answers a `-current` slug with whatever map the API listed first
+    //    (measured: 11.30.2, while `latestVersion=yes` is 11.30.0).
+    //    `resolveMapId` picks by the `latestVersion` flag instead.
+    const strippedSlug = stripCurrentSuffix(parsed.productSlug);
+    const version = extractVersionFromBundleId(strippedSlug);
     const mapId = await this.registry.resolveMapId(
-      parsed.productSlug, undefined, locale
+      version !== null ? stripVersionSuffix(strippedSlug) : strippedSlug,
+      version ?? undefined,
+      locale,
     );
     if (mapId === null) {
       throw new JamfDocsError(

@@ -16,6 +16,7 @@ export {
   buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
+  PRODUCT_ID_LIST,
 
   // locales
   DEFAULT_LOCALE,
@@ -32,6 +33,8 @@ export {
   DOC_TYPES,
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_CONTENT_TYPE_MAP,
+  LABEL_KEY_DOC_TYPE_MAP,
+  DOC_TYPE_PRECEDENCE,
   DOC_TYPE_IDS,
 
   // limits

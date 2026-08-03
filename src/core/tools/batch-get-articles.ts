@@ -13,7 +13,11 @@ import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } f
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { isAllowedHostname } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
-import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
+import {
+  buildArticleContentView,
+  formatArticleCompact,
+  formatArticleFull,
+} from '../utils/format-article.js';
 
 // ============================================================================
 // Types
@@ -91,7 +95,7 @@ comparing articles, gathering information from multiple pages, or bulk research.
 Args:
   - urls (string[], required): Array of 1-10 article URLs (must be from docs.jamf.com or learn.jamf.com)
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
-  - maxTokens (number, optional): Total token budget across all articles (default: 5000). Distributed evenly.
+  - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -184,13 +188,15 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         failed
       };
 
-      // Calculate overall token info
+      // Calculate overall token info — over what each article's view actually
+      // carries, so a compact batch does not bill for bodies it never sent.
       let totalTokenCount = 0;
       let anyTruncated = false;
       for (const r of results) {
         if (r.status === 'success') {
-          totalTokenCount += r.article.tokenInfo.tokenCount;
-          if (r.article.tokenInfo.truncated) {
+          const view = buildArticleContentView(r.article, compact);
+          totalTokenCount += view.tokenCount;
+          if (view.truncated) {
             anyTruncated = true;
           }
         }
@@ -201,17 +207,20 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         maxTokens: totalMaxTokens
       };
 
-      // Build structuredContent for MCP outputSchema
+      // Build structuredContent for MCP outputSchema. It honours `outputMode`
+      // like the markdown does: previously only the markdown shrank, so a
+      // compact batch handed programmatic callers every full body anyway.
       const structuredContent = {
         results: results.map((r) => {
           if (r.status === 'success') {
+            const view = buildArticleContentView(r.article, compact);
             return {
               url: r.url,
               status: 'success' as const,
               title: r.article.title,
-              content: r.article.content,
-              tokenCount: r.article.tokenInfo.tokenCount,
-              truncated: r.article.tokenInfo.truncated
+              content: view.content,
+              tokenCount: view.tokenCount,
+              truncated: view.truncated
             };
           }
           return {
@@ -230,12 +239,17 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         const jsonResponse = {
           results: results.map((r) => {
             if (r.status === 'success') {
+              const view = buildArticleContentView(r.article, compact);
               return {
                 url: r.url,
                 status: 'success',
                 title: r.article.title,
-                content: r.article.content,
-                tokenInfo: r.article.tokenInfo
+                content: view.content,
+                tokenInfo: {
+                  ...r.article.tokenInfo,
+                  tokenCount: view.tokenCount,
+                  truncated: view.truncated,
+                }
               };
             }
             return { url: r.url, status: 'error', error: r.error };

@@ -19,7 +19,12 @@ import type {
 } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
-import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
+import {
+  buildArticleContentView,
+  formatArticleCompact,
+  formatArticleFull,
+  type ArticleContentView,
+} from '../utils/format-article.js';
 
 const TOOL_NAME = 'jamf_docs_get_article';
 
@@ -31,16 +36,20 @@ const TOOL_NAME = 'jamf_docs_get_article';
  * payload stays a faithful JSON object. Extracted from the handler because
  * those omissions are branches: inline, they were most of its cyclomatic
  * complexity while saying nothing about how the request is served.
+ *
+ * `view` — not the article — supplies the body, so that `outputMode: 'compact'`
+ * compacts the half programmatic consumers actually read.
  */
 function buildArticleStructuredContent(
   article: FetchArticleResult,
   sections: ArticleSection[],
-  truncated: boolean,
+  view: ArticleContentView,
 ): Record<string, unknown> {
   return {
     title: article.title,
     url: article.url,
-    content: article.content,
+    content: view.content,
+    tokenCount: view.tokenCount,
     ...(article.product !== undefined ? { product: article.product } : {}),
     ...(article.version !== undefined ? { version: article.version } : {}),
     ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
@@ -53,7 +62,7 @@ function buildArticleStructuredContent(
       level: s.level,
       tokenCount: s.tokenCount
     })),
-    truncated
+    truncated: view.truncated
   };
 }
 
@@ -67,7 +76,7 @@ Args:
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article
   - includeRelated (boolean, optional): Include links to related articles (default: false)
-  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -177,15 +186,25 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
 
         await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
+        // `outputMode` governs how much of the body goes out, on every channel:
+        // markdown, JSON and structuredContent alike. Applying it to only one of
+        // them is what made "compact" a markdown-only illusion.
+        const view = buildArticleContentView(article, params.outputMode === OutputMode.COMPACT);
+
         // Build response
         const response: ArticleResponse = {
           ...article,
+          content: view.content,
           format: params.responseFormat,
-          tokenInfo,
+          tokenInfo: {
+            ...tokenInfo,
+            tokenCount: view.tokenCount,
+            truncated: view.truncated,
+          },
           sections
         };
 
-        const structuredContent = buildArticleStructuredContent(article, sections, tokenInfo.truncated);
+        const structuredContent = buildArticleStructuredContent(article, sections, view);
 
         if (params.responseFormat === ResponseFormat.JSON) {
           await reportProgress(extra, { progress: 4, total: 4 });

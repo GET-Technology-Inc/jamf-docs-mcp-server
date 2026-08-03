@@ -13,6 +13,7 @@ export {
   buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
+  PRODUCT_ID_LIST,
 } from './products.js';
 export type { ProductId } from './products.js';
 
@@ -35,6 +36,8 @@ export {
   DOC_TYPES,
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_CONTENT_TYPE_MAP,
+  LABEL_KEY_DOC_TYPE_MAP,
+  DOC_TYPE_PRECEDENCE,
   DOC_TYPE_IDS,
 } from './doc-types.js';
 export type { DocTypeId } from './doc-types.js';

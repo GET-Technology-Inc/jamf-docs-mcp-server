@@ -20,6 +20,8 @@ import {
   JAMF_TOPICS,
   DOC_TYPE_CONTENT_TYPE_MAP,
   DOC_TYPE_LABEL_MAP,
+  DOC_TYPE_PRECEDENCE,
+  LABEL_KEY_DOC_TYPE_MAP,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
@@ -111,27 +113,44 @@ function extractProductFromZoominMeta(metadata: FtMetadataEntry[] | undefined): 
   return null;
 }
 
+/** The metadata array of whichever payload an FT search entry actually carries. */
+function entryMetadata(entry: FtSearchEntry): FtMetadataEntry[] | undefined {
+  return entry.type === 'MAP' ? entry.map?.metadata : entry.topic?.metadata;
+}
+
 /**
- * Derive docType from FT metadata `jamf:contentType`.
- * Falls back to 'documentation'.
+ * Collect every docType label key a topic carries.
  *
- * Note: The FT API uses 'Technical Documentation' for multiple doc types
- * (documentation, training, solution-guide, getting-started). Because
- * DOC_TYPE_CONTENT_TYPE_MAP is iterated in insertion order, this reverse
- * lookup always returns 'documentation' for any of those types. This is
- * a known FT API limitation — there is no metadata to distinguish them.
+ * Fluid Topics ships them under `zoominmetadata` as `content-*` values, whose
+ * vocabulary is exactly DOC_TYPES' labelKey set. A topic legitimately carries
+ * several — every Jamf Pro release note is tagged both `content-techdocs` and
+ * `content-releasenotes` — so all of them are kept and the docType post-filter
+ * matches on any one of them.
+ *
+ * This replaces a reverse lookup through DOC_TYPE_CONTENT_TYPE_MAP, which is
+ * many-to-one ('Technical Documentation' covers four docTypes) and was walked
+ * in object-literal insertion order: a release note matched `documentation`
+ * first, was labelled `content-techdocs`, and was then dropped by its own
+ * `docType: 'release-notes'` filter.
  */
-function docTypeFromFtMetadata(metadata: FtMetadataEntry[] | undefined): DocTypeId {
-  const values = getMetaValues(metadata, FT_META.CONTENT_TYPE);
-  if (values.length > 0) {
-    // Reverse-lookup DOC_TYPE_CONTENT_TYPE_MAP
-    for (const [docType, contentType] of Object.entries(DOC_TYPE_CONTENT_TYPE_MAP)) {
-      if (values.includes(contentType)) {
-        return docType as DocTypeId;
-      }
-    }
-  }
-  return 'documentation';
+function docTypeLabelKeys(metadata: FtMetadataEntry[] | undefined): string[] {
+  return getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
+    .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined);
+}
+
+/**
+ * Collapse label keys to the single most specific docType.
+ *
+ * Returns undefined when the topic carries no recognised `content-*` label
+ * (Jamf's glossary topics ship with no metadata at all). "Unknown" must stay
+ * unknown: reporting `documentation` there is a positive assertion nothing
+ * backs, and it makes the docType filter drop the topic from every search
+ * except `docType: 'documentation'`.
+ */
+function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
+  return DOC_TYPE_PRECEDENCE.find(
+    docType => labelKeys.includes(DOC_TYPE_LABEL_MAP[docType])
+  );
 }
 
 // ─── Filter Construction ───────────────────────────────────────
@@ -282,15 +301,18 @@ function buildSearchResult(fields: EntryFields): SearchResult {
   const product = extractProductFromZoominMeta(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
   const versionValues = getMetaValues(metadata, FT_META.VERSION);
-  const docType = docTypeFromFtMetadata(metadata);
+  const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata));
 
   const result: SearchResult = {
     title,
     url: fields.url,
     snippet,
     product,
-    docType,
     mapId: fields.mapId,
+    // Omitted rather than set to undefined when the topic carries no
+    // `content-*` label — `docType` is declared optional and the config has
+    // exactOptionalPropertyTypes on.
+    ...(docType !== undefined ? { docType } : {}),
   };
 
   if (fields.contentId !== undefined) {
@@ -503,6 +525,7 @@ function truncateSearchResults(
 function toSearchResultWithMeta(
   result: SearchResult,
   needsTopicMatching: boolean,
+  ftLabelKeys?: string[],
 ): SearchResultWithMeta {
   // Derive bundleSlug from the product display name (extracted from
   // zoominmetadata). Do NOT use result.mapId — FT API mapIds are
@@ -510,9 +533,14 @@ function toSearchResultWithMeta(
   // bundle stems.
   const bundleSlug = productNameToId(result.product);
 
-  const labelKeys: string[] = result.docType !== undefined
-    ? [DOC_TYPE_LABEL_MAP[result.docType]]
-    : [];
+  // Prefer the full label set read off FT metadata: a topic carries several
+  // and `result.docType` is only the most specific one, so re-deriving from it
+  // would narrow a release note back down to release-notes alone. A
+  // SearchProvider hands us a flat SearchResult with no metadata to read, so
+  // there the single docType is all there is.
+  const labelKeys: string[] = ftLabelKeys ?? (
+    result.docType !== undefined ? [DOC_TYPE_LABEL_MAP[result.docType]] : []
+  );
 
   return {
     result,
@@ -522,6 +550,48 @@ function toSearchResultWithMeta(
       : [],
     labelKeys,
   };
+}
+
+// ─── Version Transparency ──────────────────────────────────────
+
+/** A `version` value that asks for a specific snapshot rather than "whatever is current". */
+function isSpecificVersion(version: string | undefined): version is string {
+  return version !== undefined && version !== '' && version !== 'current';
+}
+
+/**
+ * Explain a `version` filter that was asked for but demonstrably not applied.
+ *
+ * On the Fluid Topics path the filter goes upstream ({@link buildSearchFilters}),
+ * so the API enforces it. On the SearchProvider path nothing here enforces
+ * anything — the provider is handed `params` and its results are taken as
+ * given. When such a result set contains an article stamped with a *different*
+ * version, the filter provably did not hold, and staying silent means the tool
+ * echoes `filters.version` back as though it had: a claim about the result set
+ * that is false.
+ *
+ * Only a positive mismatch counts. Results with no version metadata are the
+ * normal shape for the unversioned products (School, Connect, Protect, …) and
+ * say nothing either way, so they must not raise the note.
+ */
+function buildVersionNote(
+  requestedVersion: string | undefined,
+  fromProvider: boolean,
+  results: SearchResultWithMeta[],
+): string | undefined {
+  if (!fromProvider || !isSpecificVersion(requestedVersion)) {
+    return undefined;
+  }
+
+  const mismatched = results.some(
+    r => r.result.version !== undefined && r.result.version !== requestedVersion
+  );
+  if (!mismatched) {
+    return undefined;
+  }
+
+  return `Version "${requestedVersion}" was not available for some results. `
+    + 'The search backend returned articles from other versions; they are shown as-is.';
 }
 
 // ─── Main Search Function ──────────────────────────────────────
@@ -546,10 +616,13 @@ export async function searchDocumentation(
   const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   let allResults: SearchResultWithMeta[];
+  let fromProvider = false;
   let searchError: string | undefined;
 
   try {
-    allResults = await resolveSearchResults(ctx, params, log);
+    const resolved = await resolveSearchResults(ctx, params, log);
+    allResults = resolved.results;
+    fromProvider = resolved.fromProvider;
   } catch (error) {
     const message = String(error);
     log.error(`Search error: ${message}`);
@@ -573,6 +646,7 @@ export async function searchDocumentation(
     truncateSearchResults(paginatedResults, maxTokens);
 
   const paginationNote = buildPaginationNote(paginationInfo);
+  const versionNote = buildVersionNote(params.version, fromProvider, filteredResults);
 
   return {
     results: finalResults,
@@ -590,6 +664,7 @@ export async function searchDocumentation(
       maxTokens,
     },
     ...(paginationNote !== undefined ? { paginationNote } : {}),
+    ...(versionNote !== undefined ? { versionNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {}),
     ...(searchError !== undefined ? { searchError } : {}),
@@ -616,18 +691,30 @@ function buildSearchCacheKey(
   return `ft-search:${locale}:${query}:${sortedFilters}`;
 }
 
+/**
+ * Where a result set came from. `fromProvider` is what tells the caller whether
+ * the upstream `version` filter was applied — see {@link buildVersionNote}.
+ */
+interface ResolvedSearchResults {
+  results: SearchResultWithMeta[];
+  fromProvider: boolean;
+}
+
 async function resolveSearchResults(
   ctx: ServerContext,
   params: SearchParams,
   log: Logger
-): Promise<SearchResultWithMeta[]> {
+): Promise<ResolvedSearchResults> {
   const needsTopicMatching = params.topic !== undefined;
 
   // 1. Try SearchProvider first (custom backend injection — no caching)
   if (ctx.searchProvider !== undefined) {
     const provided = await ctx.searchProvider.search(params);
     if (provided !== null) {
-      return provided.map(r => toSearchResultWithMeta(r, needsTopicMatching));
+      return {
+        results: provided.map(r => toSearchResultWithMeta(r, needsTopicMatching)),
+        fromProvider: true,
+      };
     }
   }
 
@@ -640,7 +727,7 @@ async function resolveSearchResults(
   const cached = await ctx.cache.get<SearchResultWithMeta[]>(cacheKey);
   if (cached !== null) {
     log.debug(`Search cache hit: key="${cacheKey}", ${cached.length} results`);
-    return cached;
+    return { results: cached, fromProvider: false };
   }
 
   const perPage = Math.min(
@@ -667,7 +754,11 @@ async function resolveSearchResults(
   for (const entry of dedupeToLatestVersions(ftResponse.results)) {
     const searchResult = transformFtSearchResult(entry);
     if (searchResult.url !== '') {
-      results.push(toSearchResultWithMeta(searchResult, needsTopicMatching));
+      results.push(toSearchResultWithMeta(
+        searchResult,
+        needsTopicMatching,
+        docTypeLabelKeys(entryMetadata(entry)),
+      ));
     }
   }
 
@@ -675,5 +766,5 @@ async function resolveSearchResults(
   await ctx.cache.set(cacheKey, results, ctx.config.cacheTtl.search);
 
   log.debug(`FT search returned ${results.length} results (cached)`);
-  return results;
+  return { results, fromProvider: false };
 }

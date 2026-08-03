@@ -460,6 +460,53 @@ describe('fetchTableOfContents()', () => {
     expect(result2.toc[0].title).toBe(result1.toc[0].title);
   });
 
+  // The map id is half of the `mapId` + `contentId` pair `jamf_docs_get_article`
+  // documents as obtainable "from search results or TOC". It was resolved here
+  // and then thrown away, so `get_toc` had nothing to attach.
+  it('should return the mapId the entries were fetched under', async () => {
+    setupMapsResponse('test-map-123', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
+
+    expect(result.mapId).toBe('test-map-123');
+  });
+
+  it('should still return the mapId when the TOC came from cache', async () => {
+    // The cache stores the tree, not the id it was fetched under. A caller
+    // hitting a warm cache must not get a different shape from one that
+    // missed — the pair would work for the first caller of the day only.
+    setupMapsResponse('map-cached-id', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    await fetchTableOfContents(ctx, 'jamf-pro');
+    const cached = await fetchTableOfContents(ctx, 'jamf-pro');
+
+    const tocCalls = mockedGetJson.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.endsWith('/toc'),
+    ).length;
+    expect(tocCalls).toBe(1);
+    expect(cached.mapId).toBe('map-cached-id');
+  });
+
+  it('should serve a cached TOC without a mapId rather than fail when the registry cannot answer', async () => {
+    setupMapsResponse('map-transient', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    await fetchTableOfContents(ctx, 'jamf-pro');
+
+    // Force the registry to rebuild, and make that rebuild fail. The TOC is
+    // already in hand, so a broken registry should cost the id, not the page.
+    ctx.mapsRegistry.reset();
+    await ctx.cache.delete('maps-registry');
+    mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
+
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
+
+    expect(result.toc).toHaveLength(2);
+    expect(result.mapId).toBeUndefined();
+  });
+
   it('should respect maxTokens option and truncate when needed', async () => {
     // Build a large set of nodes to exceed a small token limit
     const manyNodes: FtTocNode[] = Array.from({ length: 50 }, (_, i) => ({

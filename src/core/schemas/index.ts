@@ -11,6 +11,7 @@ import {
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
   PRODUCT_IDS,
+  PRODUCT_ID_LIST,
   TOPIC_IDS,
   COMMON_TOPIC_IDS,
   DOC_TYPE_IDS,
@@ -51,6 +52,12 @@ const TOPIC_DESCRIPTION =
   `Filter by topic. Common: ${COMMON_TOPIC_IDS.join(', ')}. ` +
   `See jamf_docs_list_products for the full list of ${TOPIC_IDS.length} topic IDs.`;
 
+// Product field descriptions — derived from PRODUCT_ID_LIST for the same
+// reason. These used to name the four flagship products only, while the enum
+// below accepts every ID in JAMF_PRODUCTS. See constants/products.ts.
+const PRODUCT_FILTER_DESCRIPTION = `Filter by product: ${PRODUCT_ID_LIST}`;
+const PRODUCT_REQUIRED_DESCRIPTION = `Product ID: ${PRODUCT_ID_LIST}`;
+
 /**
  * Schema for jamf_docs_list_products
  */
@@ -82,7 +89,7 @@ export const SearchInputSchema = z.object({
   product: completable(
     z.enum(PRODUCT_IDS)
       .optional()
-      .describe('Filter by product: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+      .describe(PRODUCT_FILTER_DESCRIPTION),
     completeProduct
   ),
 
@@ -198,7 +205,7 @@ export type GetArticleInput = z.infer<typeof GetArticleInputSchema>;
 export const GetTocInputSchema = z.object({
   product: completable(
     z.enum(PRODUCT_IDS)
-      .describe('Product ID: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+      .describe(PRODUCT_REQUIRED_DESCRIPTION),
     completeProduct
   ),
 
@@ -245,7 +252,7 @@ export const GlossaryLookupInputSchema = z.object({
   product: completable(
     z.enum(PRODUCT_IDS)
       .optional()
-      .describe('Filter by product: jamf-pro, jamf-school, jamf-connect, jamf-protect'),
+      .describe(PRODUCT_FILTER_DESCRIPTION),
     completeProduct
   ),
 

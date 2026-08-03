@@ -219,6 +219,39 @@ describe('jamf_docs_search tool', () => {
       expect(text).not.toContain('](https://evil.com)');
     });
 
+    // `jamf_docs_get_article` tells callers to take `mapId` + `contentId`
+    // "from search results". Markdown is the default `responseFormat`, so a
+    // client that only reads the text content could not perform the workflow
+    // the description advertises.
+    it('should print the mapId + contentId pair a caller is told to take from here', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult({ mapId: 'JAMF~PRO~MAP', contentId: 'topic-4711' })],
+        })
+      );
+
+      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'profiles' } });
+
+      const text = getTextContent(result);
+      expect(text).toContain('**IDs**: mapId=JAMF\\~PRO\\~MAP, contentId=topic-4711');
+    });
+
+    it('should omit the IDs block when only one half of the pair is present', async () => {
+      // Either id alone cannot address an article, so half a pair would be an
+      // invitation to a call that fails validation.
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult({ mapId: 'map-only' })],
+        })
+      );
+
+      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'profiles' } });
+
+      const text = getTextContent(result);
+      expect(text).not.toContain('**IDs**:');
+      expect(text).not.toContain('map-only');
+    });
+
     it('should include horizontal rule separator between results', async () => {
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({
@@ -437,6 +470,38 @@ describe('jamf_docs_search tool', () => {
       const sc = result.structuredContent as Record<string, unknown>;
       const results = sc.results as Record<string, unknown>[];
       expect(results[0].version).toBe('11.5.0');
+    });
+
+    // `SearchOutputSchema` has always declared `mapId`/`contentId` on a
+    // result, and `jamf_docs_get_article` points callers here for them, but
+    // the builder mapped each result to a fixed subset that dropped both —
+    // making the documented direct-fetch workflow impossible to perform.
+    it('should carry mapId and contentId so a caller can fetch the article directly', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({
+          results: [createSearchResult({ mapId: 'JAMF~PRO~MAP', contentId: 'topic-4711' })],
+        })
+      );
+
+      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      const results = sc.results as Record<string, unknown>[];
+      expect(results[0].mapId).toBe('JAMF~PRO~MAP');
+      expect(results[0].contentId).toBe('topic-4711');
+    });
+
+    it('should omit mapId and contentId from a result that has neither', async () => {
+      vi.mocked(searchDocumentation).mockResolvedValueOnce(
+        buildSearchResponse({ results: [createSearchResult()] })
+      );
+
+      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      const results = sc.results as Record<string, unknown>[];
+      expect(Object.prototype.hasOwnProperty.call(results[0], 'mapId')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(results[0], 'contentId')).toBe(false);
     });
 
     it('should omit version from structuredContent result when version is undefined', async () => {

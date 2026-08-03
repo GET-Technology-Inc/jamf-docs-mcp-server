@@ -9,7 +9,7 @@ import { appToolMeta } from '../apps/index.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, CONTENT_LIMITS, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
@@ -36,17 +36,38 @@ function formatFiltersLine(filters: SearchFilters): string {
   return parts.length > 0 ? `\n*Filtered by: ${parts.join(', ')}*` : '';
 }
 
+/**
+ * The `mapId` + `contentId` pair, rendered for the markdown path.
+ *
+ * `jamf_docs_get_article` documents this pair as obtainable "from search
+ * results", and markdown is the default `responseFormat` — printing it only in
+ * `structuredContent` would leave the documented workflow unreachable for any
+ * client that reads the text content. Returns `''` unless both halves are
+ * present, because either one alone cannot address an article.
+ */
+function formatResultIds(result: SearchResult): string {
+  const { mapId, contentId } = result;
+  if (mapId === undefined || mapId === '' || contentId === undefined || contentId === '') {
+    return '';
+  }
+  return `**IDs**: mapId=${sanitizeMarkdownText(mapId)}, contentId=${sanitizeMarkdownText(contentId)}`;
+}
+
 function formatSearchResult(result: SearchResult): string {
   let output = `### [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)})\n\n`;
   output += `> ${sanitizeMarkdownText(result.snippet)}\n\n`;
-  if ((result.product !== null && result.product !== '') || result.version !== undefined) {
-    const meta: string[] = [];
-    if (result.product !== null && result.product !== '') {
-      meta.push(`**Product**: ${result.product}`);
-    }
-    if (result.version !== undefined) {
-      meta.push(`**Version**: ${result.version}`);
-    }
+  const meta: string[] = [];
+  if (result.product !== null && result.product !== '') {
+    meta.push(`**Product**: ${result.product}`);
+  }
+  if (result.version !== undefined) {
+    meta.push(`**Version**: ${result.version}`);
+  }
+  const ids = formatResultIds(result);
+  if (ids !== '') {
+    meta.push(ids);
+  }
+  if (meta.length > 0) {
     output += `${meta.join(' | ')}\n\n`;
   }
   output += '---\n\n';
@@ -70,7 +91,7 @@ function formatPaginationFooter(pagination: PaginationInfo, tokenInfo: TokenInfo
   if (tokenInfo.truncated) {
     footer += '\n*Results truncated due to token limit. Use a smaller `limit` or increase `maxTokens`.*';
   }
-  footer += '\n\n*Use `jamf_docs_get_article` with any URL above to read the full article.*\n';
+  footer += '\n\n*Use `jamf_docs_get_article` with any URL above — or with the `mapId` + `contentId` pair shown with a result — to read the full article.*\n';
   return footer;
 }
 
@@ -196,9 +217,9 @@ Args:
   - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
-  - limit (number, optional): Maximum results per page 1-50 (default: 10)
-  - page (number, optional): Page number for pagination 1-100 (default: 1)
-  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
+  - limit (number, optional): Maximum results per page 1-${CONTENT_LIMITS.MAX_SEARCH_RESULTS} (default: ${CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS})
+  - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief, token-efficient output
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -233,7 +254,11 @@ Errors:
   - "No results found" if search returns empty
   - "Invalid product ID" if product parameter is not recognized
 
-Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.`;
+Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
+Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article
+to fetch that article directly instead of resolving its URL. The pair is omitted
+when a result comes from a source that does not resolve one — fall back to the
+URL in that case.`;
 
 /**
  * Build structured content for a search result set
@@ -286,6 +311,8 @@ function buildSearchStructuredContent(
     limit?: number | undefined;
     filterRelaxation?: { removed: string[]; original: Record<string, string>; message: string } | undefined;
     truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
+    versionNote?: string | undefined;
+    paginationNote?: string | undefined;
   }
 ): Record<string, unknown> {
   return {
@@ -302,9 +329,17 @@ function buildSearchStructuredContent(
       snippet: r.snippet,
       product: r.product ?? '',
       ...(r.version !== undefined ? { version: r.version } : {}),
-      ...(r.docType !== undefined ? { docType: r.docType } : {})
+      ...(r.docType !== undefined ? { docType: r.docType } : {}),
+      // `jamf_docs_get_article` tells callers to take these "from search
+      // results or TOC". `SearchOutputSchema` has always declared them; not
+      // emitting them made the documented direct-fetch workflow impossible to
+      // perform from the outputs this server actually produces.
+      ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
+      ...(r.contentId !== undefined ? { contentId: r.contentId } : {})
     })),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
+    ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
+    ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
     ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {})
   };
 }
@@ -347,23 +382,29 @@ function buildNoResultsResponse(
 }
 
 /**
- * Append filter/version/truncation notices to markdown output
+ * Append filter/version/pagination/truncation notices to markdown output
  */
 function appendMarkdownNotices(
   markdown: string,
-  filterRelaxation?: { message: string },
-  versionNote?: string,
-  truncatedContent?: { omittedCount: number }
+  notices: {
+    filterRelaxation?: { message: string } | undefined;
+    versionNote?: string | undefined;
+    paginationNote?: string | undefined;
+    truncatedContent?: { omittedCount: number } | undefined;
+  }
 ): string {
   let result = markdown;
-  if (filterRelaxation !== undefined) {
-    result += `\n> **Note:** ${filterRelaxation.message}\n`;
+  if (notices.filterRelaxation !== undefined) {
+    result += `\n> **Note:** ${notices.filterRelaxation.message}\n`;
   }
-  if (versionNote !== undefined) {
-    result += `\n> **Version Note:** ${versionNote}\n`;
+  if (notices.versionNote !== undefined) {
+    result += `\n> **Version Note:** ${notices.versionNote}\n`;
   }
-  if (truncatedContent !== undefined && truncatedContent.omittedCount > 0) {
-    result += `\n*${truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
+  if (notices.paginationNote !== undefined) {
+    result += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
+  }
+  if (notices.truncatedContent !== undefined && notices.truncatedContent.omittedCount > 0) {
+    result += `\n*${notices.truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
   }
   return result;
 }
@@ -446,7 +487,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
 
-        const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
+        const {
+          results, pagination, tokenInfo, filterRelaxation, versionNote,
+          paginationNote, truncatedContent
+        } = searchResult;
 
         // Build response
         const filters = buildFilterSummary(params);
@@ -459,6 +503,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           pagination,
           ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
           ...(versionNote !== undefined ? { versionNote } : {}),
+          ...(paginationNote !== undefined ? { paginationNote } : {}),
           ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
@@ -481,6 +526,8 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             filters: activeSearchFilters(params),
             limit: params.limit,
             filterRelaxation,
+            versionNote,
+            paginationNote,
             truncatedContent,
           }
         );
@@ -510,7 +557,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           : formatSearchResultsAsMarkdown;
         const markdown = appendMarkdownNotices(
           formatFn(params.query, results, filters, pagination, tokenInfo),
-          filterRelaxation, versionNote, truncatedContent
+          { filterRelaxation, versionNote, paginationNote, truncatedContent }
         );
 
         await reportProgress(extra, { progress: 3, total: 3 });

@@ -31,7 +31,9 @@ import type {
   FtSearchCluster,
   FtClusteredSearchResponse,
   FtMetadataEntry,
+  SearchResult,
 } from '../../../src/core/types.js';
+import type { ServerContext } from '../../../src/core/types/context.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const mockedPostJson = vi.mocked(httpPostJson);
@@ -407,10 +409,18 @@ describe('transformFtSearchResult()', () => {
       expect(result.mapTitle).toBeUndefined();
     });
 
-    it('should derive docType from jamf:contentType metadata', () => {
+    // ── docType derivation ──────────────────────────────────────────────────
+    //
+    // FT ships the answer as `content-*` values under `zoominmetadata`, whose
+    // vocabulary is exactly DOC_TYPES' labelKey set. `jamf:contentType` is
+    // many-to-one ('Technical Documentation' covers four docTypes) and so
+    // cannot be reversed: reverse-looking it up in DOC_TYPE_CONTENT_TYPE_MAP's
+    // insertion order labelled every release note `documentation`, because
+    // release notes carry BOTH values and `documentation` is declared first.
+    it('should derive docType from the zoominmetadata content-* label', () => {
       const entry = makeTopicEntry({
         metadata: makeMetadata({
-          'zoominmetadata': ['product-pro'],
+          'zoominmetadata': ['product-pro', 'content-releasenotes'],
           'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
           'jamf:contentType': ['Release Notes'],
         }),
@@ -419,7 +429,61 @@ describe('transformFtSearchResult()', () => {
       expect(result.docType).toBe('release-notes');
     });
 
-    it('should default to documentation when jamf:contentType is unknown', () => {
+    // Shape copied from the live FT API (jamf-pro release notes, 2026-08-03):
+    // both labels present, `content-techdocs` listed first.
+    it('should prefer the specific label over content-techdocs on a release note', () => {
+      const entry = makeTopicEntry({
+        metadata: makeMetadata({
+          'zoominmetadata': [
+            'content-techdocs',
+            'role-administrator',
+            'product-pro',
+            'content-releasenotes',
+            'release-status-ga',
+            'product-pro-11.24.0',
+          ],
+          'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
+          'jamf:contentType': ['Technical Documentation', 'Release Notes'],
+        }),
+      });
+      const result = transformFtSearchResult(entry);
+      expect(result.docType).toBe('release-notes');
+    });
+
+    it.each([
+      ['content-solutionguide', 'solution-guide'],
+      ['content-gettingstarted', 'getting-started'],
+      ['content-training', 'training'],
+      ['content-glossary', 'glossary'],
+    ])('should report %s alongside content-techdocs as %s', (labelKey, expected) => {
+      const entry = makeTopicEntry({
+        metadata: makeMetadata({
+          'zoominmetadata': ['content-techdocs', 'product-pro', labelKey],
+          'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
+          'jamf:contentType': ['Technical Documentation'],
+        }),
+      });
+      const result = transformFtSearchResult(entry);
+      expect(result.docType).toBe(expected);
+    });
+
+    it('should report content-techdocs alone as documentation', () => {
+      const entry = makeTopicEntry({
+        metadata: makeMetadata({
+          'zoominmetadata': ['product-pro', 'content-techdocs'],
+          'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
+          'jamf:contentType': ['Technical Documentation'],
+        }),
+      });
+      const result = transformFtSearchResult(entry);
+      expect(result.docType).toBe('documentation');
+    });
+
+    // "no content-* label" must stay unknown rather than become a positive
+    // assertion of `documentation` — Jamf's glossary topics come back with no
+    // zoominmetadata at all, and calling them documentation makes the docType
+    // filter drop them from every search except docType: 'documentation'.
+    it('should leave docType undefined when no content-* label is present', () => {
       const entry = makeTopicEntry({
         metadata: makeMetadata({
           'zoominmetadata': ['product-pro'],
@@ -428,7 +492,13 @@ describe('transformFtSearchResult()', () => {
         }),
       });
       const result = transformFtSearchResult(entry);
-      expect(result.docType).toBe('documentation');
+      expect(result.docType).toBeUndefined();
+    });
+
+    it('should leave docType undefined when the entry has no metadata at all', () => {
+      const entry = makeTopicEntry({ metadata: [] });
+      const result = transformFtSearchResult(entry);
+      expect(result.docType).toBeUndefined();
     });
 
     it('should handle Untitled when title is empty', () => {
@@ -623,6 +693,91 @@ describe('searchDocumentation()', () => {
     const proResults = result.results.filter(r => r.product === 'Jamf Pro');
     expect(proResults).toHaveLength(1);
     expect(proResults[0].contentId).toBe('pro-new');
+  });
+
+  // ── docType post-filter ───────────────────────────────────────────────────
+  //
+  // Regression: search(query='declarative device management', product='jamf-pro',
+  // docType='release-notes') returned "No results with all filters applied.
+  // Removed filter(s): docType." while the results it then showed were visibly
+  // release notes. Every jamf-pro release note carries both `content-techdocs`
+  // and `content-releasenotes`; labelKeys were derived from a single reversed
+  // docType and came out as ['content-techdocs'], so the filter dropped them all.
+  describe('docType filtering of release notes', () => {
+    /** A jamf-pro release note, labelled the way the live FT API labels one. */
+    function makeReleaseNoteEntry(contentId: string): FtSearchEntry {
+      return makeTopicEntry({
+        contentId,
+        title: 'Improved Declarative Device Management for Migrated Instances',
+        metadata: makeMetadata({
+          'zoominmetadata': [
+            'content-techdocs',
+            'role-administrator',
+            'product-pro',
+            'content-releasenotes',
+            'product-pro-11.24.0',
+          ],
+          'ft:prettyUrl': [`/en-US/bundle/jamf-pro-release-notes-11.24.0/page/${contentId}.html`],
+          'jamf:contentType': ['Technical Documentation', 'Release Notes'],
+        }),
+      });
+    }
+
+    it('keeps release notes when product and docType are combined', async () => {
+      mockedPostJson.mockResolvedValueOnce(
+        makeFtResponse([makeCluster([makeReleaseNoteEntry('rn-1')])])
+      );
+
+      const result = await searchDocumentation(ctx, {
+        query: 'declarative device management',
+        product: 'jamf-pro',
+        docType: 'release-notes',
+      });
+
+      expect(result.filterRelaxation).toBeUndefined();
+      expect(result.results).toHaveLength(1);
+      expect(result.results[0].docType).toBe('release-notes');
+    });
+
+    // The other half of carrying both labels: a release note is still
+    // technical documentation, so docType='documentation' must not lose it.
+    it('keeps release notes under docType=documentation too', async () => {
+      mockedPostJson.mockResolvedValueOnce(
+        makeFtResponse([makeCluster([makeReleaseNoteEntry('rn-2')])])
+      );
+
+      const result = await searchDocumentation(ctx, {
+        query: 'managed software updates',
+        product: 'jamf-pro',
+        docType: 'documentation',
+      });
+
+      expect(result.filterRelaxation).toBeUndefined();
+      expect(result.results).toHaveLength(1);
+    });
+
+    it('still drops a plain documentation topic from a release-notes search', async () => {
+      mockedPostJson.mockResolvedValueOnce(
+        makeFtResponse([makeCluster([
+          makeTopicEntry({
+            contentId: 'doc-1',
+            metadata: makeMetadata({
+              'zoominmetadata': ['product-pro', 'content-techdocs'],
+              'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/doc-1.html'],
+              'jamf:contentType': ['Technical Documentation'],
+            }),
+          }),
+        ])])
+      );
+
+      const result = await searchDocumentation(ctx, {
+        query: 'configuration profiles',
+        product: 'jamf-pro',
+        docType: 'release-notes',
+      });
+
+      expect(result.filterRelaxation?.removed).toContain('docType');
+    });
   });
 
   it('should return empty results when API returns no clusters', async () => {
@@ -955,6 +1110,95 @@ describe('searchDocumentation()', () => {
     expect(result.pagination.page).toBe(2);
     const { paginationNote: note } = result;
     expect(note).toBeUndefined();
+  });
+
+  // ==========================================================================
+  // versionNote — a `version` filter the provider path did not enforce
+  // ==========================================================================
+
+  function providerCtx(results: SearchResult[]): ServerContext {
+    return createMockContext({
+      searchProvider: { search: vi.fn().mockResolvedValue(results) },
+    });
+  }
+
+  const providerResult = (version?: string): SearchResult => ({
+    title: 'Configuration Profiles',
+    url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Config.html',
+    snippet: 'Configuration profiles let you manage settings on managed devices.',
+    product: 'Jamf Pro',
+    ...(version !== undefined ? { version } : {}),
+  });
+
+  it('should include versionNote when a SearchProvider returns other versions than the one requested', async () => {
+    // The provider is handed `params` and its results are taken as given —
+    // nothing in the service enforces `version` on this path. A result stamped
+    // 11.20.0 proves the filter did not hold, and the tool would otherwise echo
+    // filters.version back as though it had.
+    const result = await searchDocumentation(
+      providerCtx([providerResult('11.20.0')]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    const { versionNote: note } = result;
+    expect(note).toBeDefined();
+    expect(note).toContain('11.5.0');
+  });
+
+  it('should NOT include versionNote when the provider honoured the requested version', async () => {
+    const result = await searchDocumentation(
+      providerCtx([providerResult('11.5.0')]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    expect(result.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote for provider results that carry no version at all', async () => {
+    // The unversioned products (School, Connect, Protect, …) have no version
+    // metadata. Silence there says nothing either way, so it must not be read
+    // as a mismatch.
+    const result = await searchDocumentation(
+      providerCtx([providerResult()]),
+      { query: 'profiles', version: '11.5.0' },
+    );
+
+    expect(result.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote when version is "current" or omitted', async () => {
+    const ctxWithProvider = providerCtx([providerResult('11.20.0')]);
+
+    const currentVersion = await searchDocumentation(ctxWithProvider, {
+      query: 'profiles', version: 'current',
+    });
+    const noVersion = await searchDocumentation(ctxWithProvider, { query: 'profiles' });
+
+    expect(currentVersion.versionNote).toBeUndefined();
+    expect(noVersion.versionNote).toBeUndefined();
+  });
+
+  it('should NOT include versionNote on the FT path, where the filter goes upstream', async () => {
+    // buildSearchFilters sends `version` to Fluid Topics, so the API enforces
+    // it; whatever version metadata comes back is authoritative.
+    mockedPostJson.mockResolvedValueOnce(
+      makeFtResponse([makeCluster([
+        makeTopicEntry({
+          title: 'Configuration Profiles',
+          contentId: 'topic-vn-ft',
+          metadata: makeMetadata({
+            'zoominmetadata': ['product-pro'],
+            'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/vn-ft.html'],
+            'version': ['11.20.0'],
+          }),
+        }),
+      ])])
+    );
+
+    const result = await searchDocumentation(ctx, { query: 'profiles', version: '11.5.0' });
+
+    expect(mockedPostJson).toHaveBeenCalled();
+    expect(result.versionNote).toBeUndefined();
   });
 
   // ==========================================================================

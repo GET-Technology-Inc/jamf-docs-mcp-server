@@ -65,6 +65,14 @@ export const SearchOutputSchema = z.object({
   }).optional(),
   versionNote: z.string().optional(),
   relevanceNote: z.string().optional(),
+  /**
+   * Set when `page` was clamped to the last available page.
+   *
+   * Without it a request for page 99 of a 28-page result set comes back
+   * looking exactly like a request for page 28 — same `page`, same `hasMore` —
+   * and the client has no way to tell that its request was adjusted.
+   */
+  paginationNote: z.string().optional(),
   truncatedContent: z.object({
     omittedCount: z.number(),
     omittedItems: z.array(z.object({
@@ -77,7 +85,16 @@ export const SearchOutputSchema = z.object({
 export const ArticleOutputSchema = z.object({
   title: z.string(),
   url: z.string(),
+  /**
+   * The body actually sent. Under `outputMode: 'compact'` this is a preview,
+   * not the whole article — the markdown half and this half always agree.
+   */
   content: z.string(),
+  /**
+   * Estimated tokens of `content` above, so a caller can tell a compact preview
+   * from a full body without re-tokenising it.
+   */
+  tokenCount: z.number().optional(),
   product: z.string().optional(),
   version: z.string().optional(),
   lastUpdated: z.string().optional(),
@@ -135,6 +152,18 @@ export const TocOutputSchema = z.object({
    */
   productId: z.string(),
   version: z.string(),
+  /**
+   * The Fluid Topics map these entries came from.
+   *
+   * `jamf_docs_get_article` accepts `mapId` + `contentId` and its description
+   * points callers at "search results or TOC" for them. The map id is one per
+   * response, the content id one per entry, so the pair is only assemblable if
+   * both are emitted — this is the half that lives up here.
+   *
+   * Optional: a cached TOC re-resolves it best-effort, and a `TocProvider`
+   * serving from its own store may not know it.
+   */
+  mapId: z.string().optional(),
   totalEntries: z.number(),
   page: z.number(),
   totalPages: z.number(),
@@ -144,4 +173,13 @@ export const TocOutputSchema = z.object({
     url: z.string(),
     contentId: z.string().optional(),
   })),
+  /**
+   * Set when a specific `version` was requested; the upstream API only serves
+   * current-version content. Rendered by `jamf_docs_get_toc` since before this
+   * schema existed — declaring it keeps the structured channel honest about
+   * what the tool actually emits.
+   */
+  versionNote: z.string().optional(),
+  /** Set when `page` was clamped to the last available page. */
+  paginationNote: z.string().optional(),
 });

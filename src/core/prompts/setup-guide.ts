@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
+import { PRODUCT_ID_LIST } from '../constants.js';
 
 export function registerSetupGuidePrompt(server: McpServer): void {
   server.registerPrompt(
@@ -19,7 +20,7 @@ export function registerSetupGuidePrompt(server: McpServer): void {
         feature: z.string().max(2000).describe('The feature or capability to set up'),
         product: completable(
           z.string().optional().describe(
-            'Jamf product ID (jamf-pro, jamf-school, jamf-connect, jamf-protect)'
+            `Jamf product ID (${PRODUCT_ID_LIST})`
           ),
           completeProduct
         ),

@@ -15,6 +15,11 @@ import type { FetchArticleResult, FetchArticleOptions, ArticleSection, FtMetadat
 import { buildDisplayUrl, parseUrl, type TopicResolverInput } from './topic-resolver.js';
 import { fetchTopicContent, fetchTopicMetadata } from './ft-client.js';
 import { parseArticle, type ParsedArticleContent } from './content-parser.js';
+import {
+  buildInternalLinkResolver,
+  collectInternalLinkMapIds,
+} from './ft-internal-link.js';
+import type { Logger } from './interfaces/logger.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
 import {
   extractSections,
@@ -59,6 +64,8 @@ interface CachedArticle {
 export interface FetchArticleFromFtOptions extends FetchArticleOptions {
   /** TTL (seconds) for the cached article entry; undefined uses the cache default. */
   cacheTtl?: number;
+  /** Used to report a TOC index that would not load; links degrade either way. */
+  logger?: Logger | undefined;
 }
 
 export async function fetchArticleFromFt(
@@ -81,7 +88,22 @@ export async function fetchArticleFromFt(
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
     const { product, version } = extractProductVersion(topicMeta.metadata);
-    const parsed = parseArticle(html, displayUrl, { includeRelated: true });
+
+    // FT's in-documentation links are hrefless spans addressed by TOC node id,
+    // so placing them needs the TOC of whichever map(s) they point into. Scoped
+    // to the maps this topic actually references: a topic with no internal
+    // links collects nothing and the resolver does no I/O. The index is cached
+    // per map, so the fetch is shared by every article in it.
+    const resolveInternalLink = await buildInternalLinkResolver({
+      cache,
+      mapIds: collectInternalLinkMapIds(html),
+      ttl: options.cacheTtl,
+      logger: options.logger,
+    });
+    const parsed = parseArticle(html, displayUrl, {
+      includeRelated: true,
+      resolveInternalLink,
+    });
 
     // Metadata title is authoritative; parseArticle h1 is only a fallback
     const title = (topicMeta.title !== undefined && topicMeta.title !== '')
@@ -192,7 +214,11 @@ export async function resolveAndFetchArticle(
   // Step 3: Default — fetch from FT API + parse
   const result = await fetchArticleFromFt(
     cache, mapId, contentId, articleUrl,
-    { ...options, cacheTtl: ctx.config.cacheTtl.article }
+    {
+      ...options,
+      cacheTtl: ctx.config.cacheTtl.article,
+      logger: ctx.logger.createLogger('article-service'),
+    }
   );
 
   if (resolvedLocale !== undefined && articleUrl !== '') {

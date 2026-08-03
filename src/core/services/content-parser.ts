@@ -11,6 +11,7 @@
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { DOCS_BASE_URL, SELECTORS } from '../constants.js';
+import { INTERNAL_LINK_SELECTOR, type InternalLinkResolver } from './ft-internal-link.js';
 
 // ─── Turndown instance ──────────────────────────────────────────
 
@@ -62,6 +63,41 @@ export function cleanHtml($: cheerio.CheerioAPI): void {
   });
 }
 
+/**
+ * Turn Fluid Topics' `<span class="ft-internal-link" data-mapid data-tocid>`
+ * into a real `<a href>`.
+ *
+ * Doing this during cleaning rather than at each read site is what makes one
+ * change fix both halves of the symptom: the anchor is what Turndown renders
+ * as a Markdown link, *and* what `SELECTORS.RELATED` — which is anchor-based,
+ * as every other related-link source on the site is — can finally see.
+ *
+ * Spans the resolver cannot place are left untouched, so they degrade to the
+ * plain text they already were. `data-tocid` cannot be turned into a URL
+ * without the map's TOC, so the only way to emit an href here regardless would
+ * be to invent one.
+ */
+export function linkInternalSpans(
+  $: cheerio.CheerioAPI,
+  resolve: InternalLinkResolver,
+): void {
+  $(INTERNAL_LINK_SELECTOR).each((_, el) => {
+    const span = $(el);
+    const mapId = span.attr('data-mapid') ?? '';
+    const tocId = span.attr('data-tocid') ?? '';
+    if (mapId === '' || tocId === '') {
+      return;
+    }
+
+    const href = resolve(mapId, tocId);
+    if (href === undefined) {
+      return;
+    }
+
+    span.replaceWith($('<a></a>').attr('href', href).html(span.html() ?? ''));
+  });
+}
+
 // ─── Article parsing ────────────────────────────────────────────
 
 export interface ParsedArticleContent {
@@ -71,16 +107,32 @@ export interface ParsedArticleContent {
   relatedArticles: { title: string; url: string }[];
 }
 
+export interface ParseArticleOptions {
+  includeRelated?: boolean;
+  /**
+   * Lookup for `ft-internal-link` spans. Without one those links keep the
+   * pre-resolution behaviour: text in the content, absent from
+   * `relatedArticles`. See {@link linkInternalSpans}.
+   */
+  resolveInternalLink?: InternalLinkResolver | undefined;
+}
+
 /**
  * Parse HTML into article structure (title, markdown content, breadcrumb).
  */
 export function parseArticle(
   html: string,
   displayUrl: string,
-  options?: { includeRelated?: boolean }
+  options?: ParseArticleOptions
 ): ParsedArticleContent {
   const $ = cheerio.load(html);
   cleanHtml($);
+
+  // Before anything reads anchors: internal links are spans until this runs.
+  const resolveInternalLink = options?.resolveInternalLink;
+  if (resolveInternalLink !== undefined) {
+    linkInternalSpans($, resolveInternalLink);
+  }
 
   // Extract content — try FT API selectors first (most common path),
   // then fall back to generic page selectors.

@@ -40,7 +40,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 // Import AFTER mocks are set up
 import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
-import type { PaginationInfo, TokenInfo } from '../../../src/core/types.js';
+import type { FetchTocResult } from '../../../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 
@@ -55,11 +55,19 @@ function buildTocResponse(overrides?: {
   toc?: TocEntry[];
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
-}): { toc: TocEntry[]; pagination: PaginationInfo; tokenInfo: TokenInfo } {
+  mapId?: string;
+  paginationNote?: string;
+}): FetchTocResult {
   const toc = overrides?.toc ?? [createTocEntry()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: toc.length, totalPages: 1, hasNext: false });
   const tokenInfo = overrides?.tokenInfo ?? createTokenInfo();
-  return { toc, pagination, tokenInfo };
+  return {
+    toc,
+    pagination,
+    tokenInfo,
+    ...(overrides?.mapId !== undefined ? { mapId: overrides.mapId } : {}),
+    ...(overrides?.paginationNote !== undefined ? { paginationNote: overrides.paginationNote } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +128,39 @@ describe('jamf_docs_get_toc tool', () => {
       expect(text).toContain('**Version**: current');
       expect(text).toContain('**Page 1 of 3**');
       expect(text).toContain('2,500 tokens');
+    });
+
+    // Markdown is the default responseFormat, so the id half that costs one
+    // line for the whole page is printed here. The per-entry contentIds are
+    // not — they would be a line's worth of tokens each against a truncation
+    // budget computed from titles alone — and the footer says where to get
+    // them rather than leaving the workflow silently unreachable.
+    it('should show the map id in the summary line and point at where the contentIds live', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ mapId: 'JAMF~PRO~MAP' })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('**Map ID**: JAMF\\~PRO\\~MAP');
+      expect(text).toContain('`contentId`');
+      expect(text).toContain('responseFormat="json"');
+    });
+
+    it('should omit the Map ID field when no map id was resolved', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).not.toContain('**Map ID**');
     });
 
     it('should include Table of Contents section header', async () => {
@@ -350,6 +391,26 @@ describe('jamf_docs_get_toc tool', () => {
       expect(json.toc[0].children).toBeDefined();
       expect(json.toc[0].children[0].title).toBe('Child');
     });
+
+    it('should include the mapId alongside the per-entry contentIds', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          mapId: 'JAMF~PRO~MAP',
+          toc: [createTocEntry({ title: 'Overview', contentId: 'content-1' })],
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', responseFormat: 'json' },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      // Both halves in one body: this is the response `jamf_docs_get_article`
+      // sends callers to for its `mapId` + `contentId` arguments.
+      expect(json.mapId).toBe('JAMF~PRO~MAP');
+      expect(json.toc[0].contentId).toBe('content-1');
+    });
   });
 
   // --- structuredContent ---------------------------------------------------
@@ -410,6 +471,68 @@ describe('jamf_docs_get_toc tool', () => {
       expect(entries[1].title).toBe('Child A');
       expect(entries[2].title).toBe('Child B');
     });
+
+    // `jamf_docs_get_article` documents `mapId` + `contentId` as obtainable
+    // "from search results or TOC". The map id is one per response and the
+    // content id one per entry, so the pair only exists if both are emitted;
+    // flattening used to keep title and url and drop the contentId, and the
+    // mapId was never attached at all.
+    it('should keep every entry contentId when flattening, nested ones included', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          toc: [
+            createTocEntry({
+              title: 'Parent',
+              url: 'https://learn.jamf.com/page/Parent.html',
+              contentId: 'content-parent',
+              children: [
+                createTocEntry({
+                  title: 'Child A',
+                  url: 'https://learn.jamf.com/page/ChildA.html',
+                  contentId: 'content-child-a',
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      const entries = sc.entries as { title: string; contentId?: string }[];
+      // Nested entries too: the child is where a caller usually lands.
+      expect(entries.map(e => e.contentId)).toEqual(['content-parent', 'content-child-a']);
+    });
+
+    it('should carry the mapId that pairs with those contentIds', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ mapId: 'JAMF~PRO~MAP' })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.mapId).toBe('JAMF~PRO~MAP');
+    });
+
+    it('should omit mapId when the TOC came from a source that does not know it', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(sc, 'mapId')).toBe(false);
+    });
   });
 
   // --- Default version behaviour -------------------------------------------
@@ -438,6 +561,105 @@ describe('jamf_docs_get_toc tool', () => {
 
       const sc = result.structuredContent as Record<string, unknown>;
       expect(sc.version).toBe('current');
+    });
+  });
+
+  // --- Version note ---------------------------------------------------------
+
+  describe('version note', () => {
+    it('should NOT claim current-only content for a version Jamf publishes its own map for', async () => {
+      // jamf-pro 11.15.0 has a distinct mapId upstream and serves its own
+      // content; `fetchTableOfContents` resolves that map (or throws). The old
+      // note fired on the requested string alone and told the caller the
+      // versioned TOC they were holding was really current content.
+      const { getAvailableVersions } = await import('../../../src/core/services/metadata.js');
+      vi.mocked(getAvailableVersions).mockResolvedValueOnce(['11.26.0', '11.15.0']);
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(getTextContent(result)).not.toContain('Version Note');
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.versionNote).toBeUndefined();
+    });
+
+    it('should still disclose a version that is not among the published maps', async () => {
+      // Default mock: getAvailableVersions resolves to [], so the requested
+      // version passes validation but cannot be confirmed against upstream.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('Version Note');
+      expect(text).toContain('11.15.0');
+      expect(text).not.toContain('only provides current version content');
+    });
+
+    it('should render a paginationNote the service produced', async () => {
+      // The other half of renderTocNotices, and the one that had no assertion:
+      // dropping renderTocNotices entirely still left the version-note cases
+      // failing, so this branch was carried by nothing. calculatePagination
+      // computes this note whenever `page` is clamped, and before #195 nothing
+      // rendered it — the caller was silently served a different page than the
+      // one requested.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          paginationNote: 'Requested page 99 exceeds total pages (3). Showing last page.',
+        }),
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', page: 99 },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(getTextContent(result)).toContain('exceeds total pages');
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.paginationNote).toBe(
+        'Requested page 99 exceeds total pages (3). Showing last page.',
+      );
+    });
+
+    it('should carry both notices at once when both apply', async () => {
+      // versionNote and paginationNote are independent; rendering one must not
+      // consume the other.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ paginationNote: 'Showing last page.' }),
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0', page: 99 },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('Version Note');
+      expect(text).toContain('Showing last page.');
+    });
+
+    it('should not emit a version note for current or unspecified versions', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValue(buildTocResponse());
+
+      const withCurrent = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: 'current' },
+      });
+      expect(getTextContent(withCurrent)).not.toContain('Version Note');
+
+      const withNone = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+      expect(getTextContent(withNone)).not.toContain('Version Note');
     });
   });
 

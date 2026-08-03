@@ -36,6 +36,10 @@ describe('Search filter fallback', () => {
           mapId: 'jamf-pro-documentation',
           snippet: 'MDM enrollment configuration profile for device management',
           productLabel: 'product-pro',
+          // Documentation and nothing else — a topic that really is only a
+          // release note carries `content-releasenotes` here as well, and must
+          // NOT be relaxed out of this search.
+          contentLabels: ['content-techdocs'],
           contentType: 'Technical Documentation',
         },
       ])

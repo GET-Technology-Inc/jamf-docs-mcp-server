@@ -19,6 +19,24 @@ interface RelatedArticle {
 }
 
 /**
+ * The slice of an article a response actually carries, and an honest count of it.
+ *
+ * `outputMode: 'compact'` used to shorten only the markdown; `structuredContent`
+ * — the half programmatic consumers read — still carried the whole body, and the
+ * footer quoted the article's token count rather than the preview's. Deriving
+ * both from one view keeps the two halves of a response describing the same
+ * bytes.
+ */
+export interface ArticleContentView {
+  /** The content this response includes — the whole body, or a preview of it. */
+  content: string;
+  /** Estimated tokens of `content`, not of the article it came from. */
+  tokenCount: number;
+  /** True when `content` omits part of the article, upstream or here. */
+  truncated: boolean;
+}
+
+/**
  * Options for full (non-compact) article formatting.
  * All fields are optional so that batch-get-articles can omit them.
  */
@@ -103,8 +121,38 @@ function formatSectionsList(
   if (sections.length > 15) {
     result += `\n*...and ${String(sections.length - 15)} more sections*\n`;
   }
-  result += '\n*Use `section` parameter to retrieve a specific section.*\n';
+  result += formatSectionAdvice(sections, tokenInfo);
   return result;
+}
+
+/**
+ * Advice line under the sections list.
+ *
+ * The `section` parameter only helps when some section actually fits inside the
+ * caller's budget. Pointing at it when the smallest section is already over
+ * `maxTokens` sends the caller to an action that cannot succeed, so fall back to
+ * the two things that can (a bigger budget, or an outline).
+ */
+function formatSectionAdvice(
+  sections: ArticleSection[],
+  tokenInfo: TokenInfo
+): string {
+  const smallest = Math.min(...sections.map(section => section.tokenCount));
+
+  if (smallest > tokenInfo.maxTokens) {
+    return `\n*No section fits within \`maxTokens\` (${tokenInfo.maxTokens.toLocaleString()}); `
+      + `the smallest is ~${smallest.toLocaleString()} tokens. `
+      + 'Raise `maxTokens`, or use `summaryOnly` for an outline.*\n';
+  }
+
+  // Exactly one section: there is nothing to choose between, so name the two
+  // outcomes instead of implying a selection.
+  if (sections.length === 1) {
+    return '\n*Use `section` to retrieve the one listed section, '
+      + 'or raise `maxTokens` to get the whole article.*\n';
+  }
+
+  return '\n*Use `section` parameter to retrieve a specific section.*\n';
 }
 
 function formatRelatedArticles(articles: RelatedArticle[] | undefined): string {
@@ -140,12 +188,16 @@ function formatBriefFooter(url: string): string {
   return `\n\n---\n*Source: [${sanitizeMarkdownText(url)}](${safeUrl})*\n`;
 }
 
-function formatCompactFooter(url: string, tokenInfo: TokenInfo): string {
+/** Reports the view, not the article: compact must not bill for what it withheld. */
+function formatCompactFooter(url: string, view: ArticleContentView): string {
   const safeUrl = sanitizeMarkdownUrl(url);
-  return `\n---\n*[Source](${safeUrl}) | ${tokenInfo.tokenCount} tokens${tokenInfo.truncated ? ' (truncated)' : ''}*\n`;
+  return `\n---\n*[Source](${safeUrl}) | ${String(view.tokenCount)} tokens${view.truncated ? ' (truncated)' : ''}*\n`;
 }
 
 const COMPACT_PREVIEW_TOKENS = 500;
+
+/** Floor for the content preview once the sections list has taken its share. */
+const COMPACT_MIN_CONTENT_TOKENS = 100;
 
 /** Break at paragraph boundaries so the preview reads cleanly. */
 function truncateContentForPreview(content: string, maxTokens: number): string {
@@ -172,7 +224,13 @@ function truncateContentForPreview(content: string, maxTokens: number): string {
   return included.join('\n\n');
 }
 
-/** Always shown so the AI knows which sections can be fetched individually. */
+/**
+ * Shown when the preview withheld content, so the AI knows what it can fetch.
+ *
+ * Emitting it unconditionally made compact output *longer* than full output for
+ * any article short enough to be sent whole — there was nothing left to fetch,
+ * so the list was pure overhead on top of an identical body.
+ */
 function formatCompactSectionsList(sections: ArticleSection[]): string {
   if (sections.length === 0) {
     return '';
@@ -194,32 +252,86 @@ function formatCompactSectionsList(sections: ArticleSection[]): string {
 // ============================================================================
 
 /**
+ * Decide what a compact response carries: a ~500-token preview of the body,
+ * and the token count of that preview rather than of the article.
+ *
+ * The sections list is charged against the same budget, because it is only
+ * emitted alongside a truncated preview and a 60-section article would
+ * otherwise push a "compact" response well past its ceiling.
+ *
+ * When nothing is dropped the pipeline's own `tokenInfo.tokenCount` already
+ * describes exactly this string, so it is preferred over a re-estimate.
+ */
+export function buildCompactArticleView(article: FetchArticleResult): ArticleContentView {
+  let preview = truncateContentForPreview(article.content, COMPACT_PREVIEW_TOKENS);
+
+  if (preview.length < article.content.length) {
+    const listTokens = estimateTokens(formatCompactSectionsList(article.sections));
+    const contentBudget = Math.max(
+      COMPACT_PREVIEW_TOKENS - listTokens,
+      COMPACT_MIN_CONTENT_TOKENS
+    );
+    preview = truncateContentForPreview(article.content, contentBudget);
+  }
+
+  const previewTruncated = preview.length < article.content.length;
+
+  return {
+    content: preview,
+    tokenCount: previewTruncated ? estimateTokens(preview) : article.tokenInfo.tokenCount,
+    truncated: previewTruncated || article.tokenInfo.truncated,
+  };
+}
+
+/**
+ * The view for a given `outputMode` — compact previews, full carries the body.
+ *
+ * Shared by `get_article` and `batch_get_articles` so that both the markdown
+ * and the `structuredContent` of either tool describe the same bytes.
+ */
+export function buildArticleContentView(
+  article: FetchArticleResult,
+  compact: boolean
+): ArticleContentView {
+  if (compact) {
+    return buildCompactArticleView(article);
+  }
+  return {
+    content: article.content,
+    tokenCount: article.tokenInfo.tokenCount,
+    truncated: article.tokenInfo.truncated,
+  };
+}
+
+/**
  * Format an article in compact mode.
  *
- * Shows only a preview (~500 tokens) of the content plus a list of all
- * available sections so the AI knows what can be retrieved in full.
+ * Shows only a preview (~500 tokens) of the content. When the preview withheld
+ * something, a list of available sections follows so the AI knows what can be
+ * retrieved in full; when the article was sent whole, the list is omitted —
+ * there is nothing left to fetch and it only made the response bigger.
  *
- * Output: title, compact metadata, content preview, truncation notice,
- * available sections list, compact footer.
+ * Output: title, compact metadata, content preview, truncation notice and
+ * available sections list (only when previewed), compact footer.
  */
 export function formatArticleCompact(
   article: FetchArticleResult
 ): string {
-  const preview = truncateContentForPreview(article.content, COMPACT_PREVIEW_TOKENS);
-  const isPreviewTruncated = preview.length < article.content.length;
+  const view = buildCompactArticleView(article);
+  const isPreviewTruncated = view.content.length < article.content.length;
 
   let markdown = `# ${article.title}\n\n`;
   markdown += formatCompactMetadata(article.product, article.version);
-  markdown += preview;
+  markdown += view.content;
 
   if (isPreviewTruncated) {
     markdown += '\n\n*[Showing preview. '
       + 'Use outputMode="full" for complete content, '
       + 'or section="<name>" for specific section.]*';
+    markdown += formatCompactSectionsList(article.sections);
   }
 
-  markdown += formatCompactSectionsList(article.sections);
-  markdown += formatCompactFooter(article.url, article.tokenInfo);
+  markdown += formatCompactFooter(article.url, view);
   return markdown;
 }
 
