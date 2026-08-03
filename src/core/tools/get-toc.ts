@@ -55,18 +55,31 @@ function formatTocCompact(
   return markdown;
 }
 
+/** Everything the full markdown renderer needs, passed as one bag. */
+interface TocFullFormatInput {
+  productName: string;
+  version: string;
+  /** Absent when the map could not be resolved; the header line then omits it. */
+  mapId: string | undefined;
+  toc: TocEntry[];
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+}
+
 /**
  * Format TOC as full markdown
  */
-function formatTocFull(
-  productName: string,
-  version: string,
-  toc: TocEntry[],
-  pagination: PaginationInfo,
-  tokenInfo: TokenInfo
-): string {
+function formatTocFull(input: TocFullFormatInput): string {
+  const { productName, version, mapId, toc, pagination, tokenInfo } = input;
   let markdown = `# ${productName} Documentation\n\n`;
-  markdown += `**Version**: ${version} | **Page ${pagination.page} of ${pagination.totalPages}** | ${tokenInfo.tokenCount.toLocaleString()} tokens\n\n`;
+  markdown += `**Version**: ${version} | **Page ${pagination.page} of ${pagination.totalPages}** | ${tokenInfo.tokenCount.toLocaleString()} tokens`;
+  // Half of the `mapId` + `contentId` pair `jamf_docs_get_article` documents.
+  // One line for the whole page, unlike the per-entry `contentId`s, which stay
+  // out of markdown — see the footer note below.
+  if (mapId !== undefined && mapId !== '') {
+    markdown += ` | **Map ID**: ${sanitizeMarkdownText(mapId)}`;
+  }
+  markdown += '\n\n';
   markdown += '---\n\n';
   markdown += '## Table of Contents\n\n';
 
@@ -83,17 +96,39 @@ function formatTocFull(
     markdown += '\n*TOC truncated due to token limit. Use `page` parameter or increase `maxTokens`.*';
   }
   markdown += '\n\n*Use `jamf_docs_get_article` with any URL above to read the full content.*\n';
+  // Per-entry `contentId`s are deliberately not rendered inline: at roughly a
+  // line's worth of tokens each they would push a full page past `maxTokens`,
+  // and the truncation budget upstream is computed from titles alone, so the
+  // reported token count would understate what was actually sent. They are
+  // carried in the JSON body and in `structuredContent.entries` instead.
+  markdown += '*Each entry\'s `contentId` — the other half of the `mapId` + `contentId` pair — is in the structured output; request `responseFormat="json"` to see it inline.*\n';
 
   return markdown;
 }
 
+/** One entry of the flattened `structuredContent.entries` list. */
+interface FlatTocEntry {
+  title: string;
+  url: string;
+  contentId?: string;
+}
+
 /**
- * Flatten nested TOC entries into a flat list
+ * Flatten nested TOC entries into a flat list.
+ *
+ * `contentId` rides along: paired with the response-level `mapId` it is what
+ * `jamf_docs_get_article` documents as obtainable "from search results or
+ * TOC". Dropping it here made that workflow impossible to perform from the
+ * structured output, even though the value was already resolved.
  */
-function flattenTocEntries(entries: TocEntry[]): { title: string; url: string }[] {
-  const flat: { title: string; url: string }[] = [];
+function flattenTocEntries(entries: TocEntry[]): FlatTocEntry[] {
+  const flat: FlatTocEntry[] = [];
   for (const entry of entries) {
-    flat.push({ title: entry.title, url: entry.url });
+    flat.push({
+      title: entry.title,
+      url: entry.url,
+      ...(entry.contentId !== undefined ? { contentId: entry.contentId } : {}),
+    });
     if (entry.children !== undefined && entry.children.length > 0) {
       flat.push(...flattenTocEntries(entry.children));
     }
@@ -121,7 +156,8 @@ Returns:
   {
     "product": string,
     "version": string,
-    "toc": [...],
+    "mapId": string,
+    "toc": [...],   // each entry carries title, url and contentId
     "tokenInfo": {
       "tokenCount": number,
       "truncated": boolean,
@@ -150,7 +186,11 @@ Errors:
   - "Version not found" if the specified version doesn't exist
 
 Note: Use this to discover what topics are available before searching
-or retrieving specific articles. Large TOCs are paginated.`;
+or retrieving specific articles. Large TOCs are paginated.
+The response-level mapId and an entry's contentId together form the pair
+jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
+mapId only; use responseFormat="json" (or read structuredContent) for the
+per-entry contentIds.`;
 
 /**
  * Determine the version transparency note if a specific version was requested
@@ -243,12 +283,13 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
-        const { toc, pagination, tokenInfo } = tocResult;
+        const { toc, pagination, tokenInfo, mapId } = tocResult;
 
         // Build response
         const response: TocResponse = {
           product: productInfo.name,
           version,
+          ...(mapId !== undefined ? { mapId } : {}),
           toc,
           tokenInfo,
           pagination
@@ -261,6 +302,9 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           // IDs. Sending only the name made "next page" impossible.
           productId: params.product,
           version,
+          // Pairs with each entry's `contentId` to form the direct-fetch pair
+          // `jamf_docs_get_article` documents.
+          ...(mapId !== undefined ? { mapId } : {}),
           totalEntries: pagination.totalItems,
           page: pagination.page,
           totalPages: pagination.totalPages,
@@ -286,7 +330,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
         // Format as markdown (compact or full)
         let markdown = params.outputMode === OutputMode.COMPACT
           ? formatTocCompact(productInfo.name, toc, pagination)
-          : formatTocFull(productInfo.name, version, toc, pagination, tokenInfo);
+          : formatTocFull({ productName: productInfo.name, version, mapId, toc, pagination, tokenInfo });
 
         if (versionNote !== undefined) {
           markdown += `\n> **Version Note:** ${versionNote}\n`;

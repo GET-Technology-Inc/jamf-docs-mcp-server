@@ -40,7 +40,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 // Import AFTER mocks are set up
 import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
-import type { PaginationInfo, TokenInfo } from '../../../src/core/types.js';
+import type { FetchTocResult } from '../../../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 
@@ -55,11 +55,17 @@ function buildTocResponse(overrides?: {
   toc?: TocEntry[];
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
-}): { toc: TocEntry[]; pagination: PaginationInfo; tokenInfo: TokenInfo } {
+  mapId?: string;
+}): FetchTocResult {
   const toc = overrides?.toc ?? [createTocEntry()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: toc.length, totalPages: 1, hasNext: false });
   const tokenInfo = overrides?.tokenInfo ?? createTokenInfo();
-  return { toc, pagination, tokenInfo };
+  return {
+    toc,
+    pagination,
+    tokenInfo,
+    ...(overrides?.mapId !== undefined ? { mapId: overrides.mapId } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +126,39 @@ describe('jamf_docs_get_toc tool', () => {
       expect(text).toContain('**Version**: current');
       expect(text).toContain('**Page 1 of 3**');
       expect(text).toContain('2,500 tokens');
+    });
+
+    // Markdown is the default responseFormat, so the id half that costs one
+    // line for the whole page is printed here. The per-entry contentIds are
+    // not — they would be a line's worth of tokens each against a truncation
+    // budget computed from titles alone — and the footer says where to get
+    // them rather than leaving the workflow silently unreachable.
+    it('should show the map id in the summary line and point at where the contentIds live', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ mapId: 'JAMF~PRO~MAP' })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('**Map ID**: JAMF\\~PRO\\~MAP');
+      expect(text).toContain('`contentId`');
+      expect(text).toContain('responseFormat="json"');
+    });
+
+    it('should omit the Map ID field when no map id was resolved', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).not.toContain('**Map ID**');
     });
 
     it('should include Table of Contents section header', async () => {
@@ -350,6 +389,26 @@ describe('jamf_docs_get_toc tool', () => {
       expect(json.toc[0].children).toBeDefined();
       expect(json.toc[0].children[0].title).toBe('Child');
     });
+
+    it('should include the mapId alongside the per-entry contentIds', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          mapId: 'JAMF~PRO~MAP',
+          toc: [createTocEntry({ title: 'Overview', contentId: 'content-1' })],
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', responseFormat: 'json' },
+      });
+
+      const json = JSON.parse(getTextContent(result));
+      // Both halves in one body: this is the response `jamf_docs_get_article`
+      // sends callers to for its `mapId` + `contentId` arguments.
+      expect(json.mapId).toBe('JAMF~PRO~MAP');
+      expect(json.toc[0].contentId).toBe('content-1');
+    });
   });
 
   // --- structuredContent ---------------------------------------------------
@@ -409,6 +468,68 @@ describe('jamf_docs_get_toc tool', () => {
       expect(entries[0].title).toBe('Parent');
       expect(entries[1].title).toBe('Child A');
       expect(entries[2].title).toBe('Child B');
+    });
+
+    // `jamf_docs_get_article` documents `mapId` + `contentId` as obtainable
+    // "from search results or TOC". The map id is one per response and the
+    // content id one per entry, so the pair only exists if both are emitted;
+    // flattening used to keep title and url and drop the contentId, and the
+    // mapId was never attached at all.
+    it('should keep every entry contentId when flattening, nested ones included', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          toc: [
+            createTocEntry({
+              title: 'Parent',
+              url: 'https://learn.jamf.com/page/Parent.html',
+              contentId: 'content-parent',
+              children: [
+                createTocEntry({
+                  title: 'Child A',
+                  url: 'https://learn.jamf.com/page/ChildA.html',
+                  contentId: 'content-child-a',
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      const entries = sc.entries as { title: string; contentId?: string }[];
+      // Nested entries too: the child is where a caller usually lands.
+      expect(entries.map(e => e.contentId)).toEqual(['content-parent', 'content-child-a']);
+    });
+
+    it('should carry the mapId that pairs with those contentIds', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ mapId: 'JAMF~PRO~MAP' })
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.mapId).toBe('JAMF~PRO~MAP');
+    });
+
+    it('should omit mapId when the TOC came from a source that does not know it', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(sc, 'mapId')).toBe(false);
     });
   });
 
