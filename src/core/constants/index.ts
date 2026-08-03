@@ -13,6 +13,7 @@ export {
   buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
+  PRODUCT_ID_LIST,
 } from './products.js';
 export type { ProductId } from './products.js';
 

@@ -95,7 +95,7 @@ comparing articles, gathering information from multiple pages, or bulk research.
 Args:
   - urls (string[], required): Array of 1-10 article URLs (must be from docs.jamf.com or learn.jamf.com)
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
-  - maxTokens (number, optional): Total token budget across all articles (default: 5000). Distributed evenly.
+  - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
