@@ -56,6 +56,7 @@ function buildTocResponse(overrides?: {
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
   mapId?: string;
+  paginationNote?: string;
 }): FetchTocResult {
   const toc = overrides?.toc ?? [createTocEntry()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: toc.length, totalPages: 1, hasNext: false });
@@ -65,6 +66,7 @@ function buildTocResponse(overrides?: {
     pagination,
     tokenInfo,
     ...(overrides?.mapId !== undefined ? { mapId: overrides.mapId } : {}),
+    ...(overrides?.paginationNote !== undefined ? { paginationNote: overrides.paginationNote } : {}),
   };
 }
 
@@ -599,6 +601,49 @@ describe('jamf_docs_get_toc tool', () => {
       expect(text).toContain('Version Note');
       expect(text).toContain('11.15.0');
       expect(text).not.toContain('only provides current version content');
+    });
+
+    it('should render a paginationNote the service produced', async () => {
+      // The other half of renderTocNotices, and the one that had no assertion:
+      // dropping renderTocNotices entirely still left the version-note cases
+      // failing, so this branch was carried by nothing. calculatePagination
+      // computes this note whenever `page` is clamped, and before #195 nothing
+      // rendered it — the caller was silently served a different page than the
+      // one requested.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({
+          paginationNote: 'Requested page 99 exceeds total pages (3). Showing last page.',
+        }),
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', page: 99 },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(getTextContent(result)).toContain('exceeds total pages');
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.paginationNote).toBe(
+        'Requested page 99 exceeds total pages (3). Showing last page.',
+      );
+    });
+
+    it('should carry both notices at once when both apply', async () => {
+      // versionNote and paginationNote are independent; rendering one must not
+      // consume the other.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+        buildTocResponse({ paginationNote: 'Showing last page.' }),
+      );
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0', page: 99 },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('Version Note');
+      expect(text).toContain('Showing last page.');
     });
 
     it('should not emit a version note for current or unspecified versions', async () => {
