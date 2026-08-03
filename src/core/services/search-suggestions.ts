@@ -69,6 +69,31 @@ function extractKeywords(query: string): string[] {
 }
 
 /**
+ * Normalise a query for comparison against generated suggestions.
+ *
+ * Applies the same lowercasing / punctuation stripping / whitespace collapsing
+ * as extractKeywords, but keeps stop words so the result is comparable to the
+ * literal query the caller ran.
+ */
+function normalizeQuery(query: string): string {
+  return query
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 0)
+    .join(' ');
+}
+
+/**
+ * True when `phrase` already appears as a whole-word phrase inside `normalized`.
+ *
+ * Padding both sides keeps `group` from matching inside `groups`.
+ */
+function queryContainsPhrase(normalized: string, phrase: string): boolean {
+  return ` ${normalized} `.includes(` ${phrase} `);
+}
+
+/**
  * Simplify a query by removing stop words and keeping key terms
  */
 function simplifyQuery(query: string): string | null {
@@ -84,7 +109,15 @@ function simplifyQuery(query: string): string | null {
   }
 
   // Keep the most important 2-3 keywords
-  return keywords.slice(0, 3).join(' ');
+  const simplified = keywords.slice(0, 3).join(' ');
+
+  // Suggesting the query that just returned nothing is not advice. A 3-keyword
+  // query with no stop words "simplifies" to itself, so compare before emitting.
+  if (simplified === normalizeQuery(query)) {
+    return null;
+  }
+
+  return simplified;
 }
 
 /**
@@ -114,6 +147,16 @@ function findAlternativeKeywords(query: string): string[] {
   // Remove original keywords from alternatives
   for (const keyword of keywords) {
     alternatives.delete(keyword);
+  }
+
+  // Multi-word synonyms can reproduce the query itself (query "smart group"
+  // reaches KEYWORD_SYNONYMS.group → "smart group"), which the single-keyword
+  // deletion above cannot catch. Drop anything already in the query.
+  const normalized = normalizeQuery(query);
+  for (const alternative of alternatives) {
+    if (queryContainsPhrase(normalized, alternative)) {
+      alternatives.delete(alternative);
+    }
   }
 
   return Array.from(alternatives).slice(0, 5);

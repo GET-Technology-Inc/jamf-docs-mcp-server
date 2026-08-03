@@ -103,8 +103,38 @@ function formatSectionsList(
   if (sections.length > 15) {
     result += `\n*...and ${String(sections.length - 15)} more sections*\n`;
   }
-  result += '\n*Use `section` parameter to retrieve a specific section.*\n';
+  result += formatSectionAdvice(sections, tokenInfo);
   return result;
+}
+
+/**
+ * Advice line under the sections list.
+ *
+ * The `section` parameter only helps when some section actually fits inside the
+ * caller's budget. Pointing at it when the smallest section is already over
+ * `maxTokens` sends the caller to an action that cannot succeed, so fall back to
+ * the two things that can (a bigger budget, or an outline).
+ */
+function formatSectionAdvice(
+  sections: ArticleSection[],
+  tokenInfo: TokenInfo
+): string {
+  const smallest = Math.min(...sections.map(section => section.tokenCount));
+
+  if (smallest > tokenInfo.maxTokens) {
+    return `\n*No section fits within \`maxTokens\` (${tokenInfo.maxTokens.toLocaleString()}); `
+      + `the smallest is ~${smallest.toLocaleString()} tokens. `
+      + 'Raise `maxTokens`, or use `summaryOnly` for an outline.*\n';
+  }
+
+  // Exactly one section: there is nothing to choose between, so name the two
+  // outcomes instead of implying a selection.
+  if (sections.length === 1) {
+    return '\n*Use `section` to retrieve the one listed section, '
+      + 'or raise `maxTokens` to get the whole article.*\n';
+  }
+
+  return '\n*Use `section` parameter to retrieve a specific section.*\n';
 }
 
 function formatRelatedArticles(articles: RelatedArticle[] | undefined): string {
