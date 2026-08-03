@@ -1,3 +1,9 @@
+## [4.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.2...v4.0.3) (2026-08-03)
+
+### Bug Fixes
+
+* **ci:** create the major-update label before applying it ([#191](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/191)) ([c9491a4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c9491a4e7da5709953fccd1626817817743404eb))
+
 ## [4.0.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.1...v4.0.2) (2026-07-30)
 
 ### Bug Fixes
