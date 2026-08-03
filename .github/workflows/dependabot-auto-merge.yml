@@ -52,8 +52,13 @@ jobs:
         # job on every single major bump — the label was never applied, and each PR
         # carried a red Auto-Merge check that read like a defect in the bump itself.
         # Create the label first; `--force` makes it idempotent across runs.
+        #
+        # `--repo` is required: this job never runs actions/checkout, so there is no
+        # git remote for gh to infer the repository from. `gh pr edit` gets away with
+        # it only because the full PR URL carries the repo.
         run: |
           gh label create "major-update" \
+            --repo "$GITHUB_REPOSITORY" \
             --color "D93F0B" \
             --description "Dependabot major version bump — needs manual review" \
             --force
