@@ -1,3 +1,9 @@
+## [4.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.6...v4.0.7) (2026-08-03)
+
+### Bug Fixes
+
+* point compact search at the id pair, and pin two dev-only advisories ([#203](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/203)) ([e841431](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e8414317169d1163383d1f9549ea7c505e97a407)), closes [#201](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/201) [#202](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/202)
+
 ## [4.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.5...v4.0.6) (2026-08-03)
 
 ### Bug Fixes
