@@ -35,6 +35,8 @@ import { limitConcurrency } from '../../../src/core/utils/concurrency.js';
 
 interface TextContent { type: 'text'; text: string }
 
+type ToolCallResult = Awaited<ReturnType<Client['callTool']>>;
+
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
   return first.text;
@@ -339,6 +341,81 @@ describe('jamf_docs_batch_get_articles tool', () => {
       // Compact mode uses shorter source format
       expect(text).toContain('Source');
       expect(text).toContain('200 tokens');
+    });
+
+    /**
+     * Regression: the markdown honoured `outputMode` but structuredContent and
+     * the JSON body did not, so a compact batch still shipped every full body
+     * to the half programmatic consumers read.
+     */
+    describe('outputMode=compact compacts every channel', () => {
+      /** ~850 tokens across many paragraphs, so a preview can stop partway. */
+      function longBody(): string {
+        return Array.from(
+          { length: 60 },
+          (_, i) => `Paragraph ${i + 1}: lorem ipsum dolor sit amet, consectetur adipiscing elit.`
+        ).join('\n\n');
+      }
+
+      async function callWith(
+        outputMode: 'full' | 'compact',
+        extra: Record<string, unknown> = {}
+      ): Promise<ToolCallResult> {
+        mock.setRepeating(
+          createFetchArticleResult({
+            title: 'Long Article',
+            content: longBody(),
+            tokenInfo: createTokenInfo({ tokenCount: 9999, maxTokens: 50000, truncated: false }),
+          })
+        );
+        return await client.callTool({
+          name: 'jamf_docs_batch_get_articles',
+          arguments: { urls: [URL_1], outputMode, ...extra },
+        });
+      }
+
+      it('should carry a shorter structuredContent content than full mode', async () => {
+        const compact = await callWith('compact');
+        const full = await callWith('full');
+
+        const compactResults = (compact.structuredContent as { results: { content: string }[] }).results;
+        const fullResults = (full.structuredContent as { results: { content: string }[] }).results;
+
+        expect(compactResults[0]?.content.length)
+          .toBeLessThan(fullResults[0]?.content.length ?? 0);
+      });
+
+      it('should report the preview token count in structuredContent', async () => {
+        const compact = await callWith('compact');
+        const full = await callWith('full');
+
+        const compactResults = (compact.structuredContent as { results: { tokenCount: number; truncated: boolean }[] }).results;
+        const fullResults = (full.structuredContent as { results: { tokenCount: number; truncated: boolean }[] }).results;
+
+        expect(fullResults[0]?.tokenCount).toBe(9999);
+        expect(compactResults[0]?.tokenCount ?? Infinity).toBeLessThan(9999);
+        expect(compactResults[0]?.truncated).toBe(true);
+      });
+
+      it('should compact the JSON body too', async () => {
+        const compact = await callWith('compact', { responseFormat: 'json' });
+        const full = await callWith('full', { responseFormat: 'json' });
+
+        const compactJson = JSON.parse(getTextContent(compact));
+        const fullJson = JSON.parse(getTextContent(full));
+
+        expect(compactJson.results[0].content.length)
+          .toBeLessThan(fullJson.results[0].content.length);
+        expect(compactJson.results[0].tokenInfo.tokenCount).toBeLessThan(9999);
+      });
+
+      it('should not bill the batch summary for bodies it never sent', async () => {
+        const compact = await callWith('compact');
+
+        // The summary quotes the total across articles; under compact that must
+        // describe the previews, not the full articles.
+        expect(getTextContent(compact)).not.toContain('9,999 tokens');
+      });
     });
   });
 
