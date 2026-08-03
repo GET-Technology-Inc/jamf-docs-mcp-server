@@ -18,6 +18,7 @@ import { parseArticle, type ParsedArticleContent } from './content-parser.js';
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
+  fetchTopicAncestors,
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
@@ -105,12 +106,30 @@ export async function fetchArticleFromFt(
       resolveInternalLink,
     });
 
+    // The `/content` fragment is the article body, and a breadcrumb belongs to
+    // the reader shell around it, so `parsed.breadcrumb` is empty for every FT
+    // topic — the selector has nothing to match. The hierarchy exists only in
+    // the map's TOC, which is already fetched and cached here for internal
+    // links, so the fallback is a second lookup rather than a second fetch.
+    // Still a fallback and not a replacement: a page served as full HTML does
+    // have a breadcrumb in its markup, and that one is what the site itself
+    // renders.
+    const breadcrumb = parsed.breadcrumb.length > 0
+      ? parsed.breadcrumb
+      : await fetchTopicAncestors({
+          cache,
+          mapId,
+          contentId,
+          ttl: options.cacheTtl,
+          logger: options.logger,
+        });
+
     // Metadata title is authoritative; parseArticle h1 is only a fallback
     const title = (topicMeta.title !== undefined && topicMeta.title !== '')
       ? topicMeta.title
       : parsed.title;
 
-    cached = { title, parsed, displayUrl, product, version };
+    cached = { title, parsed: { ...parsed, breadcrumb }, displayUrl, product, version };
     await cache.set(cacheKey, cached, options.cacheTtl);
   }
 

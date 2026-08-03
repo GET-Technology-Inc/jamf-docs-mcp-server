@@ -94,38 +94,67 @@ export function collectInternalLinkMapIds(html: string): string[] {
 
 // ─── TOC index ─────────────────────────────────────────────────
 
-/** `tocId -> absolute display URL` for one map. */
-type TocIdIndex = Record<string, string>;
+/**
+ * What one map's TOC is reduced to.
+ *
+ * Two lookups over a single fetch. The TOC is the only place that ties a tocId
+ * to a URL, and also the only place that says where a topic sits in the
+ * hierarchy — the topic's own HTML and metadata carry neither. Indexing both
+ * in one pass keeps that to one fetch per map rather than two.
+ */
+interface MapTocIndex {
+  /** `tocId -> absolute display URL`, for placing internal links. */
+  urlByTocId: Record<string, string>;
+  /** `contentId -> ancestor titles`, nearest root first, excluding the topic. */
+  ancestorsByContentId: Record<string, string[]>;
+}
 
-const TOC_INDEX_CACHE_PREFIX = 'ft-tocindex:v1:';
+// v2: entries under v1 hold only the tocId map, so they would answer an
+// ancestry lookup with nothing and look like a topic that has no parents.
+const TOC_INDEX_CACHE_PREFIX = 'ft-tocindex:v2:';
 
-function indexTocNodes(nodes: readonly FtTocNode[], into: TocIdIndex): void {
+function indexTocNodes(
+  nodes: readonly FtTocNode[],
+  into: MapTocIndex,
+  ancestors: readonly string[],
+): void {
   for (const node of nodes) {
     // Both fields are declared required, but `FtTocNode` is a bare cast over
     // `response.json()` with no runtime validation behind it — the same reason
     // `title` and `children` are optional on that type. An empty value here
     // would index a link to nowhere, so it is skipped rather than stored.
     if (node.tocId !== '' && node.prettyUrl !== '') {
-      into[node.tocId] = buildDisplayUrl(node.prettyUrl);
+      into.urlByTocId[node.tocId] = buildDisplayUrl(node.prettyUrl);
     }
+    // A node with an empty contentId is a grouping heading: it still
+    // contributes a title to its children's chain, but nothing addresses it as
+    // a topic. Checked the same way as `tocId`/`prettyUrl` above, for the same
+    // reason — `FtTocNode` is a bare cast over `response.json()`.
+    if (node.contentId !== '' && ancestors.length > 0) {
+      into.ancestorsByContentId[node.contentId] = [...ancestors];
+    }
+    // A titleless node would put a blank rung in every descendant's chain, so
+    // it is skipped as an ancestor while its children are still walked.
+    const title = node.title ?? '';
+    const childAncestors = title === '' ? ancestors : [...ancestors, title];
     // Absent `children` means a leaf, the same as an empty list.
-    indexTocNodes(node.children ?? [], into);
+    indexTocNodes(node.children ?? [], into, childAncestors);
   }
 }
 
-async function loadTocIdIndex(
+async function loadMapTocIndex(
   cache: CacheProvider,
   mapId: string,
   ttl: number | undefined,
-): Promise<TocIdIndex> {
+): Promise<MapTocIndex> {
   const cacheKey = `${TOC_INDEX_CACHE_PREFIX}${mapId}`;
-  const cached = await cache.get<TocIdIndex>(cacheKey);
+  const cached = await cache.get<MapTocIndex>(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  const index: TocIdIndex = {};
-  indexTocNodes(await fetchMapToc(mapId), index);
+  const index: MapTocIndex = { urlByTocId: {}, ancestorsByContentId: {} };
+  indexTocNodes(await fetchMapToc(mapId), index, []);
   await cache.set(cacheKey, index, ttl);
   return index;
 }
@@ -156,11 +185,11 @@ export async function buildInternalLinkResolver(
     return NO_INTERNAL_LINKS;
   }
 
-  const indexes = new Map<string, TocIdIndex>();
+  const indexes = new Map<string, MapTocIndex>();
   await Promise.all(
     mapIds.map(async (mapId): Promise<void> => {
       try {
-        indexes.set(mapId, await loadTocIdIndex(cache, mapId, ttl));
+        indexes.set(mapId, await loadMapTocIndex(cache, mapId, ttl));
       } catch (error) {
         // A TOC that will not load costs its links, not the article. The map
         // stays unindexed, every link into it stays plain text, and the rest
@@ -174,5 +203,51 @@ export async function buildInternalLinkResolver(
     }),
   );
 
-  return (mapId, tocId): string | undefined => indexes.get(mapId)?.[tocId];
+  return (mapId, tocId): string | undefined => indexes.get(mapId)?.urlByTocId[tocId];
+}
+
+// ─── Topic ancestry ────────────────────────────────────────────
+
+/**
+ * Where a topic sits in its map, nearest root first, excluding the topic
+ * itself. Empty when the map's TOC will not load or does not list the topic.
+ *
+ * This exists because the breadcrumb is not in the topic payload. FT's
+ * `/content` fragment is the article body only — a breadcrumb is part of the
+ * reader shell — and the topic metadata endpoint has no ancestry field either
+ * (it has `dita:topicPath`, which is a source-file path, not the published
+ * hierarchy, and does not match what a reader sees). The map's TOC is the one
+ * place the hierarchy exists, and it is already fetched and cached for
+ * internal-link resolution, so this is a second lookup over the same index
+ * rather than a second fetch.
+ *
+ * Failure is an empty chain, never a partial or invented one: a breadcrumb
+ * missing its middle would read as a real path to somewhere that does not
+ * exist.
+ */
+export interface TopicAncestryOptions {
+  cache: CacheProvider;
+  /** The topic's own map — ancestry is only defined within it. */
+  mapId: string;
+  contentId: string;
+  /** TTL for the cached index; `undefined` uses the cache default. */
+  ttl?: number | undefined;
+  logger?: Logger | undefined;
+}
+
+export async function fetchTopicAncestors(
+  options: TopicAncestryOptions,
+): Promise<string[]> {
+  const { cache, mapId, contentId, ttl, logger } = options;
+  try {
+    const index = await loadMapTocIndex(cache, mapId, ttl);
+    return index.ancestorsByContentId[contentId] ?? [];
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logger?.warning(
+      `ft-internal-link: TOC index unavailable for map ${mapId},` +
+      ` this article will have no breadcrumb: ${reason}`,
+    );
+    return [];
+  }
 }
