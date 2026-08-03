@@ -22,6 +22,8 @@ function makeMeta(entries: Record<string, string[]>): { key: string; label: stri
   return Object.entries(entries).map(([key, values]) => ({ key, label: key, values }));
 }
 
+const VERSIONED_MAP_ID = 'pro-map-11.15.0';
+
 const MOCK_MAPS = [
   {
     id: 'pro-map', title: 'Jamf Pro', mapApiEndpoint: '/api/khub/maps/pro-map',
@@ -29,6 +31,41 @@ const MOCK_MAPS = [
       'version_bundle_stem': ['jamf-pro-documentation'],
       'version': ['11.26.0'], 'ft:locale': ['en-US'], 'latestVersion': ['yes'],
       'bundle': ['jamf-pro-documentation-current', 'jamf-pro-documentation-11.26.0'],
+    }),
+  },
+  // Jamf keeps an older release as its own map, with its own content — this is
+  // what makes a versioned URL meaningful rather than an alias for current.
+  {
+    id: VERSIONED_MAP_ID, title: 'Jamf Pro 11.15.0',
+    mapApiEndpoint: `/api/khub/maps/${VERSIONED_MAP_ID}`,
+    metadata: makeMeta({
+      'version_bundle_stem': ['jamf-pro-documentation'],
+      'version': ['11.15.0'], 'ft:locale': ['en-US'],
+      'bundle': ['jamf-pro-documentation-11.15.0'],
+    }),
+  },
+  // Release notes, shaped the way the live API actually returns them: EVERY map
+  // in the family carries `{stem}-current` in its `bundle` values, and the one
+  // flagged `latestVersion=yes` is not the first in the array. Anything that
+  // resolves a `-current` slug by scanning raw bundle values answers with
+  // 11.30.2 here (measured against the live API on 2026-08-03), which is a
+  // different map with different topics.
+  {
+    id: 'rn-map-11.30.2', title: 'Jamf Pro Release Notes 11.30.2',
+    mapApiEndpoint: '/api/khub/maps/rn-map-11.30.2',
+    metadata: makeMeta({
+      'version_bundle_stem': ['jamf-pro-release-notes'],
+      'version': ['11.30.2'], 'ft:locale': ['en-US'], 'latestVersion': ['no'],
+      'bundle': ['jamf-pro-release-notes-11.30.2', 'jamf-pro-release-notes-current'],
+    }),
+  },
+  {
+    id: 'rn-map-11.30.0', title: 'Jamf Pro Release Notes 11.30.0',
+    mapApiEndpoint: '/api/khub/maps/rn-map-11.30.0',
+    metadata: makeMeta({
+      'version_bundle_stem': ['jamf-pro-release-notes'],
+      'version': ['11.30.0'], 'ft:locale': ['en-US'], 'latestVersion': ['yes'],
+      'bundle': ['jamf-pro-release-notes-current', 'jamf-pro-release-notes-11.30.0'],
     }),
   },
 ];
@@ -105,6 +142,81 @@ describe('resolve — prettyUrl', () => {
     });
     expect(result.mapId).toBe('pro-map');
     expect(result.contentId).toBe('content-mdm');
+  });
+
+  it('should resolve a -current slug to the latest map', async () => {
+    const result = await resolver.resolve({
+      url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/MDM_Profile_Settings',
+    });
+    expect(result.mapId).toBe('pro-map');
+    expect(result.contentId).toBe('content-mdm');
+  });
+
+  it('should resolve a -current slug by latestVersion, not by bundle-value order', async () => {
+    // `{stem}-current` appears in the bundle values of every map in a family,
+    // so picking the first map that lists it lands on an arbitrary version —
+    // in production that turned a live search hit into
+    // "Topic not found: System_Requirements in jamf-pro-release-notes-current".
+    const result = await resolver.resolve({
+      url: 'https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/MDM_Profile_Settings',
+    });
+    expect(result.mapId).toBe('rn-map-11.30.0');
+  });
+});
+
+describe('resolve — versioned prettyUrl', () => {
+  // The versioned map has its own topics: resolving to the wrong map would
+  // return `content-mdm`, so contentId doubles as a check on which map was hit.
+  const MOCK_TOPICS_11_15 = [
+    {
+      title: 'MDM Profile Settings', id: 'content-mdm-11.15.0',
+      contentApiEndpoint: '/api/...', metadata: makeMeta({
+        'legacy_topicname': ['MDM_Profile_Settings'],
+      }),
+    },
+  ];
+
+  beforeEach(() => {
+    mockedFetchMapTopics.mockImplementation(async (mapId: string) =>
+      await Promise.resolve(mapId === VERSIONED_MAP_ID ? MOCK_TOPICS_11_15 : MOCK_TOPICS)
+    );
+  });
+
+  it('should resolve both URL shapes of one page to the same map + content', async () => {
+    // `get_toc(product="jamf-pro", version="11.15.0")` hands back pretty URLs
+    // built from FT's own `node.prettyUrl`; feeding one straight into
+    // `get_article` used to fail with "Cannot resolve product:
+    // jamf-pro-documentation-11.15.0" while the legacy spelling of the very
+    // same page resolved. The asymmetry between the two resolvers is the bug.
+    const legacy = await resolver.resolve({
+      url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-11.15.0/page/MDM_Profile_Settings.html',
+    });
+    const pretty = await resolver.resolve({
+      url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-11.15.0/MDM_Profile_Settings',
+    });
+
+    expect(pretty).toEqual(legacy);
+    expect(pretty.mapId).toBe(VERSIONED_MAP_ID);
+    expect(pretty.contentId).toBe('content-mdm-11.15.0');
+  });
+
+  it('should not silently serve the current map for a versioned slug', async () => {
+    const result = await resolver.resolve({
+      url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-11.15.0/MDM_Profile_Settings',
+    });
+
+    expect(result.mapId).not.toBe('pro-map');
+    expect(result.contentId).not.toBe('content-mdm');
+  });
+
+  it('should throw NOT_FOUND — not fall back to current — for a version with no map', async () => {
+    // Rewriting an unknown version to `-current` would answer an 11.15.0-shaped
+    // request with 11.26.0 content, which is worse than the error.
+    await expect(
+      resolver.resolve({
+        url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-9.99.0/MDM_Profile_Settings',
+      })
+    ).rejects.toMatchObject({ code: JamfDocsErrorCode.NOT_FOUND });
   });
 });
 

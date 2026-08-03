@@ -441,6 +441,62 @@ describe('jamf_docs_get_toc tool', () => {
     });
   });
 
+  // --- Version note ---------------------------------------------------------
+
+  describe('version note', () => {
+    it('should NOT claim current-only content for a version Jamf publishes its own map for', async () => {
+      // jamf-pro 11.15.0 has a distinct mapId upstream and serves its own
+      // content; `fetchTableOfContents` resolves that map (or throws). The old
+      // note fired on the requested string alone and told the caller the
+      // versioned TOC they were holding was really current content.
+      const { getAvailableVersions } = await import('../../../src/core/services/metadata.js');
+      vi.mocked(getAvailableVersions).mockResolvedValueOnce(['11.26.0', '11.15.0']);
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(getTextContent(result)).not.toContain('Version Note');
+      const sc = result.structuredContent as Record<string, unknown>;
+      expect(sc.versionNote).toBeUndefined();
+    });
+
+    it('should still disclose a version that is not among the published maps', async () => {
+      // Default mock: getAvailableVersions resolves to [], so the requested
+      // version passes validation but cannot be confirmed against upstream.
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: '11.15.0' },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('Version Note');
+      expect(text).toContain('11.15.0');
+      expect(text).not.toContain('only provides current version content');
+    });
+
+    it('should not emit a version note for current or unspecified versions', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValue(buildTocResponse());
+
+      const withCurrent = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro', version: 'current' },
+      });
+      expect(getTextContent(withCurrent)).not.toContain('Version Note');
+
+      const withNone = await client.callTool({
+        name: 'jamf_docs_get_toc',
+        arguments: { product: 'jamf-pro' },
+      });
+      expect(getTextContent(withNone)).not.toContain('Version Note');
+    });
+  });
+
   // --- Pagination in structuredContent -------------------------------------
 
   describe('pagination in structuredContent', () => {

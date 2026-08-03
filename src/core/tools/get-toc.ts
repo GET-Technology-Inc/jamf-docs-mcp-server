@@ -153,13 +153,31 @@ Note: Use this to discover what topics are available before searching
 or retrieving specific articles. Large TOCs are paginated.`;
 
 /**
- * Determine the version transparency note if a specific version was requested
+ * Determine the version transparency note if a specific version was requested.
+ *
+ * This used to fire for every `version !== 'current'` request and claim that
+ * "the Jamf documentation API only provides current version content". That is
+ * false: Jamf publishes a distinct map per version — jamf-pro 11.15.0 has its
+ * own mapId and serves its own content — and `fetchTableOfContents` resolves
+ * the map for the requested version, or throws. So the note told callers the
+ * versioned TOC they were holding was really current content, which is the
+ * opposite of what happened.
+ *
+ * The note now depends on the versions upstream actually publishes rather than
+ * on the requested string: if the requested version is one of them, the TOC is
+ * genuinely that version's and there is nothing to disclose.
  */
-function getVersionNote(requestedVersion: string | undefined): string | undefined {
-  if (requestedVersion !== undefined && requestedVersion !== '' && requestedVersion !== 'current') {
-    return 'The Jamf documentation API only provides current version content. Results shown are from the latest version.';
+function getVersionNote(
+  requestedVersion: string | undefined,
+  availableVersions: string[],
+): string | undefined {
+  if (requestedVersion === undefined || requestedVersion === '' || requestedVersion === 'current') {
+    return undefined;
   }
-  return undefined;
+  if (availableVersions.includes(requestedVersion)) {
+    return undefined;
+  }
+  return `Version "${requestedVersion}" is not among the versions Jamf publishes as its own documentation map, so these results may come from a different version.`;
 }
 
 /**
@@ -268,7 +286,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           entries: flattenTocEntries(toc)
         };
 
-        const versionNote = getVersionNote(params.version);
+        const versionNote = getVersionNote(params.version, availableVersions);
 
         await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
