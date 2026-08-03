@@ -271,6 +271,109 @@ describe('parseArticle', () => {
     });
   });
 
+  describe('parseArticle — ft-internal-link spans', () => {
+    // Copied from the live topic content of Smart_Groups
+    // (GET /api/khub/maps/{mapId}/topics/{contentId}/content): FT emits links
+    // that stay inside the documentation as hrefless spans addressed by TOC
+    // node id, and only external links as anchors.
+    const MAP_ID = 'FtEgPHSd28ZhPyLlTkrYTA';
+    const REPORTS_TOC_ID = '8Tflt44ylUo_Jo99tcQj5w';
+    const MASS_ACTIONS_TOC_ID = 'R13oRSNchZgR4eU7id0Chw';
+    const INVENTORY_TOC_ID = '2yXTYrap2pDeisTv2J4ffw';
+
+    const HTML = [
+      '<div class="content-locale-en-US"><div class="body conbody">',
+      '<p class="p">See <span class="xref ft-internal-link"',
+      ` data-ft-warning="excluded-from-rendering" data-mapid="${MAP_ID}"`,
+      ` data-tocid="${INVENTORY_TOC_ID}">Computer Inventory and Criteria`,
+      ' Reference</span> for details.</p>',
+      '<nav role="navigation" class="related-links">',
+      '<div class="relinfo linklist"><strong>Related content</strong>',
+      '<ul class="linklist">',
+      '<li class="linklist"><span class="link ft-internal-link"',
+      ` data-ft-warning="excluded-from-rendering" data-mapid="${MAP_ID}"`,
+      ` data-tocid="${REPORTS_TOC_ID}">Computer Reports</span></li>`,
+      '<li class="linklist"><span class="link ft-internal-link"',
+      ` data-ft-warning="excluded-from-rendering" data-mapid="${MAP_ID}"`,
+      ` data-tocid="${MASS_ACTIONS_TOC_ID}">Mass Actions for Computers</span></li>`,
+      '<li class="linklist"><a class="link" href="https://support.apple.com/guide">',
+      'Manage FileVault with MDM (Apple)</a></li>',
+      '</ul></div></nav>',
+      '</div></div>',
+    ].join('');
+
+    const URLS: Record<string, string> = {
+      [REPORTS_TOC_ID]: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Reports',
+      [MASS_ACTIONS_TOC_ID]: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mass_Actions_for_Computers',
+      [INVENTORY_TOC_ID]: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_and_Criteria_Reference',
+    };
+
+    const resolveInternalLink = (mapId: string, tocId: string): string | undefined =>
+      mapId === MAP_ID ? URLS[tocId] : undefined;
+
+    const DISPLAY_URL = 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Smart_Groups';
+
+    it('should surface resolved internal spans as related articles', () => {
+      const result = parseArticle(HTML, DISPLAY_URL, {
+        includeRelated: true,
+        resolveInternalLink,
+      });
+
+      expect(result.relatedArticles).toEqual([
+        { title: 'Computer Reports', url: URLS[REPORTS_TOC_ID] },
+        { title: 'Mass Actions for Computers', url: URLS[MASS_ACTIONS_TOC_ID] },
+        {
+          title: 'Manage FileVault with MDM (Apple)',
+          url: 'https://support.apple.com/guide',
+        },
+      ]);
+    });
+
+    it('should render internal spans in the body as Markdown links', () => {
+      const result = parseArticle(HTML, DISPLAY_URL, {
+        includeRelated: true,
+        resolveInternalLink,
+      });
+
+      expect(result.content).toContain(
+        `[Computer Inventory and Criteria Reference](${URLS[INVENTORY_TOC_ID]})`,
+      );
+      expect(result.content).toContain(`[Computer Reports](${URLS[REPORTS_TOC_ID]})`);
+    });
+
+    it('should leave unresolvable spans as plain text rather than invent an href', () => {
+      const result = parseArticle(HTML, DISPLAY_URL, {
+        includeRelated: true,
+        resolveInternalLink: () => undefined,
+      });
+
+      // The tocId is a TOC node id, not a contentId — with no TOC to place it
+      // against there is no honest URL to emit, so the text stands alone and
+      // the entry is not claimed as a related article.
+      expect(result.content).toContain('Computer Reports');
+      expect(result.content).not.toContain(REPORTS_TOC_ID);
+      expect(result.relatedArticles).toEqual([
+        {
+          title: 'Manage FileVault with MDM (Apple)',
+          url: 'https://support.apple.com/guide',
+        },
+      ]);
+    });
+
+    it('should not rewrite spans that carry no destination', () => {
+      const html =
+        '<div class="body"><p><span class="ft-internal-link">Bare span</span></p></div>';
+
+      const result = parseArticle(html, DISPLAY_URL, {
+        includeRelated: true,
+        resolveInternalLink: () => 'https://learn.jamf.com/r/en-US/doc/Nope',
+      });
+
+      expect(result.content).toContain('Bare span');
+      expect(result.content).not.toContain('](');
+    });
+  });
+
   describe('parseArticle — Turndown code block rule', () => {
     it('should produce a fenced code block with language tag from <pre><code class="language-typescript">', () => {
       const html = `

@@ -33,7 +33,7 @@ import {
 } from '../../helpers/mock-context.js';
 import { loadFixture, createFetchArticleResult, omitKey } from '../../helpers/fixtures.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../../../src/core/types.js';
-import type { FtTopicInfo } from '../../../src/core/types.js';
+import type { FtTocNode, FtTopicInfo } from '../../../src/core/types.js';
 
 // ── Typed mock helpers ──────────────────────────────────────────────────────
 
@@ -63,6 +63,33 @@ const DEFAULT_HTML = [
   '</body></html>',
 ].join('');
 
+/**
+ * TOC of MAP_ID. FT addresses in-documentation links by TOC node id, so this
+ * is the only place a `data-tocid` can be turned into a URL.
+ */
+const MAP_TOC: FtTocNode[] = [
+  {
+    tocId: 'sYQzYqbLLTd2AF4hkYq5Vw',
+    contentId: 'ZjAqzGpNHzoXNfhrfXHW4w',
+    title: 'Computers',
+    prettyUrl: '/r/en-US/jamf-pro-documentation-current/Computers',
+    children: [
+      {
+        tocId: '8Tflt44ylUo_Jo99tcQj5w',
+        contentId: 'vccKyPVSh7VrXvknBiPQgQ',
+        title: 'Computer Reports',
+        prettyUrl: '/r/en-US/jamf-pro-documentation-current/Computer_Reports',
+      },
+      {
+        tocId: 'R13oRSNchZgR4eU7id0Chw',
+        contentId: 'B9LDyFPKMhdAyCVaeUdfoA',
+        title: 'Mass Actions for Computers',
+        prettyUrl: '/r/en-US/jamf-pro-documentation-current/Mass_Actions_for_Computers',
+      },
+    ],
+  },
+];
+
 /** Mutable per-test state used by the URL router */
 let currentTopicMetadata: FtTopicInfo;
 let currentArticleHtml: string;
@@ -76,6 +103,9 @@ function setupHttpRouting(): void {
     await Promise.resolve();
     if (url.endsWith('/api/khub/maps')) {
       return loadFixture('ft-maps-list.json');
+    }
+    if (url.endsWith('/toc')) {
+      return MAP_TOC;
     }
     // /api/khub/maps/{mapId}/topics/{contentId} -> topic metadata
     if (/\/topics\/[^/]+$/.exec(url) !== null && !url.includes('/content')) {
@@ -294,6 +324,110 @@ describe('fetchArticleFromFt()', () => {
       // Related articles should be present from cached data
       expect(result.relatedArticles).toBeDefined();
       expect(result.relatedArticles!.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ── ft-internal-link related content ──────────────────────────────────────
+
+  describe('cache miss — ft-internal-link related content', () => {
+    /**
+     * Abridged from the live Smart_Groups topic. Every link that stays inside
+     * the documentation is a hrefless span carrying a TOC node id; only the
+     * external link is an anchor. That asymmetry is the whole bug: the
+     * anchor-based related-link selector saw the Apple link and nothing else.
+     */
+    const SMART_GROUPS_HTML = [
+      '<div class="content-locale-en-US"><div class="body conbody">',
+      '<p class="p">Smart group membership is dynamically updated.</p>',
+      '<nav role="navigation" class="related-links">',
+      '<div class="relinfo linklist"><strong>Related content</strong>',
+      '<ul class="linklist">',
+      '<li class="linklist"><span class="link ft-internal-link"',
+      ' data-ft-warning="excluded-from-rendering"',
+      ` data-mapid="${MAP_ID}" data-tocid="8Tflt44ylUo_Jo99tcQj5w">`,
+      'Computer Reports</span></li>',
+      '<li class="linklist"><span class="link ft-internal-link"',
+      ' data-ft-warning="excluded-from-rendering"',
+      ` data-mapid="${MAP_ID}" data-tocid="R13oRSNchZgR4eU7id0Chw">`,
+      'Mass Actions for Computers</span></li>',
+      '<li class="linklist"><a class="link" href="https://support.apple.com/guide/x">',
+      'Manage FileVault with MDM (Apple)</a></li>',
+      '</ul></div></nav>',
+      '</div></div>',
+    ].join('');
+
+    it('should resolve internal related links through the map TOC', async () => {
+      const cache = createMockCache();
+      currentArticleHtml = SMART_GROUPS_HTML;
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+      );
+
+      expect(result.relatedArticles).toEqual([
+        {
+          title: 'Computer Reports',
+          url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Reports',
+        },
+        {
+          title: 'Mass Actions for Computers',
+          url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mass_Actions_for_Computers',
+        },
+        {
+          title: 'Manage FileVault with MDM (Apple)',
+          url: 'https://support.apple.com/guide/x',
+        },
+      ]);
+    });
+
+    it('should render the related list as Markdown links, not bare text', async () => {
+      const cache = createMockCache();
+      currentArticleHtml = SMART_GROUPS_HTML;
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+      );
+
+      expect(result.content).toContain(
+        '[Computer Reports]'
+        + '(https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Reports)',
+      );
+    });
+
+    it('should not fetch a TOC for a topic with no internal links', async () => {
+      const cache = createMockCache();
+      // DEFAULT_HTML carries no ft-internal-link spans
+
+      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true });
+
+      const tocCalls = mockedGetJson.mock.calls.filter(([url]) => url.endsWith('/toc'));
+      expect(tocCalls).toHaveLength(0);
+    });
+
+    it('should still serve the article when the map TOC will not load', async () => {
+      const cache = createMockCache();
+      currentArticleHtml = SMART_GROUPS_HTML;
+      mockedGetJson.mockImplementation(async (url: string) => {
+        await Promise.resolve();
+        if (url.endsWith('/toc')) {
+          throw new HttpError('TOC unavailable', 503);
+        }
+        return currentTopicMetadata;
+      });
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+      );
+
+      // Only the external link survives — a tocId cannot be turned into a URL
+      // without the TOC, and guessing one is worse than omitting it.
+      expect(result.relatedArticles).toEqual([
+        {
+          title: 'Manage FileVault with MDM (Apple)',
+          url: 'https://support.apple.com/guide/x',
+        },
+      ]);
+      expect(result.content).toContain('Computer Reports');
     });
   });
 
