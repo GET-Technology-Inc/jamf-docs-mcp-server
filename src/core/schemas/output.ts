@@ -65,6 +65,14 @@ export const SearchOutputSchema = z.object({
   }).optional(),
   versionNote: z.string().optional(),
   relevanceNote: z.string().optional(),
+  /**
+   * Set when `page` was clamped to the last available page.
+   *
+   * Without it a request for page 99 of a 28-page result set comes back
+   * looking exactly like a request for page 28 — same `page`, same `hasMore` —
+   * and the client has no way to tell that its request was adjusted.
+   */
+  paginationNote: z.string().optional(),
   truncatedContent: z.object({
     omittedCount: z.number(),
     omittedItems: z.array(z.object({
@@ -153,4 +161,13 @@ export const TocOutputSchema = z.object({
     url: z.string(),
     contentId: z.string().optional(),
   })),
+  /**
+   * Set when a specific `version` was requested; the upstream API only serves
+   * current-version content. Rendered by `jamf_docs_get_toc` since before this
+   * schema existed — declaring it keeps the structured channel honest about
+   * what the tool actually emits.
+   */
+  versionNote: z.string().optional(),
+  /** Set when `page` was clamped to the last available page. */
+  paginationNote: z.string().optional(),
 });

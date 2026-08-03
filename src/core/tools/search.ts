@@ -286,6 +286,8 @@ function buildSearchStructuredContent(
     limit?: number | undefined;
     filterRelaxation?: { removed: string[]; original: Record<string, string>; message: string } | undefined;
     truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
+    versionNote?: string | undefined;
+    paginationNote?: string | undefined;
   }
 ): Record<string, unknown> {
   return {
@@ -305,6 +307,8 @@ function buildSearchStructuredContent(
       ...(r.docType !== undefined ? { docType: r.docType } : {})
     })),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
+    ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
+    ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
     ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {})
   };
 }
@@ -347,23 +351,29 @@ function buildNoResultsResponse(
 }
 
 /**
- * Append filter/version/truncation notices to markdown output
+ * Append filter/version/pagination/truncation notices to markdown output
  */
 function appendMarkdownNotices(
   markdown: string,
-  filterRelaxation?: { message: string },
-  versionNote?: string,
-  truncatedContent?: { omittedCount: number }
+  notices: {
+    filterRelaxation?: { message: string } | undefined;
+    versionNote?: string | undefined;
+    paginationNote?: string | undefined;
+    truncatedContent?: { omittedCount: number } | undefined;
+  }
 ): string {
   let result = markdown;
-  if (filterRelaxation !== undefined) {
-    result += `\n> **Note:** ${filterRelaxation.message}\n`;
+  if (notices.filterRelaxation !== undefined) {
+    result += `\n> **Note:** ${notices.filterRelaxation.message}\n`;
   }
-  if (versionNote !== undefined) {
-    result += `\n> **Version Note:** ${versionNote}\n`;
+  if (notices.versionNote !== undefined) {
+    result += `\n> **Version Note:** ${notices.versionNote}\n`;
   }
-  if (truncatedContent !== undefined && truncatedContent.omittedCount > 0) {
-    result += `\n*${truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
+  if (notices.paginationNote !== undefined) {
+    result += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
+  }
+  if (notices.truncatedContent !== undefined && notices.truncatedContent.omittedCount > 0) {
+    result += `\n*${notices.truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
   }
   return result;
 }
@@ -446,7 +456,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
 
-        const { results, pagination, tokenInfo, filterRelaxation, versionNote, truncatedContent } = searchResult;
+        const {
+          results, pagination, tokenInfo, filterRelaxation, versionNote,
+          paginationNote, truncatedContent
+        } = searchResult;
 
         // Build response
         const filters = buildFilterSummary(params);
@@ -459,6 +472,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           pagination,
           ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
           ...(versionNote !== undefined ? { versionNote } : {}),
+          ...(paginationNote !== undefined ? { paginationNote } : {}),
           ...(truncatedContent !== undefined ? { truncatedContent } : {})
         };
 
@@ -481,6 +495,8 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             filters: activeSearchFilters(params),
             limit: params.limit,
             filterRelaxation,
+            versionNote,
+            paginationNote,
             truncatedContent,
           }
         );
@@ -510,7 +526,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           : formatSearchResultsAsMarkdown;
         const markdown = appendMarkdownNotices(
           formatFn(params.query, results, filters, pagination, tokenInfo),
-          filterRelaxation, versionNote, truncatedContent
+          { filterRelaxation, versionNote, paginationNote, truncatedContent }
         );
 
         await reportProgress(extra, { progress: 3, total: 3 });

@@ -181,13 +181,40 @@ function getVersionNote(
 }
 
 /**
- * Attach versionNote to structured content if present
+ * Notices that ride alongside a TOC payload rather than inside it.
+ *
+ * Both are optional and both are declared on `TocOutputSchema`, so a client
+ * reading `structuredContent` sees whatever the markdown says.
  */
-function withVersionNote<T extends object>(content: T, versionNote: string | undefined): T & { versionNote?: string } {
-  if (versionNote !== undefined) {
-    return { ...content, versionNote };
+interface TocNotices {
+  versionNote?: string | undefined;
+  /** Set when `page` was clamped to the last available page. */
+  paginationNote?: string | undefined;
+}
+
+/**
+ * The notices that are actually set, as a plain bag ready to spread into
+ * either the JSON response or `structuredContent`.
+ */
+function noticeFields(notices: TocNotices): Record<string, string> {
+  return {
+    ...(notices.versionNote !== undefined ? { versionNote: notices.versionNote } : {}),
+    ...(notices.paginationNote !== undefined ? { paginationNote: notices.paginationNote } : {}),
+  };
+}
+
+/**
+ * Render the notices as markdown blockquotes, in the order they are declared.
+ */
+function renderTocNotices(notices: TocNotices): string {
+  let rendered = '';
+  if (notices.versionNote !== undefined) {
+    rendered += `\n> **Version Note:** ${notices.versionNote}\n`;
   }
-  return content;
+  if (notices.paginationNote !== undefined) {
+    rendered += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
+  }
+  return rendered;
 }
 
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
@@ -261,7 +288,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
-        const { toc, pagination, tokenInfo } = tocResult;
+        const { toc, pagination, tokenInfo, paginationNote } = tocResult;
 
         // Build response
         const response: TocResponse = {
@@ -286,7 +313,12 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           entries: flattenTocEntries(toc)
         };
 
-        const versionNote = getVersionNote(params.version, availableVersions);
+        const notices: TocNotices = {
+          // Two arguments, not one: the note is only truthful when the version
+          // asked for is absent from the maps Jamf actually publishes.
+          versionNote: getVersionNote(params.version, availableVersions),
+          paginationNote
+        };
 
         await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
@@ -295,20 +327,17 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(withVersionNote(response, versionNote), null, 2)
+              text: JSON.stringify({ ...response, ...noticeFields(notices) }, null, 2)
             }],
-            structuredContent: withVersionNote(structuredContent, versionNote)
+            structuredContent: { ...structuredContent, ...noticeFields(notices) }
           };
         }
 
         // Format as markdown (compact or full)
-        let markdown = params.outputMode === OutputMode.COMPACT
+        const markdown = (params.outputMode === OutputMode.COMPACT
           ? formatTocCompact(productInfo.name, toc, pagination)
-          : formatTocFull(productInfo.name, version, toc, pagination, tokenInfo);
-
-        if (versionNote !== undefined) {
-          markdown += `\n> **Version Note:** ${versionNote}\n`;
-        }
+          : formatTocFull(productInfo.name, version, toc, pagination, tokenInfo))
+          + renderTocNotices(notices);
 
         await reportProgress(extra, { progress: 4, total: 4 });
         return {
@@ -316,7 +345,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
             type: 'text',
             text: markdown
           }],
-          structuredContent: withVersionNote(structuredContent, versionNote)
+          structuredContent: { ...structuredContent, ...noticeFields(notices) }
         };
       } catch (error) {
         return {

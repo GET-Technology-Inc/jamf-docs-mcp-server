@@ -116,6 +116,8 @@ export interface SearchResponse {
   filterRelaxation?: FilterRelaxation;
   versionNote?: string;
   relevanceNote?: string;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
   truncatedContent?: TruncatedContentInfo;
 }
 
@@ -371,6 +373,8 @@ export interface TocResponse {
   toc: TocEntry[];
   tokenInfo: TokenInfo;
   pagination: PaginationInfo;
+  /** Set when the requested page was clamped to the last available page. */
+  paginationNote?: string;
 }
 
 // Cache types

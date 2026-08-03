@@ -552,6 +552,48 @@ function toSearchResultWithMeta(
   };
 }
 
+// ─── Version Transparency ──────────────────────────────────────
+
+/** A `version` value that asks for a specific snapshot rather than "whatever is current". */
+function isSpecificVersion(version: string | undefined): version is string {
+  return version !== undefined && version !== '' && version !== 'current';
+}
+
+/**
+ * Explain a `version` filter that was asked for but demonstrably not applied.
+ *
+ * On the Fluid Topics path the filter goes upstream ({@link buildSearchFilters}),
+ * so the API enforces it. On the SearchProvider path nothing here enforces
+ * anything — the provider is handed `params` and its results are taken as
+ * given. When such a result set contains an article stamped with a *different*
+ * version, the filter provably did not hold, and staying silent means the tool
+ * echoes `filters.version` back as though it had: a claim about the result set
+ * that is false.
+ *
+ * Only a positive mismatch counts. Results with no version metadata are the
+ * normal shape for the unversioned products (School, Connect, Protect, …) and
+ * say nothing either way, so they must not raise the note.
+ */
+function buildVersionNote(
+  requestedVersion: string | undefined,
+  fromProvider: boolean,
+  results: SearchResultWithMeta[],
+): string | undefined {
+  if (!fromProvider || !isSpecificVersion(requestedVersion)) {
+    return undefined;
+  }
+
+  const mismatched = results.some(
+    r => r.result.version !== undefined && r.result.version !== requestedVersion
+  );
+  if (!mismatched) {
+    return undefined;
+  }
+
+  return `Version "${requestedVersion}" was not available for some results. `
+    + 'The search backend returned articles from other versions; they are shown as-is.';
+}
+
 // ─── Main Search Function ──────────────────────────────────────
 
 /**
@@ -574,10 +616,13 @@ export async function searchDocumentation(
   const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   let allResults: SearchResultWithMeta[];
+  let fromProvider = false;
   let searchError: string | undefined;
 
   try {
-    allResults = await resolveSearchResults(ctx, params, log);
+    const resolved = await resolveSearchResults(ctx, params, log);
+    allResults = resolved.results;
+    fromProvider = resolved.fromProvider;
   } catch (error) {
     const message = String(error);
     log.error(`Search error: ${message}`);
@@ -601,6 +646,7 @@ export async function searchDocumentation(
     truncateSearchResults(paginatedResults, maxTokens);
 
   const paginationNote = buildPaginationNote(paginationInfo);
+  const versionNote = buildVersionNote(params.version, fromProvider, filteredResults);
 
   return {
     results: finalResults,
@@ -618,6 +664,7 @@ export async function searchDocumentation(
       maxTokens,
     },
     ...(paginationNote !== undefined ? { paginationNote } : {}),
+    ...(versionNote !== undefined ? { versionNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {}),
     ...(searchError !== undefined ? { searchError } : {}),
@@ -644,18 +691,30 @@ function buildSearchCacheKey(
   return `ft-search:${locale}:${query}:${sortedFilters}`;
 }
 
+/**
+ * Where a result set came from. `fromProvider` is what tells the caller whether
+ * the upstream `version` filter was applied — see {@link buildVersionNote}.
+ */
+interface ResolvedSearchResults {
+  results: SearchResultWithMeta[];
+  fromProvider: boolean;
+}
+
 async function resolveSearchResults(
   ctx: ServerContext,
   params: SearchParams,
   log: Logger
-): Promise<SearchResultWithMeta[]> {
+): Promise<ResolvedSearchResults> {
   const needsTopicMatching = params.topic !== undefined;
 
   // 1. Try SearchProvider first (custom backend injection — no caching)
   if (ctx.searchProvider !== undefined) {
     const provided = await ctx.searchProvider.search(params);
     if (provided !== null) {
-      return provided.map(r => toSearchResultWithMeta(r, needsTopicMatching));
+      return {
+        results: provided.map(r => toSearchResultWithMeta(r, needsTopicMatching)),
+        fromProvider: true,
+      };
     }
   }
 
@@ -668,7 +727,7 @@ async function resolveSearchResults(
   const cached = await ctx.cache.get<SearchResultWithMeta[]>(cacheKey);
   if (cached !== null) {
     log.debug(`Search cache hit: key="${cacheKey}", ${cached.length} results`);
-    return cached;
+    return { results: cached, fromProvider: false };
   }
 
   const perPage = Math.min(
@@ -707,5 +766,5 @@ async function resolveSearchResults(
   await ctx.cache.set(cacheKey, results, ctx.config.cacheTtl.search);
 
   log.debug(`FT search returned ${results.length} results (cached)`);
-  return results;
+  return { results, fromProvider: false };
 }
