@@ -36,17 +36,38 @@ function formatFiltersLine(filters: SearchFilters): string {
   return parts.length > 0 ? `\n*Filtered by: ${parts.join(', ')}*` : '';
 }
 
+/**
+ * The `mapId` + `contentId` pair, rendered for the markdown path.
+ *
+ * `jamf_docs_get_article` documents this pair as obtainable "from search
+ * results", and markdown is the default `responseFormat` — printing it only in
+ * `structuredContent` would leave the documented workflow unreachable for any
+ * client that reads the text content. Returns `''` unless both halves are
+ * present, because either one alone cannot address an article.
+ */
+function formatResultIds(result: SearchResult): string {
+  const { mapId, contentId } = result;
+  if (mapId === undefined || mapId === '' || contentId === undefined || contentId === '') {
+    return '';
+  }
+  return `**IDs**: mapId=${sanitizeMarkdownText(mapId)}, contentId=${sanitizeMarkdownText(contentId)}`;
+}
+
 function formatSearchResult(result: SearchResult): string {
   let output = `### [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)})\n\n`;
   output += `> ${sanitizeMarkdownText(result.snippet)}\n\n`;
-  if ((result.product !== null && result.product !== '') || result.version !== undefined) {
-    const meta: string[] = [];
-    if (result.product !== null && result.product !== '') {
-      meta.push(`**Product**: ${result.product}`);
-    }
-    if (result.version !== undefined) {
-      meta.push(`**Version**: ${result.version}`);
-    }
+  const meta: string[] = [];
+  if (result.product !== null && result.product !== '') {
+    meta.push(`**Product**: ${result.product}`);
+  }
+  if (result.version !== undefined) {
+    meta.push(`**Version**: ${result.version}`);
+  }
+  const ids = formatResultIds(result);
+  if (ids !== '') {
+    meta.push(ids);
+  }
+  if (meta.length > 0) {
     output += `${meta.join(' | ')}\n\n`;
   }
   output += '---\n\n';
@@ -70,7 +91,7 @@ function formatPaginationFooter(pagination: PaginationInfo, tokenInfo: TokenInfo
   if (tokenInfo.truncated) {
     footer += '\n*Results truncated due to token limit. Use a smaller `limit` or increase `maxTokens`.*';
   }
-  footer += '\n\n*Use `jamf_docs_get_article` with any URL above to read the full article.*\n';
+  footer += '\n\n*Use `jamf_docs_get_article` with any URL above — or with the `mapId` + `contentId` pair shown with a result — to read the full article.*\n';
   return footer;
 }
 
@@ -233,7 +254,9 @@ Errors:
   - "No results found" if search returns empty
   - "Invalid product ID" if product parameter is not recognized
 
-Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.`;
+Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
+Each result carries a mapId + contentId pair; pass both to jamf_docs_get_article
+to fetch that article directly instead of resolving its URL.`;
 
 /**
  * Build structured content for a search result set
@@ -304,7 +327,13 @@ function buildSearchStructuredContent(
       snippet: r.snippet,
       product: r.product ?? '',
       ...(r.version !== undefined ? { version: r.version } : {}),
-      ...(r.docType !== undefined ? { docType: r.docType } : {})
+      ...(r.docType !== undefined ? { docType: r.docType } : {}),
+      // `jamf_docs_get_article` tells callers to take these "from search
+      // results or TOC". `SearchOutputSchema` has always declared them; not
+      // emitting them made the documented direct-fetch workflow impossible to
+      // perform from the outputs this server actually produces.
+      ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
+      ...(r.contentId !== undefined ? { contentId: r.contentId } : {})
     })),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),

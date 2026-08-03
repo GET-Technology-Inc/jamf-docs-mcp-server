@@ -152,6 +152,18 @@ export const TocOutputSchema = z.object({
    */
   productId: z.string(),
   version: z.string(),
+  /**
+   * The Fluid Topics map these entries came from.
+   *
+   * `jamf_docs_get_article` accepts `mapId` + `contentId` and its description
+   * points callers at "search results or TOC" for them. The map id is one per
+   * response, the content id one per entry, so the pair is only assemblable if
+   * both are emitted — this is the half that lives up here.
+   *
+   * Optional: a cached TOC re-resolves it best-effort, and a `TocProvider`
+   * serving from its own store may not know it.
+   */
+  mapId: z.string().optional(),
   totalEntries: z.number(),
   page: z.number(),
   totalPages: z.number(),

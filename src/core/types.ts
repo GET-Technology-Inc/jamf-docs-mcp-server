@@ -158,6 +158,17 @@ export interface FetchTocResult {
   toc: TocEntry[];
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
+  /**
+   * The Fluid Topics map the entries came from.
+   *
+   * Together with an entry's `contentId` this is the pair `jamf_docs_get_article`
+   * documents as obtainable "from search results or TOC", so it is carried out
+   * of here rather than staying an implementation detail of the fetch.
+   *
+   * Optional because a `TocProvider` serving its own cache need not know it,
+   * and because a cached tree re-resolves it best-effort.
+   */
+  mapId?: string;
   /** Set when the requested page was clamped to the last available page. */
   paginationNote?: string;
 }
@@ -370,6 +381,8 @@ export interface TocEntry {
 export interface TocResponse {
   product: string;
   version: string;
+  /** See {@link FetchTocResult.mapId}. Pairs with each entry's `contentId`. */
+  mapId?: string;
   toc: TocEntry[];
   tokenInfo: TokenInfo;
   pagination: PaginationInfo;

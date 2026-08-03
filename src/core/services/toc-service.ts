@@ -76,6 +76,37 @@ function tocEntryToString(entry: TocEntry, depth = 0): string {
   return `${indent}- ${entry.title}\n${childrenStr}`;
 }
 
+// ─── Map id resolution ─────────────────────────────────────────
+
+/**
+ * Resolve the map id for a product without letting the registry take the
+ * request down with it.
+ *
+ * Used on the cache-hit path, where the TOC is already in hand: the cached
+ * tree is stored without the id it was fetched under, so the id has to be
+ * re-resolved, and a registry that cannot answer should cost the caller the
+ * `mapId` field only — not the table of contents it already has.
+ */
+async function resolveMapIdQuietly(
+  ctx: ServerContext,
+  bundleId: string,
+  version: string,
+  locale: LocaleId,
+): Promise<string | null> {
+  try {
+    return await ctx.mapsRegistry.resolveMapId(
+      bundleId,
+      version !== 'current' ? version : undefined,
+      locale,
+    );
+  } catch (error) {
+    ctx.logger.createLogger('toc-service').warning(
+      `Could not resolve mapId for a cached TOC (${bundleId}/${version}/${locale}): ${String(error)}`,
+    );
+    return null;
+  }
+}
+
 // ─── Main fetch function ───────────────────────────────────────
 
 /**
@@ -104,12 +135,14 @@ export async function fetchTableOfContents(
   const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
   const cacheKey = `ft-toc:${locale}:${product}:${version}`;
 
+  const { bundleId } = JAMF_PRODUCTS[product];
+
   let allToc = await ctx.cache.get<TocEntry[]>(cacheKey);
+  let mapId: string | null;
 
   if (allToc === null) {
-    const productInfo = JAMF_PRODUCTS[product];
-    const mapId = await ctx.mapsRegistry.resolveMapId(
-      productInfo.bundleId,
+    mapId = await ctx.mapsRegistry.resolveMapId(
+      bundleId,
       version !== 'current' ? version : undefined,
       locale,
     );
@@ -126,6 +159,11 @@ export async function fetchTableOfContents(
     allToc = transformFtTocToTocEntries(ftNodes);
 
     await ctx.cache.set(cacheKey, allToc, ctx.config.cacheTtl.article);
+  } else {
+    // The cache stores the tree, not the id it came from. Re-resolve so a
+    // caller reading a cached TOC gets the same `mapId` a cold one would —
+    // it is half of the pair `jamf_docs_get_article` documents.
+    mapId = await resolveMapIdQuietly(ctx, bundleId, version, locale);
   }
 
   // ─── Pagination & token truncation ───────────────────────────
@@ -157,6 +195,7 @@ export async function fetchTableOfContents(
     toc: finalToc,
     pagination,
     tokenInfo,
+    ...(mapId !== null ? { mapId } : {}),
     ...(paginationNote !== undefined ? { paginationNote } : {}),
   };
 }
