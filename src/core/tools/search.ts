@@ -9,7 +9,7 @@ import { appToolMeta } from '../apps/index.js';
 import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, CONTENT_LIMITS, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
@@ -196,9 +196,9 @@ Args:
   - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
   - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
-  - limit (number, optional): Maximum results per page 1-50 (default: 10)
-  - page (number, optional): Page number for pagination 1-100 (default: 1)
-  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
+  - limit (number, optional): Maximum results per page 1-${CONTENT_LIMITS.MAX_SEARCH_RESULTS} (default: ${CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS})
+  - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief, token-efficient output
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 

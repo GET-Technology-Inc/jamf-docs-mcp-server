@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
+import { PRODUCT_ID_LIST } from '../constants.js';
 
 export function registerTroubleshootPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -18,7 +19,7 @@ export function registerTroubleshootPrompt(server: McpServer): void {
         problem: z.string().max(2000).describe('Description of the issue to troubleshoot'),
         product: completable(
           z.string().optional().describe(
-            'Jamf product ID (jamf-pro, jamf-school, jamf-connect, jamf-protect)'
+            `Jamf product ID (${PRODUCT_ID_LIST})`
           ),
           completeProduct
         ),

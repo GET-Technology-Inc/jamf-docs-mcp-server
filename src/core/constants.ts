@@ -16,6 +16,7 @@ export {
   buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
+  PRODUCT_ID_LIST,
 
   // locales
   DEFAULT_LOCALE,

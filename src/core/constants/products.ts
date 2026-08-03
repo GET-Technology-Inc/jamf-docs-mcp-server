@@ -145,3 +145,17 @@ export type ProductId = keyof typeof JAMF_PRODUCTS;
 
 // Derived ID array (shared by schemas, completions, etc.)
 export const PRODUCT_IDS = Object.keys(JAMF_PRODUCTS) as [string, ...string[]];
+
+/**
+ * The product enum rendered for prose: tool descriptions, Zod `.describe()`
+ * strings, and prompt argument hints.
+ *
+ * Derived from PRODUCT_IDS rather than written out. The hand-written lists it
+ * replaces named only the four flagship products while `z.enum(PRODUCT_IDS)`
+ * accepted every ID in JAMF_PRODUCTS, so a client that trusted the description
+ * never passed `jamf-routines` or `jamf-trust` even though both work. The
+ * `descriptions enumerate the whole product enum` test in
+ * description-accuracy.test.ts fails if a description goes back to naming a
+ * subset.
+ */
+export const PRODUCT_ID_LIST = PRODUCT_IDS.join(', ');

@@ -23,7 +23,7 @@ including Jamf Pro, Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe
 and more. Also lists available topic and docType filters for search.
 
 Args:
-  - maxTokens (number, optional): Maximum tokens in response 100-20000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief list
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 

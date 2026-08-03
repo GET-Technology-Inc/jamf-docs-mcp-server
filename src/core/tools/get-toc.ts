@@ -10,7 +10,7 @@ import { GetTocInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
 import { fetchTableOfContents } from '../services/toc-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
@@ -109,10 +109,10 @@ This tool retrieves the navigation structure for a specific Jamf product,
 allowing you to browse available documentation topics.
 
 Args:
-  - product (string, required): Product ID - one of: jamf-pro, jamf-school, jamf-connect, jamf-protect
+  - product (string, required): Product ID - one of: ${PRODUCT_ID_LIST}
   - version (string, optional): Specific version (defaults to latest)
-  - page (number, optional): Page number for pagination 1-100 (default: 1)
-  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
+  - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for flat list without nested children
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 

@@ -68,7 +68,7 @@ Args:
   - term (string, required): Glossary term to look up (2-100 characters). Supports fuzzy matching.
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - language (string, optional): Documentation language/locale (default: en-US). Note: glossary is English-only.
-  - maxTokens (number, optional): Maximum tokens in response 100-50000 (default: 5000)
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full')
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 

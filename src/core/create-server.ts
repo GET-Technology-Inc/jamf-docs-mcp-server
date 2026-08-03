@@ -8,7 +8,7 @@
 
 import { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from './types/context.js';
-import { SERVER_ICON } from './constants.js';
+import { SERVER_ICON, PRODUCT_ID_LIST, TOKEN_CONFIG } from './constants.js';
 
 import { registerListProductsTool } from './tools/list-products.js';
 import { registerSearchTool } from './tools/search.js';
@@ -122,12 +122,12 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
 - Use outputMode: "full" when reading a specific article in detail.
 
 ## Token Management
-- Use the maxTokens parameter to control response size (default: 5000, max: 20000).
+- Use the maxTokens parameter to control response size (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}, max: ${TOKEN_CONFIG.MAX_TOKENS_LIMIT}).
 - Start with a lower maxTokens value and increase only when more detail is needed.
 - Use summaryOnly: true on jamf_docs_get_article to get an article outline before fetching full content.
 
 ## Product Filtering
-- When the target Jamf product is known, filter by product ID to narrow results: jamf-pro, jamf-school, jamf-connect, jamf-protect.
+- When the target Jamf product is known, filter by product ID to narrow results: ${PRODUCT_ID_LIST}.
 - Combine product and topic filters on jamf_docs_search for the most relevant results.`;
 
 /**
