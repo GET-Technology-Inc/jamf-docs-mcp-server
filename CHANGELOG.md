@@ -1,3 +1,9 @@
+## [4.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.5...v4.0.6) (2026-08-03)
+
+### Bug Fixes
+
+* repair eight defects found by an external QA pass ([#200](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/200)) ([772dc5a](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/772dc5abc686ecf2e4ce5c0310722bcd2e6556d5)), closes [#192](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/192) [#193](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/193) [#194](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/194) [#195](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/195) [#196](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/196) [#197](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/197) [#198](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/198) [#192](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/192) [#197](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/197)
+
 ## [4.0.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.4...v4.0.5) (2026-08-03)
 
 ### Dependencies
