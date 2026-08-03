@@ -77,7 +77,16 @@ export const SearchOutputSchema = z.object({
 export const ArticleOutputSchema = z.object({
   title: z.string(),
   url: z.string(),
+  /**
+   * The body actually sent. Under `outputMode: 'compact'` this is a preview,
+   * not the whole article — the markdown half and this half always agree.
+   */
   content: z.string(),
+  /**
+   * Estimated tokens of `content` above, so a caller can tell a compact preview
+   * from a full body without re-tokenising it.
+   */
+  tokenCount: z.number().optional(),
   product: z.string().optional(),
   version: z.string().optional(),
   lastUpdated: z.string().optional(),

@@ -8,7 +8,10 @@ import { describe, it, expect } from 'vitest';
 import {
   formatArticleFull,
   formatArticleCompact,
+  buildArticleContentView,
+  buildCompactArticleView,
 } from '../../../src/core/utils/format-article.js';
+import { estimateTokens } from '../../../src/core/services/tokenizer.js';
 import {
   createFetchArticleResult,
   createTokenInfo,
@@ -41,6 +44,28 @@ function makeSections(count: number): ArticleSection[] {
       tokenCount: 100 + i * 10,
     })
   );
+}
+
+/**
+ * Content well above the ~500 token preview limit.
+ * At ~4 chars/token, ~3400 chars ≈ 850 tokens — clearly exceeds the preview.
+ */
+function makeLongContent(): string {
+  const paragraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ';
+  return `${Array.from({ length: 60 }, () => paragraph).join('')  }\n\n`
+    + '## Deep Section\n\nMore detailed content that should not appear in preview.';
+}
+
+/**
+ * Long content split into many paragraphs, so the preview can actually stop at
+ * a boundary. `makeLongContent()` is one 850-token paragraph, which every
+ * budget returns whole — useless for observing where the budget landed.
+ */
+function makeParagraphedContent(count = 60): string {
+  return Array.from(
+    { length: count },
+    (_, i) => `Paragraph ${i + 1}: lorem ipsum dolor sit amet, consectetur adipiscing elit.`
+  ).join('\n\n');
 }
 
 // =============================================================================
@@ -629,14 +654,6 @@ describe('formatArticleCompact()', () => {
   // ── Content preview / truncation ────────────────────────────────────────────
 
   describe('content preview (summary-only compact mode)', () => {
-    // Helper to generate content well above the ~500 token preview limit.
-    // At ~4 chars/token, 3000 chars ≈ 750 tokens — clearly exceeds the preview.
-    function makeLongContent(): string {
-      const paragraph = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ';
-      return `${Array.from({ length: 60 }, () => paragraph).join('')  }\n\n`
-        + '## Deep Section\n\nMore detailed content that should not appear in preview.';
-    }
-
     it('should truncate long content and show truncation notice', () => {
       // Arrange
       const article = makeArticle({ content: makeLongContent() });
@@ -677,9 +694,9 @@ describe('formatArticleCompact()', () => {
   // ── Sections list ───────────────────────────────────────────────────────────
 
   describe('available sections list', () => {
-    it('should list available sections when sections are present', () => {
+    it('should list available sections when the preview withheld content', () => {
       // Arrange
-      const article = makeArticle({ sections: makeSections(3) });
+      const article = makeArticle({ content: makeLongContent(), sections: makeSections(3) });
 
       // Act
       const output = formatArticleCompact(article);
@@ -693,7 +710,7 @@ describe('formatArticleCompact()', () => {
 
     it('should not show sections list when sections array is empty', () => {
       // Arrange
-      const article = makeArticle({ sections: [] });
+      const article = makeArticle({ content: makeLongContent(), sections: [] });
 
       // Act
       const output = formatArticleCompact(article);
@@ -704,7 +721,7 @@ describe('formatArticleCompact()', () => {
 
     it('should cap sections list at 15 entries and show overflow count', () => {
       // Arrange
-      const article = makeArticle({ sections: makeSections(20) });
+      const article = makeArticle({ content: makeLongContent(), sections: makeSections(20) });
 
       // Act
       const output = formatArticleCompact(article);
@@ -713,6 +730,66 @@ describe('formatArticleCompact()', () => {
       expect(output).toContain('Section 15');
       expect(output).not.toContain('Section 16');
       expect(output).toContain('...and 5 more sections');
+    });
+
+    it('should omit the sections list when the whole article fits the preview', () => {
+      // Arrange — the article is sent whole, so there is nothing left to fetch
+      // by section and the list is pure overhead.
+      const article = makeArticle({ content: 'Short body.', sections: makeSections(20) });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).not.toContain('Available Sections');
+    });
+
+    it('should not make compact output longer than full output for a short article', () => {
+      // Arrange — regression: the unconditional sections list made compact
+      // *bigger* than full whenever the body was short enough to send whole.
+      const article = makeArticle({ content: 'Short body.', sections: makeSections(20) });
+
+      // Act
+      const compact = formatArticleCompact(article);
+      const full = formatArticleFull(article, { sections: article.sections });
+
+      // Assert
+      expect(compact.length).toBeLessThan(full.length);
+    });
+  });
+
+  // ── Footer token count ──────────────────────────────────────────────────────
+
+  describe('footer token accounting', () => {
+    it('should report the preview token count, not the whole article count', () => {
+      // Arrange — the article claims 9999 tokens; only a preview is sent.
+      const article = makeArticle({
+        content: makeLongContent(),
+        tokenInfo: createTokenInfo({ tokenCount: 9999, maxTokens: 50000, truncated: false }),
+      });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert — the article's own count must not be quoted for a partial send
+      expect(output).not.toContain('9999 tokens');
+      const match = /\| (\d+) tokens/.exec(output);
+      expect(match).not.toBeNull();
+      expect(Number(match?.[1])).toBeLessThan(9999);
+    });
+
+    it('should mark the footer truncated when only a preview was sent', () => {
+      // Arrange — upstream did not truncate; the compact preview did
+      const article = makeArticle({
+        content: makeLongContent(),
+        tokenInfo: createTokenInfo({ truncated: false }),
+      });
+
+      // Act
+      const output = formatArticleCompact(article);
+
+      // Assert
+      expect(output).toContain('(truncated)');
     });
   });
 
@@ -797,6 +874,114 @@ describe('formatArticleCompact()', () => {
       expect(output).toContain('%28');
       expect(output).toContain('%29');
     });
+  });
+});
+
+// =============================================================================
+// buildCompactArticleView / buildArticleContentView
+// =============================================================================
+
+describe('buildCompactArticleView()', () => {
+  it('should carry a preview shorter than the article for a long body', () => {
+    // Arrange
+    const article = makeArticle({ content: makeLongContent() });
+
+    // Act
+    const view = buildCompactArticleView(article);
+
+    // Assert
+    expect(view.content.length).toBeLessThan(article.content.length);
+    expect(view.truncated).toBe(true);
+  });
+
+  it('should report the token count of the preview it carries', () => {
+    // Arrange
+    const article = makeArticle({
+      content: makeLongContent(),
+      tokenInfo: createTokenInfo({ tokenCount: 9999, maxTokens: 50000 }),
+    });
+
+    // Act
+    const view = buildCompactArticleView(article);
+
+    // Assert — the count describes view.content, not the article
+    expect(view.tokenCount).toBe(estimateTokens(view.content));
+    expect(view.tokenCount).toBeLessThan(9999);
+  });
+
+  it('should charge the sections list against the preview budget', () => {
+    // Arrange — same body, one with a long sections list that will accompany
+    // the preview and one with none
+    const content = makeParagraphedContent();
+    const withSections = makeArticle({ content, sections: makeSections(15) });
+    const withoutSections = makeArticle({ content, sections: [] });
+
+    // Act
+    const listed = buildCompactArticleView(withSections);
+    const bare = buildCompactArticleView(withoutSections);
+
+    // Assert — the sections list takes its share out of the content budget
+    expect(listed.tokenCount).toBeLessThan(bare.tokenCount);
+  });
+
+  it('should carry the whole body and the pipeline token count when it fits', () => {
+    // Arrange
+    const article = makeArticle({
+      content: 'Short body.',
+      tokenInfo: createTokenInfo({ tokenCount: 42, truncated: false }),
+    });
+
+    // Act
+    const view = buildCompactArticleView(article);
+
+    // Assert
+    expect(view.content).toBe('Short body.');
+    expect(view.tokenCount).toBe(42);
+    expect(view.truncated).toBe(false);
+  });
+
+  it('should stay truncated when upstream truncated even if the preview fits', () => {
+    // Arrange
+    const article = makeArticle({
+      content: 'Short body.',
+      tokenInfo: createTokenInfo({ truncated: true }),
+    });
+
+    // Act
+    const view = buildCompactArticleView(article);
+
+    // Assert
+    expect(view.truncated).toBe(true);
+  });
+});
+
+describe('buildArticleContentView()', () => {
+  it('should return the whole body untouched when not compact', () => {
+    // Arrange
+    const article = makeArticle({
+      content: makeLongContent(),
+      tokenInfo: createTokenInfo({ tokenCount: 850, truncated: false }),
+    });
+
+    // Act
+    const view = buildArticleContentView(article, false);
+
+    // Assert
+    expect(view.content).toBe(article.content);
+    expect(view.tokenCount).toBe(850);
+    expect(view.truncated).toBe(false);
+  });
+
+  it('should return a strictly smaller view when compact', () => {
+    // Arrange
+    const article = makeArticle({ content: makeLongContent() });
+
+    // Act
+    const compact = buildArticleContentView(article, true);
+    const full = buildArticleContentView(article, false);
+
+    // Assert
+    expect(compact.content.length).toBeLessThan(full.content.length);
   });
 });
 

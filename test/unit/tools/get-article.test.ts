@@ -35,12 +35,14 @@ import { createMockContext, createMockArticleProvider } from '../../helpers/mock
 
 interface TextContent { type: 'text'; text: string }
 
+type ToolCallResult = Awaited<ReturnType<Client['callTool']>>;
+
 function getTextContent(result: { content: unknown[] }): string {
   const first = result.content[0] as TextContent;
   return first.text;
 }
 
-const VALID_URL = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html';
+const VALID_URL ='https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html';
 
 // ---------------------------------------------------------------------------
 
@@ -290,6 +292,116 @@ describe('jamf_docs_get_article tool', () => {
       const text = getTextContent(result);
       // The compact metadata italic line should not appear if no product/version
       expect(text).not.toMatch(/\*Jamf/);
+    });
+  });
+
+  // --- outputMode=compact actually compacts ---------------------------------
+
+  /**
+   * Regression cover for the mode that shortened only the markdown: the
+   * structuredContent half carried the whole body either way, which is the half
+   * programmatic consumers read.
+   */
+  describe('outputMode=compact compacts every channel', () => {
+    /** ~850 tokens across many paragraphs, so a preview can stop partway. */
+    function longBody(): string {
+      return Array.from(
+        { length: 60 },
+        (_, i) => `Paragraph ${i + 1}: lorem ipsum dolor sit amet, consectetur adipiscing elit.`
+      ).join('\n\n');
+    }
+
+    async function callWith(
+      outputMode: 'full' | 'compact',
+      extra: Record<string, unknown> = {}
+    ): Promise<ToolCallResult> {
+      mockArticle({
+        content: longBody(),
+        tokenInfo: createTokenInfo({ tokenCount: 9999, maxTokens: 50000, truncated: false }),
+      });
+      return await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url: VALID_URL, outputMode, ...extra },
+      });
+    }
+
+    it('should carry a shorter structuredContent.content than full mode', async () => {
+      const compact = await callWith('compact');
+      const full = await callWith('full');
+
+      const compactSc = compact.structuredContent as Record<string, unknown>;
+      const fullSc = full.structuredContent as Record<string, unknown>;
+
+      expect(typeof compactSc.content).toBe('string');
+      expect((compactSc.content as string).length)
+        .toBeLessThan((fullSc.content as string).length);
+    });
+
+    it('should report a preview token count in structuredContent', async () => {
+      const compact = await callWith('compact');
+      const full = await callWith('full');
+
+      const compactSc = compact.structuredContent as Record<string, unknown>;
+      const fullSc = full.structuredContent as Record<string, unknown>;
+
+      expect(fullSc.tokenCount).toBe(9999);
+      expect(compactSc.tokenCount as number).toBeLessThan(9999);
+    });
+
+    it('should mark structuredContent truncated when only a preview was sent', async () => {
+      const compact = await callWith('compact');
+      const full = await callWith('full');
+
+      expect((full.structuredContent as Record<string, unknown>).truncated).toBe(false);
+      expect((compact.structuredContent as Record<string, unknown>).truncated).toBe(true);
+    });
+
+    it('should quote the preview token count in the markdown footer, not the article count', async () => {
+      const compact = await callWith('compact');
+
+      const text = getTextContent(compact);
+      expect(text).not.toContain('9999 tokens');
+    });
+
+    it('should compact the JSON body too', async () => {
+      const compact = await callWith('compact', { responseFormat: 'json' });
+      const full = await callWith('full', { responseFormat: 'json' });
+
+      const compactJson = JSON.parse(getTextContent(compact));
+      const fullJson = JSON.parse(getTextContent(full));
+
+      expect(compactJson.content.length).toBeLessThan(fullJson.content.length);
+      expect(compactJson.tokenInfo.tokenCount).toBeLessThan(9999);
+    });
+
+    it('should not produce a longer response than full mode for a short article', async () => {
+      // The "Available Sections" block used to be appended unconditionally, so
+      // a short article came back *bigger* in compact than in full.
+      mockArticle({
+        content: 'Short body.',
+        sections: Array.from({ length: 20 }, (_, i) =>
+          createArticleSection({ id: `s-${i}`, title: `Section ${i + 1}`, level: 2, tokenCount: 50 })
+        ),
+        tokenInfo: createTokenInfo({ tokenCount: 3, truncated: false }),
+      });
+      const compact = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url: VALID_URL, outputMode: 'compact' },
+      });
+
+      mockArticle({
+        content: 'Short body.',
+        sections: Array.from({ length: 20 }, (_, i) =>
+          createArticleSection({ id: `s-${i}`, title: `Section ${i + 1}`, level: 2, tokenCount: 50 })
+        ),
+        tokenInfo: createTokenInfo({ tokenCount: 3, truncated: false }),
+      });
+      const full = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url: VALID_URL, outputMode: 'full' },
+      });
+
+      expect(getTextContent(compact).length).toBeLessThan(getTextContent(full).length);
     });
   });
 

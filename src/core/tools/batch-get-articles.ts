@@ -13,7 +13,11 @@ import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } f
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { isAllowedHostname } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
-import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
+import {
+  buildArticleContentView,
+  formatArticleCompact,
+  formatArticleFull,
+} from '../utils/format-article.js';
 
 // ============================================================================
 // Types
@@ -184,13 +188,15 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         failed
       };
 
-      // Calculate overall token info
+      // Calculate overall token info — over what each article's view actually
+      // carries, so a compact batch does not bill for bodies it never sent.
       let totalTokenCount = 0;
       let anyTruncated = false;
       for (const r of results) {
         if (r.status === 'success') {
-          totalTokenCount += r.article.tokenInfo.tokenCount;
-          if (r.article.tokenInfo.truncated) {
+          const view = buildArticleContentView(r.article, compact);
+          totalTokenCount += view.tokenCount;
+          if (view.truncated) {
             anyTruncated = true;
           }
         }
@@ -201,17 +207,20 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         maxTokens: totalMaxTokens
       };
 
-      // Build structuredContent for MCP outputSchema
+      // Build structuredContent for MCP outputSchema. It honours `outputMode`
+      // like the markdown does: previously only the markdown shrank, so a
+      // compact batch handed programmatic callers every full body anyway.
       const structuredContent = {
         results: results.map((r) => {
           if (r.status === 'success') {
+            const view = buildArticleContentView(r.article, compact);
             return {
               url: r.url,
               status: 'success' as const,
               title: r.article.title,
-              content: r.article.content,
-              tokenCount: r.article.tokenInfo.tokenCount,
-              truncated: r.article.tokenInfo.truncated
+              content: view.content,
+              tokenCount: view.tokenCount,
+              truncated: view.truncated
             };
           }
           return {
@@ -230,12 +239,17 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
         const jsonResponse = {
           results: results.map((r) => {
             if (r.status === 'success') {
+              const view = buildArticleContentView(r.article, compact);
               return {
                 url: r.url,
                 status: 'success',
                 title: r.article.title,
-                content: r.article.content,
-                tokenInfo: r.article.tokenInfo
+                content: view.content,
+                tokenInfo: {
+                  ...r.article.tokenInfo,
+                  tokenCount: view.tokenCount,
+                  truncated: view.truncated,
+                }
               };
             }
             return { url: r.url, status: 'error', error: r.error };

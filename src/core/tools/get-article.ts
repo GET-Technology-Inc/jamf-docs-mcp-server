@@ -19,7 +19,12 @@ import type {
 } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
-import { formatArticleCompact, formatArticleFull } from '../utils/format-article.js';
+import {
+  buildArticleContentView,
+  formatArticleCompact,
+  formatArticleFull,
+  type ArticleContentView,
+} from '../utils/format-article.js';
 
 const TOOL_NAME = 'jamf_docs_get_article';
 
@@ -31,16 +36,20 @@ const TOOL_NAME = 'jamf_docs_get_article';
  * payload stays a faithful JSON object. Extracted from the handler because
  * those omissions are branches: inline, they were most of its cyclomatic
  * complexity while saying nothing about how the request is served.
+ *
+ * `view` — not the article — supplies the body, so that `outputMode: 'compact'`
+ * compacts the half programmatic consumers actually read.
  */
 function buildArticleStructuredContent(
   article: FetchArticleResult,
   sections: ArticleSection[],
-  truncated: boolean,
+  view: ArticleContentView,
 ): Record<string, unknown> {
   return {
     title: article.title,
     url: article.url,
-    content: article.content,
+    content: view.content,
+    tokenCount: view.tokenCount,
     ...(article.product !== undefined ? { product: article.product } : {}),
     ...(article.version !== undefined ? { version: article.version } : {}),
     ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
@@ -53,7 +62,7 @@ function buildArticleStructuredContent(
       level: s.level,
       tokenCount: s.tokenCount
     })),
-    truncated
+    truncated: view.truncated
   };
 }
 
@@ -177,15 +186,25 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
 
         await reportProgress(extra, { progress: 3, total: 4, message: 'Formatting output...' });
 
+        // `outputMode` governs how much of the body goes out, on every channel:
+        // markdown, JSON and structuredContent alike. Applying it to only one of
+        // them is what made "compact" a markdown-only illusion.
+        const view = buildArticleContentView(article, params.outputMode === OutputMode.COMPACT);
+
         // Build response
         const response: ArticleResponse = {
           ...article,
+          content: view.content,
           format: params.responseFormat,
-          tokenInfo,
+          tokenInfo: {
+            ...tokenInfo,
+            tokenCount: view.tokenCount,
+            truncated: view.truncated,
+          },
           sections
         };
 
-        const structuredContent = buildArticleStructuredContent(article, sections, tokenInfo.truncated);
+        const structuredContent = buildArticleStructuredContent(article, sections, view);
 
         if (params.responseFormat === ResponseFormat.JSON) {
           await reportProgress(extra, { progress: 4, total: 4 });
