@@ -1,3 +1,9 @@
+## [4.1.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.0...v4.1.1) (2026-08-04)
+
+### Dependencies
+
+* bump undici ([#206](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/206)) ([c838664](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c838664a997964eca699fe6c14da42ca53d38bf0))
+
 ## [4.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.0.7...v4.1.0) (2026-08-03)
 
 ### Features
