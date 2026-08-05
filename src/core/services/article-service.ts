@@ -56,6 +56,13 @@ interface CachedArticle {
   displayUrl: string;
   product: string | undefined;
   version: string;
+  /**
+   * Per-topic edition date, cached alongside the parse because it comes from
+   * the same metadata fetch. Optional so an entry written before this field
+   * existed still reads back — those simply have no date, which is the same
+   * thing a topic that publishes none produces.
+   */
+  lastUpdated?: string | undefined;
 }
 
 /**
@@ -88,6 +95,7 @@ export async function fetchArticleFromFt(
     ]);
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
+    const lastEdition = getMetaValue(topicMeta.metadata, FT_META.LAST_EDITION);
     const { product, version } = extractProductVersion(topicMeta.metadata);
 
     // FT's in-documentation links are hrefless spans addressed by TOC node id,
@@ -129,11 +137,21 @@ export async function fetchArticleFromFt(
       ? topicMeta.title
       : parsed.title;
 
-    cached = { title, parsed: { ...parsed, breadcrumb }, displayUrl, product, version };
+    cached = {
+      title,
+      parsed: { ...parsed, breadcrumb },
+      displayUrl,
+      product,
+      version,
+      // `getMetaValue` answers a missing key with '', and an empty string
+      // would travel as a present-but-blank date. Absent has to stay absent:
+      // two of twelve sampled topics publish no edition date at all.
+      lastUpdated: lastEdition !== '' ? lastEdition : undefined,
+    };
     await cache.set(cacheKey, cached, options.cacheTtl);
   }
 
-  const { title, parsed, displayUrl, product, version } = cached;
+  const { title, parsed, displayUrl, product, version, lastUpdated } = cached;
 
   // Build base result (shared across all code paths)
   const allSections: ArticleSection[] = extractSections(parsed.content);
@@ -142,6 +160,12 @@ export async function fetchArticleFromFt(
     url: displayUrl,
     product,
     version,
+    // `ParsedArticle` has declared `lastUpdated` and `formatFullMetadata` has
+    // rendered a "**Last Updated**" line for it all along; nothing ever set it,
+    // so the line never appeared and the field was always undefined. Sampled
+    // across the live corpus, pages range from 2023-06-01 to 2026-05-14 — a
+    // caller answering from a two-year-old page had no way to know.
+    lastUpdated,
     breadcrumb: parsed.breadcrumb.length > 0 ? parsed.breadcrumb : undefined,
     relatedArticles: options.includeRelated === true && parsed.relatedArticles.length > 0
       ? parsed.relatedArticles : undefined,

@@ -15,6 +15,13 @@ export const FT_META = {
   LEGACY_URL: 'legacy_url',
   ZOOMIN_METADATA: 'zoominmetadata',
   CONTENT_TYPE: 'jamf:contentType',
+  /**
+   * When this topic was last edited. Per-topic, unlike `ft:lastTechChange`,
+   * which is the same date for every topic in a bundle and so says how old the
+   * documentation *set* is rather than the page. Measured across 12 topics in
+   * 7 products: lastEdition gave 9 distinct dates, lastTechChange gave 1.
+   */
+  LAST_EDITION: 'ft:lastEdition',
   CLUSTER_ID: 'ft:clusterId',
   PUBLICATION_ID: 'ft:publicationId',
   PRODNAME: 'prodname',
