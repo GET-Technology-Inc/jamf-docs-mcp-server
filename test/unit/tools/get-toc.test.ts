@@ -693,6 +693,30 @@ describe('jamf_docs_get_toc tool', () => {
 
       expect(entries.map(e => e.depth)).toEqual([0, 1, 2, 1, 0, 1]);
     });
+
+    // The description is the only thing that tells a client what the two
+    // channels hold, and it attributed the nesting to "the markdown"
+    // unqualified. That is true of outputMode="full" only: formatTocCompact
+    // calls renderTocEntry(entry, 0, true), which does not recurse, so compact
+    // markdown shows the two roots of the six-entry tree above while
+    // structuredContent still carries all six with their depths — the
+    // divergence the it.each right above asserts, and the flat list
+    // 'should render entries as flat list without nested children' pins. So
+    // the sentence contradicted two tests beside it, and a client reading it
+    // would expect compact markdown to be an indented view of the same tree.
+    it('should say which outputMode the markdown actually shows the nesting in', async () => {
+      const { tools } = await client.listTools();
+      const description = tools.find(t => t.name === 'jamf_docs_get_toc')?.description ?? '';
+
+      const start = description.indexOf('structuredContent.entries');
+      // Not vacuous: a description that dropped the depth claim altogether
+      // would otherwise pass by having nothing left to contradict.
+      expect(start, 'the description should still explain entry depth').toBeGreaterThanOrEqual(0);
+
+      const claim = description.slice(start);
+      expect(claim).toContain('outputMode="full"');
+      expect(claim).toContain('outputMode="compact"');
+    });
   });
 
   // --- Default version behaviour -------------------------------------------

@@ -84,8 +84,13 @@ header { margin-bottom: 14px; }
 .card .snippet { color: var(--muted); font-size: 0.85rem; margin: 0 0 6px; }
 .card .meta { font-size: 0.75rem; }
 
+/* --depth is the entry's nesting level, written on each row by app-ui/toc.ts
+   from what the server sends in structuredContent; the fallback covers a
+   server too old to send it. Bounded there at MAX_TOC_INDENT steps, so the
+   deepest row spends 84px of a panel that can be as narrow as ~320px. */
 .row {
   padding: 8px 11px;
+  padding-left: calc(11px + var(--depth, 0) * 14px);
   border-bottom: 1px solid var(--line);
   cursor: pointer;
 }
