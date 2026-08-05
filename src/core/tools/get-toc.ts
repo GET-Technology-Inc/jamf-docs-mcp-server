@@ -216,9 +216,11 @@ The response-level mapId and an entry's contentId together form the pair
 jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
 mapId only; use responseFormat="json" (or read structuredContent) for the
 per-entry contentIds.
-structuredContent.entries is the TOC flattened in document order; each entry's
-depth (0 for top level) is what restores the nesting the markdown shows as
-indentation.`;
+structuredContent.entries is the TOC flattened in document order and always
+carries every descendant; each entry's depth (0 for top level) is what
+restores the nesting. The markdown is not the same view: outputMode="full"
+shows that nesting as indentation, while outputMode="compact" lists only the
+top-level entries and shows no nesting at all.`;
 
 /**
  * Determine the version transparency note if a specific version was requested.

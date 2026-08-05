@@ -9,7 +9,9 @@
  */
 
 import { App } from '@modelcontextprotocol/ext-apps';
+import { esc } from './escape.js';
 import { CSS } from './styles.js';
+import { type TocEntry, renderTocItems } from './toc.js';
 
 // ---------------------------------------------------------------------------
 // Tool result shapes (mirrors of src/core/schemas/output.ts)
@@ -50,11 +52,6 @@ interface SearchView {
   limit?: number;
   results: SearchResult[];
   suggestions?: string[];
-}
-
-interface TocEntry {
-  title: string;
-  url: string;
 }
 
 interface TocView {
@@ -116,19 +113,6 @@ function classify(payload: unknown): View | null {
 // ---------------------------------------------------------------------------
 // Rendering helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Everything rendered here originates from fetched documentation, so it is
- * escaped before any markup is applied. The inline formatter below only ever
- * re-introduces tags it generated itself.
- */
-function esc(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 /** Inline markdown: code spans, bold, italics, links. Operates on escaped text. */
 function inline(escaped: string): string {
@@ -286,12 +270,10 @@ function renderSearch(v: SearchView): string {
 }
 
 function renderToc(v: TocView): string {
-  const items = v.entries
-    .map(
-      (e) =>
-        `<li class="row" data-url="${esc(e.url)}" tabindex="0" role="button">${esc(e.title)}</li>`,
-    )
-    .join('');
+  // Rows carry their nesting level; see `renderTocItems`. A TOC drawn flat
+  // discards the only thing "browse the TOC to decide what to read" browses
+  // by, and this app is the host the server publishes `depth` for.
+  const items = renderTocItems(v.entries);
 
   return `
     <header>
