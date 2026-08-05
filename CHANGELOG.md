@@ -1,3 +1,9 @@
+## [4.2.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.3...v4.2.0) (2026-08-05)
+
+### Features
+
+* populate lastUpdated, a field that was declared and rendered but never set ([#210](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/210)) ([ac7979c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ac7979c0a59aea9f160ba195e58c0a1c185374f4))
+
 ## [4.1.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.2...v4.1.3) (2026-08-05)
 
 ### Bug Fixes
