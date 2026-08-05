@@ -82,6 +82,12 @@ export const SearchOutputSchema = z.object({
   }).optional(),
 });
 
+/** One table-of-contents neighbour: a title to read, a URL to fetch. */
+const NavigationLinkSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+});
+
 export const ArticleOutputSchema = z.object({
   title: z.string(),
   url: z.string(),
@@ -101,6 +107,38 @@ export const ArticleOutputSchema = z.object({
   breadcrumb: z.array(z.string()).optional(),
   mapId: z.string().optional(),
   contentId: z.string().optional(),
+  /**
+   * The three below are `ArticleProvider` signals. They are declared here
+   * because a key absent from this schema is a key the tool's structured
+   * output cannot promise, whatever the builder emits — and each one is a fact
+   * a reader has to act on, not decoration.
+   *
+   * `versionStatus`: whether this copy is from the release upstream still
+   * flags as current, so a client can say "this page describes an older
+   * release" instead of quoting it as though it were current.
+   */
+  versionStatus: z.enum(['latest', 'superseded']).optional(),
+  /**
+   * The language of `content`. Distinct from the requested locale and from the
+   * locale in `url`: Jamf serves English when it has no translation, and both
+   * of those keep saying the language that was asked for.
+   */
+  contentLocale: z.string().optional(),
+  /**
+   * Where this page sits in its product's table of contents.
+   *
+   * `siblingCount`/`childCount` are the totals, not the array lengths — the
+   * arrays are capped by the provider, and a truncated list that does not say
+   * so is one a reader will treat as exhaustive.
+   */
+  navigation: z.object({
+    self: NavigationLinkSchema,
+    parent: NavigationLinkSchema.optional(),
+    siblings: z.array(NavigationLinkSchema),
+    children: z.array(NavigationLinkSchema),
+    siblingCount: z.number(),
+    childCount: z.number(),
+  }).optional(),
   sections: z.array(z.object({
     id: z.string(),
     title: z.string(),
@@ -109,6 +147,15 @@ export const ArticleOutputSchema = z.object({
   })),
   truncated: z.boolean(),
 });
+
+/**
+ * The keys `jamf_docs_get_article` may publish on the structured channel.
+ *
+ * `buildArticleStructuredContent` checks its own output against this, so that
+ * emitting a key this schema does not declare fails the build rather than
+ * failing output validation at runtime in front of a client.
+ */
+export type ArticleStructuredOutput = z.infer<typeof ArticleOutputSchema>;
 
 export const GlossaryLookupOutputSchema = z.object({
   term: z.string(),

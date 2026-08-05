@@ -8,7 +8,7 @@ import type { ServerContext } from '../types/context.js';
 import { appToolMeta } from '../apps/index.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
-import { ArticleOutputSchema } from '../schemas/output.js';
+import { ArticleOutputSchema, type ArticleStructuredOutput } from '../schemas/output.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type {
   ToolResult,
@@ -16,6 +16,7 @@ import type {
   ArticleSection,
   FetchArticleOptions,
   FetchArticleResult,
+  ParsedArticle,
 } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
@@ -28,34 +29,106 @@ import {
 
 const TOOL_NAME = 'jamf_docs_get_article';
 
+/** What the structured channel does with one field of a provider's article. */
+type ArticleFieldDisposition =
+  /** Copied through verbatim when the provider set it. */
+  | 'publish'
+  /** Emitted, but from `view` rather than from the article — see below. */
+  | 'replace'
+  /** Deliberately not on this channel. */
+  | 'withhold';
+
+/**
+ * Every field of {@link ParsedArticle}, and what becomes of it here.
+ *
+ * The `satisfies Record<keyof ParsedArticle, …>` is the whole point. This
+ * function used to enumerate its output key by key, which made it a second,
+ * silent schema: an `ArticleProvider` could return a field and have it dropped
+ * on the structured channel — the one a program reads — with no error anywhere,
+ * and that happened three times in a week (`lastUpdated`, then `breadcrumb` on
+ * search results, then `versionStatus`/`contentLocale`/`navigation` here, all
+ * of them present in the markdown channel and absent at the client).
+ *
+ * So the allowlist is now derived from the provider contract instead of
+ * maintained alongside it: add a field to `ParsedArticle` and this object stops
+ * compiling until someone says what happens to it. That is the design decision
+ * behind issue #215 — option (1), "add the keys", but with the maintenance cost
+ * it warns about converted from a silent drop into a build failure.
+ */
+const ARTICLE_FIELD_DISPOSITION = {
+  title: 'publish',
+  url: 'publish',
+  product: 'publish',
+  version: 'publish',
+  lastUpdated: 'publish',
+  breadcrumb: 'publish',
+  mapId: 'publish',
+  contentId: 'publish',
+  versionStatus: 'publish',
+  contentLocale: 'publish',
+  navigation: 'publish',
+  // `view` — not the article — supplies the body, so that `outputMode:
+  // 'compact'` compacts the half programmatic consumers actually read. Copying
+  // `article.content` through here would republish the whole body next to the
+  // preview and undo that.
+  content: 'replace',
+  // Markdown-only: they are rendered as a link list at the foot of the article
+  // and only when `includeRelated` asked for them, so publishing them
+  // unconditionally would hand out a payload the caller declined.
+  relatedArticles: 'withhold',
+} as const satisfies Record<keyof ParsedArticle, ArticleFieldDisposition>;
+
+/** The subset of `ParsedArticle` keys the loop below copies through. */
+type PublishedArticleField = {
+  [K in keyof typeof ARTICLE_FIELD_DISPOSITION]:
+    (typeof ARTICLE_FIELD_DISPOSITION)[K] extends 'publish' ? K : never
+}[keyof typeof ARTICLE_FIELD_DISPOSITION];
+
+/**
+ * Compile error unless every `publish` field above is declared on
+ * `ArticleOutputSchema`.
+ *
+ * A key the builder emits but the schema does not declare is a key the tool
+ * cannot promise a client: `tools/list` advertises the schema, and the SDK
+ * validates `structuredContent` against it before the result goes out. Catching
+ * the mismatch here means the two lists cannot disagree, rather than the
+ * disagreement surfacing as an output-validation error mid-call.
+ */
+type MustBeDeclared<Declared, Published extends Declared> = Published;
+export type PublishedArticleFieldsAreDeclared = MustBeDeclared<
+  keyof ArticleStructuredOutput,
+  PublishedArticleField
+>;
+
 /**
  * The machine-readable view of an article, for clients that render it — the
  * MCP App, chiefly — rather than reading the markdown.
  *
  * Optional fields are omitted rather than emitted as `undefined`, so the
- * payload stays a faithful JSON object. Extracted from the handler because
- * those omissions are branches: inline, they were most of its cyclomatic
- * complexity while saying nothing about how the request is served.
- *
- * `view` — not the article — supplies the body, so that `outputMode: 'compact'`
- * compacts the half programmatic consumers actually read.
+ * payload stays a faithful JSON object: a client can tell "the provider does
+ * not know this article's `versionStatus`" from "it is `latest`", which an
+ * emitted `null` would erase.
  */
 function buildArticleStructuredContent(
   article: FetchArticleResult,
   sections: ArticleSection[],
   view: ArticleContentView,
 ): Record<string, unknown> {
+  const published: Record<string, unknown> = {};
+  for (const [field, disposition] of Object.entries(ARTICLE_FIELD_DISPOSITION)) {
+    if (disposition !== 'publish') {
+      continue;
+    }
+    const value = article[field as keyof ParsedArticle];
+    if (value !== undefined) {
+      published[field] = value;
+    }
+  }
+
   return {
-    title: article.title,
-    url: article.url,
+    ...published,
     content: view.content,
     tokenCount: view.tokenCount,
-    ...(article.product !== undefined ? { product: article.product } : {}),
-    ...(article.version !== undefined ? { version: article.version } : {}),
-    ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
-    ...(article.breadcrumb !== undefined ? { breadcrumb: article.breadcrumb } : {}),
-    ...(article.mapId !== undefined ? { mapId: article.mapId } : {}),
-    ...(article.contentId !== undefined ? { contentId: article.contentId } : {}),
     sections: sections.map(s => ({
       id: s.id,
       title: s.title,
