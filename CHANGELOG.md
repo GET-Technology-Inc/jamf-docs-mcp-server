@@ -1,3 +1,9 @@
+## [4.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.2.0...v4.3.0) (2026-08-05)
+
+### Features
+
+* carry entry depth in get_toc structured output ([#212](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/212)) ([bdd980b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bdd980bcec85477565ad569309fd717bbe4491dc)), closes [#211](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/211)
+
 ## [4.2.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.3...v4.2.0) (2026-08-05)
 
 ### Features
