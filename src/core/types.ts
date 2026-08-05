@@ -199,6 +199,43 @@ export interface GetArticleParams {
   responseFormat?: ResponseFormat;
 }
 
+/** One table-of-contents neighbour, under the title the TOC gives it. */
+export interface ArticleNavigationLink {
+  title: string;
+  url: string;
+}
+
+/**
+ * Where an article sits in its product's table of contents.
+ *
+ * `siblingCount`/`childCount` are the totals in the tree, not the lengths of
+ * the arrays above them: a provider caps those lists (a root page's siblings
+ * are the product's ~20 top-level nodes), and a truncated list that does not
+ * say so is a list a reader will treat as exhaustive.
+ */
+export interface ArticleNavigation {
+  /** The node itself. */
+  self: ArticleNavigationLink;
+  parent?: ArticleNavigationLink | undefined;
+  siblings: ArticleNavigationLink[];
+  children: ArticleNavigationLink[];
+  siblingCount: number;
+  childCount: number;
+}
+
+/**
+ * An article as a provider hands it over — and, `content` aside, exactly what
+ * the structured channel publishes.
+ *
+ * This is the contract, not a superset of one: `buildArticleStructuredContent`
+ * in tools/get-article.ts assigns every key here a disposition through a
+ * `Record<keyof ParsedArticle, …>`, so adding a field below without deciding
+ * what the structured channel does with it is a compile error. That is the
+ * point of routing provider signals through this interface rather than through
+ * an intersection type on the provider side — a field an `ArticleProvider`
+ * returns that is not declared here is published on no channel and reported
+ * nowhere.
+ */
 export interface ParsedArticle {
   title: string;
   content: string;
@@ -213,6 +250,22 @@ export interface ParsedArticle {
   }[] | undefined;
   mapId?: string | undefined;
   contentId?: string | undefined;
+  /**
+   * Whether this copy came from the release upstream still flags as current.
+   *
+   * Absent means "not known" — no map, no cached map, or no flag on it — which
+   * is three different silences, none of which is `'superseded'`.
+   */
+  versionStatus?: 'latest' | 'superseded' | undefined;
+  /**
+   * The language of the bytes in `content`.
+   *
+   * Not the requested locale and not the locale in `url`, both of which still
+   * say e.g. `th-TH` when Jamf has no translation and served English.
+   */
+  contentLocale?: string | undefined;
+  /** Where the page sits in its product's table of contents. */
+  navigation?: ArticleNavigation | undefined;
 }
 
 export interface ArticleResponse extends ParsedArticle {

@@ -53,8 +53,33 @@ function formatResultIds(result: SearchResult): string {
   return `**IDs**: mapId=${sanitizeMarkdownText(mapId)}, contentId=${sanitizeMarkdownText(contentId)}`;
 }
 
+/**
+ * The result's place in its product's table of contents, rendered above the
+ * snippet.
+ *
+ * Page slugs collide across this corpus — `Overview`, `Policies`,
+ * `Getting-Started` and `Release-History` each exist under several products —
+ * so a page of ten same-titled hits cannot be told apart from title and snippet
+ * alone. `SearchOutputSchema` has always declared `breadcrumb` and
+ * `buildSearchResult` has always populated it from the Fluid Topics topic; both
+ * output paths dropped it, so the one field that separates those hits reached
+ * no caller.
+ *
+ * Rendered with the same `*A > B > C*` shape `formatArticleFull` uses, so the
+ * trail reads the same whichever tool produced it. Returns `''` for an absent
+ * or empty trail rather than an empty italic line.
+ */
+function formatResultBreadcrumb(result: SearchResult): string {
+  const { breadcrumb } = result;
+  if (breadcrumb === undefined || breadcrumb.length === 0) {
+    return '';
+  }
+  return `*${breadcrumb.map(sanitizeMarkdownText).join(' > ')}*\n\n`;
+}
+
 function formatSearchResult(result: SearchResult): string {
   let output = `### [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)})\n\n`;
+  output += formatResultBreadcrumb(result);
   output += `> ${sanitizeMarkdownText(result.snippet)}\n\n`;
   const meta: string[] = [];
   if (result.product !== null && result.product !== '') {
@@ -347,7 +372,15 @@ function buildSearchStructuredContent(
       // emitting them made the documented direct-fetch workflow impossible to
       // perform from the outputs this server actually produces.
       ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
-      ...(r.contentId !== undefined ? { contentId: r.contentId } : {})
+      ...(r.contentId !== undefined ? { contentId: r.contentId } : {}),
+      // Same drop as `mapId`/`contentId` above: declared on
+      // `SearchOutputSchema`, populated by `buildSearchResult` from the Fluid
+      // Topics topic (and by the downstream worker's search provider), and
+      // mapped away here. Slugs collide across products, so this is the field
+      // that tells ten `Overview` hits apart on the channel a program reads.
+      // Omitted, not emitted as `[]`: "no trail known" and "a trail with no
+      // steps in it" are different, and only the first one is true.
+      ...(r.breadcrumb !== undefined && r.breadcrumb.length > 0 ? { breadcrumb: r.breadcrumb } : {})
     })),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
