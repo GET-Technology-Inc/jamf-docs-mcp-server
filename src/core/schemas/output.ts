@@ -172,6 +172,20 @@ export const TocOutputSchema = z.object({
     title: z.string(),
     url: z.string(),
     contentId: z.string().optional(),
+    /**
+     * Nesting level of this entry, 0 for a top-level one.
+     *
+     * `entries` is the tree flattened in document order, so this is the only
+     * thing that says where an entry sits in it. Without it a client reading
+     * `structuredContent` got the table of contents as an unordered list of
+     * titles — the markdown channel's indentation is not a substitute, since a
+     * host that renders the structured output never sees it.
+     *
+     * Required, not optional: it is derived while flattening rather than read
+     * off the entry, so it exists for every entry of every page, and a client
+     * reconstructing the tree must not have to handle its absence.
+     */
+    depth: z.number().int().nonnegative(),
   })),
   /**
    * Set when a specific `version` was requested; the upstream API only serves

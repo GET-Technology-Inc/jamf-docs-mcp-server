@@ -111,26 +111,51 @@ interface FlatTocEntry {
   title: string;
   url: string;
   contentId?: string;
+  /** Nesting level, 0 for a top-level entry. See {@link flattenTocEntries}. */
+  depth: number;
 }
 
 /**
- * Flatten nested TOC entries into a flat list.
+ * Flatten nested TOC entries into a flat list, tagging each with its depth.
  *
  * `contentId` rides along: paired with the response-level `mapId` it is what
  * `jamf_docs_get_article` documents as obtainable "from search results or
  * TOC". Dropping it here made that workflow impossible to perform from the
  * structured output, even though the value was already resolved.
+ *
+ * `depth` rides along for the same reason: without it `structuredContent`
+ * described a table of contents as an unordered list of titles, so "browse the
+ * TOC to decide what to read" lost the one thing it browses by. The markdown
+ * channel does not cover for it — a client that reads `structuredContent`
+ * (which the MCP Apps host does) never sees `renderTocEntry`'s indentation, in
+ * either `outputMode`.
+ *
+ * Depth plus this list's order is the whole tree, not a hint at it:
+ * `fetchTableOfContents` paginates over top-level entries only
+ * (`allToc.slice`) and `truncateListByTokens` drops whole top-level items, so
+ * a page never begins part-way down a subtree — every page is a sequence of
+ * complete subtrees, each starting at depth 0, which is exactly what a
+ * stack-based outline reconstruction needs.
+ *
+ * That is also why there is no `parentContentId` beside it. It would name the
+ * parent by a field the parents mostly do not have: `TocEntry.contentId` is
+ * optional, and a `TocProvider` serving its own store builds interior nodes
+ * without one (the Cloudflare worker's `buildTree` gives every *section* node
+ * `{title, url, children}` and attaches `contentId` only to article leaves).
+ * A link key that is absent on the parents links nothing, while depth is
+ * derived here and therefore always present.
  */
-function flattenTocEntries(entries: TocEntry[]): FlatTocEntry[] {
+function flattenTocEntries(entries: TocEntry[], depth = 0): FlatTocEntry[] {
   const flat: FlatTocEntry[] = [];
   for (const entry of entries) {
     flat.push({
       title: entry.title,
       url: entry.url,
       ...(entry.contentId !== undefined ? { contentId: entry.contentId } : {}),
+      depth,
     });
     if (entry.children !== undefined && entry.children.length > 0) {
-      flat.push(...flattenTocEntries(entry.children));
+      flat.push(...flattenTocEntries(entry.children, depth + 1));
     }
   }
   return flat;
@@ -190,7 +215,10 @@ or retrieving specific articles. Large TOCs are paginated.
 The response-level mapId and an entry's contentId together form the pair
 jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
 mapId only; use responseFormat="json" (or read structuredContent) for the
-per-entry contentIds.`;
+per-entry contentIds.
+structuredContent.entries is the TOC flattened in document order; each entry's
+depth (0 for top level) is what restores the nesting the markdown shows as
+indentation.`;
 
 /**
  * Determine the version transparency note if a specific version was requested.

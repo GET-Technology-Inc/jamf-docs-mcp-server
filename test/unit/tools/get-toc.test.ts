@@ -51,6 +51,42 @@ function getTextContent(result: { content: unknown[] }): string {
   return first.text;
 }
 
+/** One entry of `structuredContent.entries`, as a client receives it. */
+interface FlatEntry {
+  title: string;
+  url: string;
+  contentId?: string;
+  depth: number;
+}
+
+/**
+ * Rebuild the nested TOC from the flat entry list using only `depth` and the
+ * order of the entries — i.e. only what a client reading `structuredContent`
+ * actually holds. Round-tripping to the tree the tool was handed is what
+ * "the hierarchy survives flattening" means; asserting depth values alone
+ * would still pass if they were, say, off by one at every level.
+ */
+function rebuildTree(entries: FlatEntry[]): TocEntry[] {
+  const roots: TocEntry[] = [];
+  const ancestors: TocEntry[] = [];
+
+  for (const entry of entries) {
+    const node: TocEntry = { title: entry.title, url: entry.url };
+    // Drop back to this entry's level; whatever is left below it is its
+    // ancestry, and the last of those is its parent.
+    ancestors.length = entry.depth;
+    const parent = ancestors[entry.depth - 1] as TocEntry | undefined;
+    if (parent === undefined) {
+      roots.push(node);
+    } else {
+      parent.children = [...(parent.children ?? []), node];
+    }
+    ancestors.push(node);
+  }
+
+  return roots;
+}
+
 function buildTocResponse(overrides?: {
   toc?: TocEntry[];
   pagination?: ReturnType<typeof createPaginationInfo>;
@@ -464,12 +500,15 @@ describe('jamf_docs_get_toc tool', () => {
       });
 
       const sc = result.structuredContent as Record<string, unknown>;
-      const entries = sc.entries as { title: string; url: string }[];
-      // flattenTocEntries should produce 3 entries: parent + 2 children
+      const entries = sc.entries as FlatEntry[];
+      // flattenTocEntries should produce 3 entries: parent + 2 children,
+      // in document order and each tagged with the level it came from — the
+      // list is flat, the tree it came from is not lost.
       expect(entries).toHaveLength(3);
       expect(entries[0].title).toBe('Parent');
       expect(entries[1].title).toBe('Child A');
       expect(entries[2].title).toBe('Child B');
+      expect(entries.map(e => e.depth)).toEqual([0, 1, 1]);
     });
 
     // `jamf_docs_get_article` documents `mapId` + `contentId` as obtainable
@@ -532,6 +571,127 @@ describe('jamf_docs_get_toc tool', () => {
 
       const sc = result.structuredContent as Record<string, unknown>;
       expect(Object.prototype.hasOwnProperty.call(sc, 'mapId')).toBe(false);
+    });
+  });
+
+  // --- Entry depth ----------------------------------------------------------
+
+  // The tool exists to expose a navigation structure, and `structuredContent`
+  // used to describe it as an unordered list of titles: flattening kept title,
+  // url and contentId and dropped the nesting. Nothing else carries it — a
+  // host that renders the structured output never sees `renderTocEntry`'s
+  // indentation, in either `outputMode`.
+  describe('entry depth', () => {
+    /** Two roots, one three levels deep with a sibling after the deep branch. */
+    function nestedToc(): TocEntry[] {
+      return [
+        createTocEntry({
+          title: 'Computers',
+          url: 'https://learn.jamf.com/page/Computers.html',
+          children: [
+            createTocEntry({
+              title: 'Inventory',
+              url: 'https://learn.jamf.com/page/Inventory.html',
+              children: [
+                createTocEntry({
+                  title: 'Inventory Display',
+                  url: 'https://learn.jamf.com/page/InventoryDisplay.html',
+                }),
+              ],
+            }),
+            createTocEntry({
+              title: 'Smart Groups',
+              url: 'https://learn.jamf.com/page/SmartGroups.html',
+            }),
+          ],
+        }),
+        createTocEntry({
+          title: 'Mobile Devices',
+          url: 'https://learn.jamf.com/page/MobileDevices.html',
+          children: [
+            createTocEntry({
+              title: 'Enrollment',
+              url: 'https://learn.jamf.com/page/Enrollment.html',
+            }),
+          ],
+        }),
+      ];
+    }
+
+    async function callToc(args: Record<string, unknown>): Promise<FlatEntry[]> {
+      const result = await client.callTool({ name: 'jamf_docs_get_toc', arguments: args });
+      const sc = result.structuredContent as Record<string, unknown>;
+      return sc.entries as FlatEntry[];
+    }
+
+    it('should tag each flattened entry with its level, counting from 0 at the root', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse({ toc: nestedToc() }));
+
+      const entries = await callToc({ product: 'jamf-pro' });
+
+      expect(entries.map(e => e.title)).toEqual([
+        'Computers', 'Inventory', 'Inventory Display', 'Smart Groups',
+        'Mobile Devices', 'Enrollment',
+      ]);
+      expect(entries.map(e => e.depth)).toEqual([0, 1, 2, 1, 0, 1]);
+    });
+
+    it('should let a client rebuild the exact tree from depth and order alone', async () => {
+      const toc = nestedToc();
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse({ toc }));
+
+      const entries = await callToc({ product: 'jamf-pro' });
+
+      // Lossless, not merely present: a constant depth, an off-by-one, or a
+      // depth that counted array position would all still be "a number".
+      expect(rebuildTree(entries)).toEqual(toc);
+    });
+
+    // Control. Every assertion above is satisfied by a `depth` that just
+    // counts up, and that would report a flat TOC as a staircase. Jamf ships
+    // flat sections (a bundle whose top level is all leaves), so this is a
+    // real page shape, not a hypothetical one.
+    it('should report every entry of a flat TOC at depth 0', async () => {
+      const toc = [
+        createTocEntry({ title: 'Release Notes', url: 'https://learn.jamf.com/page/Release.html' }),
+        createTocEntry({ title: 'Known Issues', url: 'https://learn.jamf.com/page/Known.html' }),
+        createTocEntry({ title: 'Deprecations', url: 'https://learn.jamf.com/page/Deprecations.html' }),
+      ];
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse({ toc }));
+
+      const entries = await callToc({ product: 'jamf-pro' });
+
+      expect(entries.map(e => e.depth)).toEqual([0, 0, 0]);
+      expect(rebuildTree(entries)).toEqual(toc);
+    });
+
+    // The reason this bug survived review once: the markdown does render the
+    // nesting, so the structured channel looked like a duplicate. It is not —
+    // the client that filed this received the flat object and the markdown
+    // block was discarded, on the default `responseFormat` with the recursing
+    // `outputMode`. Both modes flatten through the same call, so both must
+    // carry the depths.
+    it.each([['full'], ['compact']])(
+      'should carry depths in structuredContent for markdown outputMode=%s',
+      async (outputMode) => {
+        vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse({ toc: nestedToc() }));
+
+        const entries = await callToc({
+          product: 'jamf-pro',
+          responseFormat: 'markdown',
+          outputMode,
+        });
+
+        expect(entries.map(e => e.depth)).toEqual([0, 1, 2, 1, 0, 1]);
+      },
+    );
+
+    it('should carry depths when responseFormat is json', async () => {
+      vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse({ toc: nestedToc() }));
+
+      const entries = await callToc({ product: 'jamf-pro', responseFormat: 'json' });
+
+      expect(entries.map(e => e.depth)).toEqual([0, 1, 2, 1, 0, 1]);
     });
   });
 

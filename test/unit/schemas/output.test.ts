@@ -238,6 +238,11 @@ describe('TocOutputSchema', () => {
       {
         title: 'Getting Started',
         url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/GettingStarted.html',
+        // `entries` is the TOC flattened in document order, so depth is the
+        // only field that says where an entry sits in the tree. It is required
+        // because the tool derives it while flattening: it exists for every
+        // entry, and a client rebuilding the tree must not have to guess.
+        depth: 0,
       },
     ],
   };
@@ -280,7 +285,7 @@ describe('TocOutputSchema', () => {
   it('should fail when a toc entry is missing title', () => {
     const data = {
       ...VALID_TOC_OUTPUT,
-      entries: [{ url: 'https://learn.jamf.com/page.html' }],
+      entries: [{ url: 'https://learn.jamf.com/page.html', depth: 0 }],
     };
     const result = TocOutputSchema.safeParse(data);
     expect(result.success).toBe(false);
@@ -289,10 +294,30 @@ describe('TocOutputSchema', () => {
   it('should fail when a toc entry is missing url', () => {
     const data = {
       ...VALID_TOC_OUTPUT,
-      entries: [{ title: 'Getting Started' }],
+      entries: [{ title: 'Getting Started', depth: 0 }],
     };
     const result = TocOutputSchema.safeParse(data);
     expect(result.success).toBe(false);
+  });
+
+  // Declaring `depth` optional would let the field be dropped again without a
+  // single test going red, which is how the hierarchy went missing from the
+  // structured channel in the first place.
+  it('should fail when a toc entry is missing depth', () => {
+    const data = {
+      ...VALID_TOC_OUTPUT,
+      entries: [{ title: 'Getting Started', url: 'https://learn.jamf.com/page.html' }],
+    };
+    const result = TocOutputSchema.safeParse(data);
+    expect(result.success).toBe(false);
+  });
+
+  it('should fail when a toc entry depth is negative or fractional', () => {
+    const base = { title: 'Getting Started', url: 'https://learn.jamf.com/page.html' };
+    // 0-based counting from the root: there is nothing above the root and no
+    // level between two levels.
+    expect(TocOutputSchema.safeParse({ ...VALID_TOC_OUTPUT, entries: [{ ...base, depth: -1 }] }).success).toBe(false);
+    expect(TocOutputSchema.safeParse({ ...VALID_TOC_OUTPUT, entries: [{ ...base, depth: 1.5 }] }).success).toBe(false);
   });
 });
 
