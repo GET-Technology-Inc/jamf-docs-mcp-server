@@ -144,6 +144,51 @@ beforeEach(() => {
 // =============================================================================
 
 describe('fetchArticleFromFt()', () => {
+  // ── lastUpdated ───────────────────────────────────────────────────────────
+
+  describe('lastUpdated', () => {
+    /**
+     * `ParsedArticle` declared this field and `formatFullMetadata` rendered a
+     * "**Last Updated**" line for it, but nothing ever assigned it — so the
+     * line never appeared and every caller saw `undefined`.
+     *
+     * The source is `ft:lastEdition`, which varies per topic. `ft:lastTechChange`
+     * is the obvious-looking alternative and is wrong: sampled across 12 live
+     * topics in 7 products it returned a single date for all of them, because
+     * it describes the bundle rather than the page.
+     */
+    it('reports the topic edition date', async () => {
+      const cache = createMockCache();
+      currentTopicMetadata = {
+        ...defaultMetadata,
+        metadata: [
+          ...(defaultMetadata.metadata ?? []).filter(m => m.key !== 'ft:lastEdition'),
+          { key: 'ft:lastEdition', label: 'lastEdition', values: ['2023-08-10'] },
+        ],
+      };
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+      );
+
+      expect(result.lastUpdated).toBe('2023-08-10');
+    });
+
+    it('omits it when the topic publishes no edition date', async () => {
+      // Two of twelve sampled topics had none. Absent must stay absent rather
+      // than becoming a fabricated or empty date.
+      const cache = createMockCache();
+      currentTopicMetadata = { ...defaultMetadata, metadata: [] };
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+      );
+
+      expect(result.lastUpdated).toBeUndefined();
+      expect(result.content).not.toContain('Last Updated');
+    });
+  });
+
   // ── Cache miss: normal fetch ──────────────────────────────────────────────
 
   describe('cache miss — normal fetch', () => {
