@@ -1,3 +1,10 @@
+## [4.3.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.0...v4.3.1) (2026-08-05)
+
+### Bug Fixes
+
+* indent the bundled TOC viewer by the depth get_toc already publishes ([#217](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/217)) ([0954d77](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0954d77aefb96e832e453d2016716d2e74f59e56)), closes [#214](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/214)
+* publish the provider signals both output layers were dropping ([#216](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/216)) ([3903b06](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/3903b068803f08283a117b3df60bafaa4b990fdc)), closes [#213](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/213) [#215](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/215)
+
 ## [4.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.2.0...v4.3.0) (2026-08-05)
 
 ### Features
