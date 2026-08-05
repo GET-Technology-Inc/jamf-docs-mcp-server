@@ -1,3 +1,9 @@
+## [4.1.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.2...v4.1.3) (2026-08-05)
+
+### Bug Fixes
+
+* match short glossary abbreviations on word boundaries, not fuzzy distance ([#209](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/209)) ([ef372f8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ef372f8ac58dfe9b03cd7c08b515e25fb80a792b)), closes [#208](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/208)
+
 ## [4.1.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.1.1...v4.1.2) (2026-08-04)
 
 ### Dependencies
