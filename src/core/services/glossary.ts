@@ -317,6 +317,8 @@ function parseFallbackFormat(
  * CacheProvider is garbage-collected, its Fuse cache is too.
  */
 type GlossaryFuseCache = Map<string, {
+  /** Threshold the cached index was built with — see `thresholdFor`. */
+  threshold: number;
   source: FtTocNode[];
   fuse: Fuse<FtTocNode>;
 }>;
@@ -342,6 +344,75 @@ const TOC_FUSE_OPTIONS: IFuseOptions<FtTocNode> = {
 };
 
 /**
+ * Queries at or below this length are abbreviations, and Fuse's threshold is a
+ * fraction of the *pattern* length — so a value tuned for a multi-word term is
+ * wildly permissive on a three-letter one. `DEP` at 0.4 returned `patch
+ * definition`, which shares no substring with it at all.
+ */
+const SHORT_QUERY_LENGTH = 4;
+
+/**
+ * Threshold for those queries.
+ *
+ * Measured against the live glossary (125 terms), with ground truth taken from
+ * the data rather than invented: every term that publishes its own
+ * abbreviation in parentheses — `(LDAP)`, `(MDM)`, `(SSH)`, 18 in all — is a
+ * query whose correct answer is that term.
+ *
+ *   short threshold   top-1     results returned   noise on 2 unanswerable
+ *   0.0 - 0.2         22/22     24                 1
+ *   0.3               22/22     24                 1
+ *   0.4 (previous)    22/22     75                 52
+ *
+ * 0.4 is a cliff, not a slope. Everything at or below 0.3 is identical on
+ * precision, so the value is chosen on what separates them — typo tolerance:
+ * `LDPA` still finds LDAP at 0.3 and finds nothing at 0.2 or below.
+ */
+const SHORT_QUERY_THRESHOLD = 0.3;
+
+function thresholdFor(term: string): number {
+  return term.length <= SHORT_QUERY_LENGTH
+    ? SHORT_QUERY_THRESHOLD
+    : (TOC_FUSE_OPTIONS.threshold ?? 0.4);
+}
+
+/**
+ * Whether `term` appears in `title` delimited by non-alphanumerics.
+ *
+ * This is what makes `MDM` prefer `mobile device management (MDM)` over `User
+ * Approved MDM`: both contain it, but ranking by fuzzy distance alone put the
+ * shorter title first, and fuzzy relevance is not term relevance.
+ */
+function hasWordBoundaryMatch(title: string, term: string): boolean {
+  const escaped = escapeRegExp(term.toLowerCase());
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(title.toLowerCase());
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * How definitional a boundary match is. Lower sorts first.
+ *
+ * Jamf writes an abbreviation into the title of the entry that defines it —
+ * `mobile device management (MDM)` — while other entries merely mention it, as
+ * `User Approved MDM` does. Both are word-boundary matches, so without this the
+ * winner is decided by the order the TOC happens to arrive in. Measured across
+ * four orderings of the live glossary (TOC order, locale sort, ASCII sort,
+ * reversed), unranked scored 21/22 on two of them and ranked scored 22/22 on
+ * all four: the unranked version was right by collation, not by rule.
+ */
+function boundaryMatchRank(title: string, term: string): number {
+  const lowerTitle = title.toLowerCase();
+  const lowerTerm = term.toLowerCase();
+  if (lowerTitle === lowerTerm) { return 0; }
+  if (new RegExp(`\\(${escapeRegExp(lowerTerm)}\\)`).test(lowerTitle)) { return 1; }
+  if (lowerTitle.startsWith(lowerTerm)) { return 2; }
+  return 3;
+}
+
+/**
  * Get or create a Fuse index for the given TOC entries.
  * Rebuilds the index when the entries array reference changes
  * (i.e., the cache was refreshed).
@@ -350,14 +421,19 @@ function getTocFuse(
   fuseCache: GlossaryFuseCache,
   locale: string,
   entries: FtTocNode[],
+  threshold: number,
 ): Fuse<FtTocNode> {
+  // Keyed by threshold as well as source: the threshold is baked into the
+  // index at construction, so reusing an index built for a long term would
+  // silently apply that threshold to a short one — reintroducing exactly what
+  // `thresholdFor` exists to prevent, and only for the second caller.
   const cached = fuseCache.get(locale);
-  if (cached?.source === entries) {
+  if (cached?.source === entries && cached.threshold === threshold) {
     return cached.fuse;
   }
 
-  const fuse = new Fuse(entries, TOC_FUSE_OPTIONS);
-  fuseCache.set(locale, { source: entries, fuse });
+  const fuse = new Fuse(entries, { ...TOC_FUSE_OPTIONS, threshold });
+  fuseCache.set(locale, { source: entries, fuse, threshold });
   return fuse;
 }
 
@@ -373,11 +449,29 @@ export function searchGlossaryEntries(
 ): GlossaryEntry[] {
   if (entries.length === 0) { return []; }
 
+  // An entry whose *term* contains the query as a word answers it; one that
+  // merely scores close does not. This runs before the fuzzy pass because the
+  // fuzzy pass also weighs `definition`, and a body-text hit outranking a
+  // term-level one is how `DEP` came back as `patch definition` — whose
+  // definition happens to contain "dependencies".
+  const boundaryMatches = entries
+    .filter(e => hasWordBoundaryMatch(e.term, term))
+    .sort((a, b) => {
+      const byRank = boundaryMatchRank(a.term, term) - boundaryMatchRank(b.term, term);
+      return byRank !== 0 ? byRank : a.term.length - b.term.length;
+    });
+  if (boundaryMatches.length > 0) {
+    return boundaryMatches;
+  }
+
   const fuse = new Fuse(entries, {
     keys: [
       { name: 'term', weight: 0.7 },
       { name: 'definition', weight: 0.3 },
     ],
+    // Unchanged at 0.3. This ranker always used one value, and it is already
+    // the short-query threshold — widening it for long queries here would be
+    // an unrelated loosening smuggled in by a shared helper.
     threshold: 0.3,
     includeScore: true,
     ignoreLocation: true,
@@ -457,16 +551,28 @@ export async function lookupGlossaryTerm(
     return emptyGlossaryResult(maxTokens);
   }
 
-  // Step 2: Fuzzy-match term against TOC titles (Fuse index is cached per locale)
+  // Step 2: narrow the TOC to candidate pages.
+  //
+  // Selection only — which pages are worth reading. Ranking happens in
+  // `searchGlossaryEntries` once the terms themselves are in hand, and doing
+  // it here as well was redundant: no query behaved differently with the
+  // duplicate pass removed, because anything a word-boundary check would
+  // promote is already inside the fuzzy candidate set at this threshold.
+  //
+  // What does matter here is the threshold, because every candidate is an
+  // upstream fetch. Fuse's is a fraction of the pattern length, so a value
+  // tuned for a multi-word term admits roughly a fifth of the glossary on a
+  // three-letter one.
   const fuseCache = getFuseCacheForContext(ctx);
-  const tocFuse = getTocFuse(fuseCache, locale, tocEntries);
+  const tocFuse = getTocFuse(fuseCache, locale, tocEntries, thresholdFor(term));
   const tocMatches = tocFuse.search(term);
 
-  // If no fuzzy match, try exact substring match as fallback
   const matchedTocEntries = tocMatches.length > 0
     ? tocMatches.map(m => m.item)
-    : tocEntries.filter(e =>
-        e.title?.toLowerCase().includes(term.toLowerCase()) === true
+    // Last resort: an unanchored substring, which is how a term embedded in a
+    // longer word stays reachable when fuzzy found nothing.
+    : tocEntries.filter(
+        e => e.title?.toLowerCase().includes(term.toLowerCase()) === true,
       );
 
   if (matchedTocEntries.length === 0) {
