@@ -10,9 +10,15 @@ import { GetTocInputSchema, type GetTocInput } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
 import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
+import { fetchStaticToc } from '../services/sitemap-service.js';
+import {
+  staticSectionById,
+  type StaticDocSource,
+  type StaticSection,
+} from '../constants/sources.js';
 import { getAvailableVersions } from '../services/metadata.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
@@ -327,6 +333,17 @@ interface ResolvedTocSource {
   sourceLabel: string;
   /** Versions the registry actually publishes for it, newest first. */
   availableVersions: string[];
+  /**
+   * Set when this names a section of a static source rather than a Fluid
+   * Topics publication. Those have no maps, no versions and no TOC endpoint —
+   * their tree comes from the sitemap.
+   */
+  staticSection?: {
+    source: StaticDocSource;
+    section: StaticSection;
+    /** The source's own code for the requested locale, e.g. `ja` for ja-JP. */
+    sourceLocale: string;
+  };
 }
 
 /**
@@ -370,6 +387,27 @@ async function resolveTocSource(
   }
 
   const publication = params.publication ?? '';
+
+  // Static sources first: their sections are publications too, and they are
+  // not in the Fluid Topics maps registry, so asking it would report them as
+  // unknown and suggest something else.
+  const staticRow = staticSectionById(publication);
+  if (staticRow !== undefined) {
+    const locale = params.language ?? DEFAULT_LOCALE;
+    const sourceLocale = staticRow.source.locales[locale];
+    if (sourceLocale === undefined) {
+      return {
+        error: `${staticRow.source.name} does not publish in ${locale}. ` +
+          `Available: ${Object.keys(staticRow.source.locales).join(', ')}.`,
+      };
+    }
+    return {
+      source: publication,
+      sourceLabel: staticRow.section.title,
+      availableVersions: [],
+      staticSection: { ...staticRow, sourceLocale },
+    };
+  }
 
   // Not an enum: there are 97 families and the set is upstream's to change,
   // so the check is a registry lookup and a miss carries suggestions rather
@@ -454,11 +492,24 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
-        const tocResult = await fetchTableOfContents(ctx, source, version, {
+        const tocOptions = {
           ...(params.page !== undefined && { page: params.page }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
-          locale: params.language as LocaleId | undefined
-        });
+          locale: params.language as LocaleId | undefined,
+        };
+
+        // A static source has no map and no TOC endpoint; its tree comes from
+        // the sitemap. Pagination and truncation are shared so both kinds of
+        // TOC behave the same once the entries exist.
+        const tocResult = resolved.staticSection !== undefined
+          ? await fetchStaticToc(
+              ctx,
+              resolved.staticSection.source,
+              resolved.staticSection.section,
+              resolved.staticSection.sourceLocale,
+              tocOptions,
+            )
+          : await fetchTableOfContents(ctx, source, version, tocOptions);
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 

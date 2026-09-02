@@ -62,6 +62,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
 import { PRODUCT_IDS, JAMF_PRODUCTS } from '../../../src/core/constants/products.js';
+import { STATIC_SECTIONS } from '../../../src/core/constants/sources.js';
 
 // ---------------------------------------------------------------------------
 
@@ -594,13 +595,16 @@ describe('jamf_docs_list_products tool', () => {
 // --- Publication axis -------------------------------------------------------
 
 describe('publications section', () => {
-  it('should list every publication the registry reports', async () => {
+  it('should list every publication the registry reports, plus the compiled-in static ones', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_list_products',
       arguments: { responseFormat: 'json' },
     });
-    const sc = result.structuredContent as { publications?: unknown[] };
-    expect(sc.publications).toHaveLength(PUBLICATIONS.length);
+    const sc = result.structuredContent as { publications?: { id: string }[] };
+    expect(sc.publications).toHaveLength(PUBLICATIONS.length + STATIC_SECTIONS.length);
+    for (const { section } of STATIC_SECTIONS) {
+      expect(sc.publications?.map(p => p.id)).toContain(section.id);
+    }
   });
 
   it('should keep publications out of products so the search filter stays meaningful', async () => {
@@ -656,9 +660,11 @@ describe('publications section', () => {
     });
 
     expect(result.isError).toBeFalsy();
-    const sc = result.structuredContent as { products: unknown[]; publications?: unknown[] };
+    const sc = result.structuredContent as { products: unknown[]; publications?: { id: string }[] };
     expect(sc.products).toHaveLength(PRODUCT_IDS.length);
-    expect(sc.publications).toBeUndefined();
+    // The Fluid Topics rows are gone, but the static sources are compiled in
+    // and are the only way to discover that they are reachable at all.
+    expect(sc.publications).toHaveLength(STATIC_SECTIONS.length);
     await brokenClient.close();
   });
 });
