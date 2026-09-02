@@ -49,14 +49,33 @@ vi.mock('../../src/core/services/search-suggestions.js', () => ({
   ),
 }));
 
-vi.mock('../../src/core/services/metadata.js', () => ({
-  getAvailableVersions: vi.fn().mockResolvedValue([]),
-  getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
-  getProductsMetadata: vi.fn().mockResolvedValue([]),
-  getProductAvailability: vi.fn().mockResolvedValue({}),
-  getProductsResourceData: vi.fn(),
-  getTopicsResourceData: vi.fn(),
-}));
+vi.mock('../../src/core/services/metadata.js', async () => {
+  // `getProductsMetadata` used to be mocked to `[]` because nothing that
+  // these tests exercise read it. `jamf_docs_list_products` does now — it is
+  // where the tool gets registry-resolved versions instead of the constant's
+  // `['current']` — so an empty array here silently emptied the product list
+  // rather than failing loudly. Derived from the real registry so the shape
+  // and the row count stay honest as products are added.
+  const { JAMF_PRODUCTS } = await import('../../src/core/constants/products.js');
+  return {
+    getAvailableVersions: vi.fn().mockResolvedValue([]),
+    getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
+    getProductsMetadata: vi.fn().mockResolvedValue(
+      Object.values(JAMF_PRODUCTS).map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        bundleId: p.bundleId,
+        latestVersion: p.latestVersion,
+        availableVersions: [...p.versions],
+        labelKey: p.searchLabel,
+      }))
+    ),
+    getProductAvailability: vi.fn().mockResolvedValue({}),
+    getProductsResourceData: vi.fn(),
+    getTopicsResourceData: vi.fn(),
+  };
+});
 
 vi.mock('../../src/core/services/cache.js', () => ({
   cache: {

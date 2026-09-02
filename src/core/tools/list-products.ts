@@ -7,10 +7,10 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
 import { ProductListOutputSchema } from '../schemas/output.js';
-import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
+import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
-import { getProductAvailability } from '../services/metadata.js';
+import { getProductAvailability, getProductsMetadata } from '../services/metadata.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
@@ -195,16 +195,25 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
 
-        // Build product list — always include all known products
-        const products = Object.values(JAMF_PRODUCTS)
-          .map(product => ({
-            id: product.id,
-            name: product.name,
-            description: product.description,
-            currentVersion: product.latestVersion,
-            availableVersions: [...product.versions],
-            hasContent: availability[product.id] ?? true
-          }));
+        // Build product list — always include all known products.
+        //
+        // Versions come from getProductsMetadata, not from JAMF_PRODUCTS.
+        // Every registry row declares `versions: ['current']`, which is true
+        // of the unversioned majority and wrong for the five families Jamf
+        // actually snapshots: this tool reported one version for
+        // jamf-pro-documentation while the maps endpoint published nineteen.
+        // getProductsMetadata already resolves those through MapsRegistry —
+        // it is what `jamf://products` has been serving all along — so the
+        // two views of the same catalogue now agree.
+        const metadata = await getProductsMetadata(ctx);
+        const products = metadata.map(product => ({
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          currentVersion: product.latestVersion,
+          availableVersions: product.availableVersions,
+          hasContent: availability[product.id] ?? true
+        }));
 
         // Build topics list
         const topics = Object.entries(JAMF_TOPICS).map(([id, topic]) => ({
