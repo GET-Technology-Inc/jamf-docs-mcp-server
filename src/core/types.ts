@@ -83,7 +83,6 @@ export interface SearchResult {
   snippet: string;
   product: string | null;  // API may return null for some results
   version?: string;
-  relevance?: number;
   docType?: DocTypeId;
   mapId?: string;
   contentId?: string;

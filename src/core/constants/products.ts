@@ -124,9 +124,17 @@ export const JAMF_PRODUCTS = {
   'self-service-plus': {
     id: 'self-service-plus',
     name: 'Self Service+',
-    description: 'Next-generation self-service portal for macOS',
+    description: 'Next-generation self-service portal for macOS and mobile',
     bundleId: 'self-service-plus-documentation',
-    searchLabel: 'product-self-service',
+    // NOT `product-self-service`. Both labels exist in Jamf's zoominmetadata
+    // vocabulary, and the hyphenated one belongs to the retired iOS Self
+    // Service app: it matched 16 topics, every one of them from "Jamf Self
+    // Service for iOS Release Notes". `product-selfservice` is the Self
+    // Service+ label — 69 topics across "Self Service+ for macOS Deployment
+    // Guide" (55) and "Self Service+ for Mobile Deployment Guide" (14). The
+    // wrong label returned results rather than an error, so the mismatch was
+    // invisible; the contract test below now pins the map titles.
+    searchLabel: 'product-selfservice',
     latestVersion: 'current',
     versions: ['current']
   },

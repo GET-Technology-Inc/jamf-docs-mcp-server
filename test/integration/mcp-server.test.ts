@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject, resourceText } from '../helpers/fixtures.js';
 import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
+import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -17,6 +18,10 @@ describe('Jamf Docs MCP Server', () => {
   let transport: StdioClientTransport;
 
   beforeAll(async () => {
+    // This suite asserts against the built server, not src/ — a stale dist
+    // fails it in ways that look like product bugs.
+    requireFreshBuild();
+
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
 
     transport = new StdioClientTransport({
@@ -33,7 +38,15 @@ describe('Jamf Docs MCP Server', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    // Optional-chained because `beforeAll` can throw before `client` is
+    // assigned — requireFreshBuild() does exactly that on a stale dist, and an
+    // unguarded close() would add a second, misleading "Cannot read properties
+    // of undefined" failure on top of the actionable one.
+    // `client` is declared non-nullable so the 60+ uses below need no guard,
+    // but it is only assigned at the END of beforeAll; the type is a
+    // convenience, not a runtime guarantee.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    await client?.close();
   });
 
   describe('server instructions', () => {

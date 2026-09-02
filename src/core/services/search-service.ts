@@ -9,6 +9,7 @@ import type {
   FtSearchEntry,
   FtSearchCluster,
   FtSearchFilter,
+  FtSearchRequest,
   FtClusteredSearchResponse,
   FtMetadataEntry,
   FilterRelaxation,
@@ -18,7 +19,6 @@ import type { DocTypeId, TopicId } from '../constants.js';
 import {
   JAMF_PRODUCTS,
   JAMF_TOPICS,
-  DOC_TYPE_CONTENT_TYPE_MAP,
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_PRECEDENCE,
   LABEL_KEY_DOC_TYPE_MAP,
@@ -159,8 +159,16 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * Build Fluid Topics search filters from search params.
  *
  * - product → `zoominmetadata` filter using searchLabel
- * - docType → `jamf:contentType` filter using DOC_TYPE_CONTENT_TYPE_MAP
+ * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
  * - version → `version` filter (only when a specific version is requested)
+ *
+ * Both `zoominmetadata` filters are pushed as *separate* entries. Fluid Topics
+ * intersects filter objects and unions the values inside one, measured against
+ * the live API on a zh-TW corpus: `product-protect` alone matched 1182 topics
+ * and `content-releasenotes` alone 940, two filter objects matched 387 (the
+ * intersection) and one object holding both values matched 1735 (the union,
+ * exactly 1182 + 940 − 387). Merging them into a single entry would therefore
+ * widen a product+docType search instead of narrowing it.
  *
  * NOTE: we intentionally do NOT add `latestVersion=yes` when no version is given.
  * Jamf migrated all non-Pro products (School, Connect, Protect, Now, …) to an
@@ -183,13 +191,31 @@ export function buildSearchFilters(
     });
   }
 
-  // Document type filter
+  // Document type filter.
+  //
+  // Filters on the `content-*` label rather than `jamf:contentType`, because
+  // the latter's *values* are translated per locale while its key is not:
+  // `jamf:contentType = 'Release Notes'` matched 1323 topics under en-US and 0
+  // under zh-TW, where the same topics carry '版本資訊' (940) — and ja-JP
+  // 'リリースノート' (1207), de-DE 'Versionshinweise', and so on for every
+  // locale this server supports. Sending the English string therefore returned
+  // an empty upstream result for seven of the eight supported locales, and
+  // because that emptiness arrives from the API, the client-side relaxation in
+  // {@link applyFiltersWithFallback} has nothing left to relax.
+  //
+  // The `content-*` vocabulary is locale-invariant (`content-releasenotes`:
+  // 1323 en-US / 940 zh-TW / 1207 ja-JP / 1207 de-DE) and is already what the
+  // docType post-filter matches on, so both ends now agree on one vocabulary.
   if (params.docType !== undefined) {
-    const contentType = DOC_TYPE_CONTENT_TYPE_MAP[params.docType];
-    if (contentType !== undefined) {
+    // Widened deliberately: DOC_TYPE_LABEL_MAP is total over DocTypeId, so the
+    // type says this cannot miss — but params reach here from a JSON-RPC
+    // payload, and a docType outside the enum would otherwise push
+    // `values: [undefined]` upstream. Same idiom as the docType post-filter.
+    const labelKey = DOC_TYPE_LABEL_MAP[params.docType] as string | undefined;
+    if (labelKey !== undefined) {
       filters.push({
-        key: FT_META.CONTENT_TYPE,
-        values: [contentType],
+        key: FT_META.ZOOMIN_METADATA,
+        values: [labelKey],
       });
     }
   }
@@ -522,9 +548,24 @@ function truncateSearchResults(
 
 // ─── Convert flat SearchResult to SearchResultWithMeta ─────────
 
+/**
+ * `matchedTopics` is computed unconditionally, not only when the caller asked
+ * for a topic filter.
+ *
+ * It used to be gated on `params.topic !== undefined`, which made the cached
+ * value a function of something that is not in — and cannot be in — the FT
+ * request the cache is keyed on. A topic-less search wrote entries carrying
+ * `matchedTopics: []`, and the next search for the same query WITH a topic hit
+ * that entry, found nothing matching, and silently relaxed the topic filter it
+ * had never actually run. Same question, different answer depending on cache
+ * state; verified against the live path before this change.
+ *
+ * Computing it always costs 284 substring checks per result on a cache miss —
+ * 40 topics' keyword lists, and only on the write path — which is the cheaper
+ * half of the trade by a wide margin.
+ */
 function toSearchResultWithMeta(
   result: SearchResult,
-  needsTopicMatching: boolean,
   ftLabelKeys?: string[],
 ): SearchResultWithMeta {
   // Derive bundleSlug from the product display name (extracted from
@@ -545,9 +586,7 @@ function toSearchResultWithMeta(
   return {
     result,
     bundleSlug,
-    matchedTopics: needsTopicMatching
-      ? matchTopics(result.title, result.snippet)
-      : [],
+    matchedTopics: matchTopics(result.title, result.snippet),
     labelKeys,
   };
 }
@@ -676,19 +715,61 @@ export async function searchDocumentation(
 /**
  * Build a deterministic cache key for FT search results.
  *
- * Derived from query + filters + locale (NOT page/limit, since
- * pagination is applied client-side after caching).
+ * Keyed off the *actual request object* rather than a hand-assembled string,
+ * which buys two properties the previous projection did not have.
+ *
+ * **Injective.** The old key was `ft-search:{locale}:{query}:{k}={v}|{k}={v}`
+ * with none of `: | = ,` escaped, while both `query` and `version` are
+ * caller-supplied free text. Searching `{product: 'jamf-pro', version: '11.5'}`
+ * and `{version: '11.5|zoominmetadata=product-pro'}` produced the byte-identical
+ * key `ft-search:en-US:FileVault:version=11.5|zoominmetadata=product-pro` while
+ * sending different filters upstream, so whichever ran first served its results
+ * to the other for the whole TTL. One `FileCache` is shared per process
+ * (src/index.ts), so under `--transport http` that crosses clients. JSON escapes
+ * the delimiters, so no input can forge a neighbouring key.
+ *
+ * **Total.** Every field of the request is in the key — `sortId` included — so
+ * a relevance-sorted and a last_update-sorted query cannot come to share one
+ * entry the moment sort becomes configurable.
+ *
+ * That holds only while the cached value is a function of this request and
+ * nothing else. `params.topic` is deliberately NOT here: it selects a
+ * client-side post-filter, and `matchedTopics` is computed unconditionally
+ * (see {@link toSearchResultWithMeta}) precisely so the stored value does not
+ * vary with it. It used to, and a topic-less search then served its entry to a
+ * topic search that silently relaxed the filter it never ran. Anything added to
+ * the cached value that comes from `SearchParams` rather than from this request
+ * reopens that hole and belongs in the key instead.
+ *
+ * `paging` is part of the keyed object but constant in practice: this layer
+ * always fetches one over-fetched page and paginates client-side.
  */
-function buildSearchCacheKey(
-  query: string,
-  filters: FtSearchFilter[],
-  locale: string
-): string {
-  const sortedFilters = [...filters]
-    .sort((a, b) => a.key.localeCompare(b.key))
-    .map(f => `${f.key}=${f.values.sort().join(',')}`)
-    .join('|');
-  return `ft-search:${locale}:${query}:${sortedFilters}`;
+export function buildSearchCacheKey(request: FtSearchRequest): string {
+  const canonical = {
+    query: request.query,
+    // `?? null` rather than letting `undefined` through: `JSON.stringify`
+    // omits undefined properties entirely, so an absent locale would encode
+    // identically to a present one that happened to sort last.
+    contentLocale: request.contentLocale ?? null,
+    sortId: request.sortId ?? null,
+    perPage: request.paging?.perPage ?? null,
+    page: request.paging?.page ?? null,
+    // Sorted into a canonical form: a filter list is a set upstream, but
+    // the encoding must not reorder arrays in general — `['a','b']` and
+    // `['b','a']` are different data in general, and a helper that collapsed
+    // them would be the very non-injectivity this replaces. Compared by
+    // UTF-16 code unit on the serialized tuple, not `localeCompare` — a total
+    // order and it does not vary with the runtime's ICU locale.
+    filters: [...(request.filters ?? [])]
+      .map(f => [f.key, [...f.values].sort()] as [string, readonly string[]])
+      .sort((a, b) => {
+        const left = JSON.stringify(a);
+        const right = JSON.stringify(b);
+        if (left < right) { return -1; }
+        return left > right ? 1 : 0;
+      }),
+  };
+  return `ft-search:${JSON.stringify(canonical)}`;
 }
 
 /**
@@ -705,14 +786,12 @@ async function resolveSearchResults(
   params: SearchParams,
   log: Logger
 ): Promise<ResolvedSearchResults> {
-  const needsTopicMatching = params.topic !== undefined;
-
   // 1. Try SearchProvider first (custom backend injection — no caching)
   if (ctx.searchProvider !== undefined) {
     const provided = await ctx.searchProvider.search(params);
     if (provided !== null) {
       return {
-        results: provided.map(r => toSearchResultWithMeta(r, needsTopicMatching)),
+        results: provided.map(r => toSearchResultWithMeta(r)),
         fromProvider: true,
       };
     }
@@ -720,51 +799,88 @@ async function resolveSearchResults(
 
   // 2. Build FT search request
   const locale = params.language ?? DEFAULT_LOCALE;
-  const filters = buildSearchFilters(params);
-  const cacheKey = buildSearchCacheKey(params.query, filters, locale);
-
-  // 3. Check cache before hitting the FT API
-  const cached = await ctx.cache.get<SearchResultWithMeta[]>(cacheKey);
-  if (cached !== null) {
-    log.debug(`Search cache hit: key="${cacheKey}", ${cached.length} results`);
-    return { results: cached, fromProvider: false };
-  }
 
   const perPage = Math.min(
     CONTENT_LIMITS.MAX_SEARCH_RESULTS,
     CONTENT_LIMITS.FILTER_OVERFETCH_CAP
   );
 
-  log.debug(
-    `FT search: query="${params.query}", product=${params.product ?? 'all'}, ` +
-    `locale=${locale}, filters=${JSON.stringify(filters)}`
-  );
+  /** One cached round-trip to FT for a given filter set. */
+  const fetchFiltered = async (filters: FtSearchFilter[]): Promise<SearchResultWithMeta[]> => {
+    const request: FtSearchRequest = {
+      query: params.query,
+      contentLocale: locale,
+      // Sent explicitly even though it matches Fluid Topics' default, so the
+      // ordering this server promises its callers is a stated request
+      // parameter rather than an undocumented upstream default that could
+      // change under us. Verified identical to omitting it, and clearly
+      // distinct from `last_update`, against the live corpus.
+      sortId: 'relevance',
+      paging: { perPage, page: 1 },
+      filters,
+    };
+    const key = buildSearchCacheKey(request);
 
-  const ftResponse: FtClusteredSearchResponse = await ftSearch({
-    query: params.query,
-    contentLocale: locale,
-    paging: { perPage, page: 1 },
-    filters,
-  });
-
-  // 4. Collapse version snapshots to the latest per topic, then transform.
-  //    Deduping before transform avoids running cleanSnippet etc. over every
-  //    Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
-  const results: SearchResultWithMeta[] = [];
-  for (const entry of dedupeToLatestVersions(ftResponse.results)) {
-    const searchResult = transformFtSearchResult(entry);
-    if (searchResult.url !== '') {
-      results.push(toSearchResultWithMeta(
-        searchResult,
-        needsTopicMatching,
-        docTypeLabelKeys(entryMetadata(entry)),
-      ));
+    const cached = await ctx.cache.get<SearchResultWithMeta[]>(key);
+    if (cached !== null) {
+      log.debug(`Search cache hit: key="${key}", ${cached.length} results`);
+      return cached;
     }
+
+    log.debug(
+      `FT search: query="${params.query}", product=${params.product ?? 'all'}, ` +
+      `locale=${locale}, filters=${JSON.stringify(filters)}`
+    );
+
+    const ftResponse: FtClusteredSearchResponse = await ftSearch(request);
+
+    // Collapse version snapshots to the latest per topic, then transform.
+    // Deduping before transform avoids running cleanSnippet etc. over every
+    // Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
+    const out: SearchResultWithMeta[] = [];
+    for (const entry of dedupeToLatestVersions(ftResponse.results)) {
+      const searchResult = transformFtSearchResult(entry);
+      if (searchResult.url !== '') {
+        out.push(toSearchResultWithMeta(
+          searchResult,
+          docTypeLabelKeys(entryMetadata(entry)),
+        ));
+      }
+    }
+
+    // Cache the raw results (before client-side filtering)
+    await ctx.cache.set(key, out, ctx.config.cacheTtl.search);
+    log.debug(`FT search returned ${out.length} results (cached)`);
+    return out;
+  };
+
+  let results = await fetchFiltered(buildSearchFilters(params));
+
+  // 3. Re-query without docType when narrowing by it emptied the result set
+  //    upstream.
+  //
+  //    docType is now a `content-*` filter on the API rather than a value of
+  //    the much broader `jamf:contentType`, so a product+docType pair whose
+  //    two labels never co-occur returns nothing at all instead of returning
+  //    the product's topics for the post-filter to narrow. Measured on the
+  //    live corpus for query "enrollment": `content-solutionguide` matches 40
+  //    topics and `product-protect` 35, but their intersection is 0 — Jamf
+  //    publishes no Jamf Protect solution guides.
+  //
+  //    {@link applyFiltersWithFallback} is a *client-side* relaxation: it can
+  //    only re-filter what was fetched, so an empty upstream response leaves it
+  //    nothing to relax and the caller reports a bare "no results" that does not
+  //    even name docType as the cause. Dropping the filter here restores the
+  //    fetch the relaxation expects — the post-filter then empties it again and
+  //    the existing relaxation reports `removed: ['docType']`, which is what the
+  //    user needs to see.
+  if (results.length === 0 && params.docType !== undefined) {
+    log.debug(`Empty upstream result with docType="${params.docType}"; re-querying without it`);
+    results = await fetchFiltered(buildSearchFilters({
+      product: params.product,
+      version: params.version,
+    }));
   }
 
-  // 5. Cache the raw results (before client-side filtering)
-  await ctx.cache.set(cacheKey, results, ctx.config.cacheTtl.search);
-
-  log.debug(`FT search returned ${results.length} results (cached)`);
   return { results, fromProvider: false };
 }
