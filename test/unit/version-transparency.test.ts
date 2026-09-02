@@ -92,7 +92,12 @@ describe('Version filter transparency', () => {
 
     const json = JSON.parse((result.content[0] as TextContent).text);
     expect(json.relevanceNote).toBeDefined();
-    expect(json.relevanceNote).toContain('Fluid Topics Search API');
+    expect(json.relevanceNote).toContain('Fluid Topics search API');
+    // The note must not promise a score. Fluid Topics returns none — a
+    // clustered-search entry has no score, rank or weight field — and no
+    // result this server emits carries a numeric relevance.
+    expect(json.relevanceNote).toMatch(/no numeric relevance score/i);
+    expect(json.relevanceNote).not.toMatch(/higher values/i);
   });
 
   it('should NOT include relevanceNote in markdown format', async () => {

@@ -145,8 +145,24 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `jamf-rapididentity` | RapidIdentity | 身分識別與存取管理平台 |
 | `jamf-trust` | Jamf Trust | Apple 裝置的零信任網路存取 |
 | `jamf-routines` | Jamf Routines | 裝置管理自動化工作流程編排 |
-| `self-service-plus` | Self Service+ | macOS 新一代自助服務入口 |
+| `self-service-plus` | Self Service+ | macOS 與行動裝置的新一代自助服務入口 |
 | `jamf-app-catalog` | Jamf App Catalog | 受管部署的精選應用程式目錄 |
+| `jamf-account` | Jamf Account | 身分、授權與平台服務入口 |
+| `jamf-security-cloud` | Jamf Security Cloud | Jamf Connect 與 Jamf Protect 的雲端安全入口 |
+| `elevate` | Elevate | 引導式修復與裝置健康狀態入口 |
+| `composer` | Composer | macOS 套件建置與編輯 |
+| `jamf-parent` | Jamf Parent | 校方配發裝置的家長端管控 |
+| `jamf-teacher` | Jamf Teacher | 教師端的課堂裝置管理 |
+| `jamf-setup-reset` | Jamf Setup and Reset | 裝置個人化與抹除重佈署 App |
+| `jamf-assessment` | Jamf Assessment | 教育裝置的鎖定測驗模式 |
+| `title-editor` | Title Editor | 自訂軟體標題的修補定義 |
+| `jamf-infrastructure-manager` | Jamf Infrastructure Manager | LDAP 等內部服務的地端代理 |
+| `jamf-adcs-connector` | Jamf AD CS Connector | 透過 Active Directory 憑證服務簽發憑證 |
+| `jamf-pki-proxy` | Jamf PKI Proxy | 防火牆後憑證授權單位的代理 |
+| `jamf-migrate` | Jamf Migrate | 在 Jamf Pro 執行個體之間遷移 macOS 裝置 |
+| `jamf-remote-assist` | Jamf Remote Assist | 遠端畫面共享與支援連線 |
+| `jamf-cloud-distribution-service` | Jamf Cloud Distribution Service | Jamf 代管的套件派送（JCDS） |
+| `healthcare-listener` | Healthcare Listener | 與醫療資訊系統整合 |
 
 ## 提供的工具
 
@@ -159,7 +175,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `query` | string | 是 | 搜尋關鍵字 (2-200 字元) |
 | `product` | string | 否 | 依產品 ID 篩選 (詳見支援產品表) |
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
-| `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`install-guide`、`technical-paper`、`configuration-guide`、`training` |
+| `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`training`、`solution-guide`、`glossary`、`getting-started` |
 | `version` | string | 否 | 依版本篩選 (例如 `"11.5.0"`) |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `limit` | number | 否 | 每頁最多結果數 1-50 (預設: 10) |

@@ -22,7 +22,15 @@ const fs = vi.hoisted(() => ({
     .mockResolvedValue(undefined),
   unlink: vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined),
   readdir: vi.fn<(path: string) => Promise<string[]>>().mockResolvedValue([]),
-  stat: vi.fn<(path: string) => Promise<{ size: number }>>()
+  // `mtimeMs` as well as `size`: prune() dates abandoned `.tmp` writes by it,
+  // and a mock without it makes that branch untestable.
+  stat: vi.fn<(path: string) => Promise<{ size: number; mtimeMs: number }>>(),
+  // `set()` writes to `<path>.tmp.<pid>` and renames it into place. Without a
+  // `rename` mock every write threw "No \"rename\" export is defined on the
+  // \"fs/promises\" mock", and `set()` catches and logs rather than rethrowing —
+  // so every disk write in this file silently failed while the memory cache
+  // carried the assertions. See the round-trip test at the bottom.
+  rename: vi.fn<(from: string, to: string) => Promise<void>>().mockResolvedValue(undefined)
 }));
 
 vi.mock('fs/promises', () => fs);
@@ -391,7 +399,7 @@ describe('clear()', () => {
 describe('stats()', () => {
   beforeEach(() => {
     fs.readdir.mockResolvedValue([]);
-    fs.stat.mockResolvedValue({ size: 0 });
+    fs.stat.mockResolvedValue({ size: 0, mtimeMs: Date.now() });
   });
 
   it('should return fileEntries=0 and totalSize=0 for an empty directory', async () => {
@@ -404,7 +412,7 @@ describe('stats()', () => {
 
   it('should count only JSON files in the directory', async () => {
     fs.readdir.mockResolvedValue(['a.json', 'b.json', 'c.txt']);
-    fs.stat.mockResolvedValue({ size: 512 });
+    fs.stat.mockResolvedValue({ size: 512, mtimeMs: Date.now() });
 
     const stats = await cache.stats();
     expect(stats.totalEntries).toBe(2);
@@ -412,7 +420,7 @@ describe('stats()', () => {
 
   it('should sum file sizes for all JSON files', async () => {
     fs.readdir.mockResolvedValue(['x.json', 'y.json']);
-    fs.stat.mockResolvedValue({ size: 1024 });
+    fs.stat.mockResolvedValue({ size: 1024, mtimeMs: Date.now() });
 
     const stats = await cache.stats();
     expect(stats.totalSize).toBe(2048); // 2 * 1024
@@ -523,5 +531,135 @@ describe('prune()', () => {
     expect(pruned).toBeGreaterThanOrEqual(1);
 
     vi.restoreAllMocks();
+  });
+});
+
+// ============================================================================
+// Atomic-write round trip
+// ============================================================================
+
+describe('atomic disk write', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.writeFile.mockResolvedValue(undefined);
+    fs.rename.mockResolvedValue(undefined);
+  });
+
+  it('should complete the write-then-rename without logging a failure', async () => {
+    const log = createMockLogger();
+    const isolated = new FileCache({ log });
+
+    await isolated.set('atomic:round-trip', { hello: 'world' }, 60000);
+
+    // Regression guard. `set()` catches everything and only logs, so a missing
+    // fs mock made this whole file assert against the memory cache alone while
+    // every disk write failed. Asserting the logger stayed quiet is what makes
+    // the mock's completeness observable.
+    expect(log.error).not.toHaveBeenCalled();
+
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    expect(fs.rename).toHaveBeenCalledTimes(1);
+
+    const [tmpPath, payload] = fs.writeFile.mock.calls[0];
+    const [renameFrom, renameTo] = fs.rename.mock.calls[0];
+
+    // Written to a pid-scoped temp path, then moved into place — two
+    // concurrent processes must never share the same in-flight file.
+    expect(tmpPath).toContain(`.tmp.${process.pid}`);
+    expect(renameFrom).toBe(tmpPath);
+    expect(renameTo).toBe(tmpPath.split('.tmp.')[0]);
+    expect(JSON.parse(payload).data).toEqual({ hello: 'world' });
+  });
+});
+
+// ============================================================================
+// Orphan and abandoned-write reclamation
+// ============================================================================
+
+describe('prune reclamation', () => {
+  const hash = 'a'.repeat(64);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.writeFile.mockResolvedValue(undefined);
+    fs.rename.mockResolvedValue(undefined);
+    fs.unlink.mockResolvedValue(undefined);
+  });
+
+  it('should reclaim an expired entry it never tracked in memory', async () => {
+    // The orphan case from #248: written under a cache key this build no
+    // longer constructs, so nothing will ever `get()` it and the LRU — which
+    // only knows keys it put in memory itself — cannot evict it. prune()
+    // lists the directory, so it reaches the file anyway.
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json`]);
+    fs.readFile.mockResolvedValue(
+      JSON.stringify({ data: 'orphan', timestamp: Date.now() - 90_000, ttl: 60_000 })
+    );
+
+    expect(await isolated.prune()).toBe(1);
+    expect(fs.unlink).toHaveBeenCalledWith(expect.stringContaining(`${hash}.json`));
+  });
+
+  it('should keep an unexpired entry it never tracked in memory', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json`]);
+    fs.readFile.mockResolvedValue(
+      JSON.stringify({ data: 'orphan', timestamp: Date.now(), ttl: 60_000 })
+    );
+
+    expect(await isolated.prune()).toBe(0);
+    expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should reclaim a .tmp write left behind by a dead process', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json.tmp.99999`]);
+    fs.stat.mockResolvedValue({ size: 12, mtimeMs: Date.now() - 2 * 60 * 60 * 1000 });
+
+    expect(await isolated.prune()).toBe(1);
+    expect(fs.unlink).toHaveBeenCalledWith(expect.stringContaining('.json.tmp.99999'));
+  });
+
+  it('should leave a .tmp write from an in-flight save alone', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json.tmp.${process.pid}`]);
+    fs.stat.mockResolvedValue({ size: 12, mtimeMs: Date.now() });
+
+    expect(await isolated.prune()).toBe(0);
+    expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should leave a .tmp write alone when it cannot be stat-ed', async () => {
+    // A failed stat must not become data loss for a write still in progress.
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json.tmp.4242`]);
+    fs.stat.mockRejectedValue(Object.assign(new Error('EIO'), { code: 'EIO' }));
+
+    expect(await isolated.prune()).toBe(0);
+    expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should ignore directory entries that are neither entries nor our writes', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue(['README.md', 'nested', `${hash}.json.tmp.notapid`]);
+
+    expect(await isolated.prune()).toBe(0);
+    expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should remove abandoned .tmp writes on clear()', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([`${hash}.json`, `${hash}.json.tmp.777`, 'unrelated.txt']);
+
+    await isolated.clear();
+
+    const removed = fs.unlink.mock.calls.map(([p]) => p);
+    expect(removed).toHaveLength(2);
+    expect(removed.some(p => p.endsWith(`${hash}.json`))).toBe(true);
+    expect(removed.some(p => p.endsWith('.json.tmp.777'))).toBe(true);
+    expect(removed.some(p => p.endsWith('unrelated.txt'))).toBe(false);
   });
 });

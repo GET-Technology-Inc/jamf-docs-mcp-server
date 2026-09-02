@@ -6,11 +6,21 @@
  */
 
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type LocaleId } from '../constants.js';
+import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
 
-/** Allowed hostnames for URL validation. */
-export const ALLOWED_HOSTNAMES = new Set([
+/**
+ * Allowed hostnames for URL validation.
+ *
+ * The two Fluid Topics hosts plus every registered non-FT source. Derived
+ * rather than listed so that adding a source is one row in
+ * {@link STATIC_DOC_SOURCES} and cannot be half-done: a hostname that the
+ * article path knows how to parse but this set rejects would fail with a
+ * "must be from" error that names the wrong problem.
+ */
+export const ALLOWED_HOSTNAMES = new Set<string>([
   'learn.jamf.com',
   'docs.jamf.com',
+  ...STATIC_SOURCE_HOSTNAMES,
 ]);
 
 /** Check whether a URL string points to an allowed Jamf documentation hostname with HTTPS. */

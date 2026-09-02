@@ -282,7 +282,7 @@ describe('products resource handler', () => {
     );
   });
 
-  it('should include all 4 products in the response', async () => {
+  it('should return every product the resource data carries', async () => {
     const { server, getHandler } = makeFakeServer();
     registerResources(server, ctx);
 
@@ -290,7 +290,7 @@ describe('products resource handler', () => {
     const result = await handler(new URL('jamf://products'));
     const data = JSON.parse(result.contents[0].text);
 
-    expect(data.products).toHaveLength(12);
+    expect(data.products).toHaveLength(FAKE_PRODUCTS_DATA.products.length);
   });
 
   it('should include core product IDs: jamf-pro, jamf-school, jamf-connect, jamf-protect', async () => {

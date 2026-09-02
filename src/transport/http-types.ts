@@ -4,6 +4,7 @@
 
 import type { PerRequestResponseMode } from '@modelcontextprotocol/server';
 import type { Logger } from '../core/services/interfaces/index.js';
+import { JAMF_PRODUCTS, SUPPORTED_LOCALE_IDS } from '../core/constants.js';
 
 export type { Logger, PerRequestResponseMode };
 
@@ -49,19 +50,22 @@ export const DEFAULT_HTTP_CONFIG: HttpHandlerConfig = {
 // Static content
 // ============================================================================
 
+/**
+ * Derived from JAMF_PRODUCTS rather than hand-written. The list this replaces
+ * named 8 products while the server served 12 — Jamf Trust, Jamf Routines,
+ * Self Service+ and Jamf App Catalog were all missing, so a client reading
+ * llms.txt to decide what to ask about would never ask about them.
+ */
+const LLMS_PRODUCT_LINES = Object.values(JAMF_PRODUCTS)
+  .map(p => `- ${p.name} — ${p.description}`)
+  .join('\n');
+
 export const LLMS_TXT = `# Jamf Docs MCP Server
 
 > MCP server providing access to official Jamf documentation from learn.jamf.com
 
 ## Products
-- Jamf Pro — Apple device management for enterprise
-- Jamf School — Apple device management for education
-- Jamf Connect — identity and access management
-- Jamf Protect — endpoint security for Apple
-- Jamf Now — simple device management for small businesses
-- Jamf Safe Internet — content filtering and web security
-- Jamf Insights — analytics and reporting for Apple fleet
-- RapidIdentity — identity and access management platform
+${LLMS_PRODUCT_LINES}
 
 ## Tools
 - jamf_docs_list_products: discover available products and versions
@@ -83,7 +87,7 @@ export const LLMS_TXT = `# Jamf Docs MCP Server
 - jamf_compare_versions: compare features across versions
 
 ## Supported Locales
-en-US, ja-JP, zh-TW, de-DE, es-ES, fr-FR, nl-NL, th-TH
+${SUPPORTED_LOCALE_IDS.join(', ')}
 
 ## Limitations
 - Documentation content only — no Jamf REST API reference

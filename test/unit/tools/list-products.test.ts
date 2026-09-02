@@ -1,24 +1,82 @@
 /**
  * Unit tests for jamf_docs_list_products tool handler.
  *
- * This tool is synchronous and uses no external services — it formats
- * static JAMF_PRODUCTS and JAMF_TOPICS data. All formatting logic is
- * tested via an in-process McpServer + Client pair.
+ * Products, topics and docTypes come from compiled-in constants; the
+ * publication axis comes from the live maps registry, so the registry is
+ * stubbed here — without it these tests reach learn.jamf.com for real, and
+ * the tool swallows that failure by design, so the leak would show up as a
+ * slow network-dependent test rather than a red one.
+ *
+ * All formatting logic is tested via an in-process McpServer + Client pair.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
-import { createMockContext } from '../../helpers/mock-context.js';
+import { createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 
 const mockGetProductAvailability = vi.fn().mockResolvedValue({});
 
+/**
+ * Stands in for the registry-backed catalogue.
+ *
+ * Derived from JAMF_PRODUCTS so a new product needs no fixture edit, but
+ * `availableVersions` deliberately differs from the constant's `['current']`
+ * for one product: the whole point of reading metadata here is that the
+ * registry knows versions the constant does not.
+ */
+const mockGetProductsMetadata = vi.fn(async () => await Promise.resolve(
+  Object.values(JAMF_PRODUCTS).map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    bundleId: p.bundleId,
+    latestVersion: p.id === 'jamf-pro' ? '11.31.0' : 'current',
+    availableVersions: p.id === 'jamf-pro' ? ['11.31.0', '11.30.0'] : ['current'],
+    labelKey: p.searchLabel,
+  }))
+));
+
+/**
+ * Shaped like the live data: one family per classification slot Jamf uses,
+ * one carrying no classification at all, one versioned and one single-locale.
+ */
+const PUBLICATIONS = [
+  { id: 'technical-paper-laps', title: 'Technical Paper: LAPS for Jamf Pro',
+    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US', 'ja-JP'], versions: [] },
+  { id: 'jamf-pro-release-notes', title: 'Jamf Pro Release Notes 11.31.0',
+    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
+  { id: 'composer-user-guide', title: 'Composer User Guide',
+    portal: '', app: 'Composer', utility: '', locales: ['en-US'], versions: [] },
+  { id: 'title-editor', title: 'Title Editor Documentation',
+    portal: '', app: '', utility: 'Title Editor', locales: ['en-US'], versions: [] },
+  { id: 'welcome-to-jamf', title: 'Welcome to Jamf',
+    portal: '', app: '', utility: '', locales: ['en-US'], versions: [] },
+];
+
+/**
+ * The publication list also reaches an Intercom Help Center for its
+ * collections. Left unmocked these tests make a real request to
+ * support.jamf.com, and the tool swallows the failure by design — so the
+ * leak would show up as a slow test rather than a red one.
+ */
+const mockListIntercomCollections = vi.fn(async () => await Promise.resolve([
+  { id: '1', slug: 'jamf-pro', name: 'Jamf Pro', description: '', url: '', articleCount: 3 },
+]));
+
+vi.mock('../../../src/core/services/intercom-service.js', () => ({
+  listIntercomCollections: async () => await mockListIntercomCollections(),
+}));
+
 vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
+  getProductsMetadata: async () => await mockGetProductsMetadata(),
 }));
 
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
+import { PRODUCT_IDS, JAMF_PRODUCTS } from '../../../src/core/constants/products.js';
+import { STATIC_SECTIONS, DYNAMIC_SECTION_SOURCES } from '../../../src/core/constants/sources.js';
 
 // ---------------------------------------------------------------------------
 
@@ -37,7 +95,9 @@ describe('jamf_docs_list_products tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerListProductsTool(server, createMockContext());
+    registerListProductsTool(server, createMockContext({
+      mapsRegistry: createStubMapsRegistry(PUBLICATIONS),
+    }));
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -199,14 +259,14 @@ describe('jamf_docs_list_products tool', () => {
       expect(Array.isArray(json.topics)).toBe(true);
     });
 
-    it('should have exactly 4 products in JSON output', async () => {
+    it('should list every registered product in JSON output', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: { responseFormat: 'json' },
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
 
     it('should include all product IDs in JSON products array', async () => {
@@ -390,7 +450,7 @@ describe('jamf_docs_list_products tool', () => {
       expect(Array.isArray(sc.topics)).toBe(true);
     });
 
-    it('should have 4 products in structuredContent regardless of format', async () => {
+    it('should list every registered product in structuredContent regardless of format', async () => {
       const mdResult = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: {},
@@ -408,9 +468,9 @@ describe('jamf_docs_list_products tool', () => {
       const jsonSc = jsonResult.structuredContent as Record<string, unknown>;
       const compactSc = compactResult.structuredContent as Record<string, unknown>;
 
-      expect((mdSc.products as unknown[]).length).toBe(12);
-      expect((jsonSc.products as unknown[]).length).toBe(12);
-      expect((compactSc.products as unknown[]).length).toBe(12);
+      expect((mdSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
+      expect((jsonSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
+      expect((compactSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
     });
 
     it('should have non-empty topics in structuredContent', async () => {
@@ -512,7 +572,7 @@ describe('jamf_docs_list_products tool', () => {
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
       const routines = json.products.find((p: { id: string }) => p.id === 'jamf-routines');
       expect(routines).toBeDefined();
       expect(routines.hasContent).toBe(false);
@@ -542,7 +602,111 @@ describe('jamf_docs_list_products tool', () => {
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
+  });
+
+// --- Publication axis -------------------------------------------------------
+
+describe('publications section', () => {
+  it('should list every publication the registry reports, plus the compiled-in static ones', async () => {
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as { publications?: { id: string }[] };
+    // Declared static sections, plus one row per discovered Intercom
+    // collection, plus the Fluid Topics families.
+    expect(sc.publications).toHaveLength(
+      PUBLICATIONS.length + STATIC_SECTIONS.length + DYNAMIC_SECTION_SOURCES.length);
+    expect(sc.publications?.map(p => p.id)).toContain('jamf-support-jamf-pro');
+    for (const { section } of STATIC_SECTIONS) {
+      expect(sc.publications?.map(p => p.id)).toContain(section.id);
+    }
+  });
+
+  it('should keep publications out of products so the search filter stays meaningful', async () => {
+    // #239's acceptance condition: `product` in jamf_docs_search takes the
+    // twelve product IDs and none of these, so merging the lists would make
+    // list_products describe a filter that does not exist.
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as { products: { id: string }[] };
+    expect(sc.products).toHaveLength(PRODUCT_IDS.length);
+    expect(sc.products.map(p => p.id)).not.toContain('technical-paper-laps');
+  });
+
+  it('should group publications the way Jamf classifies them', async () => {
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+
+    // portal, app and utility are three slots of one taxonomy, so they render
+    // as sibling groups rather than three separate lists.
+    expect(text).toContain('## Jamf Pro');
+    expect(text).toContain('## Composer');
+    expect(text).toContain('## Title Editor');
+    // A family Jamf files under none of the three still has to be reachable.
+    expect(text).toContain('## Other');
+    expect(text).toContain('welcome-to-jamf');
+  });
+
+  it('should mark a versioned family and a single-locale family', async () => {
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+
+    expect(text).toContain('2 versions, latest 11.31.0');
+    expect(text).toContain('en-US only');
+  });
+
+  it('should still answer when the maps registry cannot', async () => {
+    // Products and topics are compiled in; losing the newest section must not
+    // cost a caller the list they actually asked for.
+    const brokenServer = new McpServer({ name: 'test-server', version: '0.0.1' });
+    registerListProductsTool(brokenServer, createMockContext({
+      mapsRegistry: {
+        listPublications: () => { throw new Error('maps endpoint down'); },
+      } as never,
+    }));
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const brokenClient = new Client({ name: 'test-client', version: '0.0.1' });
+    await brokenServer.connect(st);
+    await brokenClient.connect(ct);
+
+    const result = await brokenClient.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent as { products: unknown[]; publications?: { id: string }[] };
+    expect(sc.products).toHaveLength(PRODUCT_IDS.length);
+    // The Fluid Topics rows are gone, but the static sources are compiled in
+    // and are the only way to discover that they are reachable at all.
+    expect(sc.publications).toHaveLength(STATIC_SECTIONS.length + DYNAMIC_SECTION_SOURCES.length);
+    await brokenClient.close();
+  });
+});
+
+  it('should report the versions the registry publishes, not the constant\'s', async () => {
+    // JAMF_PRODUCTS declares `versions: ['current']` for every row. That is
+    // true of the unversioned majority and wrong for the families Jamf
+    // snapshots — jamf-pro-documentation publishes nineteen. Reading the
+    // constant is what made this tool disagree with `jamf://products`, which
+    // has been registry-backed all along.
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as {
+      products: { id: string; currentVersion: string; availableVersions: string[] }[];
+    };
+
+    const pro = sc.products.find(p => p.id === 'jamf-pro');
+    expect(pro?.availableVersions).toEqual(['11.31.0', '11.30.0']);
+    expect(pro?.currentVersion).toBe('11.31.0');
+    expect(JAMF_PRODUCTS['jamf-pro'].versions).toEqual(['current']);
+
+    // Unversioned products still read as they did.
+    expect(sc.products.find(p => p.id === 'composer')?.availableVersions).toEqual(['current']);
   });
 });

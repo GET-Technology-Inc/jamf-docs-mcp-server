@@ -46,9 +46,33 @@ const ctx: ServerContext = {
   topicResolver,
 };
 
+/**
+ * Reclaim disk the cache can no longer read back.
+ *
+ * `prune()` scans the cache directory rather than the LRU's in-memory keys,
+ * so it is the only thing that can reach an entry written under a key format
+ * this build no longer constructs. Nothing called it, which is why those
+ * entries sat on disk indefinitely instead of expiring on their TTL.
+ *
+ * Startup is the right moment: it is exactly when a version that changed a
+ * cache key has just replaced one that did not. Deliberately not awaited —
+ * a slow or unreadable cache directory must not delay the server's first
+ * response, and every failure inside `prune()` is already contained.
+ */
+function sweepCacheInBackground(): void {
+  void cache.prune().then(
+    (reclaimed) => {
+      if (reclaimed > 0) { log.info(`Cache sweep reclaimed ${String(reclaimed)} stale entries`); }
+    },
+    (error: unknown) => { log.warning(`Cache sweep failed: ${String(error)}`); },
+  );
+}
+
 // Start server
 async function main(): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
+
+  sweepCacheInBackground();
 
   if (args.transport === 'http') {
     const { startHttpServer } = await import('./transport/http.js');

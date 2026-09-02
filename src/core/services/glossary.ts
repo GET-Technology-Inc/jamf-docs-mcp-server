@@ -36,6 +36,7 @@ import { buildDisplayUrl } from './topic-resolver.js';
 import { cleanHtml, htmlToMarkdown } from './content-parser.js';
 import type { ServerContext } from '../types/context.js';
 import type { CacheProvider } from './interfaces/cache.js';
+import { cacheKey } from './cache-key.js';
 import { truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 
@@ -57,12 +58,11 @@ function emptyGlossaryResult(maxTokens: number): GlossaryLookupResult {
  */
 async function fetchGlossaryToc(
   ctx: ServerContext,
-  mapId: string,
-  locale: string
+  mapId: string
 ): Promise<FtTocNode[]> {
-  const cacheKey = `${locale}:glossary-toc`;
+  const key = cacheKey('glossary-toc', { mapId });
 
-  const cached = await ctx.cache.get<FtTocNode[]>(cacheKey);
+  const cached = await ctx.cache.get<FtTocNode[]>(key);
   if (cached !== null) {
     return cached;
   }
@@ -88,7 +88,7 @@ async function fetchGlossaryToc(
     }
   }
 
-  await ctx.cache.set(cacheKey, terms, ctx.config.cacheTtl.article);
+  await ctx.cache.set(key, terms, ctx.config.cacheTtl.article);
   return terms;
 }
 
@@ -98,19 +98,18 @@ async function fetchGlossaryToc(
 async function fetchGlossaryContent(
   ctx: ServerContext,
   mapId: string,
-  contentId: string,
-  locale: string
+  contentId: string
 ): Promise<string> {
-  const cacheKey = `${locale}:glossary-content:${contentId}`;
+  const key = cacheKey('glossary-content', { mapId, contentId });
 
-  const cached = await ctx.cache.get<string>(cacheKey);
+  const cached = await ctx.cache.get<string>(key);
   if (cached !== null) {
     return cached;
   }
 
   const html = await fetchTopicContent(mapId, contentId);
 
-  await ctx.cache.set(cacheKey, html, ctx.config.cacheTtl.article);
+  await ctx.cache.set(key, html, ctx.config.cacheTtl.article);
   return html;
 }
 
@@ -540,7 +539,7 @@ export async function lookupGlossaryTerm(
   // Step 1: Fetch glossary TOC (cached after first call)
   let tocEntries: FtTocNode[];
   try {
-    tocEntries = await fetchGlossaryToc(ctx, mapId, locale);
+    tocEntries = await fetchGlossaryToc(ctx, mapId);
   } catch (error) {
     log.error(`Failed to fetch glossary TOC: ${String(error)}`);
     return emptyGlossaryResult(maxTokens);
@@ -589,9 +588,7 @@ export async function lookupGlossaryTerm(
 
   const tasks = toFetch.map(tocNode => async (): Promise<GlossaryEntry[]> => {
     try {
-      const html = await fetchGlossaryContent(
-        ctx, mapId, tocNode.contentId, locale
-      );
+      const html = await fetchGlossaryContent(ctx, mapId, tocNode.contentId);
 
       const displayUrl = buildDisplayUrl(tocNode.prettyUrl);
 

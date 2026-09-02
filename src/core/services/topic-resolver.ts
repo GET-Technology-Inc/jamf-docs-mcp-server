@@ -13,6 +13,7 @@ import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 import type { MapsRegistry } from './maps-registry.js';
 import { fetchMapTopics } from './ft-client.js';
 import type { CacheProvider } from './interfaces/index.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
 import { getMetaValue, FT_META } from '../utils/ft-metadata.js';
 import { isAllowedHostname } from '../utils/url.js';
 import {
@@ -114,7 +115,7 @@ const DEFAULT_TOPICS_CACHE_TTL = 24 * 60 * 60 * 1000;
 async function fetchAndBuildIndex(
   mapId: string,
   cache: CacheProvider,
-  cacheKey: string,
+  key: CacheKey,
   fetchTopicsFn: typeof fetchMapTopics,
   cacheTtl: number,
 ): Promise<Map<string, string>> {
@@ -140,7 +141,7 @@ async function fetchAndBuildIndex(
     }
   }
 
-  await cache.set(cacheKey, [...index.entries()], cacheTtl);
+  await cache.set(key, [...index.entries()], cacheTtl);
   return index;
 }
 
@@ -171,8 +172,8 @@ export class TopicResolver {
   }
 
   private async getTopicIndex(mapId: string): Promise<Map<string, string>> {
-    const cacheKey = `topic-index:${mapId}`;
-    const cached = await this.cache.get<[string, string][]>(cacheKey);
+    const key = cacheKey('ft-topic-index', { mapId });
+    const cached = await this.cache.get<[string, string][]>(key);
     if (cached !== null) {
       return new Map(cached);
     }
@@ -184,7 +185,7 @@ export class TopicResolver {
     }
 
     const promise = fetchAndBuildIndex(
-      mapId, this.cache, cacheKey, this.fetchMapTopicsFn, this.cacheTtl
+      mapId, this.cache, key, this.fetchMapTopicsFn, this.cacheTtl
     );
     this.inflight.set(mapId, promise);
 

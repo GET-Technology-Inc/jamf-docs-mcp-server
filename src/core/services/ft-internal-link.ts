@@ -34,6 +34,7 @@ import { fetchMapToc } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/logger.js';
+import { cacheKey } from './cache-key.js';
 import type { FtTocNode } from '../types.js';
 
 // ─── Markup constants ──────────────────────────────────────────
@@ -102,16 +103,17 @@ export function collectInternalLinkMapIds(html: string): string[] {
  * hierarchy — the topic's own HTML and metadata carry neither. Indexing both
  * in one pass keeps that to one fetch per map rather than two.
  */
+/**
+ * Cached under the `ft-tocindex-v2` namespace. The `v2` is load-bearing:
+ * entries written under the v1 shape hold only `urlByTocId`, so they would
+ * answer an ancestry lookup with nothing and make a topic look parentless.
+ */
 interface MapTocIndex {
   /** `tocId -> absolute display URL`, for placing internal links. */
   urlByTocId: Record<string, string>;
   /** `contentId -> ancestor titles`, nearest root first, excluding the topic. */
   ancestorsByContentId: Record<string, string[]>;
 }
-
-// v2: entries under v1 hold only the tocId map, so they would answer an
-// ancestry lookup with nothing and look like a topic that has no parents.
-const TOC_INDEX_CACHE_PREFIX = 'ft-tocindex:v2:';
 
 function indexTocNodes(
   nodes: readonly FtTocNode[],
@@ -147,15 +149,15 @@ async function loadMapTocIndex(
   mapId: string,
   ttl: number | undefined,
 ): Promise<MapTocIndex> {
-  const cacheKey = `${TOC_INDEX_CACHE_PREFIX}${mapId}`;
-  const cached = await cache.get<MapTocIndex>(cacheKey);
+  const key = cacheKey('ft-tocindex-v2', { mapId });
+  const cached = await cache.get<MapTocIndex>(key);
   if (cached !== null) {
     return cached;
   }
 
   const index: MapTocIndex = { urlByTocId: {}, ancestorsByContentId: {} };
   indexTocNodes(await fetchMapToc(mapId), index, []);
-  await cache.set(cacheKey, index, ttl);
+  await cache.set(key, index, ttl);
   return index;
 }
 

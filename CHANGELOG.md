@@ -1,3 +1,116 @@
+## [5.9.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.8.0...v5.9.0) (2026-09-02)
+
+### Features
+
+* **search:** surface matches from the non-Fluid-Topics sources ([#266](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/266)) ([38b8311](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/38b8311a589a2990d05694fe5f1847a991015f45)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
+## [5.8.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.7.0...v5.8.0) (2026-09-02)
+
+### Features
+
+* **sources:** read the Jamf Support knowledge base ([#265](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/265)) ([b394ebc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b394ebcba3a264af70341154d7f848c8cafc4fbb)), closes [#245](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/245) [#263](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/263)
+
+## [5.7.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.6.0...v5.7.0) (2026-09-02)
+
+### Features
+
+* **toc:** browse concepts.jamf.com from its sitemap ([#264](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/264)) ([7dcd7f7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/7dcd7f78490b7359f01c26e2e204abeda7b9239b)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
+## [5.6.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.5.0...v5.6.0) (2026-09-02)
+
+### Features
+
+* **sources:** read concepts.jamf.com through a non-Fluid-Topics seam ([#263](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/263)) ([32977e3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/32977e3d06f82a44945a614d7172d09425812a0e)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
+## [5.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.2...v5.5.0) (2026-09-02)
+
+### Features
+
+* **toc:** say when a document is not published in the requested language ([#262](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/262)) ([bd88ccc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bd88ccc29545ce2e2bdc3d779978a369c4541a71)), closes [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
+## [5.4.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.1...v5.4.2) (2026-09-02)
+
+### Bug Fixes
+
+* **search:** stop collapsing version snapshots silently ([#261](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/261)) ([0b50092](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0b500925a280b710e1b8077f3eeeff4e133b8821)), closes [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
+## [5.4.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.0...v5.4.1) (2026-09-02)
+
+### Bug Fixes
+
+* **list-products:** report the versions the registry publishes ([#260](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/260)) ([ba57b6d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ba57b6d91e9689d553cdb848e0b3fb0f1b2d44d1)), closes [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240) [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
+## [5.4.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.3.0...v5.4.0) (2026-09-02)
+
+### Features
+
+* **locales:** declare every locale Jamf publishes in ([#259](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/259)) ([521b220](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/521b220c2813b57db1e0a02074a7b0b535776731))
+
+## [5.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.2.0...v5.3.0) (2026-09-02)
+
+### Features
+
+* **products:** register the products Jamf's own metadata names ([#258](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/258)) ([74a2fc1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/74a2fc1cdbd51b122144670d77de9824f83e4bf9)), closes [#238](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/238) [#252](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/252) [#238](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/238) [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
+## [5.2.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.1...v5.2.0) (2026-09-02)
+
+### Features
+
+* **list-products:** surface the publication axis without diluting the product list ([#257](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/257)) ([59dd578](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/59dd5781c2be6676a39eea5319a0d3b6f2bbfed2)), closes [#254](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/254) [#239](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/239) [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
+## [5.1.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.0...v5.1.1) (2026-09-02)
+
+### Dependencies
+
+* bump @humanfs/node from 0.16.7 to 0.16.8 ([#256](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/256)) ([7a3160c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/7a3160cb5776a46597d96ea3075e6c1b7eb22b57))
+* bump fast-uri from 3.1.5 to 3.1.7 ([#255](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/255)) ([8361727](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/83617275e2e13728d14939baf995c53180660466))
+
+## [5.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.1...v5.1.0) (2026-09-02)
+
+### Features
+
+* **toc:** browse every Jamf publication, not just the twelve products ([#254](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/254)) ([1ee504f](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1ee504fb61ed5f2bcf38d6641bc2f6333d83d8bc)), closes [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237) [#239](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/239) [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
+## [5.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.0...v5.0.1) (2026-09-02)
+
+### Bug Fixes
+
+* **cache:** reclaim orphaned entries and abandoned writes ([#253](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/253)) ([6c3d088](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6c3d0888b3306ad76eb95ff4eb87ce33239f9edb)), closes [#248](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/248) [#247](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/247)
+
+## [5.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.7...v5.0.0) (2026-09-02)
+
+### ⚠ BREAKING CHANGES
+
+* **cache:** `CacheProvider.get`, `.set` and `.delete` take `CacheKey`
+instead of `string`. Implementers are unaffected — a `get(key: string)` method
+still satisfies the interface, which is why `FileCache` needed no change — but
+an embedder that calls `ctx.cache.get('my-key')` on a context it built now gets
+TS2345 and must mint the key with `cacheKey()` or keep its own store. Every key
+also changes format, so caches are cold after deploy; entries are orphaned
+rather than migrated.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FMYa25rvY9HB3BeP55wySP
+
+### Features
+
+* **cache:** derive every cache key through one branded constructor ([#247](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/247)) ([967c448](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/967c448dc6b9c915fd8b74648c46032f246a164b))
+
+## [4.3.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.6...v4.3.7) (2026-09-02)
+
+### Bug Fixes
+
+* **search:** make docType and product filters return the right documents ([#246](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/246)) ([0417d96](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0417d96492117a13d2193234085e6c5b73d858a5))
+
+## [4.3.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.5...v4.3.6) (2026-09-02)
+
+### Dependencies
+
+* bump @types/node from 26.2.0 to 26.4.0 ([#232](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/232)) ([cb7bc76](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/cb7bc76c38e13f7a56cb5f359158e72d6bb64941))
+* bump eslint from 10.9.0 to 10.9.1 ([#235](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/235)) ([bbe25be](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bbe25bebb35b123f7b330b08f9b98e3d4212e2f3))
+* bump tsx from 4.23.12 to 4.23.13 ([#234](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/234)) ([f59317c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/f59317c366b3c2fe0338978db5d7693fa38abbff))
+* bump typescript-eslint from 8.67.0 to 8.68.0 ([#233](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/233)) ([02a7963](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/02a7963397f100046198f9e4a273d810e765321b))
+
 ## [4.3.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.4...v4.3.5) (2026-08-26)
 
 ### Dependencies

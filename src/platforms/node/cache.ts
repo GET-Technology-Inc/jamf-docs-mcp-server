@@ -34,6 +34,30 @@ interface LruNode {
 /**
  * File-based cache implementation with LRU-bounded memory cache
  */
+/**
+ * How long an abandoned `.tmp` write must sit before `prune()` reclaims it.
+ *
+ * `set()` writes `<hash>.json.tmp.<pid>` and renames it into place; the gap
+ * between the two calls is sub-millisecond. Anything still present an hour
+ * later belongs to a process that died mid-write, so the margin is four
+ * orders of magnitude wider than a live write ever needs while still bounding
+ * the residue. It has to be a time check rather than a liveness check on the
+ * embedded pid: pids are recycled, and on a shared cache directory the owning
+ * process may not even be on this host.
+ */
+const TMP_WRITE_GRACE_MS = 60 * 60 * 1000;
+
+/**
+ * Whether a directory entry is one of our in-flight writes.
+ *
+ * These are invisible to every `.json` filter in this class, which is why an
+ * interrupted write used to leak permanently: `prune()` skipped it, `clear()`
+ * skipped it, and the LRU only ever tracks keys it put in memory itself.
+ */
+function isTmpWrite(file: string): boolean {
+  return /\.json\.tmp\.\d+$/.test(file);
+}
+
 export class FileCache implements CacheProvider {
   private readonly cacheDir: string;
   private readonly maxEntries: number;
@@ -230,9 +254,12 @@ export class FileCache implements CacheProvider {
     this.lruTail.prev = this.lruHead;
     try {
       const files = await fs.readdir(this.cacheDir);
-      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      // Includes in-flight `.tmp` writes: `clear()` is an explicit "drop
+      // everything", and leaving them behind is how the directory grows a
+      // residue that nothing else looks at.
+      const ours = files.filter(f => f.endsWith('.json') || isTmpWrite(f));
       await Promise.all(
-        jsonFiles.map(async f => { await fs.unlink(path.join(this.cacheDir, f)); })
+        ours.map(async f => { await fs.unlink(path.join(this.cacheDir, f)).catch(() => { /* raced */ }); })
       );
     } catch {
       // Directory may not exist
@@ -267,7 +294,35 @@ export class FileCache implements CacheProvider {
   }
 
   /**
-   * Prune expired entries
+   * Whether an in-flight write is old enough to be certainly abandoned.
+   *
+   * A file we cannot stat is treated as not stale: deleting on a failed stat
+   * would turn a transient fs error into data loss for a write still in
+   * progress.
+   */
+  private async isStaleTmp(file: string): Promise<boolean> {
+    try {
+      const { mtimeMs } = await fs.stat(path.join(this.cacheDir, file));
+      return Date.now() - mtimeMs > TMP_WRITE_GRACE_MS;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Reclaim everything on disk that can no longer be read back.
+   *
+   * Three populations, only one of which the LRU can see:
+   *
+   *  - expired entries, tracked or not. The scan is by directory listing, so
+   *    an entry written under a cache key this build no longer constructs —
+   *    every namespace changed shape in 5.0.0 — is reclaimed on its TTL like
+   *    any other. It is orphaned, not immortal;
+   *  - corrupt or schema-invalid entries, deleted on sight;
+   *  - abandoned `.tmp` writes, which no `.json` filter has ever matched and
+   *    which nothing bounded before this.
+   *
+   * Callers get the count so a startup sweep can say what it reclaimed.
    */
   async prune(): Promise<number> {
     let pruned = 0;
@@ -285,7 +340,14 @@ export class FileCache implements CacheProvider {
     try {
       const files = await fs.readdir(this.cacheDir);
 
-      for (const file of files.filter(f => f.endsWith('.json'))) {
+      for (const file of files) {
+        if (!file.endsWith('.json')) {
+          if (isTmpWrite(file) && await this.isStaleTmp(file)) {
+            await fs.unlink(path.join(this.cacheDir, file)).catch(() => { /* raced */ });
+            pruned++;
+          }
+          continue;
+        }
         const filePath = path.join(this.cacheDir, file);
         try {
           const content = await fs.readFile(filePath, 'utf-8');
