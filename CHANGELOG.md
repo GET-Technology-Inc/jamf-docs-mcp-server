@@ -1,3 +1,9 @@
+## [4.3.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.6...v4.3.7) (2026-09-02)
+
+### Bug Fixes
+
+* **search:** make docType and product filters return the right documents ([#246](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/246)) ([0417d96](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0417d96492117a13d2193234085e6c5b73d858a5))
+
 ## [4.3.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.5...v4.3.6) (2026-09-02)
 
 ### Dependencies
