@@ -212,6 +212,25 @@ export class MapsRegistry {
     version?: string,
     locale?: LocaleId
   ): Promise<string | null> {
+    return (await this.resolveMap(bundleStem, version, locale))?.mapId ?? null;
+  }
+
+  /**
+   * Resolve to the map itself, saying which locale actually answered.
+   *
+   * The fallback to en-US has always been here; what was missing is any way
+   * for a caller to know it happened. Jamf does not publish every family in
+   * every locale — 42 of the 97 are en-US only, `jamf-school-documentation`
+   * has no zh-TW map at all (de/en/es/fr/ja/nl), and nl-NL covers 10 families
+   * against en-US's 97 — so a zh-TW request silently returning English is a
+   * routine outcome, not an edge case. Returning `resolvedLocale` lets the
+   * tool say so instead of implying the content is translated.
+   */
+  async resolveMap(
+    bundleStem: string,
+    version?: string,
+    locale?: LocaleId
+  ): Promise<{ mapId: string; title: string; resolvedLocale: string } | null> {
     await this.ensureBuilt();
     const loc = locale ?? DEFAULT_LOCALE;
 
@@ -222,9 +241,10 @@ export class MapsRegistry {
     const match = this.findMap(normalizedStem, version, loc)
       ?? (loc !== DEFAULT_LOCALE
         ? this.findMap(normalizedStem, version, DEFAULT_LOCALE)
-        : null);
+        : undefined);
 
-    return match?.mapId ?? null;
+    if (match === undefined) { return null; }
+    return { mapId: match.mapId, title: match.title, resolvedLocale: match.locale };
   }
 
   private findMap(
@@ -435,14 +455,7 @@ export class MapsRegistry {
     version?: string,
     locale?: LocaleId,
   ): Promise<string | null> {
-    await this.ensureBuilt();
-    const loc = locale ?? DEFAULT_LOCALE;
-    const normalized = stripCurrentSuffix(bundleStem);
-
-    const match = this.findMap(normalized, version, loc)
-      ?? (loc !== DEFAULT_LOCALE ? this.findMap(normalized, version, DEFAULT_LOCALE) : null);
-
-    return match?.title ?? null;
+    return (await this.resolveMap(bundleStem, version, locale))?.title ?? null;
   }
 
   /**

@@ -80,7 +80,7 @@ function tocEntryToString(entry: TocEntry, depth = 0): string {
 // ─── Map id resolution ─────────────────────────────────────────
 
 /**
- * Resolve the map id for a product without letting the registry take the
+ * Resolve the map for a product without letting the registry take the
  * request down with it.
  *
  * Used on the cache-hit path, where the TOC is already in hand: the cached
@@ -88,14 +88,14 @@ function tocEntryToString(entry: TocEntry, depth = 0): string {
  * re-resolved, and a registry that cannot answer should cost the caller the
  * `mapId` field only — not the table of contents it already has.
  */
-async function resolveMapIdQuietly(
+async function resolveMapQuietly(
   ctx: ServerContext,
   bundleId: string,
   version: string,
   locale: LocaleId,
-): Promise<string | null> {
+): Promise<{ mapId: string; resolvedLocale: string } | null> {
   try {
-    return await ctx.mapsRegistry.resolveMapId(
+    return await ctx.mapsRegistry.resolveMap(
       bundleId,
       version !== 'current' ? version : undefined,
       locale,
@@ -171,20 +171,23 @@ export async function fetchTableOfContents(
 
   let allToc = await ctx.cache.get<TocEntry[]>(key);
   let mapId: string | null;
+  let resolvedLocale: string | null;
 
   if (allToc === null) {
-    mapId = await ctx.mapsRegistry.resolveMapId(
+    const resolved = await ctx.mapsRegistry.resolveMap(
       bundleId,
       version !== 'current' ? version : undefined,
       locale,
     );
 
-    if (mapId === null) {
+    if (resolved === null) {
       throw new JamfDocsError(
         `Could not resolve map for ${source} version ${version} locale ${locale}`,
         JamfDocsErrorCode.NOT_FOUND,
       );
     }
+    mapId = resolved.mapId;
+    resolvedLocale = resolved.resolvedLocale;
 
     const ftNodes = await fetchMapToc(mapId);
 
@@ -194,8 +197,12 @@ export async function fetchTableOfContents(
   } else {
     // The cache stores the tree, not the id it came from. Re-resolve so a
     // caller reading a cached TOC gets the same `mapId` a cold one would —
-    // it is half of the pair `jamf_docs_get_article` documents.
-    mapId = await resolveMapIdQuietly(ctx, bundleId, version, locale);
+    // it is half of the pair `jamf_docs_get_article` documents. The locale
+    // that answered is re-resolved with it: a cached English tree served to a
+    // zh-TW request must still say it is English.
+    const resolved = await resolveMapQuietly(ctx, bundleId, version, locale);
+    mapId = resolved?.mapId ?? null;
+    resolvedLocale = resolved?.resolvedLocale ?? null;
   }
 
   // ─── Pagination & token truncation ───────────────────────────
@@ -228,6 +235,7 @@ export async function fetchTableOfContents(
     pagination,
     tokenInfo,
     ...(mapId !== null ? { mapId } : {}),
+    ...(resolvedLocale !== null ? { resolvedLocale } : {}),
     ...(paginationNote !== undefined ? { paginationNote } : {}),
   };
 }

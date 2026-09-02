@@ -267,6 +267,28 @@ interface TocNotices {
   versionNote?: string | undefined;
   /** Set when `page` was clamped to the last available page. */
   paginationNote?: string | undefined;
+  /** Set when Jamf does not publish this document in the requested language. */
+  localeNote?: string | undefined;
+}
+
+/**
+ * Say so when the answer is not in the language that was asked for.
+ *
+ * The registry has always fallen back to en-US, and Jamf genuinely does not
+ * translate everything: 42 of the 97 publication families are en-US only, and
+ * `jamf-school-documentation` has no zh-TW map at all (de/en/es/fr/ja/nl). A
+ * silent fallback presents English as though it were the translation, and the
+ * reader has no way to tell that from a document that simply happens to have
+ * English headings.
+ */
+function getLocaleNote(
+  requested: string | undefined,
+  resolved: string | undefined,
+): string | undefined {
+  if (requested === undefined || resolved === undefined) { return undefined; }
+  if (requested === resolved) { return undefined; }
+  return `Jamf does not publish this document in ${requested}. Showing the ` +
+    `${resolved} edition instead.`;
 }
 
 /**
@@ -276,6 +298,7 @@ interface TocNotices {
 function noticeFields(notices: TocNotices): Record<string, string> {
   return {
     ...(notices.versionNote !== undefined ? { versionNote: notices.versionNote } : {}),
+    ...(notices.localeNote !== undefined ? { localeNote: notices.localeNote } : {}),
     ...(notices.paginationNote !== undefined ? { paginationNote: notices.paginationNote } : {}),
   };
 }
@@ -287,6 +310,9 @@ function renderTocNotices(notices: TocNotices): string {
   let rendered = '';
   if (notices.versionNote !== undefined) {
     rendered += `\n> **Version Note:** ${notices.versionNote}\n`;
+  }
+  if (notices.localeNote !== undefined) {
+    rendered += `\n> **Language Note:** ${notices.localeNote}\n`;
   }
   if (notices.paginationNote !== undefined) {
     rendered += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
@@ -436,7 +462,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
-        const { toc, pagination, tokenInfo, paginationNote, mapId } = tocResult;
+        const { toc, pagination, tokenInfo, paginationNote, mapId, resolvedLocale } = tocResult;
 
         // Build response
         const response: TocResponse = {
@@ -472,6 +498,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           // Two arguments, not one: the note is only truthful when the version
           // asked for is absent from the maps Jamf actually publishes.
           versionNote: getVersionNote(params.version, availableVersions),
+          localeNote: getLocaleNote(params.language, resolvedLocale),
           paginationNote
         };
 
