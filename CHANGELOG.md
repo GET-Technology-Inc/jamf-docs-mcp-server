@@ -1,3 +1,9 @@
+## [5.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.2...v5.5.0) (2026-09-02)
+
+### Features
+
+* **toc:** say when a document is not published in the requested language ([#262](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/262)) ([bd88ccc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/bd88ccc29545ce2e2bdc3d779978a369c4541a71)), closes [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
 ## [5.4.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.1...v5.4.2) (2026-09-02)
 
 ### Bug Fixes
