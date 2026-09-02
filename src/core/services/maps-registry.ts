@@ -16,6 +16,7 @@ import { DEFAULT_LOCALE, type LocaleId } from '../constants.js';
 import type { FtMapInfo, FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
+import { cacheKey } from './cache-key.js';
 import {
   compareVersions,
   extractVersionFromBundleId,
@@ -84,7 +85,7 @@ function parseMap(map: FtMapInfo): MapEntry {
 
 // ─── Registry ───────────────────────────────────────────────────
 
-const CACHE_KEY = 'maps-registry';
+const CACHE_KEY = cacheKey('maps-registry');
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GLOSSARY_BUNDLE_STEM = 'jamf-technical-glossary';
 

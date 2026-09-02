@@ -15,6 +15,7 @@ import {
 } from '../../../src/core/services/metadata.js';
 import { JAMF_PRODUCTS, JAMF_TOPICS } from '../../../src/core/constants.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { cacheKey } from '../../../src/core/services/cache-key.js';
 
 const ctx = createMockContext();
 
@@ -444,7 +445,7 @@ describe('getTopicsMetadata', () => {
       // Awaits a resolved promise so this stands in for a real async call —
       // it yields to the microtask queue the way the code it replaces does.
       await Promise.resolve();
-      if (key === 'metadata:topics') {return cachedTopics;}
+      if (key === cacheKey('metadata-topics')) {return cachedTopics;}
       return null;
     });
 
@@ -599,7 +600,7 @@ describe('getTopicsResourceData', () => {
       // Awaits a resolved promise so this stands in for a real async call —
       // it yields to the microtask queue the way the code it replaces does.
       await Promise.resolve();
-      if (key === 'metadata:topics') {return cachedTopics;}
+      if (key === cacheKey('metadata-topics')) {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -621,7 +622,7 @@ describe('getTopicsResourceData', () => {
       // Awaits a resolved promise so this stands in for a real async call —
       // it yields to the microtask queue the way the code it replaces does.
       await Promise.resolve();
-      if (key === 'metadata:topics') {return cachedTopics;}
+      if (key === cacheKey('metadata-topics')) {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -642,7 +643,7 @@ describe('getTopicsResourceData', () => {
       // Awaits a resolved promise so this stands in for a real async call —
       // it yields to the microtask queue the way the code it replaces does.
       await Promise.resolve();
-      if (key === 'metadata:topics') {return cachedTopics;}
+      if (key === cacheKey('metadata-topics')) {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
@@ -659,7 +660,7 @@ describe('getTopicsResourceData', () => {
       // Awaits a resolved promise so this stands in for a real async call —
       // it yields to the microtask queue the way the code it replaces does.
       await Promise.resolve();
-      if (key === 'metadata:topics') {return cachedTopics;}
+      if (key === cacheKey('metadata-topics')) {return cachedTopics;}
       return null;
     });
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);

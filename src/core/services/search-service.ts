@@ -32,6 +32,7 @@ import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import { cleanSnippet } from './content-parser.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { compareVersions } from '../utils/bundle.js';
@@ -744,18 +745,19 @@ export async function searchDocumentation(
  * `paging` is part of the keyed object but constant in practice: this layer
  * always fetches one over-fetched page and paginates client-side.
  */
-export function buildSearchCacheKey(request: FtSearchRequest): string {
-  const canonical = {
+export function buildSearchCacheKey(request: FtSearchRequest): CacheKey {
+  return cacheKey('ft-search', {
     query: request.query,
-    // `?? null` rather than letting `undefined` through: `JSON.stringify`
-    // omits undefined properties entirely, so an absent locale would encode
-    // identically to a present one that happened to sort last.
+    // `?? null` rather than passing `undefined` through: the space declares
+    // these nullable so that "absent" is one value, not two. `cacheKey` drops
+    // undefined parts, so leaving them undefined would key an omitted locale
+    // identically to a present one only by accident of that dropping rule.
     contentLocale: request.contentLocale ?? null,
     sortId: request.sortId ?? null,
     perPage: request.paging?.perPage ?? null,
     page: request.paging?.page ?? null,
-    // Sorted into a canonical form: a filter list is a set upstream, but
-    // the encoding must not reorder arrays in general — `['a','b']` and
+    // Sorted into a canonical form here rather than in `cacheKey`, which must
+    // not reorder arrays: a filter list is a set upstream, but `['a','b']` and
     // `['b','a']` are different data in general, and a helper that collapsed
     // them would be the very non-injectivity this replaces. Compared by
     // UTF-16 code unit on the serialized tuple, not `localeCompare` — a total
@@ -768,8 +770,7 @@ export function buildSearchCacheKey(request: FtSearchRequest): string {
         if (left < right) { return -1; }
         return left > right ? 1 : 0;
       }),
-  };
-  return `ft-search:${JSON.stringify(canonical)}`;
+  });
 }
 
 /**
