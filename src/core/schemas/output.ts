@@ -196,8 +196,20 @@ export const TocOutputSchema = z.object({
    * `jamf_docs_get_toc` `product` parameter does not accept — it is an enum of
    * IDs ("jamf-pro"). A client paging through a table of contents needs the ID
    * to ask for page 2, so it is carried explicitly rather than inferred.
+   *
+   * Optional since 5.1: a TOC can also be addressed by `publication`, and a
+   * response to that request reports {@link publicationId} instead. Exactly
+   * one of the two is always present — echoing the id back under the same
+   * name the request used is what lets a client resend it without having to
+   * test it against the product enum first.
    */
-  productId: z.string(),
+  productId: z.string().optional(),
+
+  /**
+   * The bundle family id the entries were fetched under, when the request
+   * addressed the publication axis rather than the product one.
+   */
+  publicationId: z.string().optional(),
   version: z.string(),
   /**
    * The Fluid Topics map these entries came from.

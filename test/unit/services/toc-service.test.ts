@@ -499,7 +499,7 @@ describe('fetchTableOfContents()', () => {
     // Force the registry to rebuild, and make that rebuild fail. The TOC is
     // already in hand, so a broken registry should cost the id, not the page.
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry'));
+    await ctx.cache.delete(cacheKey('maps-registry-v2'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const result = await fetchTableOfContents(ctx, 'jamf-pro');

@@ -1023,3 +1023,150 @@ describe('jamf_docs_get_toc tool', () => {
     });
   });
 });
+
+// --- Publication axis -------------------------------------------------------
+
+describe('publication axis', () => {
+  /** The registry is async; these stubs are not. Keeps both promise lint rules happy. */
+  const stub = async <T>(value: T): Promise<T> => await Promise.resolve(value);
+
+  const PUBLICATIONS = [
+    { id: 'technical-paper-laps', title: 'Technical Paper: Local Administrator Password Solution for Jamf Pro',
+      portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US', 'ja-JP'], versions: [] },
+    { id: 'jamf-pro-release-notes', title: 'Jamf Pro Release Notes 11.31.0',
+      portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
+  ];
+
+  let pubServer: McpServer;
+  let pubClient: Client;
+
+  beforeAll(async () => {
+    const ctx = createMockContext({
+      mapsRegistry: {
+        hasPublication: async (id: string) => await stub(PUBLICATIONS.some(p => p.id === id)),
+        suggestPublications: async (id: string) =>
+          await stub(PUBLICATIONS.filter(p => p.id.includes(id.split('-')[0] ?? '')).map(p => p.id)),
+        listPublications: async () => await stub(PUBLICATIONS),
+        getVersions: async (id: string) =>
+          await stub(PUBLICATIONS.find(p => p.id === id)?.versions ?? []),
+        // Mirrors the live shape: a versioned family titles each map with its
+        // own version, so asking for 11.30.0 must not answer 11.31.0.
+        resolveTitle: async (id: string, version?: string) => {
+          const pub = PUBLICATIONS.find(p => p.id === id);
+          if (pub === undefined) { return await stub(null); }
+          return await stub(version === undefined ? pub.title : pub.title.replace(/[\d.]+$/, version));
+        },
+      } as never,
+    });
+
+    pubServer = new McpServer({ name: 'test-server', version: '0.0.1' });
+    registerGetTocTool(pubServer, ctx);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    pubClient = new Client({ name: 'test-client', version: '0.0.1' });
+    await pubServer.connect(serverTransport);
+    await pubClient.connect(clientTransport);
+  });
+
+  afterAll(async () => { await pubClient.close(); });
+
+  beforeEach(() => { vi.mocked(fetchTableOfContents).mockReset(); });
+
+  it('should fetch a TOC for a publication that is not one of the products', async () => {
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-laps' },
+    });
+
+    expect(result.isError).toBeFalsy();
+    // The bundle stem reaches the service unchanged — that is the whole point:
+    // resolveMapId has always been able to reach all 97 families.
+    expect(fetchTableOfContents).toHaveBeenCalledWith(
+      expect.anything(), 'technical-paper-laps', 'current', expect.anything(),
+    );
+  });
+
+  it('should title the response with Jamf\'s own map title', async () => {
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-laps' },
+    });
+
+    expect(getTextContent(result))
+      .toContain('Technical Paper: Local Administrator Password Solution for Jamf Pro');
+  });
+
+  it('should return publicationId, not productId, so a client knows which argument to resend', async () => {
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-laps' },
+    });
+
+    const sc = result.structuredContent as Record<string, unknown>;
+    expect(sc.publicationId).toBe('technical-paper-laps');
+    expect(sc.productId).toBeUndefined();
+  });
+
+  it('should enumerate a versioned publication instead of reporting only current', async () => {
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'jamf-pro-release-notes', version: '9.9.9' },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = getTextContent(result);
+    expect(text).toContain('11.31.0');
+    expect(text).toContain('11.30.0');
+  });
+
+  it('should suggest near matches for an unknown publication', async () => {
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-lapse' },
+    });
+
+    expect(result.isError).toBe(true);
+    const text = getTextContent(result);
+    expect(text).toContain('Unknown publication');
+    expect(text).toContain('technical-paper-laps');
+  });
+
+  it('should reject a request naming neither axis', async () => {
+    const result = await pubClient.callTool({ name: 'jamf_docs_get_toc', arguments: {} });
+
+    expect(result.isError).toBe(true);
+    expect(getTextContent(result)).toContain('either `product`');
+  });
+
+  it('should reject a request naming both axes', async () => {
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { product: 'jamf-pro', publication: 'technical-paper-laps' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(getTextContent(result)).toContain('only one');
+  });
+
+  it('should title a versioned publication with the version actually served', async () => {
+    // Live regression: asking for 11.26.0 rendered "Jamf Pro Release Notes
+    // 11.31.0" because the label came from the family's latest map.
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(buildTocResponse());
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'jamf-pro-release-notes', version: '11.30.0', outputMode: 'compact' },
+    });
+
+    const text = getTextContent(result);
+    expect(text).toContain('11.30.0');
+    expect(text).not.toContain('11.31.0');
+  });
+});
