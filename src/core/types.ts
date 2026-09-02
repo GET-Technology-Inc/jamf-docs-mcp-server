@@ -88,6 +88,17 @@ export interface SearchResult {
   contentId?: string;
   breadcrumb?: string[];
   mapTitle?: string;
+  /**
+   * Other versions of this same topic that the search collapsed away.
+   *
+   * Fluid Topics publishes one entry per product version, all sharing an
+   * `ft:clusterId`; `dedupeToLatestVersions` keeps the newest so a broad
+   * query does not return fifteen copies of one page. Listing what it
+   * dropped is what makes that reversible: the reader can see the topic
+   * exists in 11.26 and ask for it by version. Newest first; absent when
+   * nothing was collapsed.
+   */
+  otherVersions?: string[];
 }
 
 export interface FilterRelaxation {

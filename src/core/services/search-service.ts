@@ -233,6 +233,13 @@ export function buildSearchFilters(
   return filters;
 }
 
+/** A survivor of {@link dedupeToLatestVersions}, with the versions it stands for. */
+export interface DedupedEntry {
+  entry: FtSearchEntry;
+  /** Versions collapsed into this one, newest first. Empty when nothing was. */
+  collapsedVersions: string[];
+}
+
 /**
  * Collapse Fluid Topics version snapshots to a single result per topic.
  *
@@ -244,12 +251,20 @@ export function buildSearchFilters(
  * Entries with no `ft:clusterId` cannot be version-deduped and are each kept.
  *
  * First-seen (relevance) order is preserved.
+ *
+ * Collapsing stays the default — one broad query returns roughly fifteen
+ * snapshots per topic and a release-notes query returned 199 entries for ten
+ * topics, so surfacing all of them would bury the answer. What changes is
+ * that it is no longer silent: each survivor carries the versions that were
+ * dropped, so "what changed in 11.26?" is answerable rather than invisible.
+ * That matters most for release notes, whose whole value is the older
+ * versions.
  */
 export function dedupeToLatestVersions(
   clusters: FtSearchCluster[]
-): FtSearchEntry[] {
+): DedupedEntry[] {
   const order: string[] = [];
-  const best = new Map<string, { entry: FtSearchEntry; version: string }>();
+  const best = new Map<string, { entry: FtSearchEntry; version: string; seen: Set<string> }>();
   let anonCount = 0;
 
   for (const cluster of clusters) {
@@ -262,16 +277,29 @@ export function dedupeToLatestVersions(
       const existing = best.get(key);
       if (existing === undefined) {
         order.push(key);
-        best.set(key, { entry, version });
-      } else if (compareVersions(version, existing.version) > 0) {
-        best.set(key, { entry, version });
+        best.set(key, { entry, version, seen: new Set(version !== '' ? [version] : []) });
+      } else {
+        if (version !== '') { existing.seen.add(version); }
+        if (compareVersions(version, existing.version) > 0) {
+          existing.entry = entry;
+          existing.version = version;
+        }
       }
     }
   }
 
-  return order
-    .map(key => best.get(key)?.entry)
-    .filter((entry): entry is FtSearchEntry => entry !== undefined);
+  const out: DedupedEntry[] = [];
+  for (const key of order) {
+    const hit = best.get(key);
+    if (hit === undefined) { continue; }
+    // Only the versions that lost. The survivor's own version is reported as
+    // the result's `version`, so repeating it here would read as a duplicate.
+    const collapsed = [...hit.seen]
+      .filter(v => v !== hit.version)
+      .sort((a, b) => compareVersions(b, a));
+    out.push({ entry: hit.entry, collapsedVersions: collapsed });
+  }
+  return out;
 }
 
 // ─── Result Transformation ─────────────────────────────────────
@@ -839,11 +867,11 @@ async function resolveSearchResults(
     // Deduping before transform avoids running cleanSnippet etc. over every
     // Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
     const out: SearchResultWithMeta[] = [];
-    for (const entry of dedupeToLatestVersions(ftResponse.results)) {
+    for (const { entry, collapsedVersions } of dedupeToLatestVersions(ftResponse.results)) {
       const searchResult = transformFtSearchResult(entry);
       if (searchResult.url !== '') {
         out.push(toSearchResultWithMeta(
-          searchResult,
+          { ...searchResult, ...(collapsedVersions.length > 0 ? { otherVersions: collapsedVersions } : {}) },
           docTypeLabelKeys(entryMetadata(entry)),
         ));
       }

@@ -323,7 +323,10 @@ describe('dedupeToLatestVersions()', () => {
     const deduped = dedupeToLatestVersions([cluster]);
 
     expect(deduped).toHaveLength(1);
-    expect(deduped[0].topic?.contentId).toBe('c2'); // the 11.29.0 entry
+    expect(deduped[0].entry.topic?.contentId).toBe('c2'); // the 11.29.0 entry
+    // The collapse is reported, not silent: the survivor names what it stands
+    // for, newest first, and does not repeat its own version.
+    expect(deduped[0].collapsedVersions).toEqual(['11.28.0', '11.27.0']);
   });
 
   it('preserves non-versioned non-Pro topics (distinct cluster ids)', () => {
@@ -336,9 +339,11 @@ describe('dedupeToLatestVersions()', () => {
     // One result per product — none dropped by version dedup.
     expect(deduped).toHaveLength(3);
     const products = deduped.map(
-      e => e.topic?.metadata?.find(m => m.key === 'zoominmetadata')?.values[0]
+      d => d.entry.topic?.metadata?.find(m => m.key === 'zoominmetadata')?.values[0]
     );
     expect(new Set(products)).toEqual(new Set(['product-pro', 'product-school', 'product-connect']));
+    // Nothing was collapsed, so nothing is claimed to have been.
+    expect(deduped.every(d => d.collapsedVersions.length === 0)).toBe(true);
   });
 
   it('preserves first-seen (relevance) order', () => {
@@ -351,7 +356,8 @@ describe('dedupeToLatestVersions()', () => {
       makeCluster([makeVersionedEntry('connect/Z', '', 'product-connect', 'third')]),
     ]);
 
-    expect(deduped.map(e => e.topic?.contentId)).toEqual(['first', 'second-new', 'third']);
+    expect(deduped.map(d => d.entry.topic?.contentId)).toEqual(['first', 'second-new', 'third']);
+    expect(deduped[1].collapsedVersions).toEqual(['11.20.0']);
   });
 
   it('keeps each entry that has no cluster id (cannot be version-deduped)', () => {
@@ -361,6 +367,7 @@ describe('dedupeToLatestVersions()', () => {
     const deduped = dedupeToLatestVersions([makeCluster([noCluster1, noCluster2])]);
 
     expect(deduped).toHaveLength(2);
+    expect(deduped.every(d => d.collapsedVersions.length === 0)).toBe(true);
   });
 });
 
