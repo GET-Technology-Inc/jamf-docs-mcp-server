@@ -17,9 +17,14 @@ import {
 import { extractLocaleFromUrl } from '../../src/core/utils/url.js';
 import { completeLanguage } from '../../src/core/completions.js';
 
-// Ground truth from FluidTopics availableUiLocales + manual verification (2026-03-29)
-// These 8 locales have actual documentation content accessible via the language switcher.
-// availableContentLocales includes 3 more (it-IT, pt-BR, zh-CN) but they have no content.
+// Ground truth: every locale that carries at least one map in
+// `/api/khub/maps`, re-measured over all 662 maps on 2026-09-02.
+//
+// The previous note here said it-IT, pt-BR and zh-CN appeared in
+// availableContentLocales "but they have no content". That has stopped being
+// true — each now carries the Jamf Parent and Jamf Teacher guides (2 maps
+// apiece) and each returns a real TOC in its own language. They are declared
+// alongside th-TH, whose content is exactly the same two publications.
 const OFFICIAL_LOCALES: Record<string, string> = {
   'en-US': 'English',
   'ja-JP': '日本語',
@@ -29,6 +34,9 @@ const OFFICIAL_LOCALES: Record<string, string> = {
   'fr-FR': 'Français',
   'nl-NL': 'Nederlands',
   'th-TH': 'ไทย',
+  'it-IT': 'Italiano',
+  'pt-BR': 'Português (Brasil)',
+  'zh-CN': '简体中文',
 };
 const OFFICIAL_LOCALE_CODES = Object.keys(OFFICIAL_LOCALES);
 
@@ -37,7 +45,7 @@ describe('SUPPORTED_LOCALES', () => {
     expect(DEFAULT_LOCALE).toBe('en-US');
   });
 
-  it('should contain exactly the 8 official Jamf locales', () => {
+  it('should contain exactly the locales Jamf publishes in', () => {
     expect(SUPPORTED_LOCALE_IDS).toEqual(OFFICIAL_LOCALE_CODES);
   });
 
@@ -106,16 +114,18 @@ describe('extractLocaleFromUrl', () => {
 });
 
 describe('completeLanguage', () => {
-  it('should return all 8 official locales for empty input', () => {
+  it('should return every published locale for empty input', () => {
     expect(completeLanguage('')).toEqual(OFFICIAL_LOCALE_CODES);
   });
 
-  it('should return all 8 official locales for undefined input', () => {
+  it('should return every published locale for undefined input', () => {
     expect(completeLanguage(undefined)).toEqual(OFFICIAL_LOCALE_CODES);
   });
 
+  // Two now, in declaration order: Jamf publishes the Parent and Teacher
+  // guides in Simplified Chinese as well as Traditional.
   it('should filter by prefix "zh"', () => {
-    expect(completeLanguage('zh')).toEqual(['zh-TW']);
+    expect(completeLanguage('zh')).toEqual(['zh-TW', 'zh-CN']);
   });
 
   it('should filter by prefix "ja"', () => {
