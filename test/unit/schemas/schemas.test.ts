@@ -264,9 +264,23 @@ describe('GetTocInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('should reject input without a product', () => {
-    const result = GetTocInputSchema.safeParse({});
-    expect(result.success).toBe(false);
+  // `product` and `publication` are one axis each and exactly one is
+  // required, but that pairing cannot live in the object schema: expressing
+  // it needs `.refine()`, which makes this a ZodEffects and breaks the JSON
+  // Schema `registerTool` derives from it. The schema therefore accepts
+  // neither, both, or one, and the handler is what enforces the pairing —
+  // covered in get-toc.test.ts.
+  it('should accept input with neither product nor publication, leaving the pairing to the handler', () => {
+    expect(GetTocInputSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('should accept a publication id', () => {
+    const result = GetTocInputSchema.safeParse({ publication: 'technical-paper-laps' });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject an empty publication id', () => {
+    expect(GetTocInputSchema.safeParse({ publication: '' }).success).toBe(false);
   });
 
   it('should accept an optional version string', () => {

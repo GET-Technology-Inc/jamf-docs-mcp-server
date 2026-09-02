@@ -6,13 +6,13 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { appToolMeta } from '../apps/index.js';
-import { GetTocInputSchema } from '../schemas/index.js';
+import { GetTocInputSchema, type GetTocInput } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
-import { fetchTableOfContents } from '../services/toc-service.js';
+import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
@@ -163,13 +163,18 @@ function flattenTocEntries(entries: TocEntry[], depth = 0): FlatTocEntry[] {
 
 const TOOL_NAME = 'jamf_docs_get_toc';
 
-const TOOL_DESCRIPTION = `Get the table of contents for a Jamf product's documentation.
+const TOOL_DESCRIPTION = `Get the table of contents for Jamf documentation.
 
-This tool retrieves the navigation structure for a specific Jamf product,
-allowing you to browse available documentation topics.
+Browse the navigation structure of either a Jamf product or any single Jamf
+publication - release notes, technical papers, courses, evaluation guides and
+configuration guides all live on the publication axis rather than the product
+one. Exactly one of \`product\` and \`publication\` is required.
 
 Args:
-  - product (string, required): Product ID - one of: ${PRODUCT_ID_LIST}
+  - product (string): Product ID - one of: ${PRODUCT_ID_LIST}
+  - publication (string): Bundle family id of any single publication, e.g.
+    "technical-paper-laps" or "jamf-pro-release-notes". Call
+    jamf_docs_list_products for the available ids
   - version (string, optional): Specific version (defaults to latest)
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
@@ -180,6 +185,8 @@ Returns:
   For JSON format:
   {
     "product": string,
+    "productId": string,      // present when addressed by product
+    "publicationId": string,  // present when addressed by publication
     "version": string,
     "mapId": string,   // omitted when the map could not be resolved
     "toc": [...],      // each entry carries title, url and contentId
@@ -287,6 +294,88 @@ function renderTocNotices(notices: TocNotices): string {
   return rendered;
 }
 
+/** A `get_toc` request that named something Fluid Topics can serve. */
+interface ResolvedTocSource {
+  source: TocSource;
+  /** What to call it in prose. */
+  sourceLabel: string;
+  /** Versions the registry actually publishes for it, newest first. */
+  availableVersions: string[];
+}
+
+/**
+ * Turn `product` / `publication` into one addressable source, or say why not.
+ *
+ * The two parameters are one axis each — `product` names a Jamf product,
+ * `publication` names a single document by its bundle family — and exactly
+ * one is required. That pairing cannot be expressed in the object schema
+ * without `.refine()` (which would make it a ZodEffects and break the tool's
+ * JSON Schema derivation), so it is enforced here, where the message can also
+ * say what to call instead.
+ */
+async function resolveTocSource(
+  ctx: ServerContext,
+  params: GetTocInput,
+  version: string,
+): Promise<ResolvedTocSource | { error: string }> {
+  if ((params.product !== undefined) === (params.publication !== undefined)) {
+    return {
+      error: params.product === undefined
+        ? 'Provide either `product` (one of the Jamf products) or `publication` (a bundle ' +
+          'family id such as "technical-paper-laps"). Call jamf_docs_list_products to see both.'
+        : 'Provide only one of `product` and `publication`, not both. `product` addresses a ' +
+          'Jamf product; `publication` addresses any single document by its bundle family id.',
+    };
+  }
+
+  if (params.product !== undefined) {
+    if (!(params.product in JAMF_PRODUCTS)) {
+      const valid = Object.entries(JAMF_PRODUCTS)
+        .map(([id, p]) => `- \`${id}\`: ${p.name}`)
+        .join('\n');
+      return { error: `Invalid product ID: "${params.product}".\n\nValid options:\n${valid}` };
+    }
+    const productId = params.product as ProductId;
+    return {
+      source: productId,
+      sourceLabel: JAMF_PRODUCTS[productId].name,
+      availableVersions: await getAvailableVersions(ctx, productId),
+    };
+  }
+
+  const publication = params.publication ?? '';
+
+  // Not an enum: there are 97 families and the set is upstream's to change,
+  // so the check is a registry lookup and a miss carries suggestions rather
+  // than a wall of every id.
+  if (!(await ctx.mapsRegistry.hasPublication(publication))) {
+    const suggestions = await ctx.mapsRegistry.suggestPublications(publication);
+    return {
+      error: `Unknown publication: "${publication}".${
+        suggestions.length > 0
+          ? `\n\nDid you mean:\n${suggestions.map(id => `- \`${id}\``).join('\n')}`
+          : '\n\nCall jamf_docs_list_products to see the available publications.'
+      }`,
+    };
+  }
+
+  const locale = params.language as LocaleId | undefined;
+
+  return {
+    source: publication,
+    // The title of the map actually being served, not the family's latest:
+    // versioned families put their version in the title, so reporting the
+    // latest while serving an older one is wrong exactly where a reader looks.
+    sourceLabel: await ctx.mapsRegistry.resolveTitle(
+      publication,
+      version !== 'current' ? version : undefined,
+      locale,
+    ) ?? publication,
+    // A publication id is already the bundle stem the registry keys on.
+    availableVersions: await ctx.mapsRegistry.getVersions(publication),
+  };
+}
+
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
@@ -317,23 +406,12 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
       const params = parseResult.data;
 
       try {
-        // Validate product
-        if (!(params.product in JAMF_PRODUCTS)) {
-          return {
-            isError: true,
-            content: [{
-              type: 'text',
-              text: `Invalid product ID: "${params.product}".\n\nValid options:\n${Object.entries(JAMF_PRODUCTS).map(([id, p]) => `- \`${id}\`: ${p.name}`).join('\n')}`
-            }]
-          };
-        }
-
-        const productId = params.product as ProductId;
-        const productInfo = JAMF_PRODUCTS[productId];
-
-        // Get available versions dynamically
-        const availableVersions = await getAvailableVersions(ctx, productId);
         const version = params.version ?? 'current';
+        const resolved = await resolveTocSource(ctx, params, version);
+        if ('error' in resolved) {
+          return { isError: true, content: [{ type: 'text', text: resolved.error }] };
+        }
+        const { source, sourceLabel, availableVersions } = resolved;
 
         // Validate version if specified
         if (params.version !== undefined && params.version !== '' && params.version !== 'current') {
@@ -342,7 +420,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
               isError: true,
               content: [{
                 type: 'text',
-                text: `Version "${params.version}" not found for ${productInfo.name}.\n\nAvailable versions: ${availableVersions.length > 0 ? availableVersions.join(', ') : 'current'}`
+                text: `Version "${params.version}" not found for ${sourceLabel}.\n\nAvailable versions: ${availableVersions.length > 0 ? availableVersions.join(', ') : 'current'}`
               }]
             };
           }
@@ -350,7 +428,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
-        const tocResult = await fetchTableOfContents(ctx, productId, version, {
+        const tocResult = await fetchTableOfContents(ctx, source, version, {
           ...(params.page !== undefined && { page: params.page }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
           locale: params.language as LocaleId | undefined
@@ -362,7 +440,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         // Build response
         const response: TocResponse = {
-          product: productInfo.name,
+          product: sourceLabel,
           version,
           ...(mapId !== undefined ? { mapId } : {}),
           toc,
@@ -371,11 +449,14 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
         };
 
         const structuredContent = {
-          product: productInfo.name,
+          product: sourceLabel,
           // The ID, not just the display name: a client paging through this
-          // TOC has to pass `product` back, and that parameter is an enum of
-          // IDs. Sending only the name made "next page" impossible.
-          productId: params.product,
+          // TOC has to pass the same argument back, and `product` is an enum
+          // of IDs. Sending only the name made "next page" impossible. For a
+          // publication the id goes back under its own key, so a client can
+          // tell which parameter to resend without matching against the enum.
+          ...(params.product !== undefined ? { productId: params.product } : {}),
+          ...(params.publication !== undefined ? { publicationId: params.publication } : {}),
           version,
           // Pairs with each entry's `contentId` to form the direct-fetch pair
           // `jamf_docs_get_article` documents.
@@ -409,8 +490,8 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         // Format as markdown (compact or full)
         const markdown = (params.outputMode === OutputMode.COMPACT
-          ? formatTocCompact(productInfo.name, toc, pagination)
-          : formatTocFull({ productName: productInfo.name, version, mapId, toc, pagination, tokenInfo }))
+          ? formatTocCompact(sourceLabel, toc, pagination)
+          : formatTocFull({ productName: sourceLabel, version, mapId, toc, pagination, tokenInfo }))
           + renderTocNotices(notices);
 
         await reportProgress(extra, { progress: 4, total: 4 });

@@ -219,11 +219,29 @@ export type GetArticleInput = z.infer<typeof GetArticleInputSchema>;
  * Schema for jamf_docs_get_toc
  */
 export const GetTocInputSchema = z.object({
+  // Optional since 5.1: exactly one of `product` and `publication` is
+  // required, and that pairing cannot be expressed in a plain object schema
+  // without `.refine()`, which would turn this into a ZodEffects and break
+  // `registerTool`'s JSON Schema derivation. The handler enforces it and can
+  // give a far better message than a refinement would.
   product: completable(
     z.enum(PRODUCT_IDS)
+      .optional()
       .describe(PRODUCT_REQUIRED_DESCRIPTION),
     completeProduct
   ),
+
+  publication: z.string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'Bundle family id for any Jamf publication, e.g. "technical-paper-laps" or ' +
+      '"jamf-pro-release-notes". Use this for the documents that are not one of the ' +
+      'products in `product` — release notes, technical papers, courses, evaluation ' +
+      'and configuration guides. Exactly one of `product` or `publication` is required. ' +
+      'Call jamf_docs_list_products to see the available ids.'
+    ),
 
   language: completable(
     z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),

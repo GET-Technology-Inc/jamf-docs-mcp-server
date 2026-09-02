@@ -32,7 +32,7 @@
  * Keys here stay readable, which is what makes a cache directory debuggable.
  */
 
-import type { LocaleId, ProductId } from '../constants/index.js';
+import type { LocaleId } from '../constants/index.js';
 
 declare const CACHE_KEY_BRAND: unique symbol;
 
@@ -93,7 +93,14 @@ export interface CacheKeySpaces {
   // such call would cache an article whose `url` is empty and serve it to
   // every later caller that asked by URL.
   'ft-article-v3': { mapId: string; contentId: string; articleUrl: string };
-  'ft-toc': { locale: LocaleId; product: ProductId; version: string };
+  // `product` is a ProductId **or** a bundle family stem: `get_toc` addresses
+  // both axes and they land in the same cache. The two id spaces overlap on
+  // exactly one value — `jamf-app-catalog` is both a product id and its own
+  // bundle stem — and there they name the same publication, so sharing the
+  // namespace cannot serve one caller another's TOC. Kept as `product` rather
+  // than renamed: the field name is part of the key material, so renaming it
+  // would orphan every TOC entry on disk to buy nothing.
+  'ft-toc': { locale: LocaleId; product: string; version: string };
   'ft-tocindex-v2': { mapId: string };
   'ft-topic-index': { mapId: string };
   // `mapId` and nothing else. `fetchGlossaryToc` calls `fetchMapToc(mapId)`
@@ -106,7 +113,7 @@ export interface CacheKeySpaces {
   // overwrote each other.
   'glossary-toc': { mapId: string };
   'glossary-content': { mapId: string; contentId: string };
-  'maps-registry': null;
+  'maps-registry-v2': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
   'metadata-product-availability': null;
@@ -161,7 +168,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-topic-index': true,
   'glossary-toc': true,
   'glossary-content': true,
-  'maps-registry': true,
+  'maps-registry-v2': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
   'metadata-product-availability': true,
