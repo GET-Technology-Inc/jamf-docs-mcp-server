@@ -1,3 +1,9 @@
+## [5.4.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.0...v5.4.1) (2026-09-02)
+
+### Bug Fixes
+
+* **list-products:** report the versions the registry publishes ([#260](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/260)) ([ba57b6d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ba57b6d91e9689d553cdb848e0b3fb0f1b2d44d1)), closes [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240) [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
 ## [5.4.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.3.0...v5.4.0) (2026-09-02)
 
 ### Features
