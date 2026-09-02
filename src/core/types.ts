@@ -83,12 +83,22 @@ export interface SearchResult {
   snippet: string;
   product: string | null;  // API may return null for some results
   version?: string;
-  relevance?: number;
   docType?: DocTypeId;
   mapId?: string;
   contentId?: string;
   breadcrumb?: string[];
   mapTitle?: string;
+  /**
+   * Other versions of this same topic that the search collapsed away.
+   *
+   * Fluid Topics publishes one entry per product version, all sharing an
+   * `ft:clusterId`; `dedupeToLatestVersions` keeps the newest so a broad
+   * query does not return fifteen copies of one page. Listing what it
+   * dropped is what makes that reversible: the reader can see the topic
+   * exists in 11.26 and ask for it by version. Newest first; absent when
+   * nothing was collapsed.
+   */
+  otherVersions?: string[];
 }
 
 export interface FilterRelaxation {
@@ -171,6 +181,16 @@ export interface FetchTocResult {
   mapId?: string;
   /** Set when the requested page was clamped to the last available page. */
   paginationNote?: string;
+  /**
+   * The locale of the map that actually answered.
+   *
+   * Differs from the requested one whenever Jamf does not publish this
+   * publication in it — 42 of 97 families are en-US only, and
+   * `jamf-school-documentation` has no zh-TW map at all. The registry has
+   * always fallen back to en-US; carrying the answer out is what lets the
+   * caller say so rather than presenting English as a translation.
+   */
+  resolvedLocale?: string;
 }
 
 /**

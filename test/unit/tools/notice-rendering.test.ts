@@ -87,6 +87,10 @@ function tocPayloadWithAllNotices(): Record<string, unknown> {
     pagination: createPaginationInfo({ page: 3, totalPages: 3, totalItems: 25, hasNext: false, hasPrev: true }),
     tokenInfo: createTokenInfo(),
     paginationNote: CLAMPED_PAGE_NOTE,
+    // The registry answered in a different language than was asked for. Jamf
+    // publishes 42 of its 97 families in en-US only, so the tool must be able
+    // to say so; the sweep below asserts the resulting note is reachable.
+    resolvedLocale: 'en-US',
   };
 }
 
@@ -303,7 +307,13 @@ describe('tool notices reach the caller', () => {
         );
         record(await client.callTool({
           name: 'jamf_docs_get_toc',
-          arguments: { product: 'jamf-pro', version: '11.5.0', page: 99, responseFormat },
+          arguments: {
+            product: 'jamf-pro', version: '11.5.0', page: 99,
+            // Requesting a language the payload above did not answer in is
+            // what makes `localeNote` fire.
+            language: 'zh-TW',
+            responseFormat,
+          },
         }));
       }
 

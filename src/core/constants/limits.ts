@@ -41,6 +41,28 @@ export const PAGINATION_CONFIG = {
 } as const;
 
 // HTML selectors for learn.jamf.com (React-based site)
+/**
+ * The CSS selectors one documentation source needs to be readable.
+ *
+ * Extracted as a type because `SELECTORS` below describes learn.jamf.com
+ * specifically — its `<article>` markup, its breadcrumb classes, the wrappers
+ * Fluid Topics emits — and a second source has different ones. Declaring the
+ * shape lets each source carry its own set instead of every source being
+ * parsed as though it were Fluid Topics.
+ */
+export interface SelectorSet {
+  /** Where the article body lives. */
+  readonly CONTENT: string;
+  /** The page title. */
+  readonly TITLE: string;
+  /** Breadcrumb trail anchors. */
+  readonly BREADCRUMB: string;
+  /** Related-article anchors. */
+  readonly RELATED: string;
+  /** Everything to strip before converting to Markdown. */
+  readonly REMOVE: string;
+}
+
 export const SELECTORS = {
   // Main content - learn.jamf.com uses semantic article tag
   CONTENT: 'article, .article-content, main article, #content',
@@ -54,4 +76,4 @@ export const SELECTORS = {
 
   // Elements to remove (scripts, tracking, etc.)
   REMOVE: 'script, style, noscript, footer, [id="initial-data"], [class*="cookie"], [class*="tracking"], [class*="analytics"]'
-} as const;
+} as const satisfies SelectorSet;

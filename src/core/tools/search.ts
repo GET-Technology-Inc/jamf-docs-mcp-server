@@ -15,6 +15,10 @@ import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
+import {
+  searchStaticSources,
+  type StaticSearchHit,
+} from '../services/static-search-service.js';
 
 interface SearchFilters {
   product?: string;
@@ -87,6 +91,17 @@ function formatSearchResult(result: SearchResult): string {
   }
   if (result.version !== undefined) {
     meta.push(`**Version**: ${result.version}`);
+  }
+  // Say what was collapsed, and how to get it. Naming the newest few rather
+  // than all of them keeps a release-notes hit readable — one topic can span
+  // forty-three versions — while still proving the older ones exist.
+  if (result.otherVersions !== undefined && result.otherVersions.length > 0) {
+    const shown = result.otherVersions.slice(0, 3).join(', ');
+    const rest = result.otherVersions.length - 3;
+    meta.push(
+      `**Also in**: ${shown}${rest > 0 ? ` +${String(rest)} more` : ''}` +
+      ' (pass `version` to fetch one)'
+    );
   }
   const ids = formatResultIds(result);
   if (ids !== '') {
@@ -339,6 +354,34 @@ function activeSearchFilters(params: {
   return Object.keys(filters).length > 0 ? filters : undefined;
 }
 
+/**
+ * Render the other-source hits as a labelled trailer.
+ *
+ * Below the results and clearly separated, because these come from a
+ * different ranking that shares no scale with the one above — and because
+ * two of the three sources are not product documentation.
+ */
+function renderOtherSources(hits: StaticSearchHit[]): string {
+  if (hits.length === 0) { return ''; }
+
+  const bySource = new Map<string, StaticSearchHit[]>();
+  for (const hit of hits) {
+    bySource.set(hit.source, [...(bySource.get(hit.source) ?? []), hit]);
+  }
+
+  let out = '\n---\n\n## Also found outside the product documentation\n\n';
+  for (const [source, sourceHits] of bySource) {
+    out += `**${source}**\n\n`;
+    for (const hit of sourceHits) {
+      out += `- [${sanitizeMarkdownText(hit.title)}](${sanitizeMarkdownUrl(hit.url)})\n`;
+    }
+    out += '\n';
+  }
+  out += '*Matched on title, ranked separately from the results above — '
+    + 'Fluid Topics returns no score to rank them against.*\n';
+  return out;
+}
+
 function buildSearchStructuredContent(
   query: string,
   results: SearchResult[],
@@ -350,6 +393,7 @@ function buildSearchStructuredContent(
     truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
+    otherSources?: StaticSearchHit[] | undefined;
   }
 ): Record<string, unknown> {
   return {
@@ -373,6 +417,7 @@ function buildSearchStructuredContent(
       // perform from the outputs this server actually produces.
       ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
       ...(r.contentId !== undefined ? { contentId: r.contentId } : {}),
+      ...(r.otherVersions !== undefined ? { otherVersions: r.otherVersions } : {}),
       // Same drop as `mapId`/`contentId` above: declared on
       // `SearchOutputSchema`, populated by `buildSearchResult` from the Fluid
       // Topics topic (and by the downstream worker's search provider), and
@@ -385,7 +430,17 @@ function buildSearchStructuredContent(
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
     ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
-    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {})
+    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {}),
+    // Omitted rather than emitted empty: "nothing matched elsewhere" and
+    // "the other sources were not reachable" are different answers, and an
+    // empty array would claim the first.
+    ...(extras?.otherSources !== undefined && extras.otherSources.length > 0
+      ? {
+          otherSources: extras.otherSources.map(hit => ({
+            title: hit.title, url: hit.url, source: hit.source,
+          })),
+        }
+      : {})
   };
 }
 
@@ -532,6 +587,23 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
 
+        // The non-Fluid-Topics sources, as their own block.
+        //
+        // Deliberately not merged into the ranking above. Fluid Topics
+        // returns no score — see the relevanceNote below, which says so —
+        // and neither does this server's SearchResult, so there is nothing
+        // on either side to fuse two orderings on. Interleaving them on an
+        // invented number would look authoritative and would not be. Never
+        // allowed to fail the search it runs beside.
+        const otherSources = await searchStaticSources(
+          ctx, params.query, params.language ?? DEFAULT_LOCALE,
+        ).catch((error: unknown) => {
+          ctx.logger.createLogger('search').warning(
+            `Other-source search failed: ${String(error)}`,
+          );
+          return [];
+        });
+
         const {
           results, pagination, tokenInfo, filterRelaxation, versionNote,
           paginationNote, truncatedContent
@@ -574,14 +646,24 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             versionNote,
             paginationNote,
             truncatedContent,
+            otherSources,
           }
         );
 
         if (params.responseFormat === ResponseFormat.JSON) {
-          // Add relevance note only in JSON format
+          // Add relevance note only in JSON format.
+          //
+          // States the ordering and nothing more. The previous wording promised
+          // "relevance scores ... higher values indicate stronger keyword
+          // matches", but Fluid Topics returns no score of any kind — a
+          // clustered-search entry carries only `type`, `missingTerms` and the
+          // topic/map payload, with no score, rank or weight field anywhere in
+          // the response — and no result this server emits has ever carried a
+          // numeric relevance. The ordering itself is real: `sortId:
+          // 'relevance'` is sent explicitly (see resolveSearchResults).
           const jsonResponse = {
             ...response,
-            relevanceNote: 'Relevance scores are provided by the Fluid Topics Search API based on text matching. Higher values indicate stronger keyword matches.'
+            relevanceNote: 'Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included.'
           };
           await reportProgress(extra, { progress: 3, total: 3 });
           return {
@@ -603,7 +685,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         const markdown = appendMarkdownNotices(
           formatFn(params.query, results, filters, pagination, tokenInfo),
           { filterRelaxation, versionNote, paginationNote, truncatedContent }
-        );
+        ) + renderOtherSources(otherSources);
 
         await reportProgress(extra, { progress: 3, total: 3 });
         return {

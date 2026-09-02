@@ -49,14 +49,33 @@ vi.mock('../../src/core/services/search-suggestions.js', () => ({
   ),
 }));
 
-vi.mock('../../src/core/services/metadata.js', () => ({
-  getAvailableVersions: vi.fn().mockResolvedValue([]),
-  getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
-  getProductsMetadata: vi.fn().mockResolvedValue([]),
-  getProductAvailability: vi.fn().mockResolvedValue({}),
-  getProductsResourceData: vi.fn(),
-  getTopicsResourceData: vi.fn(),
-}));
+vi.mock('../../src/core/services/metadata.js', async () => {
+  // `getProductsMetadata` used to be mocked to `[]` because nothing that
+  // these tests exercise read it. `jamf_docs_list_products` does now — it is
+  // where the tool gets registry-resolved versions instead of the constant's
+  // `['current']` — so an empty array here silently emptied the product list
+  // rather than failing loudly. Derived from the real registry so the shape
+  // and the row count stay honest as products are added.
+  const { JAMF_PRODUCTS } = await import('../../src/core/constants/products.js');
+  return {
+    getAvailableVersions: vi.fn().mockResolvedValue([]),
+    getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
+    getProductsMetadata: vi.fn().mockResolvedValue(
+      Object.values(JAMF_PRODUCTS).map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        bundleId: p.bundleId,
+        latestVersion: p.latestVersion,
+        availableVersions: [...p.versions],
+        labelKey: p.searchLabel,
+      }))
+    ),
+    getProductAvailability: vi.fn().mockResolvedValue({}),
+    getProductsResourceData: vi.fn(),
+    getTopicsResourceData: vi.fn(),
+  };
+});
 
 vi.mock('../../src/core/services/cache.js', () => ({
   cache: {
@@ -78,12 +97,13 @@ import {
   getBundleIdForVersion,
 } from '../../src/core/services/metadata.js';
 import type { FetchArticleResult } from '../../src/core/types.js';
+import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 import { registerListProductsTool } from '../../src/core/tools/list-products.js';
 import { registerSearchTool } from '../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
 import { registerGetTocTool } from '../../src/core/tools/get-toc.js';
 import { registerResources } from '../../src/core/resources/index.js';
-import { createMockContext, createMockArticleProvider } from '../helpers/mock-context.js';
+import { createMockContext, createMockArticleProvider, createStubMapsRegistry } from '../helpers/mock-context.js';
 import { registerTroubleshootPrompt } from '../../src/core/prompts/troubleshoot.js';
 import { registerSetupGuidePrompt } from '../../src/core/prompts/setup-guide.js';
 import { registerCompareVersionsPrompt } from '../../src/core/prompts/compare-versions.js';
@@ -95,6 +115,10 @@ const mockArticleProvider = createMockArticleProvider(() => nextArticleResult);
 
 const ctx = createMockContext({
   articleProvider: mockArticleProvider,
+  // list_products reads the publication axis from the maps registry. Without
+  // a stub the default registry reaches learn.jamf.com for real, and the tool
+  // degrades quietly on failure — so the leak would never turn a test red.
+  mapsRegistry: createStubMapsRegistry(),
 });
 // Override topicResolver.resolve to return fixed IDs (avoids network calls)
 ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
@@ -306,7 +330,7 @@ describe('E2E: MCP Server Response Schema', () => {
   // =========================================================================
 
   describe('jamf_docs_list_products', () => {
-    it('should return all 4 products in markdown format', async () => {
+    it('should return every registered product in markdown format', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: {},
@@ -334,10 +358,10 @@ describe('E2E: MCP Server Response Schema', () => {
       const json = JSON.parse(text);
 
       expect(Array.isArray(json.products)).toBe(true);
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
 
-    it('should include all 4 product IDs in JSON format', async () => {
+    it('should include every registered product ID in JSON format', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: { responseFormat: 'json' },
@@ -703,7 +727,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       const data = JSON.parse(resourceText(result.contents));
       expect(Array.isArray(data.products)).toBe(true);
-      expect(data.products).toHaveLength(12);
+      expect(data.products).toHaveLength(MOCK_PRODUCTS_RESOURCE_DATA.products.length);
     });
 
     it('should read topics resource and return JSON', async () => {

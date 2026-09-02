@@ -80,10 +80,19 @@ export const DOC_TYPE_PRECEDENCE: readonly DocTypeId[] = [
 /**
  * Forward mapping: docType -> Fluid Topics `jamf:contentType` metadata value.
  *
- * Used only to narrow the upstream FT query. The FT API uses 'Technical
- * Documentation' for multiple doc types (documentation, training,
- * solution-guide, getting-started), so this direction is many-to-one and
- * cannot be reversed — use {@link LABEL_KEY_DOC_TYPE_MAP} to go the other way.
+ * **Do not use this to filter a search.** The values are English, and
+ * `jamf:contentType` is one of the few FT metadata keys whose *values* are
+ * translated per locale: the topics that carry 'Release Notes' under en-US
+ * carry '版本資訊' under zh-TW, 'リリースノート' under ja-JP,
+ * 'Versionshinweise' under de-DE, and so on. Sending the English string as an
+ * upstream filter matched 1323 topics under en-US and exactly 0 under every
+ * other locale this server supports. {@link DOC_TYPE_LABEL_MAP}'s `content-*`
+ * vocabulary is locale-invariant and is what `buildSearchFilters` uses.
+ *
+ * Kept because it is a published export and still describes a real FT field,
+ * but it is not a query-building map. The mapping is also many-to-one
+ * ('Technical Documentation' covers four docTypes) and so cannot be reversed —
+ * use {@link LABEL_KEY_DOC_TYPE_MAP} to go the other way.
  */
 export const DOC_TYPE_CONTENT_TYPE_MAP: Record<string, string> = {
   'documentation': 'Technical Documentation',

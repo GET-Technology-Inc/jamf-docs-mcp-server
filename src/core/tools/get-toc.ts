@@ -6,13 +6,26 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { appToolMeta } from '../apps/index.js';
-import { GetTocInputSchema } from '../schemas/index.js';
+import { GetTocInputSchema, type GetTocInput } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG } from '../constants.js';
-import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
-import { fetchTableOfContents } from '../services/toc-service.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
+import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo, FetchTocOptions, FetchTocResult } from '../types.js';
+import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
+import { fetchStaticToc } from '../services/sitemap-service.js';
+import {
+  staticSectionById,
+  dynamicSectionId,
+  DYNAMIC_SECTION_SOURCES,
+  type StaticDocSource,
+  type StaticSection,
+} from '../constants/sources.js';
+import {
+  listIntercomCollections,
+  fetchIntercomToc,
+  type IntercomCollection,
+} from '../services/intercom-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
@@ -163,13 +176,18 @@ function flattenTocEntries(entries: TocEntry[], depth = 0): FlatTocEntry[] {
 
 const TOOL_NAME = 'jamf_docs_get_toc';
 
-const TOOL_DESCRIPTION = `Get the table of contents for a Jamf product's documentation.
+const TOOL_DESCRIPTION = `Get the table of contents for Jamf documentation.
 
-This tool retrieves the navigation structure for a specific Jamf product,
-allowing you to browse available documentation topics.
+Browse the navigation structure of either a Jamf product or any single Jamf
+publication - release notes, technical papers, courses, evaluation guides and
+configuration guides all live on the publication axis rather than the product
+one. Exactly one of \`product\` and \`publication\` is required.
 
 Args:
-  - product (string, required): Product ID - one of: ${PRODUCT_ID_LIST}
+  - product (string): Product ID - one of: ${PRODUCT_ID_LIST}
+  - publication (string): Bundle family id of any single publication, e.g.
+    "technical-paper-laps" or "jamf-pro-release-notes". Call
+    jamf_docs_list_products for the available ids
   - version (string, optional): Specific version (defaults to latest)
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
@@ -180,6 +198,8 @@ Returns:
   For JSON format:
   {
     "product": string,
+    "productId": string,      // present when addressed by product
+    "publicationId": string,  // present when addressed by publication
     "version": string,
     "mapId": string,   // omitted when the map could not be resolved
     "toc": [...],      // each entry carries title, url and contentId
@@ -260,6 +280,28 @@ interface TocNotices {
   versionNote?: string | undefined;
   /** Set when `page` was clamped to the last available page. */
   paginationNote?: string | undefined;
+  /** Set when Jamf does not publish this document in the requested language. */
+  localeNote?: string | undefined;
+}
+
+/**
+ * Say so when the answer is not in the language that was asked for.
+ *
+ * The registry has always fallen back to en-US, and Jamf genuinely does not
+ * translate everything: 42 of the 97 publication families are en-US only, and
+ * `jamf-school-documentation` has no zh-TW map at all (de/en/es/fr/ja/nl). A
+ * silent fallback presents English as though it were the translation, and the
+ * reader has no way to tell that from a document that simply happens to have
+ * English headings.
+ */
+function getLocaleNote(
+  requested: string | undefined,
+  resolved: string | undefined,
+): string | undefined {
+  if (requested === undefined || resolved === undefined) { return undefined; }
+  if (requested === resolved) { return undefined; }
+  return `Jamf does not publish this document in ${requested}. Showing the ` +
+    `${resolved} edition instead.`;
 }
 
 /**
@@ -269,6 +311,7 @@ interface TocNotices {
 function noticeFields(notices: TocNotices): Record<string, string> {
   return {
     ...(notices.versionNote !== undefined ? { versionNote: notices.versionNote } : {}),
+    ...(notices.localeNote !== undefined ? { localeNote: notices.localeNote } : {}),
     ...(notices.paginationNote !== undefined ? { paginationNote: notices.paginationNote } : {}),
   };
 }
@@ -281,10 +324,210 @@ function renderTocNotices(notices: TocNotices): string {
   if (notices.versionNote !== undefined) {
     rendered += `\n> **Version Note:** ${notices.versionNote}\n`;
   }
+  if (notices.localeNote !== undefined) {
+    rendered += `\n> **Language Note:** ${notices.localeNote}\n`;
+  }
   if (notices.paginationNote !== undefined) {
     rendered += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
   }
   return rendered;
+}
+
+/** A `get_toc` request that named something Fluid Topics can serve. */
+interface ResolvedTocSource {
+  source: TocSource;
+  /** What to call it in prose. */
+  sourceLabel: string;
+  /** Versions the registry actually publishes for it, newest first. */
+  availableVersions: string[];
+  /**
+   * Set when this names a section of a static source rather than a Fluid
+   * Topics publication. Those have no maps, no versions and no TOC endpoint —
+   * their tree comes from the sitemap.
+   */
+  staticSection?: {
+    source: StaticDocSource;
+    section: StaticSection;
+    /** The source's own code for the requested locale, e.g. `ja` for ja-JP. */
+    sourceLocale: string;
+  };
+  /** Set when this names one collection of an Intercom Help Center. */
+  intercomCollection?: {
+    source: StaticDocSource;
+    collection: IntercomCollection;
+    sourceLocale: string;
+  };
+}
+
+/**
+ * Resolve a publication id that names a runtime-discovered section.
+ *
+ * An Intercom Help Center's collections are content, not configuration —
+ * pinning their ids in the registry would mean a code change whenever Jamf
+ * adds one — so they are looked up. Tried before the Fluid Topics registry
+ * for the same reason the declared static sections are: that registry would
+ * report them unknown and suggest a bundle family instead.
+ *
+ * Returns null when the id names no dynamic source, so the caller falls
+ * through to the Fluid Topics path.
+ */
+async function resolveDynamicSection(
+  ctx: ServerContext,
+  publication: string,
+  locale: string,
+): Promise<ResolvedTocSource | { error: string } | null> {
+  for (const source of DYNAMIC_SECTION_SOURCES) {
+    const prefix = source.dynamicSections?.idPrefix ?? source.id;
+    if (!publication.startsWith(`${prefix}-`)) { continue; }
+
+    const sourceLocale = source.locales[locale];
+    if (sourceLocale === undefined) {
+      return {
+        error: `${source.name} does not publish in ${locale}. ` +
+          `Available: ${Object.keys(source.locales).join(', ')}.`,
+      };
+    }
+
+    const collections = await listIntercomCollections(ctx, source, sourceLocale);
+    const match = collections.find(c => dynamicSectionId(source, c.slug) === publication);
+    if (match === undefined) {
+      const available = collections.map(c => `- \`${dynamicSectionId(source, c.slug)}\``);
+      return {
+        error: available.length > 0
+          ? `Unknown ${source.name} collection: "${publication}".\n\nAvailable in ${locale}:\n${available.join('\n')}`
+          : `Unknown ${source.name} collection: "${publication}".\n\n${source.name} publishes nothing in ${locale}.`,
+      };
+    }
+
+    return {
+      source: publication,
+      sourceLabel: `${source.name}: ${match.name}`,
+      availableVersions: [],
+      intercomCollection: { source, collection: match, sourceLocale },
+    };
+  }
+  return null;
+}
+
+/**
+ * Turn `product` / `publication` into one addressable source, or say why not.
+ *
+ * The two parameters are one axis each — `product` names a Jamf product,
+ * `publication` names a single document by its bundle family — and exactly
+ * one is required. That pairing cannot be expressed in the object schema
+ * without `.refine()` (which would make it a ZodEffects and break the tool's
+ * JSON Schema derivation), so it is enforced here, where the message can also
+ * say what to call instead.
+ */
+async function resolveTocSource(
+  ctx: ServerContext,
+  params: GetTocInput,
+  version: string,
+): Promise<ResolvedTocSource | { error: string }> {
+  if ((params.product !== undefined) === (params.publication !== undefined)) {
+    return {
+      error: params.product === undefined
+        ? 'Provide either `product` (one of the Jamf products) or `publication` (a bundle ' +
+          'family id such as "technical-paper-laps"). Call jamf_docs_list_products to see both.'
+        : 'Provide only one of `product` and `publication`, not both. `product` addresses a ' +
+          'Jamf product; `publication` addresses any single document by its bundle family id.',
+    };
+  }
+
+  if (params.product !== undefined) {
+    if (!(params.product in JAMF_PRODUCTS)) {
+      const valid = Object.entries(JAMF_PRODUCTS)
+        .map(([id, p]) => `- \`${id}\`: ${p.name}`)
+        .join('\n');
+      return { error: `Invalid product ID: "${params.product}".\n\nValid options:\n${valid}` };
+    }
+    const productId = params.product as ProductId;
+    return {
+      source: productId,
+      sourceLabel: JAMF_PRODUCTS[productId].name,
+      availableVersions: await getAvailableVersions(ctx, productId),
+    };
+  }
+
+  const publication = params.publication ?? '';
+
+  // Static sources first: their sections are publications too, and they are
+  // not in the Fluid Topics maps registry, so asking it would report them as
+  // unknown and suggest something else.
+  const staticRow = staticSectionById(publication);
+  if (staticRow !== undefined) {
+    const locale = params.language ?? DEFAULT_LOCALE;
+    const sourceLocale = staticRow.source.locales[locale];
+    if (sourceLocale === undefined) {
+      return {
+        error: `${staticRow.source.name} does not publish in ${locale}. ` +
+          `Available: ${Object.keys(staticRow.source.locales).join(', ')}.`,
+      };
+    }
+    return {
+      source: publication,
+      sourceLabel: staticRow.section.title,
+      availableVersions: [],
+      staticSection: { ...staticRow, sourceLocale },
+    };
+  }
+
+  const dynamic = await resolveDynamicSection(ctx, publication, params.language ?? DEFAULT_LOCALE);
+  if (dynamic !== null) { return dynamic; }
+
+  // Not an enum: there are 97 families and the set is upstream's to change,
+  // so the check is a registry lookup and a miss carries suggestions rather
+  // than a wall of every id.
+  if (!(await ctx.mapsRegistry.hasPublication(publication))) {
+    const suggestions = await ctx.mapsRegistry.suggestPublications(publication);
+    return {
+      error: `Unknown publication: "${publication}".${
+        suggestions.length > 0
+          ? `\n\nDid you mean:\n${suggestions.map(id => `- \`${id}\``).join('\n')}`
+          : '\n\nCall jamf_docs_list_products to see the available publications.'
+      }`,
+    };
+  }
+
+  const locale = params.language as LocaleId | undefined;
+
+  return {
+    source: publication,
+    // The title of the map actually being served, not the family's latest:
+    // versioned families put their version in the title, so reporting the
+    // latest while serving an older one is wrong exactly where a reader looks.
+    sourceLabel: await ctx.mapsRegistry.resolveTitle(
+      publication,
+      version !== 'current' ? version : undefined,
+      locale,
+    ) ?? publication,
+    // A publication id is already the bundle stem the registry keys on.
+    availableVersions: await ctx.mapsRegistry.getVersions(publication),
+  };
+}
+
+/**
+ * Fetch the TOC from whichever kind of source the request resolved to.
+ *
+ * Three shapes of upstream — a Fluid Topics map, a sitemap tree, an Intercom
+ * collection — behind one return type, so nothing downstream has to know
+ * which answered. Each path applies the same pagination and truncation.
+ */
+async function fetchTocFor(
+  ctx: ServerContext,
+  resolved: ResolvedTocSource,
+  version: string,
+  options: FetchTocOptions,
+): Promise<FetchTocResult> {
+  if (resolved.intercomCollection !== undefined) {
+    const { source, collection } = resolved.intercomCollection;
+    return await fetchIntercomToc(ctx, source, collection, options);
+  }
+  if (resolved.staticSection !== undefined) {
+    const { source, section, sourceLocale } = resolved.staticSection;
+    return await fetchStaticToc(ctx, source, section, sourceLocale, options);
+  }
+  return await fetchTableOfContents(ctx, resolved.source, version, options);
 }
 
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
@@ -317,23 +560,12 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
       const params = parseResult.data;
 
       try {
-        // Validate product
-        if (!(params.product in JAMF_PRODUCTS)) {
-          return {
-            isError: true,
-            content: [{
-              type: 'text',
-              text: `Invalid product ID: "${params.product}".\n\nValid options:\n${Object.entries(JAMF_PRODUCTS).map(([id, p]) => `- \`${id}\`: ${p.name}`).join('\n')}`
-            }]
-          };
-        }
-
-        const productId = params.product as ProductId;
-        const productInfo = JAMF_PRODUCTS[productId];
-
-        // Get available versions dynamically
-        const availableVersions = await getAvailableVersions(ctx, productId);
         const version = params.version ?? 'current';
+        const resolved = await resolveTocSource(ctx, params, version);
+        if ('error' in resolved) {
+          return { isError: true, content: [{ type: 'text', text: resolved.error }] };
+        }
+        const { sourceLabel, availableVersions } = resolved;
 
         // Validate version if specified
         if (params.version !== undefined && params.version !== '' && params.version !== 'current') {
@@ -342,7 +574,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
               isError: true,
               content: [{
                 type: 'text',
-                text: `Version "${params.version}" not found for ${productInfo.name}.\n\nAvailable versions: ${availableVersions.length > 0 ? availableVersions.join(', ') : 'current'}`
+                text: `Version "${params.version}" not found for ${sourceLabel}.\n\nAvailable versions: ${availableVersions.length > 0 ? availableVersions.join(', ') : 'current'}`
               }]
             };
           }
@@ -350,19 +582,21 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 0, total: 4, message: 'Fetching TOC...' });
 
-        const tocResult = await fetchTableOfContents(ctx, productId, version, {
+        const tocOptions = {
           ...(params.page !== undefined && { page: params.page }),
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS,
-          locale: params.language as LocaleId | undefined
-        });
+          locale: params.language as LocaleId | undefined,
+        };
+
+        const tocResult = await fetchTocFor(ctx, resolved, version, tocOptions);
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
-        const { toc, pagination, tokenInfo, paginationNote, mapId } = tocResult;
+        const { toc, pagination, tokenInfo, paginationNote, mapId, resolvedLocale } = tocResult;
 
         // Build response
         const response: TocResponse = {
-          product: productInfo.name,
+          product: sourceLabel,
           version,
           ...(mapId !== undefined ? { mapId } : {}),
           toc,
@@ -371,11 +605,14 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
         };
 
         const structuredContent = {
-          product: productInfo.name,
+          product: sourceLabel,
           // The ID, not just the display name: a client paging through this
-          // TOC has to pass `product` back, and that parameter is an enum of
-          // IDs. Sending only the name made "next page" impossible.
-          productId: params.product,
+          // TOC has to pass the same argument back, and `product` is an enum
+          // of IDs. Sending only the name made "next page" impossible. For a
+          // publication the id goes back under its own key, so a client can
+          // tell which parameter to resend without matching against the enum.
+          ...(params.product !== undefined ? { productId: params.product } : {}),
+          ...(params.publication !== undefined ? { publicationId: params.publication } : {}),
           version,
           // Pairs with each entry's `contentId` to form the direct-fetch pair
           // `jamf_docs_get_article` documents.
@@ -391,6 +628,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           // Two arguments, not one: the note is only truthful when the version
           // asked for is absent from the maps Jamf actually publishes.
           versionNote: getVersionNote(params.version, availableVersions),
+          localeNote: getLocaleNote(params.language, resolvedLocale),
           paginationNote
         };
 
@@ -409,8 +647,8 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         // Format as markdown (compact or full)
         const markdown = (params.outputMode === OutputMode.COMPACT
-          ? formatTocCompact(productInfo.name, toc, pagination)
-          : formatTocFull({ productName: productInfo.name, version, mapId, toc, pagination, tokenInfo }))
+          ? formatTocCompact(sourceLabel, toc, pagination)
+          : formatTocFull({ productName: sourceLabel, version, mapId, toc, pagination, tokenInfo }))
           + renderTocNotices(notices);
 
         await reportProgress(extra, { progress: 4, total: 4 });

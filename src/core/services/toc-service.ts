@@ -20,6 +20,7 @@ import {
 } from '../constants.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import type { ServerContext } from '../types/context.js';
+import { cacheKey } from './cache-key.js';
 import type { FtTocNode, TocEntry, PaginationInfo, FetchTocOptions, FetchTocResult } from '../types.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 
@@ -79,7 +80,7 @@ function tocEntryToString(entry: TocEntry, depth = 0): string {
 // ─── Map id resolution ─────────────────────────────────────────
 
 /**
- * Resolve the map id for a product without letting the registry take the
+ * Resolve the map for a product without letting the registry take the
  * request down with it.
  *
  * Used on the cache-hit path, where the TOC is already in hand: the cached
@@ -87,14 +88,14 @@ function tocEntryToString(entry: TocEntry, depth = 0): string {
  * re-resolved, and a registry that cannot answer should cost the caller the
  * `mapId` field only — not the table of contents it already has.
  */
-async function resolveMapIdQuietly(
+async function resolveMapQuietly(
   ctx: ServerContext,
   bundleId: string,
   version: string,
   locale: LocaleId,
-): Promise<string | null> {
+): Promise<{ mapId: string; resolvedLocale: string } | null> {
   try {
-    return await ctx.mapsRegistry.resolveMapId(
+    return await ctx.mapsRegistry.resolveMap(
       bundleId,
       version !== 'current' ? version : undefined,
       locale,
@@ -110,60 +111,98 @@ async function resolveMapIdQuietly(
 // ─── Main fetch function ───────────────────────────────────────
 
 /**
- * Fetch table of contents for a product via the Fluid Topics API.
+ * What a TOC request addresses.
+ *
+ * Either a {@link ProductId} — the twelve curated products — or a bundle
+ * family stem such as `technical-paper-laps`, which is what Fluid Topics
+ * actually keys a publication on. Both reduce to a bundle stem before the
+ * registry sees them, because that is the only thing `resolveMapId` has ever
+ * needed; binding this parameter to the product enum is what limited
+ * reachable content to 12 of the 97 families Jamf publishes.
+ *
+ * Deliberately `string` rather than a discriminated union: every existing
+ * caller passes a product id positionally, and a union would have rewritten
+ * ~40 call sites to buy a distinction the resolution below does not need.
+ */
+export type TocSource = ProductId | (string & {});
+
+/**
+ * The bundle family a TOC source resolves to.
+ *
+ * A product id maps through its registry row; anything else is already a
+ * bundle stem. Publication ids that collide with a product id resolve through
+ * the product — the only such value is `jamf-app-catalog`, whose registry row
+ * names that same stem, so the two paths agree.
+ */
+function bundleStemFor(source: TocSource): string {
+  return source in JAMF_PRODUCTS
+    ? JAMF_PRODUCTS[source as ProductId].bundleId
+    : source;
+}
+
+/**
+ * Fetch table of contents for a product or publication via the Fluid Topics API.
  *
  * Resolution order:
  *   1. ctx.tocProvider (if configured)
  *   2. MapsRegistry → mapId → ft-client.fetchMapToc
  *   3. Transform FtTocNode[] → TocEntry[]
  *
- * Results are cached under `ft-toc:{locale}:{product}:{version}`.
+ * Results are cached under the `ft-toc` namespace, keyed on locale, product
+ * and version — see {@link CacheKeySpaces}.
  */
 export async function fetchTableOfContents(
   ctx: ServerContext,
-  product: ProductId,
+  source: TocSource,
   version = 'current',
   options: FetchTocOptions = {},
 ): Promise<FetchTocResult> {
   if (ctx.tocProvider !== undefined) {
-    const provided = await ctx.tocProvider.getTableOfContents(product, version, options);
+    const provided = await ctx.tocProvider.getTableOfContents(source as ProductId, version, options);
     if (provided !== null) { return provided; }
   }
 
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
-  const cacheKey = `ft-toc:${locale}:${product}:${version}`;
+  const key = cacheKey('ft-toc', { locale, product: source, version });
 
-  const { bundleId } = JAMF_PRODUCTS[product];
+  const bundleId = bundleStemFor(source);
 
-  let allToc = await ctx.cache.get<TocEntry[]>(cacheKey);
+  let allToc = await ctx.cache.get<TocEntry[]>(key);
   let mapId: string | null;
+  let resolvedLocale: string | null;
 
   if (allToc === null) {
-    mapId = await ctx.mapsRegistry.resolveMapId(
+    const resolved = await ctx.mapsRegistry.resolveMap(
       bundleId,
       version !== 'current' ? version : undefined,
       locale,
     );
 
-    if (mapId === null) {
+    if (resolved === null) {
       throw new JamfDocsError(
-        `Could not resolve map for ${product} version ${version} locale ${locale}`,
+        `Could not resolve map for ${source} version ${version} locale ${locale}`,
         JamfDocsErrorCode.NOT_FOUND,
       );
     }
+    mapId = resolved.mapId;
+    resolvedLocale = resolved.resolvedLocale;
 
     const ftNodes = await fetchMapToc(mapId);
 
     allToc = transformFtTocToTocEntries(ftNodes);
 
-    await ctx.cache.set(cacheKey, allToc, ctx.config.cacheTtl.article);
+    await ctx.cache.set(key, allToc, ctx.config.cacheTtl.article);
   } else {
     // The cache stores the tree, not the id it came from. Re-resolve so a
     // caller reading a cached TOC gets the same `mapId` a cold one would —
-    // it is half of the pair `jamf_docs_get_article` documents.
-    mapId = await resolveMapIdQuietly(ctx, bundleId, version, locale);
+    // it is half of the pair `jamf_docs_get_article` documents. The locale
+    // that answered is re-resolved with it: a cached English tree served to a
+    // zh-TW request must still say it is English.
+    const resolved = await resolveMapQuietly(ctx, bundleId, version, locale);
+    mapId = resolved?.mapId ?? null;
+    resolvedLocale = resolved?.resolvedLocale ?? null;
   }
 
   // ─── Pagination & token truncation ───────────────────────────
@@ -196,6 +235,7 @@ export async function fetchTableOfContents(
     pagination,
     tokenInfo,
     ...(mapId !== null ? { mapId } : {}),
+    ...(resolvedLocale !== null ? { resolvedLocale } : {}),
     ...(paginationNote !== undefined ? { paginationNote } : {}),
   };
 }

@@ -27,6 +27,22 @@ const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
 // Output mode enum
 const OutputModeSchema = z.nativeEnum(OutputMode);
 
+/**
+ * A Jamf documentation version: dotted numerals, or the literal `current`.
+ *
+ * Constrained because the value is forwarded verbatim into an upstream Fluid
+ * Topics filter and, before this, into a hand-assembled cache key whose
+ * delimiters it could forge. All 44 version values live on learn.jamf.com match
+ * this shape (`11.13.0` … `11.31.1`, `2.45.0`, `current`); nothing upstream
+ * accepts a wildcard, so the old `"10.x"` example in the description below was
+ * never a working input.
+ */
+const VersionSchema = z.string()
+  .regex(
+    /^(?:current|\d+(?:\.\d+)*)$/,
+    'Version must be dotted numerals (e.g. "11.13.0") or "current"'
+  );
+
 // Common maxTokens parameter schema
 const MaxTokensSchema = z.number()
   .int()
@@ -101,9 +117,9 @@ export const SearchInputSchema = z.object({
   ),
 
   version: completable(
-    z.string()
+    VersionSchema
       .optional()
-      .describe('Filter by version (e.g., "11.5.0", "10.x")'),
+      .describe('Filter by version (e.g., "11.13.0") or "current"'),
     completeVersion
   ),
 
@@ -203,11 +219,29 @@ export type GetArticleInput = z.infer<typeof GetArticleInputSchema>;
  * Schema for jamf_docs_get_toc
  */
 export const GetTocInputSchema = z.object({
+  // Optional since 5.1: exactly one of `product` and `publication` is
+  // required, and that pairing cannot be expressed in a plain object schema
+  // without `.refine()`, which would turn this into a ZodEffects and break
+  // `registerTool`'s JSON Schema derivation. The handler enforces it and can
+  // give a far better message than a refinement would.
   product: completable(
     z.enum(PRODUCT_IDS)
+      .optional()
       .describe(PRODUCT_REQUIRED_DESCRIPTION),
     completeProduct
   ),
+
+  publication: z.string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      'Bundle family id for any Jamf publication, e.g. "technical-paper-laps" or ' +
+      '"jamf-pro-release-notes". Use this for the documents that are not one of the ' +
+      'products in `product` — release notes, technical papers, courses, evaluation ' +
+      'and configuration guides. Exactly one of `product` or `publication` is required. ' +
+      'Call jamf_docs_list_products to see the available ids.'
+    ),
 
   language: completable(
     z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
@@ -215,9 +249,9 @@ export const GetTocInputSchema = z.object({
   ),
 
   version: completable(
-    z.string()
+    VersionSchema
       .optional()
-      .describe('Specific version (defaults to latest)'),
+      .describe('Specific version (e.g. "11.13.0"); defaults to latest'),
     completeVersion
   ),
 

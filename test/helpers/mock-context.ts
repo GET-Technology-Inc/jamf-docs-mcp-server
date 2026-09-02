@@ -18,6 +18,7 @@ import type {
   Logger,
 } from '../../src/core/services/interfaces/index.js';
 import { createDefaultConfig } from '../../src/core/config.js';
+import type { PublicationInfo } from '../../src/core/services/maps-registry.js';
 import { MapsRegistry } from '../../src/core/services/maps-registry.js';
 import { TopicResolver } from '../../src/core/services/topic-resolver.js';
 
@@ -76,6 +77,37 @@ export function createMockCache(): CacheProvider {
     stats: vi.fn(async () => await Promise.resolve({ memoryEntries: store.size, totalEntries: store.size })),
     prune: vi.fn(async () => await Promise.resolve(0)),
   };
+}
+
+/**
+ * A `MapsRegistry` stand-in that answers from a fixed publication list.
+ *
+ * `createMockContext` builds a real `MapsRegistry`, which is right for tests
+ * that mock the http client underneath it — but a unit test that exercises a
+ * tool reading the publication axis without such a mock will reach
+ * learn.jamf.com for real. That failure is swallowed (the tools degrade
+ * gracefully by design), so it shows up as a slow, network-dependent test
+ * rather than a red one. Pass this instead.
+ */
+export function createStubMapsRegistry(
+  publications: PublicationInfo[] = [],
+): ServerContext['mapsRegistry'] {
+  const find = (id: string): PublicationInfo | undefined =>
+    publications.find(pub => pub.id === id);
+
+  return {
+    listPublications: vi.fn(async () => await Promise.resolve(publications)),
+    hasPublication: vi.fn(async (id: string) => await Promise.resolve(find(id) !== undefined)),
+    suggestPublications: vi.fn(async () => await Promise.resolve([])),
+    getVersions: vi.fn(async (id: string) => await Promise.resolve(find(id)?.versions ?? [])),
+    resolveTitle: vi.fn(async (id: string) => await Promise.resolve(find(id)?.title ?? null)),
+    resolveMapId: vi.fn(async () => await Promise.resolve(null)),
+    resolveFromBundleId: vi.fn(async () => await Promise.resolve(null)),
+    resolveGlossaryMapId: vi.fn(async () => await Promise.resolve(null)),
+    getProducts: vi.fn(async () => await Promise.resolve([])),
+    ensureBuilt: vi.fn(async () => { await Promise.resolve(); }),
+    reset: vi.fn(),
+  } as unknown as ServerContext['mapsRegistry'];
 }
 
 export function createMockContext(overrides?: Partial<ServerContext>): ServerContext {

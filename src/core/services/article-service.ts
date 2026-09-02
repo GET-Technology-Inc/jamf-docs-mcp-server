@@ -15,20 +15,18 @@ import type { FetchArticleResult, FetchArticleOptions, ArticleSection, FtMetadat
 import { buildDisplayUrl, parseUrl, type TopicResolverInput } from './topic-resolver.js';
 import { fetchTopicContent, fetchTopicMetadata } from './ft-client.js';
 import { parseArticle, type ParsedArticleContent } from './content-parser.js';
+import { staticSourceForUrl } from '../constants/sources.js';
+import { buildArticleView } from './article-view.js';
+import { fetchStaticArticle } from './static-article-service.js';
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
   fetchTopicAncestors,
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
+import { cacheKey } from './cache-key.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
-import {
-  extractSections,
-  extractSummary,
-  extractSection,
-  truncateToTokenLimit,
-  createTokenInfo,
-} from './tokenizer.js';
+import { extractSections } from './tokenizer.js';
 
 // ─── Shared article fetch ──────────────────────────────────────
 
@@ -85,8 +83,8 @@ export async function fetchArticleFromFt(
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
-  const cacheKey = `ft:article:v3:${mapId}:${contentId}`;
-  let cached = await cache.get<CachedArticle>(cacheKey);
+  const key = cacheKey('ft-article-v3', { mapId, contentId, articleUrl });
+  let cached = await cache.get<CachedArticle>(key);
 
   if (cached === null) {
     const [topicMeta, html] = await Promise.all([
@@ -148,7 +146,7 @@ export async function fetchArticleFromFt(
       // two of twelve sampled topics publish no edition date at all.
       lastUpdated: lastEdition !== '' ? lastEdition : undefined,
     };
-    await cache.set(cacheKey, cached, options.cacheTtl);
+    await cache.set(key, cached, options.cacheTtl);
   }
 
   const { title, parsed, displayUrl, product, version, lastUpdated } = cached;
@@ -174,36 +172,7 @@ export async function fetchArticleFromFt(
     sections: allSections,
   };
 
-  // ── summaryOnly mode ──
-  if (options.summaryOnly === true) {
-    const summaryResult = extractSummary(parsed.content, title, maxTokens);
-    let summaryContent = `## Summary\n\n${summaryResult.summary}\n\n`;
-    summaryContent += `## Article Outline (${summaryResult.outline.length} sections)\n\n`;
-    for (const section of summaryResult.outline) {
-      const indent = '  '.repeat(Math.max(0, section.level - 1));
-      summaryContent += `${indent}- ${section.title} (~${section.tokenCount} tokens)\n`;
-    }
-    summaryContent += `\n*Estimated read time: ${summaryResult.estimatedReadTime} min`
-      + ` (${summaryResult.totalTokens.toLocaleString()} tokens)*\n`;
-
-    return { ...base, content: summaryContent, tokenInfo: summaryResult.tokenInfo };
-  }
-
-  // ── Section extraction ──
-  if (options.section !== undefined && options.section !== '') {
-    const sectionResult = extractSection(parsed.content, options.section, maxTokens);
-    if (sectionResult.section !== null) {
-      return { ...base, content: sectionResult.content, tokenInfo: sectionResult.tokenInfo };
-    }
-    const sectionsList = allSections.map(s => `- ${s.title}`).join('\n');
-    const notFoundMsg =
-      `*Section "${options.section}" not found.*\n\n**Available sections:**\n${sectionsList}`;
-    return { ...base, content: notFoundMsg, tokenInfo: createTokenInfo(notFoundMsg, maxTokens) };
-  }
-
-  // ── Full content with truncation ──
-  const truncateResult = truncateToTokenLimit(parsed.content, maxTokens, allSections);
-  return { ...base, content: truncateResult.content, tokenInfo: truncateResult.tokenInfo };
+  return buildArticleView(base, parsed.content, options, maxTokens, allSections);
 }
 
 // ─── Resolve + fetch (shared by get-article & batch-get-articles) ──
@@ -223,6 +192,20 @@ export async function resolveAndFetchArticle(
 ): Promise<FetchArticleResult> {
   const { topicResolver, cache, articleProvider } = ctx;
   const articleUrl = input.url ?? '';
+
+  // Step 0: Non-Fluid-Topics sources, before anything tries to parse the URL
+  // as a Fluid Topics one.
+  //
+  // `topicResolver.parseUrl` only recognises `/{locale}/bundle/…/page/…` and
+  // `/r/{locale}/…`, so a concepts.jamf.com URL threw INVALID_URL at step 1 —
+  // before `articleProvider.getArticle`, the documented URL fallback, was
+  // ever reached. Dispatching on hostname first is what makes a second source
+  // reachable at all; for a Fluid Topics URL this is one Set lookup and the
+  // flow below is unchanged.
+  const staticSource = staticSourceForUrl(articleUrl);
+  if (staticSource !== undefined) {
+    return await fetchStaticArticle(ctx, staticSource, articleUrl, options);
+  }
 
   // Step 1: Resolve mapId + contentId
   let { mapId, contentId } = input;

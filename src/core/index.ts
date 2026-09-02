@@ -22,6 +22,9 @@ export type { CreateServerOptions } from './create-server.js';
 // Interfaces (platform adapters implement these)
 // ============================================================================
 
+export { cacheKey, CACHE_NAMESPACES } from './services/cache-key.js';
+export type { CacheKey, CacheNamespace, CacheKeySpaces, CacheKeyValue, CanonicalSearchFilters } from './services/cache-key.js';
+
 export type {
   CacheProvider,
   CacheStats,

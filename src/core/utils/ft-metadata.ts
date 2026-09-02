@@ -25,6 +25,26 @@ export const FT_META = {
   CLUSTER_ID: 'ft:clusterId',
   PUBLICATION_ID: 'ft:publicationId',
   PRODNAME: 'prodname',
+
+  /**
+   * Jamf's own publication classification, present on all 662 maps.
+   *
+   * Unlike the `product-*` values inside `zoominmetadata` — a legacy Zoomin
+   * vocabulary where one label covers many publications (`product-pro` alone
+   * spans 38 bundle families) — these three name the platform, client app or
+   * utility a publication documents, and each map carries at most one of
+   * each. Measured across all 97 bundle families and 11 locales, every family
+   * reports the same value in every locale: 0 disagreements. That is what
+   * makes them usable as a stable classification rather than display text,
+   * and it is the opposite of `jamf:contentType`, whose values ARE translated
+   * (see DOC_TYPE_CONTENT_TYPE_MAP).
+   *
+   * Live distribution: portal 12 distinct values over 550 maps, app 9 over
+   * 92, utility 9 over 25. A map may carry none of them.
+   */
+  PORTAL: 'jamf:portal',
+  APP: 'jamf:app',
+  UTILITY: 'jamf:utility',
 } as const;
 
 /**

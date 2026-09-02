@@ -33,10 +33,25 @@ vi.mock('../../src/core/services/cache.js', () => ({
   },
 }));
 
-vi.mock('../../src/core/services/metadata.js', () => ({
+vi.mock('../../src/core/services/metadata.js', async () => {
+  // Derived from the registry rather than `[]`: `jamf_docs_list_products`
+  // reads getProductsMetadata for registry-resolved versions, so an empty
+  // array here empties the product list instead of failing loudly.
+  const { JAMF_PRODUCTS } = await import('../../src/core/constants/products.js');
+  return {
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),
-  getProductsMetadata: vi.fn().mockResolvedValue([]),
+  getProductsMetadata: vi.fn().mockResolvedValue(
+    Object.values(JAMF_PRODUCTS).map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      bundleId: p.bundleId,
+      latestVersion: p.latestVersion,
+      availableVersions: [...p.versions],
+      labelKey: p.searchLabel,
+    }))
+  ),
   getProductAvailability: vi.fn().mockResolvedValue({
     'jamf-pro': true,
     'jamf-school': true,
@@ -46,7 +61,8 @@ vi.mock('../../src/core/services/metadata.js', () => ({
   }),
   getProductsResourceData: vi.fn(),
   getTopicsResourceData: vi.fn(),
-}));
+  };
+});
 
 import { searchDocumentation } from '../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../src/core/tools/search.js';

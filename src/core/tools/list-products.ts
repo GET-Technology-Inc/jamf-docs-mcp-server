@@ -7,20 +7,34 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
 import { ProductListOutputSchema } from '../schemas/output.js';
-import { JAMF_PRODUCTS, JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
+import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
-import { getProductAvailability } from '../services/metadata.js';
+import { getProductAvailability, getProductsMetadata } from '../services/metadata.js';
+import {
+  STATIC_SECTIONS,
+  DYNAMIC_SECTION_SOURCES,
+  dynamicSectionId,
+} from '../constants/sources.js';
+import { listIntercomCollections } from '../services/intercom-service.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
 
-const TOOL_DESCRIPTION = `List all available Jamf products, topics, and their documentation versions.
+const TOOL_DESCRIPTION = `List Jamf products, publications, topics, and documentation versions.
 
-This tool returns information about all Jamf products with available documentation,
-including Jamf Pro, Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet,
-and more. Also lists available topic and docType filters for search.
+Returns two separate catalogues:
+  - Products: the IDs the \`product\` filter in jamf_docs_search accepts, and the
+    \`product\` parameter of jamf_docs_get_toc. Jamf Pro, Jamf School, Jamf Connect,
+    Jamf Protect, Jamf Now, Jamf Safe Internet and more.
+  - Publications: every document Jamf publishes - release notes, technical papers,
+    courses, evaluation and configuration guides - grouped the way Jamf classifies
+    them. Pass one of these IDs as the \`publication\` parameter of jamf_docs_get_toc.
+    These are documents, not products, and the search \`product\` filter does not
+    take them.
+
+Also lists available topic and docType filters for search.
 
 Args:
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
@@ -31,6 +45,7 @@ Returns:
   For JSON format:
   {
     "products": [...],
+    "publications": [...],   // omitted if the maps registry is unreachable
     "topics": [...],
     "tokenInfo": {
       "tokenCount": number,
@@ -46,8 +61,143 @@ Examples:
   - "What Jamf products are available?" → use this tool
   - "List all Jamf documentation" → use this tool
   - "What topics can I filter by?" → use this tool
+  - "Where are the Jamf Pro release notes?" → use this tool, then get_toc with the publication ID
 
 Note: This is a read-only operation that does not modify any state.`;
+
+/** One publication as `list_products` reports it. */
+interface PublicationRow {
+  id: string;
+  title: string;
+  portal?: string;
+  app?: string;
+  utility?: string;
+  locales: string[];
+  versions: string[];
+}
+
+/**
+ * The publication axis, or null when the registry cannot answer.
+ *
+ * `products` and `topics` are compiled in; this needs a live `/api/khub/maps`.
+ * Making the whole tool fail because the newest section could not load would
+ * be a regression for every caller that only wanted the product list.
+ */
+async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationRow[] | null> {
+  // Static sources are compiled in, so they list whether or not the maps
+  // registry answers — and they are the only way to discover that
+  // concepts.jamf.com is reachable at all.
+  const staticRows: PublicationRow[] = STATIC_SECTIONS.map(({ source, section }) => ({
+    id: section.id,
+    title: section.title,
+    portal: source.name,
+    locales: Object.keys(source.locales).sort(),
+    versions: [],
+  }));
+
+  // Sources whose sections come from the source itself. Best-effort per
+  // source: an unreachable Help Center costs its own rows, not the list.
+  for (const source of DYNAMIC_SECTION_SOURCES) {
+    const locale = source.locales[DEFAULT_LOCALE];
+    if (locale === undefined) { continue; }
+    try {
+      for (const collection of await listIntercomCollections(ctx, source, locale)) {
+        staticRows.push({
+          id: dynamicSectionId(source, collection.slug),
+          title: `${source.name}: ${collection.name}`,
+          portal: source.name,
+          locales: Object.keys(source.locales).sort(),
+          versions: [],
+        });
+      }
+    } catch (error) {
+      ctx.logger.createLogger('list-products').warning(
+        `Could not list ${source.name} collections: ${String(error)}`,
+      );
+    }
+  }
+
+  try {
+    const pubs = await ctx.mapsRegistry.listPublications();
+    return [...staticRows, ...pubs.map(pub => ({
+      id: pub.id,
+      title: pub.title,
+      ...(pub.portal !== '' ? { portal: pub.portal } : {}),
+      ...(pub.app !== '' ? { app: pub.app } : {}),
+      ...(pub.utility !== '' ? { utility: pub.utility } : {}),
+      locales: pub.locales,
+      versions: pub.versions,
+    }))];
+  } catch (error) {
+    ctx.logger.createLogger('list-products').warning(
+      `Could not list publications: ${String(error)}`,
+    );
+    return staticRows;
+  }
+}
+
+/**
+ * How Jamf files a publication, as one display string.
+ *
+ * `jamf:portal`, `jamf:app` and `jamf:utility` are three slots of one
+ * taxonomy — a map carries at most one of each and most carry exactly one —
+ * so they read as a single answer to "what is this about" rather than three
+ * independent fields. Grouping by it is what keeps 97 rows navigable.
+ */
+function classificationOf(pub: PublicationRow): string {
+  return pub.portal ?? pub.app ?? pub.utility ?? 'Other';
+}
+
+/**
+ * Render the publication axis.
+ *
+ * Deliberately its own section rather than extra rows under Products: the
+ * `product` search filter accepts the twelve above and nothing here, and
+ * merging the two lists is exactly the dilution #239 asked to avoid.
+ */
+function renderPublications(publications: PublicationRow[] | null, mode: OutputMode): string {
+  if (publications === null || publications.length === 0) { return ''; }
+
+  const groups = new Map<string, PublicationRow[]>();
+  for (const pub of publications) {
+    const key = classificationOf(pub);
+    groups.set(key, [...(groups.get(key) ?? []), pub]);
+  }
+  // 'Other' last; everything else alphabetical.
+  const ordered = [...groups.entries()].sort(([a], [b]) =>
+    a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b));
+
+  if (mode === OutputMode.COMPACT) {
+    let out = `\n## Publications (${String(publications.length)})\n`;
+    for (const [group, rows] of ordered) {
+      out += `\n### ${group}\n`;
+      for (const pub of rows) { out += `- \`${pub.id}\`\n`; }
+    }
+    return out;
+  }
+
+  let out = '---\n\n';
+  out += `# Publications (${String(publications.length)})\n\n`;
+  out += 'Every document Jamf publishes, grouped the way Jamf classifies it. ';
+  out += 'Pass an ID as the `publication` parameter of `jamf_docs_get_toc` to browse one. ';
+  out += 'These are documents, not products — the `product` filter in `jamf_docs_search` ';
+  out += 'takes the product IDs above, not these.\n\n';
+
+  for (const [group, rows] of ordered) {
+    out += `## ${group}\n\n`;
+    for (const pub of rows) {
+      const extras: string[] = [];
+      if (pub.versions.length > 0) {
+        extras.push(`${String(pub.versions.length)} versions, latest ${pub.versions[0] ?? ''}`);
+      }
+      if (pub.locales.length === 1) { extras.push(`${pub.locales[0] ?? ''} only`); }
+      out += `- **\`${pub.id}\`**: ${pub.title}`;
+      out += extras.length > 0 ? ` *(${extras.join('; ')})*\n` : '\n';
+    }
+    out += '\n';
+  }
+  return out;
+}
 
 export function registerListProductsTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
@@ -84,16 +234,25 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
 
-        // Build product list — always include all known products
-        const products = Object.values(JAMF_PRODUCTS)
-          .map(product => ({
-            id: product.id,
-            name: product.name,
-            description: product.description,
-            currentVersion: product.latestVersion,
-            availableVersions: [...product.versions],
-            hasContent: availability[product.id] ?? true
-          }));
+        // Build product list — always include all known products.
+        //
+        // Versions come from getProductsMetadata, not from JAMF_PRODUCTS.
+        // Every registry row declares `versions: ['current']`, which is true
+        // of the unversioned majority and wrong for the five families Jamf
+        // actually snapshots: this tool reported one version for
+        // jamf-pro-documentation while the maps endpoint published nineteen.
+        // getProductsMetadata already resolves those through MapsRegistry —
+        // it is what `jamf://products` has been serving all along — so the
+        // two views of the same catalogue now agree.
+        const metadata = await getProductsMetadata(ctx);
+        const products = metadata.map(product => ({
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          currentVersion: product.latestVersion,
+          availableVersions: product.availableVersions,
+          hasContent: availability[product.id] ?? true
+        }));
 
         // Build topics list
         const topics = Object.entries(JAMF_TOPICS).map(([id, topic]) => ({
@@ -102,7 +261,16 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           keywords: topic.keywords
         }));
 
-        const structuredContent = { products, topics };
+        // The publication axis. Best-effort: it needs the live maps registry,
+        // and the products and topics above do not, so a registry that cannot
+        // answer costs this section rather than the whole response.
+        const publications = await listPublicationsQuietly(ctx);
+
+        const structuredContent = {
+          products,
+          topics,
+          ...(publications !== null ? { publications } : {}),
+        };
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
 
@@ -134,6 +302,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           for (const topic of topics) {
             markdown += `- \`${topic.id}\`: ${topic.name}\n`;
           }
+          markdown += renderPublications(publications, OutputMode.COMPACT);
 
           const compactResult = truncateToTokenLimit(markdown, maxTokens);
           await reportProgress(extra, { progress: 3, total: 3 });
@@ -161,6 +330,8 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           }
           markdown += '\n';
         }
+
+        markdown += renderPublications(publications, OutputMode.FULL);
 
         markdown += '---\n\n';
         markdown += '# Available Topics for Filtering\n\n';

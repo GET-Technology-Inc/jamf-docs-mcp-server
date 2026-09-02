@@ -18,6 +18,29 @@ export const ProductListOutputSchema = z.object({
     name: z.string(),
     keywords: z.array(z.string()),
   })),
+  /**
+   * Every bundle family Fluid Topics publishes — the publication axis.
+   *
+   * Separate from `products` on purpose. `products` is the curated set the
+   * `product` search filter accepts; this is the set `jamf_docs_get_toc`'s
+   * `publication` parameter accepts, and it is an order of magnitude larger
+   * (97 vs 12) because most Jamf documents share a product label with
+   * another document rather than having one of their own. Folding them
+   * together would turn "which product" into "which document".
+   *
+   * Optional: it comes from the live maps registry, so a request that cannot
+   * reach it still gets the products and topics it asked for.
+   */
+  publications: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    /** Jamf's own classification. Fields absent when Jamf assigns none. */
+    portal: z.string().optional(),
+    app: z.string().optional(),
+    utility: z.string().optional(),
+    locales: z.array(z.string()),
+    versions: z.array(z.string()),
+  })).optional(),
 });
 
 export const SearchOutputSchema = z.object({
@@ -56,7 +79,31 @@ export const SearchOutputSchema = z.object({
     contentId: z.string().optional(),
     breadcrumb: z.array(z.string()).optional(),
     mapTitle: z.string().optional(),
+    /**
+     * Other versions of this topic that the search collapsed away.
+     *
+     * Fluid Topics returns one entry per product version; the search keeps
+     * the newest so a broad query does not return fifteen copies of one
+     * page. This is what it dropped, newest first — without it, "what
+     * changed in 11.26?" has no answer a client could act on.
+     */
+    otherVersions: z.array(z.string()).optional(),
   })),
+  /**
+   * Matches from documentation sources outside Fluid Topics.
+   *
+   * A separate list, not merged into `results`: Fluid Topics returns no
+   * relevance score and neither does this server, so there is no scale on
+   * which the two orderings could be interleaved. Present only when
+   * something matched — an empty array would claim "nothing matched
+   * elsewhere" where the truth may be "those sources were unreachable".
+   */
+  otherSources: z.array(z.object({
+    title: z.string(),
+    url: z.string(),
+    /** Display name of the source, e.g. "Jamf Concepts". */
+    source: z.string(),
+  })).optional(),
   suggestions: z.array(z.string()).optional(),
   filterRelaxation: z.object({
     removed: z.array(z.string()),
@@ -196,8 +243,20 @@ export const TocOutputSchema = z.object({
    * `jamf_docs_get_toc` `product` parameter does not accept — it is an enum of
    * IDs ("jamf-pro"). A client paging through a table of contents needs the ID
    * to ask for page 2, so it is carried explicitly rather than inferred.
+   *
+   * Optional since 5.1: a TOC can also be addressed by `publication`, and a
+   * response to that request reports {@link publicationId} instead. Exactly
+   * one of the two is always present — echoing the id back under the same
+   * name the request used is what lets a client resend it without having to
+   * test it against the product enum first.
    */
-  productId: z.string(),
+  productId: z.string().optional(),
+
+  /**
+   * The bundle family id the entries were fetched under, when the request
+   * addressed the publication axis rather than the product one.
+   */
+  publicationId: z.string().optional(),
   version: z.string(),
   /**
    * The Fluid Topics map these entries came from.
@@ -241,6 +300,17 @@ export const TocOutputSchema = z.object({
    * what the tool actually emits.
    */
   versionNote: z.string().optional(),
+  /**
+   * Set when Jamf does not publish this document in the requested language and
+   * the en-US edition was served instead.
+   *
+   * 42 of the 97 publication families are en-US only and several products are
+   * translated into a different six locales than the rest, so this is a
+   * routine outcome rather than an error — but without saying so, an English
+   * table of contents returned for a zh-TW request is indistinguishable from
+   * a translated one.
+   */
+  localeNote: z.string().optional(),
   /** Set when `page` was clamped to the last available page. */
   paginationNote: z.string().optional(),
 });

@@ -25,6 +25,7 @@ import {
 } from '../../../src/core/services/toc-service.js';
 import { DOCS_BASE_URL, FT_API_BASE } from '../../../src/core/constants.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { cacheKey } from '../../../src/core/services/cache-key.js';
 import type { FtTocNode, FtMapInfo } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 
@@ -498,7 +499,7 @@ describe('fetchTableOfContents()', () => {
     // Force the registry to rebuild, and make that rebuild fail. The TOC is
     // already in hand, so a broken registry should cost the id, not the page.
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete('maps-registry');
+    await ctx.cache.delete(cacheKey('maps-registry-v2'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const result = await fetchTableOfContents(ctx, 'jamf-pro');

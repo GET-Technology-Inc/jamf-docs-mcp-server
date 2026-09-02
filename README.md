@@ -6,7 +6,7 @@
 
 An MCP server that gives AI assistants (Claude, Cursor, etc.) direct access to Jamf official documentation. Ask Jamf-related questions and get answers based on the latest docs from learn.jamf.com.
 
-**Supported Products**: Jamf Pro, Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet, Jamf Insights, RapidIdentity, Jamf Trust, Jamf Routines, Self Service+, Jamf App Catalog
+**Supported Products** (28): Jamf Pro, Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet, Jamf Insights, RapidIdentity, Jamf Trust, Jamf Routines, Self Service+, Jamf App Catalog, Jamf Account, Jamf Security Cloud, Elevate, Composer, Jamf Parent, Jamf Teacher, Jamf Setup and Reset, Jamf Assessment, Title Editor, Jamf Infrastructure Manager, Jamf AD CS Connector, Jamf PKI Proxy, Jamf Migrate, Jamf Remote Assist, Jamf Cloud Distribution Service, Healthcare Listener
 
 [中文文件](docs/README.zh-TW.md)
 
@@ -115,7 +115,7 @@ Once configured, just ask your AI assistant:
 | `jamf_docs_list_products` | List all supported products, topics, and document type filters |
 | `jamf_docs_search` | Search documentation by keyword with filtering and pagination |
 | `jamf_docs_get_article` | Retrieve full content of a specific documentation article |
-| `jamf_docs_get_toc` | Browse the table of contents for a product |
+| `jamf_docs_get_toc` | Browse the table of contents for a product or any single publication |
 | `jamf_docs_batch_get_articles` | Fetch multiple articles in one call (up to 10 URLs) |
 | `jamf_docs_glossary_lookup` | Look up Jamf terminology and definitions (fuzzy matching) |
 
@@ -139,7 +139,7 @@ Searches across all Jamf product documentation.
 | `query` | string (2–200 chars) | required | Search keywords |
 | `product` | string | — | Filter by product ID (e.g., `jamf-pro`) |
 | `topic` | string | — | Filter by topic category (e.g., `enrollment`, `security`) |
-| `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, `training` |
+| `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, `getting-started` |
 | `version` | string | — | Filter by version (e.g., `"11.5.0"`) |
 | `language` | string | `en-US` | Documentation language/locale |
 | `limit` | number (1–50) | `10` | Results per page |
@@ -264,8 +264,24 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 | `jamf-rapididentity` | RapidIdentity | Identity and access management platform |
 | `jamf-trust` | Jamf Trust | Zero-trust network access for Apple devices |
 | `jamf-routines` | Jamf Routines | Automated workflow orchestration for device management |
-| `self-service-plus` | Self Service+ | Next-generation self-service portal for macOS |
+| `self-service-plus` | Self Service+ | Next-generation self-service portal for macOS and mobile |
 | `jamf-app-catalog` | Jamf App Catalog | Curated application catalog for managed deployments |
+| `jamf-account` | Jamf Account | Identity, licensing, and platform services portal |
+| `jamf-security-cloud` | Jamf Security Cloud | Cloud security portal for Jamf Connect and Jamf Protect |
+| `elevate` | Elevate | Guided remediation and device health portal |
+| `composer` | Composer | macOS package building and editing |
+| `jamf-parent` | Jamf Parent | Parental device controls for school-issued devices |
+| `jamf-teacher` | Jamf Teacher | Classroom device management for teachers |
+| `jamf-setup-reset` | Jamf Setup and Reset | Device personalisation and wipe-and-reprovision apps |
+| `jamf-assessment` | Jamf Assessment | Locked-down assessment mode for education devices |
+| `title-editor` | Title Editor | Custom software title patch definitions |
+| `jamf-infrastructure-manager` | Jamf Infrastructure Manager | On-premises proxy for LDAP and other internal services |
+| `jamf-adcs-connector` | Jamf AD CS Connector | Certificate issuance via Active Directory Certificate Services |
+| `jamf-pki-proxy` | Jamf PKI Proxy | Proxy for certificate authorities behind a firewall |
+| `jamf-migrate` | Jamf Migrate | Migrating macOS devices between Jamf Pro instances |
+| `jamf-remote-assist` | Jamf Remote Assist | Remote screen sharing and support sessions |
+| `jamf-cloud-distribution-service` | Jamf Cloud Distribution Service | Jamf-hosted package distribution (JCDS) |
+| `healthcare-listener` | Healthcare Listener | Integration with healthcare information systems |
 
 ## Key Features
 
@@ -275,7 +291,7 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 - **Batch Fetching**: Use `jamf_docs_batch_get_articles` to fetch up to 10 articles in one call with concurrent requests
 - **Glossary Lookup**: Use `jamf_docs_glossary_lookup` to look up Jamf terminology with fuzzy matching
 - **Multi-language**: All tools accept a `language` parameter for localized documentation (e.g., `ja-JP`, `de-DE`)
-- **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, or `training`
+- **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, or `getting-started`
 - **Version Query**: Use the `version` parameter to query documentation for a specific product version
 - **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated
 - **Search Suggestions**: Receive helpful suggestions when a search returns no results
