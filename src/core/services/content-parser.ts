@@ -11,6 +11,7 @@
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { DOCS_BASE_URL, SELECTORS } from '../constants.js';
+import type { SelectorSet } from '../constants/limits.js';
 import { INTERNAL_LINK_SELECTOR, type InternalLinkResolver } from './ft-internal-link.js';
 
 // ─── Turndown instance ──────────────────────────────────────────
@@ -42,23 +43,43 @@ turndown.addRule('stripScripts', {
 
 // ─── HTML cleaning ──────────────────────────────────────────────
 
+/** Per-source overrides for {@link cleanHtml}; every field defaults to learn.jamf.com's. */
+export interface CleanHtmlOptions {
+  /** Selector set for this source. Defaults to {@link SELECTORS}. */
+  selectors?: SelectorSet;
+  /** Origin that root-relative hrefs and srcs resolve against. Defaults to {@link DOCS_BASE_URL}. */
+  linkBase?: string;
+}
+
 /**
  * Clean HTML content: remove unwanted elements, fix relative URLs.
+ *
+ * Both the selector set and the link base are parameters with learn.jamf.com
+ * defaults rather than module constants, so a caller reading a different site
+ * gets that site's markup rules. Existing single-argument callers — the
+ * glossary path among them — are unaffected.
  */
-export function cleanHtml($: cheerio.CheerioAPI): void {
-  $(SELECTORS.REMOVE).remove();
+export function cleanHtml($: cheerio.CheerioAPI, options?: CleanHtmlOptions): void {
+  const selectors = options?.selectors ?? SELECTORS;
+  // Root-relative links resolve against the site they came from. Hard-coding
+  // learn.jamf.com here is what would point every internal link and image of
+  // a second source at the wrong host — silently, since both produce a valid
+  // absolute URL.
+  const linkBase = options?.linkBase ?? DOCS_BASE_URL;
+
+  $(selectors.REMOVE).remove();
 
   $('a[href^="/"]').each((_, el) => {
     const href = $(el).attr('href');
     if (href !== undefined && href !== '') {
-      $(el).attr('href', `${DOCS_BASE_URL}${href}`);
+      $(el).attr('href', `${linkBase}${href}`);
     }
   });
 
   $('img[src^="/"]').each((_, el) => {
     const src = $(el).attr('src');
     if (src !== undefined && src !== '') {
-      $(el).attr('src', `${DOCS_BASE_URL}${src}`);
+      $(el).attr('src', `${linkBase}${src}`);
     }
   });
 }
@@ -115,6 +136,16 @@ export interface ParseArticleOptions {
    * `relatedArticles`. See {@link linkInternalSpans}.
    */
   resolveInternalLink?: InternalLinkResolver | undefined;
+  /**
+   * Selector set for the source this HTML came from.
+   *
+   * Optional, defaulting to learn.jamf.com's, because `parseArticle` is a
+   * published deep-import (`./core/*` is in the package export map) and
+   * making it required would be a breaking change for embedders.
+   */
+  selectors?: SelectorSet;
+  /** Origin that root-relative hrefs and srcs resolve against. */
+  linkBase?: string;
 }
 
 /**
@@ -126,7 +157,11 @@ export function parseArticle(
   options?: ParseArticleOptions
 ): ParsedArticleContent {
   const $ = cheerio.load(html);
-  cleanHtml($);
+  const selectors = options?.selectors ?? SELECTORS;
+  cleanHtml($, {
+    selectors,
+    ...(options?.linkBase !== undefined ? { linkBase: options.linkBase } : {}),
+  });
 
   // Before anything reads anchors: internal links are spans until this runs.
   const resolveInternalLink = options?.resolveInternalLink;
@@ -144,7 +179,7 @@ export function parseArticle(
   //    Checked before body wrappers because <article> is semantically broader
   //    and should take priority when both exist as siblings.
   if (contentHtml === '') {
-    contentHtml = $(SELECTORS.CONTENT).html() ?? '';
+    contentHtml = $(selectors.CONTENT).html() ?? '';
   }
 
   // 3. Common FT body wrappers (taskbody, conbody, refbody, etc.)
@@ -162,7 +197,7 @@ export function parseArticle(
     contentHtml = html;
   }
 
-  const extractedTitle = $(SELECTORS.TITLE).first().text().trim();
+  const extractedTitle = $(selectors.TITLE).first().text().trim();
   const title = extractedTitle !== '' ? extractedTitle : 'Untitled';
 
   // Convert to Markdown and strip Turndown anchor artifacts from headings
@@ -170,14 +205,14 @@ export function parseArticle(
     .replace(/^(#{1,6}\s+)\[([^\]]*)\]\(#[^)]*\)/gm, '$1$2');
 
   // Extract breadcrumb
-  const breadcrumb = $(SELECTORS.BREADCRUMB)
+  const breadcrumb = $(selectors.BREADCRUMB)
     .map((_, el) => $(el).text().trim())
     .get()
     .filter(Boolean);
 
   // Extract related articles
   const relatedArticles = options?.includeRelated === true
-    ? $(SELECTORS.RELATED).map((_, el) => {
+    ? $(selectors.RELATED).map((_, el) => {
         const rawHref = $(el).attr('href') ?? '';
         if (rawHref === '' || rawHref.startsWith('#')) {
           return { title: '', url: '' };
