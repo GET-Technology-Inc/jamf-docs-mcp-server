@@ -15,6 +15,10 @@ import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
+import {
+  searchStaticSources,
+  type StaticSearchHit,
+} from '../services/static-search-service.js';
 
 interface SearchFilters {
   product?: string;
@@ -350,6 +354,34 @@ function activeSearchFilters(params: {
   return Object.keys(filters).length > 0 ? filters : undefined;
 }
 
+/**
+ * Render the other-source hits as a labelled trailer.
+ *
+ * Below the results and clearly separated, because these come from a
+ * different ranking that shares no scale with the one above — and because
+ * two of the three sources are not product documentation.
+ */
+function renderOtherSources(hits: StaticSearchHit[]): string {
+  if (hits.length === 0) { return ''; }
+
+  const bySource = new Map<string, StaticSearchHit[]>();
+  for (const hit of hits) {
+    bySource.set(hit.source, [...(bySource.get(hit.source) ?? []), hit]);
+  }
+
+  let out = '\n---\n\n## Also found outside the product documentation\n\n';
+  for (const [source, sourceHits] of bySource) {
+    out += `**${source}**\n\n`;
+    for (const hit of sourceHits) {
+      out += `- [${sanitizeMarkdownText(hit.title)}](${sanitizeMarkdownUrl(hit.url)})\n`;
+    }
+    out += '\n';
+  }
+  out += '*Matched on title, ranked separately from the results above — '
+    + 'Fluid Topics returns no score to rank them against.*\n';
+  return out;
+}
+
 function buildSearchStructuredContent(
   query: string,
   results: SearchResult[],
@@ -361,6 +393,7 @@ function buildSearchStructuredContent(
     truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
+    otherSources?: StaticSearchHit[] | undefined;
   }
 ): Record<string, unknown> {
   return {
@@ -397,7 +430,17 @@ function buildSearchStructuredContent(
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
     ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
-    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {})
+    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {}),
+    // Omitted rather than emitted empty: "nothing matched elsewhere" and
+    // "the other sources were not reachable" are different answers, and an
+    // empty array would claim the first.
+    ...(extras?.otherSources !== undefined && extras.otherSources.length > 0
+      ? {
+          otherSources: extras.otherSources.map(hit => ({
+            title: hit.title, url: hit.url, source: hit.source,
+          })),
+        }
+      : {})
   };
 }
 
@@ -544,6 +587,23 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
 
+        // The non-Fluid-Topics sources, as their own block.
+        //
+        // Deliberately not merged into the ranking above. Fluid Topics
+        // returns no score — see the relevanceNote below, which says so —
+        // and neither does this server's SearchResult, so there is nothing
+        // on either side to fuse two orderings on. Interleaving them on an
+        // invented number would look authoritative and would not be. Never
+        // allowed to fail the search it runs beside.
+        const otherSources = await searchStaticSources(
+          ctx, params.query, params.language ?? DEFAULT_LOCALE,
+        ).catch((error: unknown) => {
+          ctx.logger.createLogger('search').warning(
+            `Other-source search failed: ${String(error)}`,
+          );
+          return [];
+        });
+
         const {
           results, pagination, tokenInfo, filterRelaxation, versionNote,
           paginationNote, truncatedContent
@@ -586,6 +646,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             versionNote,
             paginationNote,
             truncatedContent,
+            otherSources,
           }
         );
 
@@ -624,7 +685,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         const markdown = appendMarkdownNotices(
           formatFn(params.query, results, filters, pagination, tokenInfo),
           { filterRelaxation, versionNote, paginationNote, truncatedContent }
-        );
+        ) + renderOtherSources(otherSources);
 
         await reportProgress(extra, { progress: 3, total: 3 });
         return {

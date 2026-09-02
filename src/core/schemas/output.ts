@@ -89,6 +89,21 @@ export const SearchOutputSchema = z.object({
      */
     otherVersions: z.array(z.string()).optional(),
   })),
+  /**
+   * Matches from documentation sources outside Fluid Topics.
+   *
+   * A separate list, not merged into `results`: Fluid Topics returns no
+   * relevance score and neither does this server, so there is no scale on
+   * which the two orderings could be interleaved. Present only when
+   * something matched — an empty array would claim "nothing matched
+   * elsewhere" where the truth may be "those sources were unreachable".
+   */
+  otherSources: z.array(z.object({
+    title: z.string(),
+    url: z.string(),
+    /** Display name of the source, e.g. "Jamf Concepts". */
+    source: z.string(),
+  })).optional(),
   suggestions: z.array(z.string()).optional(),
   filterRelaxation: z.object({
     removed: z.array(z.string()),
