@@ -1,3 +1,9 @@
+## [5.4.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.1...v5.4.2) (2026-09-02)
+
+### Bug Fixes
+
+* **search:** stop collapsing version snapshots silently ([#261](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/261)) ([0b50092](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/0b500925a280b710e1b8077f3eeeff4e133b8821)), closes [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
 ## [5.4.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.0...v5.4.1) (2026-09-02)
 
 ### Bug Fixes
