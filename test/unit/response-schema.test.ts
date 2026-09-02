@@ -84,7 +84,7 @@ import { registerSearchTool } from '../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
 import { registerGetTocTool } from '../../src/core/tools/get-toc.js';
 import { registerResources } from '../../src/core/resources/index.js';
-import { createMockContext, createMockArticleProvider } from '../helpers/mock-context.js';
+import { createMockContext, createMockArticleProvider, createStubMapsRegistry } from '../helpers/mock-context.js';
 import { registerTroubleshootPrompt } from '../../src/core/prompts/troubleshoot.js';
 import { registerSetupGuidePrompt } from '../../src/core/prompts/setup-guide.js';
 import { registerCompareVersionsPrompt } from '../../src/core/prompts/compare-versions.js';
@@ -96,6 +96,10 @@ const mockArticleProvider = createMockArticleProvider(() => nextArticleResult);
 
 const ctx = createMockContext({
   articleProvider: mockArticleProvider,
+  // list_products reads the publication axis from the maps registry. Without
+  // a stub the default registry reaches learn.jamf.com for real, and the tool
+  // degrades quietly on failure — so the leak would never turn a test red.
+  mapsRegistry: createStubMapsRegistry(),
 });
 // Override topicResolver.resolve to return fixed IDs (avoids network calls)
 ctx.topicResolver.resolve = vi.fn().mockResolvedValue({

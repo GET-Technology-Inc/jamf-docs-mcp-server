@@ -18,6 +18,29 @@ export const ProductListOutputSchema = z.object({
     name: z.string(),
     keywords: z.array(z.string()),
   })),
+  /**
+   * Every bundle family Fluid Topics publishes — the publication axis.
+   *
+   * Separate from `products` on purpose. `products` is the curated set the
+   * `product` search filter accepts; this is the set `jamf_docs_get_toc`'s
+   * `publication` parameter accepts, and it is an order of magnitude larger
+   * (97 vs 12) because most Jamf documents share a product label with
+   * another document rather than having one of their own. Folding them
+   * together would turn "which product" into "which document".
+   *
+   * Optional: it comes from the live maps registry, so a request that cannot
+   * reach it still gets the products and topics it asked for.
+   */
+  publications: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    /** Jamf's own classification. Fields absent when Jamf assigns none. */
+    portal: z.string().optional(),
+    app: z.string().optional(),
+    utility: z.string().optional(),
+    locales: z.array(z.string()),
+    versions: z.array(z.string()),
+  })).optional(),
 });
 
 export const SearchOutputSchema = z.object({
