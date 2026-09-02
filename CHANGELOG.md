@@ -1,3 +1,9 @@
+## [5.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.0...v5.0.1) (2026-09-02)
+
+### Bug Fixes
+
+* **cache:** reclaim orphaned entries and abandoned writes ([#253](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/253)) ([6c3d088](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6c3d0888b3306ad76eb95ff4eb87ce33239f9edb)), closes [#248](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/248) [#247](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/247)
+
 ## [5.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.7...v5.0.0) (2026-09-02)
 
 ### ⚠ BREAKING CHANGES
