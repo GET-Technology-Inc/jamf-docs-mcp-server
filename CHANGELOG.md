@@ -1,3 +1,9 @@
+## [5.9.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.8.0...v5.9.0) (2026-09-02)
+
+### Features
+
+* **search:** surface matches from the non-Fluid-Topics sources ([#266](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/266)) ([38b8311](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/38b8311a589a2990d05694fe5f1847a991015f45)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
 ## [5.8.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.7.0...v5.8.0) (2026-09-02)
 
 ### Features
