@@ -78,6 +78,7 @@ import {
   getBundleIdForVersion,
 } from '../../src/core/services/metadata.js';
 import type { FetchArticleResult } from '../../src/core/types.js';
+import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 import { registerListProductsTool } from '../../src/core/tools/list-products.js';
 import { registerSearchTool } from '../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../src/core/tools/get-article.js';
@@ -306,7 +307,7 @@ describe('E2E: MCP Server Response Schema', () => {
   // =========================================================================
 
   describe('jamf_docs_list_products', () => {
-    it('should return all 4 products in markdown format', async () => {
+    it('should return every registered product in markdown format', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: {},
@@ -334,10 +335,10 @@ describe('E2E: MCP Server Response Schema', () => {
       const json = JSON.parse(text);
 
       expect(Array.isArray(json.products)).toBe(true);
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
 
-    it('should include all 4 product IDs in JSON format', async () => {
+    it('should include every registered product ID in JSON format', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: { responseFormat: 'json' },
@@ -703,7 +704,7 @@ describe('E2E: MCP Server Response Schema', () => {
 
       const data = JSON.parse(resourceText(result.contents));
       expect(Array.isArray(data.products)).toBe(true);
-      expect(data.products).toHaveLength(12);
+      expect(data.products).toHaveLength(MOCK_PRODUCTS_RESOURCE_DATA.products.length);
     });
 
     it('should read topics resource and return JSON', async () => {
