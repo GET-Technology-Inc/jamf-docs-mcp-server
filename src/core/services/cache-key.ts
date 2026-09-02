@@ -113,6 +113,17 @@ export interface CacheKeySpaces {
   // overwrote each other.
   'glossary-toc': { mapId: string };
   'glossary-content': { mapId: string; contentId: string };
+  /**
+   * An article from a non-Fluid-Topics source, keyed on the URL it was
+   * fetched from.
+   *
+   * Not folded into `ft-article-v3`: that space is `{mapId, contentId,
+   * articleUrl}`, and a static page has neither of the first two. `source`
+   * rides along so two sources cannot collide on a path, even though the URL
+   * alone already carries the hostname — it keeps the namespace readable on
+   * disk, which is the stated reason these keys are not just hashes.
+   */
+  'static-article': { source: string; url: string };
   'maps-registry-v2': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
@@ -168,6 +179,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-topic-index': true,
   'glossary-toc': true,
   'glossary-content': true,
+  'static-article': true,
   'maps-registry-v2': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
