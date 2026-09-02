@@ -13,6 +13,7 @@ import { asJsonObject } from '../helpers/fixtures.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
+import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 
 // ============================================================================
 // HTTP Server lifecycle helpers
@@ -175,7 +176,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       const json = JSON.parse(content[0].text);
       // Product count depends on live API availability; assert a reasonable range
       expect(json.products.length).toBeGreaterThanOrEqual(4);
-      expect(json.products.length).toBeLessThanOrEqual(12);
+      expect(json.products.length).toBeLessThanOrEqual(PRODUCT_IDS.length);
 
       // Each product should have expected shape
       for (const p of json.products) {

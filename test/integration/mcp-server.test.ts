@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject, resourceText } from '../helpers/fixtures.js';
 import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
+import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
@@ -298,7 +299,7 @@ describe('Jamf Docs MCP Server', () => {
         ref: { type: 'ref/resource', uri: 'jamf://products/{productId}/toc' },
         argument: { name: 'productId', value: '' }
       });
-      expect(result.completion.values).toHaveLength(12);
+      expect(result.completion.values).toHaveLength(PRODUCT_IDS.length);
     });
   });
 
@@ -425,7 +426,7 @@ describe('Jamf Docs MCP Server', () => {
       expect(json.products).toBeDefined();
       // Products with no TOC content are filtered out; count may vary
       expect(json.products.length).toBeGreaterThanOrEqual(8);
-      expect(json.products.length).toBeLessThanOrEqual(12);
+      expect(json.products.length).toBeLessThanOrEqual(PRODUCT_IDS.length);
       expect(json.topics).toBeDefined();
       expect(json.topics.length).toBeGreaterThan(30);
       expect(json.tokenInfo).toBeDefined();

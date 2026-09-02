@@ -19,6 +19,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 }));
 
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
+import { PRODUCT_IDS } from '../../../src/core/constants/products.js';
 
 // ---------------------------------------------------------------------------
 
@@ -199,14 +200,14 @@ describe('jamf_docs_list_products tool', () => {
       expect(Array.isArray(json.topics)).toBe(true);
     });
 
-    it('should have exactly 4 products in JSON output', async () => {
+    it('should list every registered product in JSON output', async () => {
       const result = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: { responseFormat: 'json' },
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
 
     it('should include all product IDs in JSON products array', async () => {
@@ -390,7 +391,7 @@ describe('jamf_docs_list_products tool', () => {
       expect(Array.isArray(sc.topics)).toBe(true);
     });
 
-    it('should have 4 products in structuredContent regardless of format', async () => {
+    it('should list every registered product in structuredContent regardless of format', async () => {
       const mdResult = await client.callTool({
         name: 'jamf_docs_list_products',
         arguments: {},
@@ -408,9 +409,9 @@ describe('jamf_docs_list_products tool', () => {
       const jsonSc = jsonResult.structuredContent as Record<string, unknown>;
       const compactSc = compactResult.structuredContent as Record<string, unknown>;
 
-      expect((mdSc.products as unknown[]).length).toBe(12);
-      expect((jsonSc.products as unknown[]).length).toBe(12);
-      expect((compactSc.products as unknown[]).length).toBe(12);
+      expect((mdSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
+      expect((jsonSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
+      expect((compactSc.products as unknown[]).length).toBe(PRODUCT_IDS.length);
     });
 
     it('should have non-empty topics in structuredContent', async () => {
@@ -512,7 +513,7 @@ describe('jamf_docs_list_products tool', () => {
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
       const routines = json.products.find((p: { id: string }) => p.id === 'jamf-routines');
       expect(routines).toBeDefined();
       expect(routines.hasContent).toBe(false);
@@ -542,7 +543,7 @@ describe('jamf_docs_list_products tool', () => {
       });
 
       const json = JSON.parse(getTextContent(result));
-      expect(json.products).toHaveLength(12);
+      expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
   });
 });
