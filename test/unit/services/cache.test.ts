@@ -566,7 +566,7 @@ describe('atomic disk write', () => {
     // concurrent processes must never share the same in-flight file.
     expect(tmpPath).toContain(`.tmp.${process.pid}`);
     expect(renameFrom).toBe(tmpPath);
-    expect(renameTo).toBe(String(tmpPath).split('.tmp.')[0]);
-    expect(JSON.parse(String(payload)).data).toEqual({ hello: 'world' });
+    expect(renameTo).toBe(tmpPath.split('.tmp.')[0]);
+    expect(JSON.parse(payload).data).toEqual({ hello: 'world' });
   });
 });
