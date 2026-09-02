@@ -79,6 +79,15 @@ export const SearchOutputSchema = z.object({
     contentId: z.string().optional(),
     breadcrumb: z.array(z.string()).optional(),
     mapTitle: z.string().optional(),
+    /**
+     * Other versions of this topic that the search collapsed away.
+     *
+     * Fluid Topics returns one entry per product version; the search keeps
+     * the newest so a broad query does not return fifteen copies of one
+     * page. This is what it dropped, newest first — without it, "what
+     * changed in 11.26?" has no answer a client could act on.
+     */
+    otherVersions: z.array(z.string()).optional(),
   })),
   suggestions: z.array(z.string()).optional(),
   filterRelaxation: z.object({

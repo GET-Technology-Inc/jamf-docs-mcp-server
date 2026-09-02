@@ -88,6 +88,17 @@ function formatSearchResult(result: SearchResult): string {
   if (result.version !== undefined) {
     meta.push(`**Version**: ${result.version}`);
   }
+  // Say what was collapsed, and how to get it. Naming the newest few rather
+  // than all of them keeps a release-notes hit readable — one topic can span
+  // forty-three versions — while still proving the older ones exist.
+  if (result.otherVersions !== undefined && result.otherVersions.length > 0) {
+    const shown = result.otherVersions.slice(0, 3).join(', ');
+    const rest = result.otherVersions.length - 3;
+    meta.push(
+      `**Also in**: ${shown}${rest > 0 ? ` +${String(rest)} more` : ''}` +
+      ' (pass `version` to fetch one)'
+    );
+  }
   const ids = formatResultIds(result);
   if (ids !== '') {
     meta.push(ids);
@@ -373,6 +384,7 @@ function buildSearchStructuredContent(
       // perform from the outputs this server actually produces.
       ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
       ...(r.contentId !== undefined ? { contentId: r.contentId } : {}),
+      ...(r.otherVersions !== undefined ? { otherVersions: r.otherVersions } : {}),
       // Same drop as `mapId`/`contentId` above: declared on
       // `SearchOutputSchema`, populated by `buildSearchResult` from the Fluid
       // Topics topic (and by the downstream worker's search provider), and
