@@ -19,6 +19,26 @@ import { createMockContext, createStubMapsRegistry } from '../../helpers/mock-co
 const mockGetProductAvailability = vi.fn().mockResolvedValue({});
 
 /**
+ * Stands in for the registry-backed catalogue.
+ *
+ * Derived from JAMF_PRODUCTS so a new product needs no fixture edit, but
+ * `availableVersions` deliberately differs from the constant's `['current']`
+ * for one product: the whole point of reading metadata here is that the
+ * registry knows versions the constant does not.
+ */
+const mockGetProductsMetadata = vi.fn(async () => await Promise.resolve(
+  Object.values(JAMF_PRODUCTS).map(p => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    bundleId: p.bundleId,
+    latestVersion: p.id === 'jamf-pro' ? '11.31.0' : 'current',
+    availableVersions: p.id === 'jamf-pro' ? ['11.31.0', '11.30.0'] : ['current'],
+    labelKey: p.searchLabel,
+  }))
+));
+
+/**
  * Shaped like the live data: one family per classification slot Jamf uses,
  * one carrying no classification at all, one versioned and one single-locale.
  */
@@ -37,10 +57,11 @@ const PUBLICATIONS = [
 
 vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
+  getProductsMetadata: async () => await mockGetProductsMetadata(),
 }));
 
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
-import { PRODUCT_IDS } from '../../../src/core/constants/products.js';
+import { PRODUCT_IDS, JAMF_PRODUCTS } from '../../../src/core/constants/products.js';
 
 // ---------------------------------------------------------------------------
 
@@ -641,4 +662,27 @@ describe('publications section', () => {
     await brokenClient.close();
   });
 });
+
+  it('should report the versions the registry publishes, not the constant\'s', async () => {
+    // JAMF_PRODUCTS declares `versions: ['current']` for every row. That is
+    // true of the unversioned majority and wrong for the families Jamf
+    // snapshots — jamf-pro-documentation publishes nineteen. Reading the
+    // constant is what made this tool disagree with `jamf://products`, which
+    // has been registry-backed all along.
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as {
+      products: { id: string; currentVersion: string; availableVersions: string[] }[];
+    };
+
+    const pro = sc.products.find(p => p.id === 'jamf-pro');
+    expect(pro?.availableVersions).toEqual(['11.31.0', '11.30.0']);
+    expect(pro?.currentVersion).toBe('11.31.0');
+    expect(JAMF_PRODUCTS['jamf-pro'].versions).toEqual(['current']);
+
+    // Unversioned products still read as they did.
+    expect(sc.products.find(p => p.id === 'composer')?.availableVersions).toEqual(['current']);
+  });
 });
