@@ -1,3 +1,22 @@
+## [5.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.7...v5.0.0) (2026-09-02)
+
+### ⚠ BREAKING CHANGES
+
+* **cache:** `CacheProvider.get`, `.set` and `.delete` take `CacheKey`
+instead of `string`. Implementers are unaffected — a `get(key: string)` method
+still satisfies the interface, which is why `FileCache` needed no change — but
+an embedder that calls `ctx.cache.get('my-key')` on a context it built now gets
+TS2345 and must mint the key with `cacheKey()` or keep its own store. Every key
+also changes format, so caches are cold after deploy; entries are orphaned
+rather than migrated.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01FMYa25rvY9HB3BeP55wySP
+
+### Features
+
+* **cache:** derive every cache key through one branded constructor ([#247](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/247)) ([967c448](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/967c448dc6b9c915fd8b74648c46032f246a164b))
+
 ## [4.3.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v4.3.6...v4.3.7) (2026-09-02)
 
 ### Bug Fixes
