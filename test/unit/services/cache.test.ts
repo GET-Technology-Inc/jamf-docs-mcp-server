@@ -22,7 +22,13 @@ const fs = vi.hoisted(() => ({
     .mockResolvedValue(undefined),
   unlink: vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined),
   readdir: vi.fn<(path: string) => Promise<string[]>>().mockResolvedValue([]),
-  stat: vi.fn<(path: string) => Promise<{ size: number }>>()
+  stat: vi.fn<(path: string) => Promise<{ size: number }>>(),
+  // `set()` writes to `<path>.tmp.<pid>` and renames it into place. Without a
+  // `rename` mock every write threw "No \"rename\" export is defined on the
+  // \"fs/promises\" mock", and `set()` catches and logs rather than rethrowing —
+  // so every disk write in this file silently failed while the memory cache
+  // carried the assertions. See the round-trip test at the bottom.
+  rename: vi.fn<(from: string, to: string) => Promise<void>>().mockResolvedValue(undefined)
 }));
 
 vi.mock('fs/promises', () => fs);
@@ -523,5 +529,44 @@ describe('prune()', () => {
     expect(pruned).toBeGreaterThanOrEqual(1);
 
     vi.restoreAllMocks();
+  });
+});
+
+// ============================================================================
+// Atomic-write round trip
+// ============================================================================
+
+describe('atomic disk write', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.writeFile.mockResolvedValue(undefined);
+    fs.rename.mockResolvedValue(undefined);
+  });
+
+  it('should complete the write-then-rename without logging a failure', async () => {
+    const log = createMockLogger();
+    const isolated = new FileCache({ log });
+
+    await isolated.set('atomic:round-trip', { hello: 'world' }, 60000);
+
+    // Regression guard. `set()` catches everything and only logs, so a missing
+    // fs mock made this whole file assert against the memory cache alone while
+    // every disk write failed. Asserting the logger stayed quiet is what makes
+    // the mock's completeness observable.
+    expect(log.error).not.toHaveBeenCalled();
+
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
+    expect(fs.rename).toHaveBeenCalledTimes(1);
+
+    const [tmpPath, payload] = fs.writeFile.mock.calls[0];
+    const [renameFrom, renameTo] = fs.rename.mock.calls[0];
+
+    // Written to a pid-scoped temp path, then moved into place — two
+    // concurrent processes must never share the same in-flight file.
+    expect(tmpPath).toContain(`.tmp.${process.pid}`);
+    expect(renameFrom).toBe(tmpPath);
+    expect(renameTo).toBe(tmpPath.split('.tmp.')[0]);
+    expect(JSON.parse(payload).data).toEqual({ hello: 'world' });
   });
 });
