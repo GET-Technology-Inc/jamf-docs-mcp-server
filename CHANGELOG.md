@@ -1,3 +1,9 @@
+## [5.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.1...v5.1.0) (2026-09-02)
+
+### Features
+
+* **toc:** browse every Jamf publication, not just the twelve products ([#254](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/254)) ([1ee504f](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1ee504fb61ed5f2bcf38d6641bc2f6333d83d8bc)), closes [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237) [#239](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/239) [#240](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/240)
+
 ## [5.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.0...v5.0.1) (2026-09-02)
 
 ### Bug Fixes
