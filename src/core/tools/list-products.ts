@@ -11,6 +11,7 @@ import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
 import { getProductAvailability, getProductsMetadata } from '../services/metadata.js';
+import { STATIC_SECTIONS } from '../constants/sources.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
@@ -78,9 +79,20 @@ interface PublicationRow {
  * be a regression for every caller that only wanted the product list.
  */
 async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationRow[] | null> {
+  // Static sources are compiled in, so they list whether or not the maps
+  // registry answers — and they are the only way to discover that
+  // concepts.jamf.com is reachable at all.
+  const staticRows: PublicationRow[] = STATIC_SECTIONS.map(({ source, section }) => ({
+    id: section.id,
+    title: section.title,
+    portal: source.name,
+    locales: Object.keys(source.locales).sort(),
+    versions: [],
+  }));
+
   try {
     const pubs = await ctx.mapsRegistry.listPublications();
-    return pubs.map(pub => ({
+    return [...staticRows, ...pubs.map(pub => ({
       id: pub.id,
       title: pub.title,
       ...(pub.portal !== '' ? { portal: pub.portal } : {}),
@@ -88,12 +100,12 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
       ...(pub.utility !== '' ? { utility: pub.utility } : {}),
       locales: pub.locales,
       versions: pub.versions,
-    }));
+    }))];
   } catch (error) {
     ctx.logger.createLogger('list-products').warning(
       `Could not list publications: ${String(error)}`,
     );
-    return null;
+    return staticRows;
   }
 }
 

@@ -14,6 +14,24 @@
 
 import { SELECTORS, type SelectorSet } from './limits.js';
 
+/**
+ * One browsable part of a static source.
+ *
+ * A Fluid Topics publication is a bundle with a TOC endpoint. A static site
+ * has no such thing, so its browsable units are declared: `path` is the URL
+ * segment that groups them and `id` is what `jamf_docs_get_toc`'s
+ * `publication` parameter accepts, which keeps both kinds of source on one
+ * tool surface rather than adding a third addressing mode.
+ */
+export interface StaticSection {
+  /** Publication id, e.g. `jamf-concepts-guides`. */
+  readonly id: string;
+  /** URL segment after the locale, e.g. `guides`. */
+  readonly path: string;
+  /** Title for listings. */
+  readonly title: string;
+}
+
 export interface StaticDocSource {
   /** Stable id, used as the cache namespace discriminator. */
   readonly id: string;
@@ -34,6 +52,17 @@ export interface StaticDocSource {
    * without saying which is which would be the actual error.
    */
   readonly provenance?: string;
+  /**
+   * Locale codes this source uses, mapped from this server's.
+   *
+   * concepts.jamf.com uses bare short codes (`en`, `ja`, `de`) and is
+   * case-sensitive; only `zh-TW` matches this server's form exactly. Locales
+   * absent from this map are not published by the source at all — th-TH is
+   * a hard gap, `/th` and `/th-TH` both 404.
+   */
+  readonly locales: Readonly<Record<string, string>>;
+  /** Browsable sections, exposed as publications. */
+  readonly sections: readonly StaticSection[];
 }
 
 /**
@@ -74,6 +103,20 @@ export const STATIC_DOC_SOURCES = {
       'Source: Jamf Concepts (concepts.jamf.com), Jamf\'s innovation lab. ' +
       'This is exploratory material, not official product documentation — ' +
       'see learn.jamf.com for the supported configuration steps.',
+    locales: {
+      'en-US': 'en',
+      'ja-JP': 'ja',
+      'de-DE': 'de',
+      'es-ES': 'es',
+      'fr-FR': 'fr',
+      'nl-NL': 'nl',
+      'zh-TW': 'zh-TW',
+      'zh-CN': 'zh-CN',
+    },
+    sections: [
+      { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides' },
+      { id: 'jamf-concepts-tools', path: 'concepts', title: 'Jamf Concepts: Open Source Tools' },
+    ],
   },
 } as const satisfies Record<string, StaticDocSource>;
 
@@ -101,4 +144,16 @@ export function staticSourceForUrl(urlStr: string): StaticDocSource | undefined 
   } catch {
     return undefined;
   }
+}
+
+/** Every browsable section across all static sources, as publication rows. */
+export const STATIC_SECTIONS: readonly { source: StaticDocSource; section: StaticSection }[] =
+  Object.values(STATIC_DOC_SOURCES).flatMap(source =>
+    source.sections.map(section => ({ source, section })));
+
+/** The static section a publication id names, or undefined for a Fluid Topics one. */
+export function staticSectionById(
+  id: string,
+): { source: StaticDocSource; section: StaticSection } | undefined {
+  return STATIC_SECTIONS.find(row => row.section.id === id);
 }

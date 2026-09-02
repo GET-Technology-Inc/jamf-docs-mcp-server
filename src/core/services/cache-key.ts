@@ -124,6 +124,8 @@ export interface CacheKeySpaces {
    * disk, which is the stated reason these keys are not just hashes.
    */
   'static-article': { source: string; url: string };
+  /** A static source's sitemap, whole. One per source, so no per-locale part. */
+  'static-sitemap': { source: string };
   'maps-registry-v2': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
@@ -180,6 +182,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'glossary-toc': true,
   'glossary-content': true,
   'static-article': true,
+  'static-sitemap': true,
   'maps-registry-v2': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
