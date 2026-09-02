@@ -1,3 +1,9 @@
+## [5.8.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.7.0...v5.8.0) (2026-09-02)
+
+### Features
+
+* **sources:** read the Jamf Support knowledge base ([#265](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/265)) ([b394ebc](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b394ebcba3a264af70341154d7f848c8cafc4fbb)), closes [#245](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/245) [#263](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/263)
+
 ## [5.7.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.6.0...v5.7.0) (2026-09-02)
 
 ### Features
