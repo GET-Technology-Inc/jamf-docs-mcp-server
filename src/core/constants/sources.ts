@@ -41,7 +41,17 @@ export interface StaticDocSource {
   readonly baseUrl: string;
   /** Human name, for prose and error messages. */
   readonly name: string;
-  /** How to read this source's HTML. */
+  /**
+   * How this source's pages are read.
+   *
+   * `html` parses the DOM with {@link StaticDocSource.selectors}. `intercom`
+   * ignores them entirely: an Intercom Help Center embeds its own data as
+   * JSON in `<script id="__NEXT_DATA__">`, and the content model is a block
+   * list rather than markup, so the rendered DOM is a view of the source of
+   * truth rather than the source itself.
+   */
+  readonly parser: 'html' | 'intercom';
+  /** How to read this source's HTML. Unused when `parser` is not `html`. */
   readonly selectors: SelectorSet;
   /**
    * Appended to every article served from this source.
@@ -61,8 +71,22 @@ export interface StaticDocSource {
    * a hard gap, `/th` and `/th-TH` both 404.
    */
   readonly locales: Readonly<Record<string, string>>;
-  /** Browsable sections, exposed as publications. */
+  /**
+   * Browsable sections, exposed as publications.
+   *
+   * Empty for a source whose sections are not knowable without a request —
+   * an Intercom Help Center's collections are content, not configuration,
+   * and pinning their ids here would mean a registry edit whenever Jamf adds
+   * one. Those are discovered instead; see {@link StaticDocSource.dynamicSections}.
+   */
   readonly sections: readonly StaticSection[];
+  /**
+   * Set when sections come from the source at runtime rather than this table.
+   *
+   * The publication id is then `{prefix}-{slug}`, so a caller can still name
+   * one without knowing Intercom's numeric ids.
+   */
+  readonly dynamicSections?: { readonly kind: 'intercom-collections'; readonly idPrefix: string };
 }
 
 /**
@@ -86,6 +110,7 @@ export const STATIC_DOC_SOURCES = {
     hostname: 'concepts.jamf.com',
     baseUrl: 'https://concepts.jamf.com',
     name: 'Jamf Concepts',
+    parser: 'html',
     selectors: {
       // Every page type — guide, concept, about — wraps its body in exactly
       // one `<article class="prose">`. `main` is deliberately NOT listed:
@@ -117,6 +142,41 @@ export const STATIC_DOC_SOURCES = {
       { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides' },
       { id: 'jamf-concepts-tools', path: 'concepts', title: 'Jamf Concepts: Open Source Tools' },
     ],
+  },
+
+  'jamf-support': {
+    id: 'jamf-support',
+    hostname: 'support.jamf.com',
+    baseUrl: 'https://support.jamf.com',
+    name: 'Jamf Support Knowledge Base',
+    parser: 'intercom',
+    // Unused: the Intercom parser reads __NEXT_DATA__, not the DOM. Present
+    // because the shape requires it and because a future HTML fallback would
+    // want somewhere sensible to start.
+    selectors: {
+      CONTENT: 'article, main',
+      TITLE: 'h1',
+      BREADCRUMB: '[class*="breadcrumb"] a',
+      RELATED: '[class*="related"] a',
+      REMOVE: STATIC_PAGE_REMOVE,
+    },
+    provenance:
+      'Source: Jamf Support Knowledge Base (support.jamf.com). Troubleshooting ' +
+      'and known-issue articles, edited separately from the product ' +
+      'documentation on learn.jamf.com.',
+    // Six locales route and carry content. `nl` and `th` route but return an
+    // empty collection list, so they are absent rather than listed and
+    // silently empty.
+    locales: {
+      'en-US': 'en',
+      'de-DE': 'de',
+      'es-ES': 'es',
+      'fr-FR': 'fr',
+      'ja-JP': 'ja',
+      'zh-TW': 'zh-TW',
+    },
+    sections: [],
+    dynamicSections: { kind: 'intercom-collections', idPrefix: 'jamf-support' },
   },
 } as const satisfies Record<string, StaticDocSource>;
 
@@ -156,4 +216,20 @@ export function staticSectionById(
   id: string,
 ): { source: StaticDocSource; section: StaticSection } | undefined {
   return STATIC_SECTIONS.find(row => row.section.id === id);
+}
+
+/** Sources whose sections are discovered at runtime rather than declared here. */
+export const DYNAMIC_SECTION_SOURCES: readonly StaticDocSource[] =
+  (Object.values(STATIC_DOC_SOURCES) as StaticDocSource[])
+    .filter(source => source.dynamicSections !== undefined);
+
+/**
+ * Publication id for a runtime-discovered section.
+ *
+ * Built from the slug rather than Intercom's numeric id so a caller can name
+ * a collection from its URL, and so recreating a collection upstream does not
+ * change the id this server publishes.
+ */
+export function dynamicSectionId(source: StaticDocSource, slug: string): string {
+  return `${source.dynamicSections?.idPrefix ?? source.id}-${slug}`;
 }

@@ -17,7 +17,9 @@ import { cacheKey } from './cache-key.js';
 import { TOKEN_CONFIG } from '../constants.js';
 import type { StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
+import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 import type { FetchArticleOptions, FetchArticleResult } from '../types.js';
+import { parseIntercomArticle } from './intercom-service.js';
 import type { ParsedArticleContent } from './content-parser.js';
 
 /** What gets cached: the parse, not the rendered view. */
@@ -25,6 +27,8 @@ interface CachedStaticArticle {
   title: string;
   parsed: ParsedArticleContent;
   displayUrl: string;
+  /** Only Intercom publishes one; the static pages carry no date. */
+  lastUpdated?: string;
 }
 
 /**
@@ -96,6 +100,33 @@ export async function fetchStaticArticle(
 
   if (cached === null) {
     const html = await httpGetText(displayUrl);
+
+    // An Intercom Help Center's body is a block list in `__NEXT_DATA__`, not
+    // markup — no selector set can read it, so the parser is chosen per
+    // source rather than per page.
+    if (source.parser === 'intercom') {
+      const article = parseIntercomArticle(html);
+      if (article === null) {
+        throw new JamfDocsError(
+          `Could not read a ${source.name} article at ${displayUrl}`,
+          JamfDocsErrorCode.PARSE_ERROR,
+        );
+      }
+      cached = {
+        title: article.title,
+        parsed: {
+          title: article.title,
+          content: article.content,
+          breadcrumb: article.breadcrumb,
+          relatedArticles: [],
+        },
+        displayUrl,
+        ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
+      };
+      await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
+      return renderStaticArticle(cached, source, options, maxTokens);
+    }
+
     const documentTitle = extractDocumentTitle(html);
     const parsed = parseArticle(html, displayUrl, {
       // The source's own markup rules. Parsing a static page with Fluid
@@ -118,6 +149,16 @@ export async function fetchStaticArticle(
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
   }
 
+  return renderStaticArticle(cached, source, options, maxTokens);
+}
+
+/** Assemble the response from a parsed page, whichever parser produced it. */
+function renderStaticArticle(
+  cached: CachedStaticArticle,
+  source: StaticDocSource,
+  options: FetchArticleOptions,
+  maxTokens: number,
+): FetchArticleResult {
   const { title, parsed } = cached;
 
   // Provenance is part of the content, not metadata: it has to survive
@@ -135,6 +176,7 @@ export async function fetchStaticArticle(
       title,
       url: cached.displayUrl,
       product: source.name,
+      ...(cached.lastUpdated !== undefined ? { lastUpdated: cached.lastUpdated } : {}),
       breadcrumb: parsed.breadcrumb.length > 0 ? parsed.breadcrumb : undefined,
       relatedArticles: options.includeRelated === true && parsed.relatedArticles.length > 0
         ? parsed.relatedArticles

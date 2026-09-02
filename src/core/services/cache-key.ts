@@ -126,6 +126,10 @@ export interface CacheKeySpaces {
   'static-article': { source: string; url: string };
   /** A static source's sitemap, whole. One per source, so no per-locale part. */
   'static-sitemap': { source: string };
+  /** An Intercom Help Center's top-level collections, per locale. */
+  'intercom-collections': { source: string; locale: string };
+  /** One Intercom collection's article tree. Keyed on the collection, which is locale-specific. */
+  'intercom-collection-toc': { source: string; collection: string };
   'maps-registry-v2': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
@@ -183,6 +187,8 @@ const CACHE_NAMESPACE_REGISTRY: {
   'glossary-content': true,
   'static-article': true,
   'static-sitemap': true,
+  'intercom-collections': true,
+  'intercom-collection-toc': true,
   'maps-registry-v2': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
