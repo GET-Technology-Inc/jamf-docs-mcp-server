@@ -1,3 +1,9 @@
+## [5.4.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.3.0...v5.4.0) (2026-09-02)
+
+### Features
+
+* **locales:** declare every locale Jamf publishes in ([#259](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/259)) ([521b220](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/521b220c2813b57db1e0a02074a7b0b535776731))
+
 ## [5.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.2.0...v5.3.0) (2026-09-02)
 
 ### Features
