@@ -1,18 +1,39 @@
 /**
  * Unit tests for jamf_docs_list_products tool handler.
  *
- * This tool is synchronous and uses no external services — it formats
- * static JAMF_PRODUCTS and JAMF_TOPICS data. All formatting logic is
- * tested via an in-process McpServer + Client pair.
+ * Products, topics and docTypes come from compiled-in constants; the
+ * publication axis comes from the live maps registry, so the registry is
+ * stubbed here — without it these tests reach learn.jamf.com for real, and
+ * the tool swallows that failure by design, so the leak would show up as a
+ * slow network-dependent test rather than a red one.
+ *
+ * All formatting logic is tested via an in-process McpServer + Client pair.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
-import { createMockContext } from '../../helpers/mock-context.js';
+import { createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 
 const mockGetProductAvailability = vi.fn().mockResolvedValue({});
+
+/**
+ * Shaped like the live data: one family per classification slot Jamf uses,
+ * one carrying no classification at all, one versioned and one single-locale.
+ */
+const PUBLICATIONS = [
+  { id: 'technical-paper-laps', title: 'Technical Paper: LAPS for Jamf Pro',
+    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US', 'ja-JP'], versions: [] },
+  { id: 'jamf-pro-release-notes', title: 'Jamf Pro Release Notes 11.31.0',
+    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
+  { id: 'composer-user-guide', title: 'Composer User Guide',
+    portal: '', app: 'Composer', utility: '', locales: ['en-US'], versions: [] },
+  { id: 'title-editor', title: 'Title Editor Documentation',
+    portal: '', app: '', utility: 'Title Editor', locales: ['en-US'], versions: [] },
+  { id: 'welcome-to-jamf', title: 'Welcome to Jamf',
+    portal: '', app: '', utility: '', locales: ['en-US'], versions: [] },
+];
 
 vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
@@ -38,7 +59,9 @@ describe('jamf_docs_list_products tool', () => {
 
   beforeAll(async () => {
     server = new McpServer({ name: 'test-server', version: '0.0.1' });
-    registerListProductsTool(server, createMockContext());
+    registerListProductsTool(server, createMockContext({
+      mapsRegistry: createStubMapsRegistry(PUBLICATIONS),
+    }));
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
@@ -546,4 +569,76 @@ describe('jamf_docs_list_products tool', () => {
       expect(json.products).toHaveLength(PRODUCT_IDS.length);
     });
   });
+
+// --- Publication axis -------------------------------------------------------
+
+describe('publications section', () => {
+  it('should list every publication the registry reports', async () => {
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as { publications?: unknown[] };
+    expect(sc.publications).toHaveLength(PUBLICATIONS.length);
+  });
+
+  it('should keep publications out of products so the search filter stays meaningful', async () => {
+    // #239's acceptance condition: `product` in jamf_docs_search takes the
+    // twelve product IDs and none of these, so merging the lists would make
+    // list_products describe a filter that does not exist.
+    const result = await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+    const sc = result.structuredContent as { products: { id: string }[] };
+    expect(sc.products).toHaveLength(PRODUCT_IDS.length);
+    expect(sc.products.map(p => p.id)).not.toContain('technical-paper-laps');
+  });
+
+  it('should group publications the way Jamf classifies them', async () => {
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+
+    // portal, app and utility are three slots of one taxonomy, so they render
+    // as sibling groups rather than three separate lists.
+    expect(text).toContain('## Jamf Pro');
+    expect(text).toContain('## Composer');
+    expect(text).toContain('## Title Editor');
+    // A family Jamf files under none of the three still has to be reachable.
+    expect(text).toContain('## Other');
+    expect(text).toContain('welcome-to-jamf');
+  });
+
+  it('should mark a versioned family and a single-locale family', async () => {
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+
+    expect(text).toContain('2 versions, latest 11.31.0');
+    expect(text).toContain('en-US only');
+  });
+
+  it('should still answer when the maps registry cannot', async () => {
+    // Products and topics are compiled in; losing the newest section must not
+    // cost a caller the list they actually asked for.
+    const brokenServer = new McpServer({ name: 'test-server', version: '0.0.1' });
+    registerListProductsTool(brokenServer, createMockContext({
+      mapsRegistry: {
+        listPublications: () => { throw new Error('maps endpoint down'); },
+      } as never,
+    }));
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const brokenClient = new Client({ name: 'test-client', version: '0.0.1' });
+    await brokenServer.connect(st);
+    await brokenClient.connect(ct);
+
+    const result = await brokenClient.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent as { products: unknown[]; publications?: unknown[] };
+    expect(sc.products).toHaveLength(PRODUCT_IDS.length);
+    expect(sc.publications).toBeUndefined();
+    await brokenClient.close();
+  });
+});
 });
