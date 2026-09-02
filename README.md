@@ -139,7 +139,7 @@ Searches across all Jamf product documentation.
 | `query` | string (2–200 chars) | required | Search keywords |
 | `product` | string | — | Filter by product ID (e.g., `jamf-pro`) |
 | `topic` | string | — | Filter by topic category (e.g., `enrollment`, `security`) |
-| `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, `training` |
+| `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, `getting-started` |
 | `version` | string | — | Filter by version (e.g., `"11.5.0"`) |
 | `language` | string | `en-US` | Documentation language/locale |
 | `limit` | number (1–50) | `10` | Results per page |
@@ -264,7 +264,7 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 | `jamf-rapididentity` | RapidIdentity | Identity and access management platform |
 | `jamf-trust` | Jamf Trust | Zero-trust network access for Apple devices |
 | `jamf-routines` | Jamf Routines | Automated workflow orchestration for device management |
-| `self-service-plus` | Self Service+ | Next-generation self-service portal for macOS |
+| `self-service-plus` | Self Service+ | Next-generation self-service portal for macOS and mobile |
 | `jamf-app-catalog` | Jamf App Catalog | Curated application catalog for managed deployments |
 
 ## Key Features
@@ -275,7 +275,7 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 - **Batch Fetching**: Use `jamf_docs_batch_get_articles` to fetch up to 10 articles in one call with concurrent requests
 - **Glossary Lookup**: Use `jamf_docs_glossary_lookup` to look up Jamf terminology with fuzzy matching
 - **Multi-language**: All tools accept a `language` parameter for localized documentation (e.g., `ja-JP`, `de-DE`)
-- **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `release-notes`, `install-guide`, `technical-paper`, `configuration-guide`, or `training`
+- **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, or `getting-started`
 - **Version Query**: Use the `version` parameter to query documentation for a specific product version
 - **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated
 - **Search Suggestions**: Receive helpful suggestions when a search returns no results

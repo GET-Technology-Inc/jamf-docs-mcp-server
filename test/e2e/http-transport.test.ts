@@ -12,6 +12,7 @@ import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject } from '../helpers/fixtures.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
+import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 
 // ============================================================================
 // HTTP Server lifecycle helpers
@@ -111,6 +112,9 @@ async function callTool(
 
 describe('HTTP Transport E2E', { timeout: 60000 }, () => {
   beforeAll(async () => {
+    // Spawns dist/index.js; see require-fresh-build.
+    requireFreshBuild();
+
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
     const proc = spawn(
       'node',

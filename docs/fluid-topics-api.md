@@ -48,9 +48,26 @@ Primary search endpoint. Returns results grouped into clusters.
 | Filter key | Values | Purpose |
 |------------|--------|---------|
 | `zoominmetadata` | `product-pro`, `product-connect`, `product-protect`, `product-school`, etc. | Filter by product |
-| `jamf:contentType` | `Technical Documentation`, `Release Notes`, `Glossary` | Filter by content type |
-| `latestVersion` | `yes` | Deduplicate cross-version results |
+| `zoominmetadata` | `content-techdocs`, `content-releasenotes`, `content-training`, `content-solutionguide`, `content-glossary`, `content-gettingstarted` | Filter by content type |
 | `version` | Specific version string (e.g. `"11.13.0"`) | Pin to a version |
+
+**Filter by content type with `content-*`, never with `jamf:contentType`.** The
+`jamf:contentType` key is real and is returned on every topic, but its *values*
+are translated per locale — the topics that read `Release Notes` under `en-US`
+read `版本資訊` under `zh-TW`, `リリースノート` under `ja-JP` and
+`Versionshinweise` under `de-DE`. Filtering on the English string matched 1323
+topics under `en-US` and **exactly 0** under all seven other locales. The
+`content-*` vocabulary under `zoominmetadata` is locale-invariant
+(`content-releasenotes`: 1323 / 940 / 1207 / 1207 for those four locales).
+See `DOC_TYPE_LABEL_MAP` in `src/core/constants/doc-types.ts`.
+
+**Filter objects intersect; values inside one filter union.** Product and
+content type share the `zoominmetadata` key, so they must be sent as two
+separate objects. Measured: `product-protect` alone 1182, `content-releasenotes`
+alone 940, two objects 387 (the intersection), one object holding both values
+1735 (the union). Merging them widens the search instead of narrowing it.
+
+**Do not send `latestVersion=yes`.** See architectural note 4 below.
 
 **Response shape:**
 
@@ -120,7 +137,7 @@ These are the metadata descriptors returned by `GET /api/configuration/metadata`
 | # | Key | Description |
 |---|-----|-------------|
 | 1 | `zoominmetadata` | Product identifier (product-pro, product-connect, etc.) |
-| 2 | `jamf:contentType` | Content type (Technical Documentation, Release Notes, Glossary) |
+| 2 | `jamf:contentType` | Content type. **Descriptive only — do not filter on it**; its values are localised (see the search section above). Use the `content-*` values of `zoominmetadata` instead. |
 | 3 | `latestVersion` | Whether the content is from the latest version |
 | 4 | `version` | Specific product version string |
 | 5 | `bundle` | Bundle identifier (maps to legacy bundleId format) |
@@ -218,7 +235,14 @@ The following require user authentication and are not available for anonymous AP
 
 3. **Search requires POST with JSON body.** It does not support GET with query parameters.
 
-4. **Use `latestVersion=yes` to deduplicate.** Without this filter, search returns results from every published version of every product.
+4. **Do NOT use `latestVersion=yes` to deduplicate.** Jamf migrated every
+   non-Pro product (School, Connect, Protect, Now, …) to an unversioned
+   documentation model that carries no `latestVersion` metadata at all, so the
+   filter silently drops them entirely: `product-protect` alone returns 1238
+   topics and `product-protect` + `latestVersion=yes` returns **0**. Only Jamf
+   Pro survives it (984). This server collapses Jamf Pro's version snapshots
+   client-side instead — see `dedupeToLatestVersions` in
+   `src/core/services/search-service.ts`.
 
 5. **`bundle` metadata maps to legacy bundleId format.** This provides backward compatibility with URL patterns like `/bundle/{product}-documentation/`.
 

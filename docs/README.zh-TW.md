@@ -145,7 +145,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `jamf-rapididentity` | RapidIdentity | 身分識別與存取管理平台 |
 | `jamf-trust` | Jamf Trust | Apple 裝置的零信任網路存取 |
 | `jamf-routines` | Jamf Routines | 裝置管理自動化工作流程編排 |
-| `self-service-plus` | Self Service+ | macOS 新一代自助服務入口 |
+| `self-service-plus` | Self Service+ | macOS 與行動裝置的新一代自助服務入口 |
 | `jamf-app-catalog` | Jamf App Catalog | 受管部署的精選應用程式目錄 |
 
 ## 提供的工具
@@ -159,7 +159,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `query` | string | 是 | 搜尋關鍵字 (2-200 字元) |
 | `product` | string | 否 | 依產品 ID 篩選 (詳見支援產品表) |
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
-| `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`install-guide`、`technical-paper`、`configuration-guide`、`training` |
+| `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`training`、`solution-guide`、`glossary`、`getting-started` |
 | `version` | string | 否 | 依版本篩選 (例如 `"11.5.0"`) |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `limit` | number | 否 | 每頁最多結果數 1-50 (預設: 10) |

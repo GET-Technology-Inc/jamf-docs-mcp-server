@@ -25,7 +25,13 @@ import {
   searchDocumentation,
   dedupeToLatestVersions,
 } from '../../../src/core/services/search-service.js';
-import { DOCS_BASE_URL, FT_API_BASE } from '../../../src/core/constants.js';
+import {
+  DOCS_BASE_URL,
+  FT_API_BASE,
+  DOC_TYPE_IDS,
+  DOC_TYPE_LABEL_MAP,
+} from '../../../src/core/constants.js';
+import type { DocTypeId } from '../../../src/core/constants.js';
 import type {
   FtSearchEntry,
   FtSearchCluster,
@@ -191,19 +197,65 @@ describe('buildSearchFilters()', () => {
     ]);
   });
 
-  it('should map docType to jamf:contentType filter', () => {
+  // Pinned offline and by exact string. `product-self-service` also exists
+  // upstream and also returns results — it is the retired iOS Self Service
+  // app's label — so reverting this one character produces a green suite and
+  // wrong answers. The live contract test that checks the map titles lives in
+  // the integration job, which does not block a merge; this one runs in the
+  // unit job, which does.
+  it('maps self-service-plus to product-selfservice, not the retired iOS label', () => {
+    expect(buildSearchFilters({ product: 'self-service-plus' })).toEqual([
+      { key: 'zoominmetadata', values: ['product-selfservice'] },
+    ]);
+  });
+
+  // docType filters on the `content-*` label, NOT `jamf:contentType`. The
+  // latter's values are translated per locale ('Release Notes' / '版本資訊' /
+  // 'リリースノート'), so the English string matched nothing upstream in seven
+  // of the eight supported locales — and because the emptiness came back from
+  // the API, applyFiltersWithFallback had nothing left to relax.
+  it('should map docType to a locale-invariant zoominmetadata content-* filter', () => {
     const filters = buildSearchFilters({ docType: 'release-notes' });
     expect(filters).toContainEqual({
-      key: 'jamf:contentType',
-      values: ['Release Notes'],
+      key: 'zoominmetadata',
+      values: ['content-releasenotes'],
     });
+  });
+
+  it('never sends jamf:contentType, whose values are locale-dependent', () => {
+    for (const docType of DOC_TYPE_IDS as DocTypeId[]) {
+      expect(
+        buildSearchFilters({ docType }).map(f => f.key),
+        `docType '${docType}' must not filter on jamf:contentType`
+      ).not.toContain('jamf:contentType');
+    }
+  });
+
+  it('maps every docType to its DOC_TYPE_LABEL_MAP label key', () => {
+    for (const docType of DOC_TYPE_IDS as DocTypeId[]) {
+      expect(buildSearchFilters({ docType })).toEqual([
+        { key: 'zoominmetadata', values: [DOC_TYPE_LABEL_MAP[docType]] },
+      ]);
+    }
+  });
+
+  // Fluid Topics intersects separate filter objects but unions the values
+  // inside one, so product and docType must stay in two entries even though
+  // they share the `zoominmetadata` key. Merged into one entry, a
+  // product+docType search widens to the union instead of narrowing.
+  it('keeps product and docType as two separate zoominmetadata entries', () => {
+    const filters = buildSearchFilters({ product: 'jamf-protect', docType: 'release-notes' });
+    expect(filters).toEqual([
+      { key: 'zoominmetadata', values: ['product-protect'] },
+      { key: 'zoominmetadata', values: ['content-releasenotes'] },
+    ]);
   });
 
   it('should map documentation docType correctly', () => {
     const filters = buildSearchFilters({ docType: 'documentation' });
     expect(filters).toContainEqual({
-      key: 'jamf:contentType',
-      values: ['Technical Documentation'],
+      key: 'zoominmetadata',
+      values: ['content-techdocs'],
     });
   });
 
@@ -215,24 +267,25 @@ describe('buildSearchFilters()', () => {
     });
     expect(filters).toHaveLength(3);
     expect(filters).toContainEqual({ key: 'zoominmetadata', values: ['product-connect'] });
-    expect(filters).toContainEqual({ key: 'jamf:contentType', values: ['Technical Documentation'] });
+    expect(filters).toContainEqual({ key: 'zoominmetadata', values: ['content-techdocs'] });
     expect(filters).toContainEqual({ key: 'version', values: ['2.30.0'] });
   });
 
-  it('should not add jamf:contentType when docType has no mapping', () => {
+  it('should not add a docType filter when docType has no mapping', () => {
     // Use a hypothetical unmapped docType to verify the fallback behavior
     const filters = buildSearchFilters({ docType: 'unknown-type' as never });
-    const contentTypeFilter = filters.find(f => f.key === 'jamf:contentType');
-    expect(contentTypeFilter).toBeUndefined();
+    expect(filters).toEqual([]);
   });
 
-  it('should map training docType to Technical Documentation', () => {
-    const filters = buildSearchFilters({ docType: 'training' });
-    const contentTypeFilter = filters.find(f => f.key === 'jamf:contentType');
-    expect(contentTypeFilter).toEqual({
-      key: 'jamf:contentType',
-      values: ['Technical Documentation'],
-    });
+  // `training` used to map through DOC_TYPE_CONTENT_TYPE_MAP onto 'Technical
+  // Documentation', which four docTypes share — so the upstream query widened
+  // to all technical documentation and only the client-side post-filter
+  // narrowed it back. `content-training` is one-to-one, so the narrowing now
+  // happens at the API where it belongs.
+  it('narrows training to its own label rather than the shared techdocs value', () => {
+    expect(buildSearchFilters({ docType: 'training' })).toEqual([
+      { key: 'zoominmetadata', values: ['content-training'] },
+    ]);
   });
 });
 

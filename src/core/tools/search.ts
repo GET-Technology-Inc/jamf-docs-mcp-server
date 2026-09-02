@@ -578,10 +578,19 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         );
 
         if (params.responseFormat === ResponseFormat.JSON) {
-          // Add relevance note only in JSON format
+          // Add relevance note only in JSON format.
+          //
+          // States the ordering and nothing more. The previous wording promised
+          // "relevance scores ... higher values indicate stronger keyword
+          // matches", but Fluid Topics returns no score of any kind — a
+          // clustered-search entry carries only `type`, `missingTerms` and the
+          // topic/map payload, with no score, rank or weight field anywhere in
+          // the response — and no result this server emits has ever carried a
+          // numeric relevance. The ordering itself is real: `sortId:
+          // 'relevance'` is sent explicitly (see resolveSearchResults).
           const jsonResponse = {
             ...response,
-            relevanceNote: 'Relevance scores are provided by the Fluid Topics Search API based on text matching. Higher values indicate stronger keyword matches.'
+            relevanceNote: 'Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included.'
           };
           await reportProgress(extra, { progress: 3, total: 3 });
           return {
