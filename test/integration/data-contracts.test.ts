@@ -472,6 +472,37 @@ describe('FT API data contracts', () => {
       titlePattern: RegExp;
     }[] = [
       { product: 'self-service-plus', titlePattern: /Self Service\+/ },
+
+      // The products registered from Jamf's own `jamf:portal` / `jamf:app` /
+      // `jamf:utility` classification. Each was verified against the live
+      // clustered-search endpoint before being added — every label returned
+      // only that product's own documentation — and this pins that, because
+      // "the label exists upstream" is exactly the check that let
+      // `product-self-service` through.
+      //
+      // Patterns match the locale-invariant part of the title, not the
+      // English one: `ft:title` IS translated per map, so
+      // /Jamf Setup and Reset/ passes on en-US and fails on the same
+      // publication's five other locales
+      // ("Jamf Setup und Reset Konfigurationsleitfaden",
+      // "Jamf Setup 和 Reset 設定指南"). Product names and initialisms survive
+      // translation; the surrounding prose does not.
+      { product: 'jamf-account', titlePattern: /Jamf Account|AI Governance|Jamf Platform Services/ },
+      { product: 'jamf-security-cloud', titlePattern: /Jamf Security Cloud/ },
+      { product: 'elevate', titlePattern: /Elevate/ },
+      { product: 'composer', titlePattern: /Composer/ },
+      { product: 'jamf-parent', titlePattern: /Jamf Parent/ },
+      { product: 'jamf-teacher', titlePattern: /Jamf Teacher/ },
+      { product: 'jamf-setup-reset', titlePattern: /Jamf Setup/ },
+      { product: 'jamf-assessment', titlePattern: /Jamf Assessment/ },
+      { product: 'title-editor', titlePattern: /Title Editor/ },
+      { product: 'jamf-infrastructure-manager', titlePattern: /Jamf Infrastructure Manager/ },
+      { product: 'jamf-adcs-connector', titlePattern: /AD CS/ },
+      { product: 'jamf-pki-proxy', titlePattern: /Jamf PKI/ },
+      { product: 'jamf-migrate', titlePattern: /Jamf Migrate/ },
+      { product: 'jamf-remote-assist', titlePattern: /Jamf Remote Assist/ },
+      { product: 'jamf-cloud-distribution-service', titlePattern: /Jamf Cloud Distribution Service/ },
+      { product: 'healthcare-listener', titlePattern: /Healthcare Listener/ },
     ];
 
     it.each(LABEL_TITLE_CONTRACTS)(
