@@ -1,3 +1,9 @@
+## [5.2.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.1...v5.2.0) (2026-09-02)
+
+### Features
+
+* **list-products:** surface the publication axis without diluting the product list ([#257](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/257)) ([59dd578](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/59dd5781c2be6676a39eea5319a0d3b6f2bbfed2)), closes [#254](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/254) [#239](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/239) [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
 ## [5.1.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.0...v5.1.1) (2026-09-02)
 
 ### Dependencies
