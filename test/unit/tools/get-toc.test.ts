@@ -93,6 +93,8 @@ function buildTocResponse(overrides?: {
   tokenInfo?: ReturnType<typeof createTokenInfo>;
   mapId?: string;
   paginationNote?: string;
+  /** Locale of the map that actually answered; drives the language note. */
+  resolvedLocale?: string;
 }): FetchTocResult {
   const toc = overrides?.toc ?? [createTocEntry()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: toc.length, totalPages: 1, hasNext: false });
@@ -102,6 +104,7 @@ function buildTocResponse(overrides?: {
     pagination,
     tokenInfo,
     ...(overrides?.mapId !== undefined ? { mapId: overrides.mapId } : {}),
+    ...(overrides?.resolvedLocale !== undefined ? { resolvedLocale: overrides.resolvedLocale } : {}),
     ...(overrides?.paginationNote !== undefined ? { paginationNote: overrides.paginationNote } : {}),
   };
 }
@@ -1168,5 +1171,39 @@ describe('publication axis', () => {
     const text = getTextContent(result);
     expect(text).toContain('11.30.0');
     expect(text).not.toContain('11.31.0');
+  });
+
+  it('should say so when Jamf does not publish the document in the requested language', async () => {
+    // jamf-school-documentation genuinely has no zh-TW map (de/en/es/fr/ja/nl),
+    // and 42 of the 97 families are en-US only — so the registry falling back
+    // is routine. Silently returning English made it indistinguishable from a
+    // translation.
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+      buildTocResponse({ resolvedLocale: 'en-US' })
+    );
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-laps', language: 'zh-TW' },
+    });
+
+    const text = getTextContent(result);
+    expect(text).toContain('Language Note');
+    expect(text).toContain('does not publish this document in zh-TW');
+    expect((result.structuredContent as Record<string, unknown>).localeNote).toBeDefined();
+  });
+
+  it('should stay quiet when the requested language is the one served', async () => {
+    vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
+      buildTocResponse({ resolvedLocale: 'ja-JP' })
+    );
+
+    const result = await pubClient.callTool({
+      name: 'jamf_docs_get_toc',
+      arguments: { publication: 'technical-paper-laps', language: 'ja-JP' },
+    });
+
+    expect(getTextContent(result)).not.toContain('Language Note');
+    expect((result.structuredContent as Record<string, unknown>).localeNote).toBeUndefined();
   });
 });

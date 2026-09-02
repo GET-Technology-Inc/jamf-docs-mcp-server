@@ -276,6 +276,17 @@ export const TocOutputSchema = z.object({
    * what the tool actually emits.
    */
   versionNote: z.string().optional(),
+  /**
+   * Set when Jamf does not publish this document in the requested language and
+   * the en-US edition was served instead.
+   *
+   * 42 of the 97 publication families are en-US only and several products are
+   * translated into a different six locales than the rest, so this is a
+   * routine outcome rather than an error — but without saying so, an English
+   * table of contents returned for a zh-TW request is indistinguishable from
+   * a translated one.
+   */
+  localeNote: z.string().optional(),
   /** Set when `page` was clamped to the last available page. */
   paginationNote: z.string().optional(),
 });
