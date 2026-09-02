@@ -1,3 +1,9 @@
+## [5.6.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.5.0...v5.6.0) (2026-09-02)
+
+### Features
+
+* **sources:** read concepts.jamf.com through a non-Fluid-Topics seam ([#263](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/263)) ([32977e3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/32977e3d06f82a44945a614d7172d09425812a0e)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
 ## [5.5.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.4.2...v5.5.0) (2026-09-02)
 
 ### Features
