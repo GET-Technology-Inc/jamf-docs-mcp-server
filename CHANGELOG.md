@@ -1,3 +1,9 @@
+## [5.7.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.6.0...v5.7.0) (2026-09-02)
+
+### Features
+
+* **toc:** browse concepts.jamf.com from its sitemap ([#264](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/264)) ([7dcd7f7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/7dcd7f78490b7359f01c26e2e204abeda7b9239b)), closes [#244](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/244)
+
 ## [5.6.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.5.0...v5.6.0) (2026-09-02)
 
 ### Features
