@@ -1,3 +1,9 @@
+## [5.3.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.2.0...v5.3.0) (2026-09-02)
+
+### Features
+
+* **products:** register the products Jamf's own metadata names ([#258](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/258)) ([74a2fc1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/74a2fc1cdbd51b122144670d77de9824f83e4bf9)), closes [#238](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/238) [#252](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/252) [#238](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/238) [#237](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/237)
+
 ## [5.2.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.1...v5.2.0) (2026-09-02)
 
 ### Features
