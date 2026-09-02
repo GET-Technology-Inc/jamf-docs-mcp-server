@@ -55,6 +55,20 @@ const PUBLICATIONS = [
     portal: '', app: '', utility: '', locales: ['en-US'], versions: [] },
 ];
 
+/**
+ * The publication list also reaches an Intercom Help Center for its
+ * collections. Left unmocked these tests make a real request to
+ * support.jamf.com, and the tool swallows the failure by design — so the
+ * leak would show up as a slow test rather than a red one.
+ */
+const mockListIntercomCollections = vi.fn(async () => await Promise.resolve([
+  { id: '1', slug: 'jamf-pro', name: 'Jamf Pro', description: '', url: '', articleCount: 3 },
+]));
+
+vi.mock('../../../src/core/services/intercom-service.js', () => ({
+  listIntercomCollections: async () => await mockListIntercomCollections(),
+}));
+
 vi.mock('../../../src/core/services/metadata.js', () => ({
   getProductAvailability: (...args: unknown[]) => mockGetProductAvailability(...args),
   getProductsMetadata: async () => await mockGetProductsMetadata(),
@@ -62,7 +76,7 @@ vi.mock('../../../src/core/services/metadata.js', () => ({
 
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
 import { PRODUCT_IDS, JAMF_PRODUCTS } from '../../../src/core/constants/products.js';
-import { STATIC_SECTIONS } from '../../../src/core/constants/sources.js';
+import { STATIC_SECTIONS, DYNAMIC_SECTION_SOURCES } from '../../../src/core/constants/sources.js';
 
 // ---------------------------------------------------------------------------
 
@@ -601,7 +615,11 @@ describe('publications section', () => {
       arguments: { responseFormat: 'json' },
     });
     const sc = result.structuredContent as { publications?: { id: string }[] };
-    expect(sc.publications).toHaveLength(PUBLICATIONS.length + STATIC_SECTIONS.length);
+    // Declared static sections, plus one row per discovered Intercom
+    // collection, plus the Fluid Topics families.
+    expect(sc.publications).toHaveLength(
+      PUBLICATIONS.length + STATIC_SECTIONS.length + DYNAMIC_SECTION_SOURCES.length);
+    expect(sc.publications?.map(p => p.id)).toContain('jamf-support-jamf-pro');
     for (const { section } of STATIC_SECTIONS) {
       expect(sc.publications?.map(p => p.id)).toContain(section.id);
     }
@@ -664,7 +682,7 @@ describe('publications section', () => {
     expect(sc.products).toHaveLength(PRODUCT_IDS.length);
     // The Fluid Topics rows are gone, but the static sources are compiled in
     // and are the only way to discover that they are reachable at all.
-    expect(sc.publications).toHaveLength(STATIC_SECTIONS.length);
+    expect(sc.publications).toHaveLength(STATIC_SECTIONS.length + DYNAMIC_SECTION_SOURCES.length);
     await brokenClient.close();
   });
 });

@@ -7,11 +7,16 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { ListProductsInputSchema } from '../schemas/index.js';
 import { ProductListOutputSchema } from '../schemas/output.js';
-import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG } from '../constants.js';
+import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
 import { getProductAvailability, getProductsMetadata } from '../services/metadata.js';
-import { STATIC_SECTIONS } from '../constants/sources.js';
+import {
+  STATIC_SECTIONS,
+  DYNAMIC_SECTION_SOURCES,
+  dynamicSectionId,
+} from '../constants/sources.js';
+import { listIntercomCollections } from '../services/intercom-service.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
@@ -89,6 +94,28 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
     locales: Object.keys(source.locales).sort(),
     versions: [],
   }));
+
+  // Sources whose sections come from the source itself. Best-effort per
+  // source: an unreachable Help Center costs its own rows, not the list.
+  for (const source of DYNAMIC_SECTION_SOURCES) {
+    const locale = source.locales[DEFAULT_LOCALE];
+    if (locale === undefined) { continue; }
+    try {
+      for (const collection of await listIntercomCollections(ctx, source, locale)) {
+        staticRows.push({
+          id: dynamicSectionId(source, collection.slug),
+          title: `${source.name}: ${collection.name}`,
+          portal: source.name,
+          locales: Object.keys(source.locales).sort(),
+          versions: [],
+        });
+      }
+    } catch (error) {
+      ctx.logger.createLogger('list-products').warning(
+        `Could not list ${source.name} collections: ${String(error)}`,
+      );
+    }
+  }
 
   try {
     const pubs = await ctx.mapsRegistry.listPublications();

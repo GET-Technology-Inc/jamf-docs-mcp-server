@@ -11,14 +11,21 @@ import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
-import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo } from '../types.js';
+import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo, FetchTocOptions, FetchTocResult } from '../types.js';
 import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
 import { fetchStaticToc } from '../services/sitemap-service.js';
 import {
   staticSectionById,
+  dynamicSectionId,
+  DYNAMIC_SECTION_SOURCES,
   type StaticDocSource,
   type StaticSection,
 } from '../constants/sources.js';
+import {
+  listIntercomCollections,
+  fetchIntercomToc,
+  type IntercomCollection,
+} from '../services/intercom-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 
@@ -344,6 +351,62 @@ interface ResolvedTocSource {
     /** The source's own code for the requested locale, e.g. `ja` for ja-JP. */
     sourceLocale: string;
   };
+  /** Set when this names one collection of an Intercom Help Center. */
+  intercomCollection?: {
+    source: StaticDocSource;
+    collection: IntercomCollection;
+    sourceLocale: string;
+  };
+}
+
+/**
+ * Resolve a publication id that names a runtime-discovered section.
+ *
+ * An Intercom Help Center's collections are content, not configuration —
+ * pinning their ids in the registry would mean a code change whenever Jamf
+ * adds one — so they are looked up. Tried before the Fluid Topics registry
+ * for the same reason the declared static sections are: that registry would
+ * report them unknown and suggest a bundle family instead.
+ *
+ * Returns null when the id names no dynamic source, so the caller falls
+ * through to the Fluid Topics path.
+ */
+async function resolveDynamicSection(
+  ctx: ServerContext,
+  publication: string,
+  locale: string,
+): Promise<ResolvedTocSource | { error: string } | null> {
+  for (const source of DYNAMIC_SECTION_SOURCES) {
+    const prefix = source.dynamicSections?.idPrefix ?? source.id;
+    if (!publication.startsWith(`${prefix}-`)) { continue; }
+
+    const sourceLocale = source.locales[locale];
+    if (sourceLocale === undefined) {
+      return {
+        error: `${source.name} does not publish in ${locale}. ` +
+          `Available: ${Object.keys(source.locales).join(', ')}.`,
+      };
+    }
+
+    const collections = await listIntercomCollections(ctx, source, sourceLocale);
+    const match = collections.find(c => dynamicSectionId(source, c.slug) === publication);
+    if (match === undefined) {
+      const available = collections.map(c => `- \`${dynamicSectionId(source, c.slug)}\``);
+      return {
+        error: available.length > 0
+          ? `Unknown ${source.name} collection: "${publication}".\n\nAvailable in ${locale}:\n${available.join('\n')}`
+          : `Unknown ${source.name} collection: "${publication}".\n\n${source.name} publishes nothing in ${locale}.`,
+      };
+    }
+
+    return {
+      source: publication,
+      sourceLabel: `${source.name}: ${match.name}`,
+      availableVersions: [],
+      intercomCollection: { source, collection: match, sourceLocale },
+    };
+  }
+  return null;
 }
 
 /**
@@ -409,6 +472,9 @@ async function resolveTocSource(
     };
   }
 
+  const dynamic = await resolveDynamicSection(ctx, publication, params.language ?? DEFAULT_LOCALE);
+  if (dynamic !== null) { return dynamic; }
+
   // Not an enum: there are 97 families and the set is upstream's to change,
   // so the check is a registry lookup and a miss carries suggestions rather
   // than a wall of every id.
@@ -438,6 +504,30 @@ async function resolveTocSource(
     // A publication id is already the bundle stem the registry keys on.
     availableVersions: await ctx.mapsRegistry.getVersions(publication),
   };
+}
+
+/**
+ * Fetch the TOC from whichever kind of source the request resolved to.
+ *
+ * Three shapes of upstream — a Fluid Topics map, a sitemap tree, an Intercom
+ * collection — behind one return type, so nothing downstream has to know
+ * which answered. Each path applies the same pagination and truncation.
+ */
+async function fetchTocFor(
+  ctx: ServerContext,
+  resolved: ResolvedTocSource,
+  version: string,
+  options: FetchTocOptions,
+): Promise<FetchTocResult> {
+  if (resolved.intercomCollection !== undefined) {
+    const { source, collection } = resolved.intercomCollection;
+    return await fetchIntercomToc(ctx, source, collection, options);
+  }
+  if (resolved.staticSection !== undefined) {
+    const { source, section, sourceLocale } = resolved.staticSection;
+    return await fetchStaticToc(ctx, source, section, sourceLocale, options);
+  }
+  return await fetchTableOfContents(ctx, resolved.source, version, options);
 }
 
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
@@ -475,7 +565,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
         if ('error' in resolved) {
           return { isError: true, content: [{ type: 'text', text: resolved.error }] };
         }
-        const { source, sourceLabel, availableVersions } = resolved;
+        const { sourceLabel, availableVersions } = resolved;
 
         // Validate version if specified
         if (params.version !== undefined && params.version !== '' && params.version !== 'current') {
@@ -498,18 +588,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           locale: params.language as LocaleId | undefined,
         };
 
-        // A static source has no map and no TOC endpoint; its tree comes from
-        // the sitemap. Pagination and truncation are shared so both kinds of
-        // TOC behave the same once the entries exist.
-        const tocResult = resolved.staticSection !== undefined
-          ? await fetchStaticToc(
-              ctx,
-              resolved.staticSection.source,
-              resolved.staticSection.section,
-              resolved.staticSection.sourceLocale,
-              tocOptions,
-            )
-          : await fetchTableOfContents(ctx, source, version, tocOptions);
+        const tocResult = await fetchTocFor(ctx, resolved, version, tocOptions);
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
