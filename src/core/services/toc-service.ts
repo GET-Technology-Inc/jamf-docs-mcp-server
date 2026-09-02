@@ -20,6 +20,7 @@ import {
 } from '../constants.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import type { ServerContext } from '../types/context.js';
+import { cacheKey } from './cache-key.js';
 import type { FtTocNode, TocEntry, PaginationInfo, FetchTocOptions, FetchTocResult } from '../types.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 
@@ -117,7 +118,8 @@ async function resolveMapIdQuietly(
  *   2. MapsRegistry → mapId → ft-client.fetchMapToc
  *   3. Transform FtTocNode[] → TocEntry[]
  *
- * Results are cached under `ft-toc:{locale}:{product}:{version}`.
+ * Results are cached under the `ft-toc` namespace, keyed on locale, product
+ * and version — see {@link CacheKeySpaces}.
  */
 export async function fetchTableOfContents(
   ctx: ServerContext,
@@ -133,11 +135,11 @@ export async function fetchTableOfContents(
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
-  const cacheKey = `ft-toc:${locale}:${product}:${version}`;
+  const key = cacheKey('ft-toc', { locale, product, version });
 
   const { bundleId } = JAMF_PRODUCTS[product];
 
-  let allToc = await ctx.cache.get<TocEntry[]>(cacheKey);
+  let allToc = await ctx.cache.get<TocEntry[]>(key);
   let mapId: string | null;
 
   if (allToc === null) {
@@ -158,7 +160,7 @@ export async function fetchTableOfContents(
 
     allToc = transformFtTocToTocEntries(ftNodes);
 
-    await ctx.cache.set(cacheKey, allToc, ctx.config.cacheTtl.article);
+    await ctx.cache.set(key, allToc, ctx.config.cacheTtl.article);
   } else {
     // The cache stores the tree, not the id it came from. Re-resolve so a
     // caller reading a cached TOC gets the same `mapId` a cold one would —

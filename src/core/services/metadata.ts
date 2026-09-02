@@ -12,6 +12,7 @@ import {
 } from '../constants.js';
 import type { RegistryProductInfo } from './maps-registry.js';
 import type { ServerContext } from '../types/context.js';
+import { cacheKey } from './cache-key.js';
 
 // ============================================================================
 // Types
@@ -132,7 +133,7 @@ interface CachedProductsMetadata {
   degraded: boolean;
 }
 
-const PRODUCTS_CACHE_KEY = 'metadata:products:v2';
+const PRODUCTS_CACHE_KEY = cacheKey('metadata-products-v2');
 
 /**
  * Whether a cache hit really holds what this module wrote.
@@ -311,10 +312,10 @@ export async function getAvailableVersions(
  * no failure mode to fall back from. Its answer is always the real one.
  */
 export async function getTopicsMetadata(ctx: ServerContext): Promise<TopicMetadata[]> {
-  const cacheKey = 'metadata:topics';
+  const key = cacheKey('metadata-topics');
 
   // Check cache
-  const cached = await ctx.cache.get<TopicMetadata[]>(cacheKey);
+  const cached = await ctx.cache.get<TopicMetadata[]>(key);
   if (cached !== null) {
     return cached;
   }
@@ -330,7 +331,7 @@ export async function getTopicsMetadata(ctx: ServerContext): Promise<TopicMetada
   }
 
   // Cache for 24 hours
-  await ctx.cache.set(cacheKey, topics, ctx.config.cacheTtl.article);
+  await ctx.cache.set(key, topics, ctx.config.cacheTtl.article);
 
   return topics;
 }
@@ -346,9 +347,9 @@ export async function getProductAvailability(
   ctx: ServerContext
 ): Promise<Record<string, boolean>> {
   const log = ctx.logger.createLogger('metadata');
-  const cacheKey = 'metadata:product-availability';
+  const key = cacheKey('metadata-product-availability');
 
-  const cached = await ctx.cache.get<Record<string, boolean>>(cacheKey);
+  const cached = await ctx.cache.get<Record<string, boolean>>(key);
   if (cached !== null) {
     return cached;
   }
@@ -375,7 +376,7 @@ export async function getProductAvailability(
   }
 
   // Cache for 1 hour
-  await ctx.cache.set(cacheKey, availability, 60 * 60 * 1000);
+  await ctx.cache.set(key, availability, 60 * 60 * 1000);
 
   return availability;
 }

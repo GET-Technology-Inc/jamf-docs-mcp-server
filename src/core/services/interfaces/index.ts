@@ -5,6 +5,8 @@
  */
 
 export type { CacheProvider, CacheStats } from './cache.js';
+export { cacheKey, CACHE_NAMESPACES } from '../cache-key.js';
+export type { CacheKey, CacheNamespace, CacheKeySpaces, CacheKeyValue, CanonicalSearchFilters } from '../cache-key.js';
 export type {
   ProductMetadata,
   TopicMetadata,

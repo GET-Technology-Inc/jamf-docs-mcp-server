@@ -21,6 +21,7 @@ import {
   fetchTopicAncestors,
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
+import { cacheKey } from './cache-key.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
 import {
   extractSections,
@@ -85,8 +86,8 @@ export async function fetchArticleFromFt(
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
-  const cacheKey = `ft:article:v3:${mapId}:${contentId}`;
-  let cached = await cache.get<CachedArticle>(cacheKey);
+  const key = cacheKey('ft-article-v3', { mapId, contentId, articleUrl });
+  let cached = await cache.get<CachedArticle>(key);
 
   if (cached === null) {
     const [topicMeta, html] = await Promise.all([
@@ -148,7 +149,7 @@ export async function fetchArticleFromFt(
       // two of twelve sampled topics publish no edition date at all.
       lastUpdated: lastEdition !== '' ? lastEdition : undefined,
     };
-    await cache.set(cacheKey, cached, options.cacheTtl);
+    await cache.set(key, cached, options.cacheTtl);
   }
 
   const { title, parsed, displayUrl, product, version, lastUpdated } = cached;
