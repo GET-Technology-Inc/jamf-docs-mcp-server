@@ -1,3 +1,10 @@
+## [5.1.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.1.0...v5.1.1) (2026-09-02)
+
+### Dependencies
+
+* bump @humanfs/node from 0.16.7 to 0.16.8 ([#256](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/256)) ([7a3160c](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/7a3160cb5776a46597d96ea3075e6c1b7eb22b57))
+* bump fast-uri from 3.1.5 to 3.1.7 ([#255](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/255)) ([8361727](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/83617275e2e13728d14939baf995c53180660466))
+
 ## [5.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.0.1...v5.1.0) (2026-09-02)
 
 ### Features
