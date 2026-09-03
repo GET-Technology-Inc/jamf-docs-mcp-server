@@ -57,8 +57,11 @@ function cellMarkdown(cell: { innerHTML: string; textContent: string | null }): 
     // A pipe row is one line by definition, so paragraphs and list items in a
     // cell collapse to sentences rather than breaking the table apart.
     .replace(/\s*\n+\s*/g, ' ')
-    // An unescaped pipe inside a cell ends the cell early and shifts every
-    // column after it.
+    // Backslash first, then pipe. Escaping the pipe alone is not enough: a cell
+    // containing `\|` becomes `\\|`, where the doubled backslash is itself an
+    // escaped backslash and the pipe is live again — so the row breaks at
+    // exactly the input the escaping exists to handle.
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .trim();
 }

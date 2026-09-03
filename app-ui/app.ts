@@ -628,8 +628,22 @@ function stampIds(html: string, sections: ArticleSection[]): { html: string; use
     if (section === undefined || !renderableText(section.id)) {
       return whole;
     }
-    const text = body.replace(/<[^>]*>/g, '').trim();
-    if (text !== section.title.trim()) {
+    // Compared against what this renderer *would* emit for that title, not
+    // against the heading's text with its markup stripped.
+    //
+    // Stripping was the obvious version and it was wrong twice over. Once as
+    // sanitization — `<[^>]*>` never matches an unterminated tag, so
+    // `<img src=x onerror=y` survives a strip entirely, and no amount of
+    // looping fixes that (CodeQL flagged it as
+    // js/incomplete-multi-character-sanitization). And once as logic: it asked
+    // "do these two plain texts coincide" when the question is "was this
+    // heading rendered from this title", which is what the id is being
+    // stamped on the strength of.
+    //
+    // There is nothing to sanitize here because there is nothing to parse: the
+    // body was produced by `inline(esc(...))`, so producing it again from the
+    // title is an exact-equality check on generated output.
+    if (body.trim() !== inline(esc(section.title.trim()))) {
       return whole;
     }
     used.add(cursor);

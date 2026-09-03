@@ -483,6 +483,29 @@ describe('htmlToMarkdown renders tables as tables', () => {
     expect(markdown).toContain('| Computers \\| devices | both |');
   });
 
+  it('escapes a backslash before escaping a pipe', () => {
+    // Escaping the pipe alone is not enough. A cell containing a backslash
+    // immediately before a pipe becomes `\\|` — a doubled backslash, which is
+    // itself an escaped backslash, followed by a *live* pipe. The row then
+    // breaks at exactly the input the escaping exists to handle, and every
+    // column after it shifts.
+    //
+    // Flagged by CodeQL as js/incomplete-sanitization on the first version of
+    // this rule.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Path</th><th>Note</th></tr>'
+      + '<tr><td>C:\\|next</td><td>ok</td></tr></table>',
+    );
+
+    const rows = markdown.split('\n').filter((line) => line.startsWith('|'));
+    expect(rows).toHaveLength(3);
+    // Split on pipes that are not themselves escaped: the row must still be
+    // two columns, not three.
+    const cells = (rows[2] ?? '').split(/(?<!\\)\|/).filter((cell) => cell.trim() !== '');
+    expect(cells).toHaveLength(2);
+    expect(rows[2]).toContain('\\\\');
+  });
+
   it('still emits a divider for a table with no header row', () => {
     // Jamf frequently omits `<thead>`. A pipe table without a divider is not a
     // table to any renderer, so an unlabelled table gets an empty header rather
