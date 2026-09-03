@@ -18,14 +18,29 @@ updates:
       # `Missing helper: ... requires conventional-changelog-writer@9 or
       # newer`. #230 bumped it and broke every release after it.
       #
-      # The combination that does support 10.x is semantic-release 26, which is
-      # still a beta, and on that line the preset ALSO ignores this repo's
-      # `presetConfig.types` hidden flags — `chore`, `docs` and `test` land in
-      # an unlabelled block above Features. Verified by generating notes under
-      # both combinations.
+      # Separately — and this is the part that makes unpinning dangerous rather
+      # than merely blocked — preset 10.x drops the `hidden: true` flags this
+      # repo sets in `presetConfig.types`. It renamed the mechanism: constants.js
+      # carries `effect: 'bump' | 'hidden'` and writer.js filters with
+      # `isTypeEffect(entry, 'hidden')`. Nothing reads a `hidden` boolean, so the
+      # four entries here are silently ignored and `chore`, `docs`, `ci` and
+      # `test` land in an unlabelled block above Features.
       #
-      # Remove this once semantic-release 26 is stable AND the hidden-types
-      # regression is confirmed fixed.
+      # That is in the PRESET, not in semantic-release, so it does not go away
+      # when 26 ships. Removing this ignore requires BOTH:
+      #
+      #   1. a stable @semantic-release/release-notes-generator that depends on
+      #      conventional-changelog-writer@^9 (14.x pins ^8, so today there is
+      #      none), and
+      #   2. rewriting the four `hidden: true` entries in .releaserc.json to
+      #      `effect: "hidden"`.
+      #
+      # Both verified by generating notes against this repo's own presetConfig:
+      # preset 10 + `hidden: true` leaks the four types, preset 10 +
+      # `effect: "hidden"` is correct.
+      #
+      # Check the generated notes before merging any change here. This failure
+      # publishes; it does not fail CI.
       - dependency-name: "conventional-changelog-conventionalcommits"
         versions: [">=10"]
 
