@@ -101,7 +101,7 @@ export interface CacheKeySpaces {
   // than renamed: the field name is part of the key material, so renaming it
   // would orphan every TOC entry on disk to buy nothing.
   'ft-toc': { locale: LocaleId; product: string; version: string };
-  'ft-tocindex-v2': { mapId: string };
+  'ft-tocindex-v3': { mapId: string };
   'ft-topic-index': { mapId: string };
   // `mapId` and nothing else. `fetchGlossaryToc` calls `fetchMapToc(mapId)`
   // and `fetchGlossaryContent` calls `fetchTopicContent(mapId, contentId)`;
@@ -183,7 +183,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-search': true,
   'ft-article-v3': true,
   'ft-toc': true,
-  'ft-tocindex-v2': true,
+  'ft-tocindex-v3': true,
   'ft-topic-index': true,
   'glossary-toc': true,
   'glossary-content': true,
