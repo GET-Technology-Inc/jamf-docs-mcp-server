@@ -313,6 +313,103 @@ because the URI is content-addressed: a given URI names one exact bundle forever
 and a new bundle arrives under a new URI rather than replacing an old one. Hosts
 pick up a changed viewer on their next `tools/list` refresh.
 
+### Design
+
+The viewer paints no background and owns no colour. It reads the host's theme,
+design tokens and fonts out of `hostContext` (`applyDocumentTheme`,
+`applyHostStyleVariables`, `applyHostFonts`) and builds every rule from those,
+so the panel is a piece of the host's surface rather than a web page embedded in
+one. `app-ui/styles.ts` carries a `:root` fallback for each token, because hosts
+may send any subset of the 76 style variables.
+
+Before 5.10 it did the opposite: a hardcoded palette with a
+`prefers-color-scheme` dark block. That media query reports the **operating
+system**, not the host — so a user running Claude in dark mode on a light OS got
+a white slab in a dark conversation, and no tuning of the greys could fix it.
+
+### Inline and fullscreen
+
+The two display modes render different things, because Claude's
+[design guidelines](https://claude.com/docs/connectors/building/mcp-apps/design-guidelines)
+make them different surfaces. An inline card is a compact summary that fits its
+own content; fullscreen is where a documentation browser lives.
+
+|                                   | Inline                        | Fullscreen |
+| --------------------------------- | ----------------------------- | ---------- |
+| Search hits                       | 3                             | the page   |
+| Table-of-contents rows            | 8                             | the page   |
+| Article prose                     | 3 blocks, stopping before any table or code block | whole |
+| Breadcrumbs, Back, parent link    | —                             | ✓          |
+| Section rail, neighbour list      | —                             | ✓          |
+| Type-ahead filter, paging         | —                             | ✓          |
+| Actions                           | 1                             | as needed  |
+
+Opening a result from an inline panel sends `ui/request-display-mode` **before**
+the `tools/call`, so the article arrives in the mode built for it. A host that
+declines, or that offers no fullscreen, still gets the article in place.
+
+Two documented constraints drive this.
+
+**Inline apps must not scroll internally.** On a touch device the conversation
+view owns vertical panning, so a vertical gesture starting inside an inline app
+is handed to the conversation — an internal scroll container does not scroll at
+all, and everything past the host's cap becomes *unreachable* rather than below
+the fold. Bounding what is rendered instead keeps search at ~518px, the table of
+contents at ~373px and an article at ~554px, all fully visible.
+
+**Inline apps must not drill in.** "Drill-ins, breadcrumbs, or multiple views"
+are named patterns to avoid, which is why every piece of navigation chrome above
+is fullscreen-only.
+
+The article preview is counted in blocks rather than characters. A character
+budget does not predict height: 900 characters of prose is three short
+paragraphs, and 900 characters containing a 22-row settings table is 700px of
+panel.
+
+Style variables in `app-ui/styles.ts` are transcribed from the same guidelines.
+
+### Article navigation
+
+`jamf_docs_get_article` publishes `navigation` — `parent`, `siblings`,
+`children`, and the true totals alongside the (capped) lists.
+
+This matters more than it sounds. Fluid Topics serves **one topic per API call**
+while learn.jamf.com concatenates a topic and its children into a single page,
+so every `<h2>` a reader sees on the site is a separate topic here — verified at
+9 of 9 on "Computer Configuration Profiles", whose API payload contains zero
+heading tags of any level. Without `navigation`, a client showing that page has
+the introduction and no route to the nine procedures the page consists of on the
+website. The viewer renders them as *In this section*.
+
+It is derived from the map's TOC index, which the breadcrumb lookup already
+fetches and caches, so an article pays no extra request for it.
+
+### Developing the viewer
+
+```bash
+npm run dev:app-ui     # http://127.0.0.1:5173 — edit app-ui/*.ts, the frame reloads
+```
+
+`app-ui/dev/harness.ts` is a local MCP Apps host built on the SDK's `AppBridge`,
+which accepts `Client | null` — a host with no server behind it is a supported
+mode. It speaks the real protocol to the real `App` class and answers
+`tools/call` out of `app-ui/dev/fixtures.json`, real `structuredContent`
+captured from the live tools by `npm run fixtures:app-ui`.
+
+It exists because the viewer only runs inside a host, so there is nothing to
+look at without one, and the alternative loop — build, launch the Inspector,
+click through — is tens of seconds per edit. It also does three things no
+inspector can: strip `hostContext.styles` entirely (the check that proves the
+`:root` fallbacks are coherent as a set), resize the container continuously
+across the `@container` breakpoints, and lie about `deviceCapabilities.hover`.
+
+Before shipping, run the viewer through the real thing as well — it is the only
+place the actual `ui://` resource, CSP and `_meta` are exercised:
+
+```bash
+npm run build && npm run test:inspector
+```
+
 > [!WARNING]
 > **The MCP Apps viewer is broken in 4.0.0 — upgrade past it.** The build step that
 > inlines the UI bundle into the HTML document used a replacement string, so every
@@ -439,6 +536,8 @@ npm run start:http # HTTP transport mode
 |--------|-------------|
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run dev` | Development mode with auto-reload (stdio) |
+| `npm run dev:app-ui` | Live preview of the MCP Apps viewer at http://127.0.0.1:5173 |
+| `npm run fixtures:app-ui` | Re-capture the viewer's fixtures from the live tools |
 | `npm run start:http` | Start HTTP/SSE transport mode |
 | `npm test` | Run all tests |
 | `npm run test:unit` | Unit tests only |

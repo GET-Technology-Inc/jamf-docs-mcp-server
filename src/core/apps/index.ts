@@ -54,6 +54,37 @@ export function appToolMeta(): Record<string, unknown> {
 }
 
 /**
+ * Resource-level `_meta.ui` for the app document.
+ *
+ * `prefersBorder: false` because the viewer is built to have no chrome of its
+ * own: it paints no background and draws four borders in the whole stylesheet.
+ * Claude's documented default is borderless on web and bordered on mobile, so
+ * without this the same panel is a flat surface on a desktop and a boxed card
+ * on a phone, for no reason either platform can explain.
+ *
+ * `clipboardWrite` because a sandboxed iframe cannot reach
+ * `navigator.clipboard.writeText` without the Permissions-Policy grant, and
+ * copying a `jamf recon` invocation out of a code block is the one thing a
+ * reader of these pages actually wants to do with them. The app checks the
+ * capability back before offering the button, so a host that declines the
+ * grant simply does not show one.
+ *
+ * `csp` is deliberately absent rather than forgotten. The document is fully
+ * self-contained and every data path is `postMessage`, so there is nothing to
+ * allow — but the moment anyone adds an `<img src>` or a font, the failure is a
+ * silently blank element under the host's deny-by-default policy, and this is
+ * the comment that should be read first.
+ */
+function appResourceMeta(): Record<string, unknown> {
+  return {
+    ui: {
+      prefersBorder: false,
+      permissions: { clipboardWrite: {} },
+    },
+  };
+}
+
+/**
  * Register the shared `ui://` resource.
  *
  * The document is fully self-contained — script and styles inlined — because
@@ -76,6 +107,8 @@ export function registerApps(server: McpServer): void {
       // for a day is holding something that genuinely cannot go stale. A new
       // bundle arrives under a new URI rather than replacing this one.
       cacheHint: { ttlMs: 86_400_000, cacheScope: 'public' },
+      // What a host reads at connection time, off `resources/list`.
+      _meta: appResourceMeta(),
     },
     () => ({
       contents: [
@@ -83,6 +116,9 @@ export function registerApps(server: McpServer): void {
           uri: APP_RESOURCE_URI,
           mimeType: APP_MIME_TYPE,
           text: APP_HTML,
+          // And again on the content item, which takes precedence for a host
+          // that reads the resource without having listed it.
+          _meta: appResourceMeta(),
         },
       ],
     }),

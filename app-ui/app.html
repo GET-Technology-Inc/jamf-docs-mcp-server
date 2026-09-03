@@ -1,11 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Covers the frames before applyDocumentTheme() runs. A browser gives an
+         iframe document an opaque canvas when its color-scheme disagrees with
+         the embedder's, which would defeat the transparent body and flash a
+         white slab into a dark conversation. -->
+    <meta name="color-scheme" content="light dark" />
     <title>Jamf Documentation</title>
   </head>
+  <!-- No lang attribute: it is set from hostContext.locale once the host says
+       what the reader's is. Hardcoding "en" told every screen reader that a
+       zh-TW page was English. -->
   <body>
-    <div id="root"><p class="muted">Loading…</p></div>
+    <!-- The first painted frame is already the right shape. The word "Loading"
+         it replaces was a different shape, a different size and a different
+         colour from anything that would follow it. -->
+    <div id="root">
+      <div class="sk" style="padding: 16px">
+        <span class="sk-line" style="--w: 45%"></span>
+        <span class="sk-line" style="--w: 90%"></span>
+        <span class="sk-line" style="--w: 72%"></span>
+        <span class="sk-line" style="--w: 84%"></span>
+      </div>
+    </div>
   </body>
 </html>

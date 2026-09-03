@@ -7,6 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { GlossaryLookupInputSchema } from '../schemas/index.js';
 import { GlossaryLookupOutputSchema } from '../schemas/output.js';
+import { appToolMeta } from '../apps/index.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
 import type { ToolResult, GlossaryEntry, TokenInfo } from '../types.js';
@@ -101,6 +102,13 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
       description: TOOL_DESCRIPTION,
       inputSchema: GlossaryLookupInputSchema,
       outputSchema: GlossaryLookupOutputSchema,
+      // Hosts supporting the MCP Apps extension render this result in the
+      // shared viewer; others ignore the metadata and get the markdown. The
+      // glossary view reuses the search view's components wholesale — a term
+      // is a title, a definition is a snippet — so it was the cheapest way to
+      // check that the component set generalises past the three views it was
+      // drawn against.
+      _meta: appToolMeta(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
