@@ -1,3 +1,9 @@
+## [5.10.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.0...v5.10.1) (2026-09-03)
+
+### Bug Fixes
+
+* **deps:** clear all six Dependabot alerts on the default branch ([#270](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/270)) ([06fd780](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/06fd78005d25b0b899c97a017713e06c3514a8de))
+
 ## [5.10.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.9.0...v5.10.0) (2026-09-03)
 
 ### Features
