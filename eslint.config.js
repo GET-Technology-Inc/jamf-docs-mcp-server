@@ -24,7 +24,12 @@ export default tseslint.config(
         console: 'readonly',
         process: 'readonly',
         URL: 'readonly',
-        Buffer: 'readonly'
+        Buffer: 'readonly',
+        // The dev server and the fixture capture both time out work they
+        // cannot cancel any other way — a stalled tool call, a coalesced
+        // burst of filesystem events.
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly'
       }
     },
     rules: {

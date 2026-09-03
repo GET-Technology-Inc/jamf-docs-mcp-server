@@ -10,6 +10,8 @@
   "scripts": {
     "build": "npm run build:app-ui && tsc",
     "dev": "tsx watch src/index.ts",
+    "dev:app-ui": "node scripts/dev-app-ui.mjs",
+    "fixtures:app-ui": "node scripts/capture-app-fixtures.mjs",
     "start": "node dist/index.js",
     "start:http": "node dist/index.js --transport http",
     "test": "ALLOW_LIVE_REQUESTS=1 vitest run",
