@@ -27,6 +27,46 @@ const repo = path.resolve(here, '..');
 const uiDir = path.join(repo, 'app-ui');
 const outFile = path.join(repo, 'src', 'core', 'apps', 'generated', 'app-html.ts');
 
+/**
+ * Drops the 62 non-English zod locale bundles from the output.
+ *
+ * `zod/v4/core/index.js` does `export * as locales from "../locales/index.js"`,
+ * and that barrel eagerly re-exports every translation zod ships. A namespace
+ * re-export is not statically analysable the way a named one is, so nothing
+ * tree-shakes them and all 63 land in a bundle that is inlined verbatim into
+ * every `tools/list` response — 248 kB of Hebrew, Tamil and Ukrainian
+ * validation strings, about half the document, to serve an app whose only zod
+ * consumer is the MCP SDK's own schema parsing.
+ *
+ * `en.js` is left alone: `zod/v4/classic/schemas.js` imports it directly and
+ * registers it as the default on first `ZodType` construction, so it is the
+ * locale every message in this app is actually rendered from. The rest are
+ * replaced by a factory returning the same shape zod expects, so a caller that
+ * did reach for one gets an unhelpful message rather than a crash.
+ *
+ * The filter has to be a JS RegExp against the *import specifier* (`./ar.js`),
+ * and esbuild compiles it with Go's RE2 — no lookahead — hence the importer
+ * check in the body rather than a negative match in the pattern.
+ */
+const dropZodLocales = {
+  name: 'drop-zod-locales',
+  setup(build) {
+    build.onResolve({ filter: /^\.\/[a-zA-Z-]+\.js$/ }, (args) => {
+      if (!args.importer.replace(/\\/g, '/').endsWith('zod/v4/locales/index.js')) {
+        return null;
+      }
+      if (args.path === './en.js') {
+        return null;
+      }
+      return { path: args.path, namespace: 'zod-locale-stub' };
+    });
+    build.onLoad({ filter: /.*/, namespace: 'zod-locale-stub' }, () => ({
+      contents: 'export default () => ({ localeError: () => "invalid input" });',
+      loader: 'js',
+    }));
+  },
+};
+
 const result = await build({
   entryPoints: [path.join(uiDir, 'app.ts')],
   bundle: true,
@@ -35,6 +75,7 @@ const result = await build({
   minify: true,
   legalComments: 'none',
   write: false,
+  plugins: [dropZodLocales],
 });
 
 const script = result.outputFiles[0].text;
