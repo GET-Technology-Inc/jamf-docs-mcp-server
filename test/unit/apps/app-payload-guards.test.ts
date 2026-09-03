@@ -100,7 +100,14 @@ describe('section ids are stamped on a rendered-output match', () => {
 
     expect(rendered).not.toContain('<img');
     expect(rendered).toContain('&lt;img');
-    // And an unterminated tag is exactly what a tag-stripping regex misses.
-    expect(hostile.replace(/<[^>]*>/g, '')).toBe(hostile);
+    // And an unterminated tag is exactly what a tag-stripping regex misses:
+    // the pattern needs a closing bracket, so it finds nothing here to remove.
+    //
+    // Asserted as a non-match rather than by running the replacement. Writing
+    // `.replace(/<[^>]*>/g, '')` — even to demonstrate that it is inadequate —
+    // is the shape CodeQL flags as incomplete sanitization, and it is right to:
+    // a scanner cannot tell a counter-example from a use, and neither can the
+    // next person to copy the line out of here.
+    expect(/<[^>]*>/.test(hostile)).toBe(false);
   });
 });
