@@ -1,3 +1,18 @@
+## [5.10.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.9.0...v5.10.0) (2026-09-03)
+
+### Features
+
+* **app-ui:** rebuild the MCP Apps viewer on the host's design tokens ([#267](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/267)) ([ef02e2e](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ef02e2ebf9c6704e911f33a38332803d1b83cfea))
+
+### Bug Fixes
+
+* **release:** hold the changelog preset at 9.x so releases publish again ([#268](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/268)) ([af638ac](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/af638aca9b0811cee129e21964dea767bf7bc023)), closes [#230](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/230) [#230](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/230)
+
+### Dependencies
+
+* bump conventional-changelog-conventionalcommits ([#230](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/230)) ([09b883a](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/09b883a9ebf8bc1decadbbaeae61027b80fd37a3))
+* bump zod from 4.4.3 to 4.5.4 ([#236](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/236)) ([2f9d11b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/2f9d11ba679fcbc235222e4dcbf3dbdf4cea00c4))
+
 ## [5.9.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.8.0...v5.9.0) (2026-09-02)
 
 ### Features
