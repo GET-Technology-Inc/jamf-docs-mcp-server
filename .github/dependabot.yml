@@ -10,6 +10,24 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
+    ignore:
+      # Held at 9.x deliberately. The 10.x line switched to
+      # @conventional-changelog/template and requires
+      # conventional-changelog-writer@9, but semantic-release 25 pins
+      # release-notes-generator to writer ^8 — so 10.x fails the release with
+      # `Missing helper: ... requires conventional-changelog-writer@9 or
+      # newer`. #230 bumped it and broke every release after it.
+      #
+      # The combination that does support 10.x is semantic-release 26, which is
+      # still a beta, and on that line the preset ALSO ignores this repo's
+      # `presetConfig.types` hidden flags — `chore`, `docs` and `test` land in
+      # an unlabelled block above Features. Verified by generating notes under
+      # both combinations.
+      #
+      # Remove this once semantic-release 26 is stable AND the hidden-types
+      # regression is confirmed fixed.
+      - dependency-name: "conventional-changelog-conventionalcommits"
+        versions: [">=10"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
