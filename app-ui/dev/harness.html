@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jamf docs viewer — dev harness</title>
+    <style>
+      /* The harness chrome is deliberately plain and deliberately NOT in the
+         viewer's design language. Anything that looked like the thing being
+         designed would make it harder to judge, not easier. */
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr) 320px;
+        height: 100vh;
+        font: 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+        color: #1c1c1c;
+        background: #f2f2f0;
+      }
+
+      aside, section { overflow: auto; }
+
+      aside {
+        padding: 16px;
+        border-right: 1px solid #dcdcd8;
+        background: #fbfbfa;
+      }
+
+      h1 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+      .sub { margin: 0 0 18px; color: #6b6b66; font-size: 11px; }
+
+      fieldset {
+        margin: 0 0 16px;
+        padding: 0;
+        border: 0;
+      }
+      legend {
+        padding: 0;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b6b66;
+      }
+
+      select, input[type='range'] { width: 100%; font: inherit; }
+      select { padding: 4px; border: 1px solid #cfcfca; border-radius: 5px; background: #fff; }
+
+      .why {
+        margin: 6px 0 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #6b6b66;
+      }
+
+      .opts { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+      label.opt { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+      /* The styles toggle gets emphasis because it is the check the whole
+         token layer exists to pass, and the one no inspector can perform. */
+      .keycheck {
+        padding: 8px 10px;
+        border: 1px solid #d8cfa8;
+        border-radius: 6px;
+        background: #fdf8e8;
+      }
+      .keycheck .note { margin: 4px 0 0; font-size: 10.5px; color: #7a6a35; line-height: 1.4; }
+
+      button {
+        width: 100%;
+        padding: 6px;
+        font: inherit;
+        border: 1px solid #cfcfca;
+        border-radius: 5px;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover { border-color: #9b9b95; }
+
+      /* The stage repaints itself in the host canvas colour, so the viewer's
+         "paint no background" rule can be seen rather than taken on trust. */
+      #stage {
+        display: grid;
+        place-items: start center;
+        padding: 32px 24px;
+        overflow: auto;
+        transition: background 120ms;
+      }
+
+      #panel {
+        /* No border and no fill: this stands in for Claude's own inline
+           container, which is borderless on web. A frame here would flatter
+           the viewer by giving it edges it will not have. */
+        position: relative;
+        overflow: auto;
+        border-radius: 12px;
+        resize: horizontal;
+      }
+      #panel[data-mode='fullscreen'] { border-radius: 0; }
+
+      /* Height is written by the harness from `ui/notifications/size-changed`,
+         clamped the way Claude clamps an inline panel. */
+      #frame { display: block; width: 100%; height: 240px; border: 0; }
+
+      section {
+        padding: 16px;
+        border-left: 1px solid #dcdcd8;
+        background: #fbfbfa;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+      }
+
+      .log-row { display: flex; gap: 6px; padding: 3px 0; border-bottom: 1px solid #eeeeeb; }
+      .log-kind { flex: 0 0 auto; color: #6b6b66; }
+      .log-detail { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+      .log-row[data-kind='error'] .log-kind { color: #a3302a; }
+      .log-row[data-kind='tools/call'] .log-kind { color: #2d5f9e; }
+      .log-row[data-kind='initialized'] .log-kind { color: #2b6440; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <h1>Jamf docs viewer</h1>
+      <p class="sub">Local MCP Apps host · fixtures, no network</p>
+
+      <fieldset>
+        <legend>Fixture</legend>
+        <select id="fixture"></select>
+        <p class="why" id="why"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Theme</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="theme" data-radio="theme:light" />light</label>
+          <label class="opt"><input type="radio" name="theme" data-radio="theme:dark" />dark</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="keycheck">
+        <legend>Host tokens</legend>
+        <label class="opt"><input type="checkbox" data-flag="styles" />send styles.variables</label>
+        <p class="note">
+          Turn this off to see the viewer on its own <code>:root</code> fallbacks. Hosts may send
+          any subset of the 76 variables, so the fallbacks have to be a coherent palette — not a
+          pile of per-token guesses. No inspector can run this check.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Panel width</legend>
+        <input type="range" id="width" min="300" max="1000" step="10" value="420" />
+        <output id="width-out"></output>
+      </fieldset>
+
+      <fieldset>
+        <legend>Host height budget</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="budget" data-radio="budget:none" />not sent</label>
+          <label class="opt"><input type="radio" name="budget" data-radio="budget:480" />480</label>
+          <label class="opt"><input type="radio" name="budget" data-radio="budget:640" />640</label>
+          <label class="opt"><input type="radio" name="budget" data-radio="budget:1200" />1200</label>
+        </div>
+        <p class="why">
+          <code>containerDimensions.maxHeight</code>. The viewer clamps it to its own 640px inline
+          ceiling and scrolls inside — a host that offers 1200 does not get a 1200px panel.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Display mode</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="mode" data-radio="mode:inline" />inline</label>
+          <label class="opt"><input type="radio" name="mode" data-radio="mode:fullscreen" />fullscreen</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Tool call</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="behaviour" data-radio="behaviour:instant" />instant</label>
+          <label class="opt"><input type="radio" name="behaviour" data-radio="behaviour:slow" />slow (2s)</label>
+          <label class="opt"><input type="radio" name="behaviour" data-radio="behaviour:fail" />fail</label>
+        </div>
+        <p class="why">
+          The loading and error views are otherwise unreachable: a fixture answers instantly and
+          never fails, so both render for zero frames and neither can be judged.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Device</legend>
+        <label class="opt"><input type="checkbox" data-flag="hover" />deviceCapabilities.hover</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Locale</legend>
+        <div class="opts">
+          <label class="opt"><input type="radio" name="locale" data-radio="locale:en-US" />en-US</label>
+          <label class="opt"><input type="radio" name="locale" data-radio="locale:zh-TW" />zh-TW</label>
+          <label class="opt"><input type="radio" name="locale" data-radio="locale:ja-JP" />ja-JP</label>
+        </div>
+      </fieldset>
+
+      <button id="reload" type="button">Reload app frame</button>
+    </aside>
+
+    <div id="stage">
+      <div id="panel"><iframe id="frame" title="Jamf documentation viewer"></iframe></div>
+    </div>
+
+    <section>
+      <div id="log"></div>
+    </section>
+
+    <script type="module" src="/harness.js"></script>
+  </body>
+</html>

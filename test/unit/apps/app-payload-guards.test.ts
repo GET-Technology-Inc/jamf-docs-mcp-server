@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
+import { esc } from '../../../app-ui/escape.js';
 
 /** Mirrors `renderableText` in app-ui/app.ts. */
 function renderableText(value: unknown): value is string {
@@ -61,5 +62,52 @@ describe('malformed payload guards', () => {
     // test and an `Array.isArray` test both survive minification.
     expect(APP_HTML).toContain('Array.isArray');
     expect(APP_HTML).toMatch(/typeof [\w$]+=="string"/);
+  });
+});
+
+describe('section ids are stamped on a rendered-output match', () => {
+  /**
+   * `stampIds` decides whether a rendered heading came from a given section by
+   * comparing it against what the renderer would emit for that section's
+   * title — not by stripping the heading's markup and comparing plain text.
+   *
+   * Stripping was wrong twice. As sanitization, `<[^>]*>` never matches an
+   * unterminated tag, so `<img src=x onerror=y` survives it whole and no
+   * amount of looping helps (CodeQL: js/incomplete-multi-character-
+   * sanitization). As logic, it asked whether two plain texts coincide when
+   * the question is whether the heading was rendered *from* that title.
+   *
+   * Mirrored rather than imported for the reason app-ui/escape.ts documents:
+   * importing app.ts runs its top-level wiring and throws outside a browser.
+   */
+  function inline(escaped: string): string {
+    return escaped
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  }
+
+  it('matches a heading the renderer produced from that title', () => {
+    const title = 'Jamf `recon` Requirements';
+    expect(inline(esc(title.trim()))).toBe('Jamf <code>recon</code> Requirements');
+  });
+
+  // CONTROL. The comparison never sees raw markup, because `esc` has already
+  // turned every angle bracket into an entity — which is what removes the
+  // sanitization question rather than answering it.
+  it('never has markup to strip in the first place', () => {
+    const hostile = '<img src=x onerror=alert(1)';
+    const rendered = inline(esc(hostile));
+
+    expect(rendered).not.toContain('<img');
+    expect(rendered).toContain('&lt;img');
+    // And an unterminated tag is exactly what a tag-stripping regex misses:
+    // the pattern needs a closing bracket, so it finds nothing here to remove.
+    //
+    // Asserted as a non-match rather than by running the replacement. Writing
+    // `.replace(/<[^>]*>/g, '')` — even to demonstrate that it is inadequate —
+    // is the shape CodeQL flags as incomplete sanitization, and it is right to:
+    // a scanner cannot tell a counter-example from a use, and neither can the
+    // next person to copy the line out of here.
+    expect(/<[^>]*>/.test(hostile)).toBe(false);
   });
 });

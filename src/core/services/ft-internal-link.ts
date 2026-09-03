@@ -35,7 +35,7 @@ import { buildDisplayUrl } from './topic-resolver.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
-import type { FtTocNode } from '../types.js';
+import type { ArticleNavigation, ArticleNavigationLink, FtTocNode } from '../types.js';
 
 // ─── Markup constants ──────────────────────────────────────────
 
@@ -104,23 +104,81 @@ export function collectInternalLinkMapIds(html: string): string[] {
  * in one pass keeps that to one fetch per map rather than two.
  */
 /**
- * Cached under the `ft-tocindex-v2` namespace. The `v2` is load-bearing:
- * entries written under the v1 shape hold only `urlByTocId`, so they would
- * answer an ancestry lookup with nothing and make a topic look parentless.
+ * Cached under the `ft-tocindex-v3` namespace. The version is load-bearing:
+ * entries written under an older shape hold only the fields that shape had, so
+ * they answer a newer lookup with nothing — a v1 entry makes every topic look
+ * parentless, and a v2 entry makes every topic look like a leaf with no
+ * siblings. Bump it whenever a field is added.
  */
 interface MapTocIndex {
   /** `tocId -> absolute display URL`, for placing internal links. */
   urlByTocId: Record<string, string>;
   /** `contentId -> ancestor titles`, nearest root first, excluding the topic. */
   ancestorsByContentId: Record<string, string[]>;
+
+  /**
+   * The tree, flattened into three lookups keyed by `tocId`.
+   *
+   * Keyed by `tocId` rather than `contentId` because a grouping heading has an
+   * empty `contentId` — it is a rung in the hierarchy that nothing addresses as
+   * a topic — and keying by contentId would detach every child of one from its
+   * siblings.
+   *
+   * Stored as ids rather than as a per-topic `{parent, siblings, children}`
+   * record on purpose: siblings are shared by every member of a sibling set, so
+   * materialising them per topic would store the same ~20 links twenty times.
+   * For Jamf Pro's 792-node map that is the difference between a small index
+   * and a multi-megabyte one, in a cache entry every article fetch reads.
+   */
+  nodeByTocId: Record<string, { title: string; url: string }>;
+  /** `tocId -> its children's tocIds`, in document order. */
+  childTocIds: Record<string, string[]>;
+  /** `tocId -> its parent's tocId`. Absent for a root node. */
+  parentTocId: Record<string, string>;
+  /** `contentId -> tocId`, the way in from an article's own identifiers. */
+  tocIdByContentId: Record<string, string>;
+  /** The tocIds of the roots, so a root topic still has siblings. */
+  rootTocIds: string[];
 }
 
 function indexTocNodes(
   nodes: readonly FtTocNode[],
   into: MapTocIndex,
   ancestors: readonly string[],
+  parent?: string,
 ): void {
   for (const node of nodes) {
+    // Only a node a reader could actually open joins the navigation tree: it
+    // needs an id to key on, a contentId to be addressed by, a URL to go to and
+    // a title to be labelled with. A node missing any of those is a grouping
+    // heading, and putting one in the tree would mean publishing a link to
+    // nothing and counting it among a page's neighbours.
+    //
+    // Note this is a *stricter* test than the ancestry index below applies. A
+    // breadcrumb rung is text, so an unopenable one is harmless and Jamf's own
+    // grouping titles belong there; a navigation entry is a destination, and an
+    // unopenable one is a dead end. Different requirement, different rule.
+    //
+    // Measured against the live Jamf Pro map: 0 of 792 nodes are missing any of
+    // the four, so in practice nothing takes this branch. It is here because
+    // `FtTocNode` is a bare cast over `response.json()` with no validation
+    // behind it, and because a future map that does group its topics should
+    // lose the grouping, not the topics under it.
+    const openable =
+      node.tocId !== '' && node.contentId !== '' && node.prettyUrl !== '' && (node.title ?? '') !== '';
+    if (openable) {
+      into.nodeByTocId[node.tocId] = {
+        title: node.title ?? '',
+        url: buildDisplayUrl(node.prettyUrl),
+      };
+      if (parent === undefined) {
+        into.rootTocIds.push(node.tocId);
+      } else {
+        into.parentTocId[node.tocId] = parent;
+        (into.childTocIds[parent] ??= []).push(node.tocId);
+      }
+      into.tocIdByContentId[node.contentId] = node.tocId;
+    }
     // Both fields are declared required, but `FtTocNode` is a bare cast over
     // `response.json()` with no runtime validation behind it — the same reason
     // `title` and `children` are optional on that type. An empty value here
@@ -140,7 +198,10 @@ function indexTocNodes(
     const title = node.title ?? '';
     const childAncestors = title === '' ? ancestors : [...ancestors, title];
     // Absent `children` means a leaf, the same as an empty list.
-    indexTocNodes(node.children ?? [], into, childAncestors);
+    // A node that did not join the tree passes its own parent down, so its
+    // children attach one rung higher rather than being orphaned under an id
+    // nothing can reach.
+    indexTocNodes(node.children ?? [], into, childAncestors, openable ? node.tocId : parent);
   }
 }
 
@@ -149,13 +210,21 @@ async function loadMapTocIndex(
   mapId: string,
   ttl: number | undefined,
 ): Promise<MapTocIndex> {
-  const key = cacheKey('ft-tocindex-v2', { mapId });
+  const key = cacheKey('ft-tocindex-v3', { mapId });
   const cached = await cache.get<MapTocIndex>(key);
   if (cached !== null) {
     return cached;
   }
 
-  const index: MapTocIndex = { urlByTocId: {}, ancestorsByContentId: {} };
+  const index: MapTocIndex = {
+    urlByTocId: {},
+    ancestorsByContentId: {},
+    nodeByTocId: {},
+    childTocIds: {},
+    parentTocId: {},
+    tocIdByContentId: {},
+    rootTocIds: [],
+  };
   indexTocNodes(await fetchMapToc(mapId), index, []);
   await cache.set(key, index, ttl);
   return index;
@@ -235,6 +304,104 @@ export interface TopicAncestryOptions {
   /** TTL for the cached index; `undefined` uses the cache default. */
   ttl?: number | undefined;
   logger?: Logger | undefined;
+}
+
+/**
+ * How many neighbours a navigation list carries.
+ *
+ * The counts alongside them are the totals, so a capped list still says how
+ * much it is not showing. The cap exists because the sibling set of a
+ * top-level page is every top-level page — for Jamf Pro that is twenty-odd
+ * links, on the structured channel, on every article fetch.
+ */
+const MAX_NAV_LINKS = 8;
+
+/**
+ * Where a topic sits among its neighbours in its map.
+ *
+ * The complement of {@link fetchTopicAncestors}: that answers "what is above
+ * this page", this answers "what is beside and below it". Both read the same
+ * cached index, so an article that already resolved a breadcrumb pays nothing
+ * for this.
+ *
+ * It exists because the Fluid Topics API serves one topic per call while the
+ * website concatenates a topic and its children into a single page. Nine of
+ * the nine `<h2>` sections on the rendered "Computer Configuration Profiles"
+ * page are separate topics in the map — measured, not assumed. A reader who
+ * opens that page in a viewer gets the parent's introduction and no route to
+ * the nine procedures underneath it unless something publishes the tree, and
+ * the tree is only in the TOC.
+ *
+ * Returns `undefined` rather than an empty shape when the topic is not in the
+ * index: absent means "this map does not place it", which is different from
+ * "it has no neighbours".
+ */
+export async function fetchTopicNavigation(
+  options: TopicAncestryOptions,
+): Promise<ArticleNavigation | undefined> {
+  const { cache, mapId, contentId, ttl, logger } = options;
+
+  let index: MapTocIndex;
+  try {
+    index = await loadMapTocIndex(cache, mapId, ttl);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logger?.warning(
+      `ft-internal-link: TOC index unavailable for map ${mapId},` +
+      ` this article will have no navigation: ${reason}`,
+    );
+    return undefined;
+  }
+
+  const tocId = index.tocIdByContentId[contentId];
+  if (tocId === undefined) {
+    return undefined;
+  }
+  const self = index.nodeByTocId[tocId];
+  if (self === undefined) {
+    return undefined;
+  }
+
+  // Constructed field by field, not returned by reference.
+  //
+  // The index is a cache entry, so what comes back is whatever shape was
+  // written when it was stored — including fields a later version of this file
+  // dropped. `NavigationLinkSchema` is strict, so one stale extra key fails
+  // output validation for the whole tool and the article does not render at
+  // all. Naming the two fields makes the published shape independent of how
+  // the index happens to be stored, which is the property that actually needs
+  // to hold; the namespace version protects against a *missing* field, and
+  // cannot protect against an extra one.
+  const link = (id: string): ArticleNavigationLink | undefined => {
+    const node = index.nodeByTocId[id];
+    return node === undefined ? undefined : { title: node.title, url: node.url };
+  };
+
+  const parentId = index.parentTocId[tocId];
+  const parent = parentId !== undefined ? link(parentId) : undefined;
+
+  // A root topic's siblings are the other roots — which is why `rootTocIds` is
+  // indexed at all. Without it every top-level page in a product reported no
+  // neighbours, which is the opposite of true.
+  const siblingIds = (parentId !== undefined ? index.childTocIds[parentId] : index.rootTocIds) ?? [];
+  const siblings = siblingIds.filter((id) => id !== tocId).map(link).filter(isLink);
+  const children = (index.childTocIds[tocId] ?? []).map(link).filter(isLink);
+
+  return {
+    self: { title: self.title, url: self.url },
+    ...(parent !== undefined ? { parent } : {}),
+    siblings: siblings.slice(0, MAX_NAV_LINKS),
+    children: children.slice(0, MAX_NAV_LINKS),
+    // The totals, not the array lengths. A truncated list that does not say so
+    // is one a reader will treat as exhaustive.
+    siblingCount: siblings.length,
+    childCount: children.length,
+  };
+}
+
+/** Narrows away an id that is somehow not in the node table. */
+function isLink(value: ArticleNavigationLink | undefined): value is ArticleNavigationLink {
+  return value !== undefined;
 }
 
 export async function fetchTopicAncestors(

@@ -47,12 +47,12 @@ describe('cacheKey', () => {
 
   // A namespace that is a prefix of another would collide if the payload were
   // appended without a separator: `ft-toc` + `index-v2:...` reads the same as
-  // `ft-tocindex-v2` + `...`. Both exist, so this is not hypothetical.
+  // `ft-tocindex-v3` + `...`. Both exist, so this is not hypothetical.
   it('keeps prefix-sharing namespaces apart', () => {
     const toc = cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: 'current' });
-    const index = cacheKey('ft-tocindex-v2', { mapId: 'm1' });
+    const index = cacheKey('ft-tocindex-v3', { mapId: 'm1' });
     expect(toc.startsWith('ft-toc:')).toBe(true);
-    expect(index.startsWith('ft-tocindex-v2:')).toBe(true);
+    expect(index.startsWith('ft-tocindex-v3:')).toBe(true);
     expect(toc).not.toBe(index);
   });
 

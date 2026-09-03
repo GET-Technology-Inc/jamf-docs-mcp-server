@@ -1,0 +1,3460 @@
+[
+  {
+    "key": "search",
+    "label": "Search — typical",
+    "why": "The common case: ten hits, breadcrumbs, mixed docTypes.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "automated device enrollment",
+      "product": "jamf-pro",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "automated device enrollment",
+      "filters": {
+        "product": "jamf-pro"
+      },
+      "totalResults": 50,
+      "page": 1,
+      "totalPages": 5,
+      "limit": 10,
+      "hasMore": true,
+      "results": [
+        {
+          "title": "Computer PreStage Enrollments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_PreStage_Enrollments",
+          "snippet": "PreStage enrollments allow you to configure and deploy the Automated Device Enrollment experience to devices. The scope of a PreStage enrollment specifies which devices...instance for the PreStage enrollment are eligible to be included in the scope. Note: If you clone a PreStage enrollment, the scope...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "zGNgfc54eSb4O0Kk864Pkg",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Computers",
+            "Automated Device Enrollment for Computers",
+            "Computer PreStage Enrollments"
+          ]
+        },
+        {
+          "title": "Mobile Device PreStage Enrollments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mobile_Device_PreStage_Enrollments",
+          "snippet": "PreStage enrollments allow you to configure and deploy the Automated Device Enrollment experience to devices. The scope of a PreStage enrollment specifies which devices...instance for the PreStage enrollment are eligible to be included in the scope. Note: If you clone a PreStage enrollment, the scope...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "Hl8kl0VoKUt1_2TFW5Oj~w",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Mobile Devices",
+            "Automated Device Enrollment for Mobile Devices",
+            "Mobile Device PreStage Enrollments"
+          ]
+        },
+        {
+          "title": "Automated Device Enrollment Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_Integration",
+          "snippet": "...Pro with Automated Device Enrollment involves the following...and displays Automated Device Enrollment updates from Apple every two minutes. Note: Up to a two minute syncing delay may occur, which can cause outdated Automated Device Enrollment to display in...Enrollment and PreStage Enrollments Training...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "baBJgkbwWsX2X9emI4I7cQ",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Global Management Settings",
+            "Automated Device Enrollment Integration"
+          ]
+        },
+        {
+          "title": "PreStage Panes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/PreStage_Panes",
+          "snippet": "PreStage Panes are groups of settings that customize the screens that display during Automated Device Enrollment with Jamf Pro. The PreStage Panes display during the Setup Assistant after...can configure multiple Text PreStage Panes to suit your...enroll devices using the PreStage enrollment. You can add...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "xDvE4hyZU2xvC7Ny2nPI1A",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Global Management Settings",
+            "Enrollment Customization Settings",
+            "PreStage Panes"
+          ]
+        },
+        {
+          "title": "Automated Device Enrollment for Computers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_for_Computers",
+          "snippet": "...integrate with Automated Device Enrollment, which establishes communication between Jamf Pro and Apple Business or Apple School Manager. For more information, see Automated Device Enrollment Integration. When the integration is complete, you can then use a Jamf Pro PreStage enrollment to configure...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "rH8tuWcMS91TkwA9FTk1VA",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Computers",
+            "Automated Device Enrollment for Computers"
+          ]
+        },
+        {
+          "title": "Creating or Editing a Computer PreStage Enrollment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Computer_PreStage_Enrollment",
+          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "CKss94KreyPXT6wPrKvVOg",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Computers",
+            "Automated Device Enrollment for Computers",
+            "Creating or Editing a Computer PreStage Enrollment"
+          ]
+        },
+        {
+          "title": "Creating or Editing a Mobile Device PreStage Enrollment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Mobile_Device_PreStage_Enrollment",
+          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "I8Fvf7mokhFCMYU4PkNXeA",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Mobile Devices",
+            "Automated Device Enrollment for Mobile Devices",
+            "Creating or Editing a Mobile Device PreStage Enrollment"
+          ]
+        },
+        {
+          "title": "Computer PreStage Enrollment Payload Reference",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_PreStage_Enrollment_Payload_Reference",
+          "snippet": "When you create a PreStage enrollment, you can...a Computer PreStage Enrollment Configuring Remote...scope of the PreStage enrollment. Add only configuration profiles that are essential to the enrollment experience to a PreStage enrollment. Installing too...enrolled using a PreStage enrollment. Certificates...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "6nSatuwfoiIV6xzFcmh4ew",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Computers",
+            "Automated Device Enrollment for Computers",
+            "Computer PreStage Enrollment Payload Reference"
+          ]
+        },
+        {
+          "title": "Automated Device Enrollment for Mobile Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_for_Mobile_Devices",
+          "snippet": "...integrate with Automated Device Enrollment, which establishes communication between Jamf Pro and Apple Business or Apple School Manager. For more information, see Automated Device Enrollment Integration. When the integration is complete, you can then use a Jamf Pro PreStage enrollment to configure...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "h~jOOwp~1qpI1YxEABhnHQ",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Mobile Devices",
+            "Automated Device Enrollment for Mobile Devices"
+          ]
+        },
+        {
+          "title": "Mobile Device PreStage Enrollment Payload Reference",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mobile_Device_PreStage_Enrollment_Payload_Reference",
+          "snippet": "...settings for the PreStage enrollment, specify...a Mobile Device PreStage Enrollment Configuring Remote...device enrolled using a PreStage enrollment. This is most useful when devices in scope of the PreStage are associated with a static...device enrolled using a PreStage enrollment. Certificates You can...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "r6OBx4MkK4JNOhdh~oxbNg",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0"
+          ],
+          "breadcrumb": [
+            "Enrollment",
+            "Enrollment for Mobile Devices",
+            "Automated Device Enrollment for Mobile Devices",
+            "Mobile Device PreStage Enrollment Payload Reference"
+          ]
+        }
+      ],
+      "otherSources": [
+        {
+          "title": "Troubleshooting Automated Device Enrollment",
+          "url": "https://support.jamf.com/en/articles/11695672-troubleshooting-automated-device-enrollment",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Setting Up Automated Device Enrollment in Jamf School",
+          "url": "https://support.jamf.com/en/articles/11028768-setting-up-automated-device-enrollment-in-jamf-school",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Restoring Icloud Backup During Automated Device Enrollment Ade",
+          "url": "https://support.jamf.com/en/articles/11571202-restoring-icloud-backup-during-automated-device-enrollment-ade",
+          "source": "Jamf Support Knowledge Base"
+        }
+      ],
+      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
+    }
+  },
+  {
+    "key": "search-relaxed",
+    "label": "Search — filter relaxed",
+    "why": "A version filter nothing matched, so the server dropped it and said so in filterRelaxation. The viewer must surface that, or the user reads results for the wrong version.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "FileVault escrow",
+      "product": "jamf-pro",
+      "version": "10.1.0",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "FileVault escrow",
+      "totalResults": 0,
+      "page": 1,
+      "totalPages": 0,
+      "hasMore": false,
+      "results": [],
+      "suggestions": [
+        "encryption",
+        "disk encryption",
+        "recovery key"
+      ]
+    }
+  },
+  {
+    "key": "search-empty",
+    "label": "Search — no results",
+    "why": "Exercises the empty state and the suggestions list.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "zzzqqq nonexistent topic",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "zzzqqq nonexistent topic",
+      "totalResults": 50,
+      "page": 1,
+      "totalPages": 5,
+      "limit": 10,
+      "hasMore": true,
+      "results": [
+        {
+          "title": "Advanced Topics",
+          "url": "https://learn.jamf.com/r/en-US/elevate-documentation/Advanced_Topics",
+          "snippet": "Advanced Topics — Elevate",
+          "product": "Elevate",
+          "docType": "documentation",
+          "mapId": "ulGSurHfb386BC0K9bkNdw",
+          "contentId": "vCahOkFP_zaaBboIpnY1kg",
+          "breadcrumb": [
+            "Advanced Topics"
+          ]
+        },
+        {
+          "title": "Supervision",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Supervision",
+          "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "CnnOkiwxHgpZ~bsj7l4R7w",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Managing Mobile Devices",
+            "Settings and Security Management for Mobile Devices",
+            "Supervision"
+          ]
+        },
+        {
+          "title": "New Features and Enhancements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/New_Features_and_Enhancements",
+          "snippet": "Subscribe for Updates To receive email notifications when this topic is updated, log in to the Jamf Learning Hub and click the Subscribe button (bell icon) in the upper-right of the page.",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "release-notes",
+          "mapId": "3NCZDwxnkFrs89jc8CgOuA",
+          "contentId": "8MiY2En7icUlly1dKMLgrw",
+          "breadcrumb": [
+            "New Features and Enhancements"
+          ]
+        },
+        {
+          "title": "Renewing the Push Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Push_Certificate",
+          "snippet": "...the push certificate, and make note or take a screenshot of the topic bundle identifier. Click Renew . Choose a method for renewing the push...renew the push certificate in the Apple Push Certificates Portal, make sure the topic bundle identifier you noted earlier matches the identifier in the portal.",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "jhaRzrAeNYDDWe~3T8rdgw",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "Global Management Settings",
+            "Push Certificates",
+            "Renewing the Push Certificate"
+          ]
+        },
+        {
+          "title": "Insights",
+          "url": "https://learn.jamf.com/r/en-US/jamf-rapididentity-documentation/understanding-users-with-rapididentity-insights",
+          "snippet": "...utilization tracking to identify unused or underutilized digital curriculum applications The Insights module includes the following topics, each providing distinct data perspectives: Topic Description Users Provides school usage analytics, including growth metrics, teacher-student ratios, and...",
+          "product": "RapidIdentity",
+          "docType": "documentation",
+          "mapId": "z4D9NauuOznmw4bcf~x1iw",
+          "contentId": "PzfnG8f8BvneT7GM0DOwAA",
+          "breadcrumb": [
+            "Identity Solutions",
+            "Identity Lifecycle Management",
+            "Insights"
+          ]
+        },
+        {
+          "title": "Supervision",
+          "url": "https://learn.jamf.com/r/en-US/jamf-now-documentation/Supervision",
+          "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
+          "product": "Jamf Now",
+          "docType": "documentation",
+          "mapId": "VtT2s4tzZgWnlMWVuiQI2A",
+          "contentId": "7T7OujfZg0xn5Yx6M8gQ~Q",
+          "breadcrumb": [
+            "Device Management",
+            "Supervision"
+          ]
+        },
+        {
+          "title": "Additional Information",
+          "url": "https://learn.jamf.com/r/en-US/technical-articles/Additional_Information",
+          "snippet": "For more information about the bootstrap token on macOS, see the following topics in Apple Platform Deployment: Use secure token, bootstrap token, and volume ownership in deployments Manage FileVault with mobile device management For more information about using the bootstrap token to manage...",
+          "product": "",
+          "docType": "documentation",
+          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+          "contentId": "2Vbcimug0DgiBU7lrTn9YQ",
+          "breadcrumb": [
+            "Device Management",
+            "Leveraging Apple's Bootstrap Token Functionality",
+            "Additional Information"
+          ]
+        },
+        {
+          "title": "Security Overview",
+          "url": "https://learn.jamf.com/r/en-US/jamf-auto-update-documentation/Security_Overview",
+          "snippet": "Jamf Auto Update uses encrypted communications, signed software, and minimal data collection throughout. The following topics describe the security measures that apply to the service infrastructure, communications, data handling, software packaging, and client components: Service Infrastructure...",
+          "product": "",
+          "docType": "documentation",
+          "mapId": "6JXG~38SifVdyJKsU1MyVQ",
+          "contentId": "6RWh4sm_nClxJoeKX_9w3g",
+          "breadcrumb": [
+            "Security Overview"
+          ]
+        },
+        {
+          "title": "General Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-connect-documentation-current/General-Requirements",
+          "snippet": "...to devices under management Familiarity with your device management platform, and the ability to adapt the generic configurations provided in the following topics for your specific device management solution An activation profile that enables Zero Trust Network Access (ZTNA). For more information,...",
+          "product": "",
+          "version": "Enter the latest product version for which the topic was revised.",
+          "mapId": "bjs61pwUXJK9FzeINitaJA",
+          "contentId": "NMAuPbiWjDpOkr52PFoL3Q",
+          "breadcrumb": [
+            "Zero Trust Network Access",
+            "Deploying Zero Trust Network Access",
+            "Optimizing Zero Trust Network Access Deployment for Managed Devices",
+            "Bootstrapping Jamf Trust App Activation via Managed App Configuration",
+            "General Requirements"
+          ]
+        },
+        {
+          "title": "Administrator Management",
+          "url": "https://learn.jamf.com/r/en-US/jamf-safe-internet-documentation/Administrator_Management",
+          "snippet": "This topic explains how administrator accounts are configured in Safe Internet. To access the Administration section, click Settings &gt; Administrators.",
+          "product": "Jamf Safe Internet",
+          "docType": "documentation",
+          "mapId": "o~jRfY0909ZcujCBWOLBsw",
+          "contentId": "ji6koA5dmEEn3Bsyp7SAxg",
+          "breadcrumb": [
+            "Safe Internet Portal Settings",
+            "Administrator Management"
+          ]
+        }
+      ],
+      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
+    }
+  },
+  {
+    "key": "search-other-sources",
+    "label": "Search — other sources",
+    "why": "Populates otherSources, the separate population the server refuses to interleave.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "Jamf Pro API authentication",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "Jamf Pro API authentication",
+      "totalResults": 49,
+      "page": 1,
+      "totalPages": 5,
+      "limit": 10,
+      "hasMore": true,
+      "results": [
+        {
+          "title": "FIDO2 Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/FIDO2_Authentication",
+          "snippet": "...the FIDO2 authentication method for single...It enables passwordless authentication, including passkeys, local biometric access, and hardware keys. FIDO2 must be configured through your IdP and enabled in Jamf Pro. When FIDO2 authentication is enabled,...are required when FIDO2 authentication is active.",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "_yc94GpIG45H~CTwJlRJ3w",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "Single Sign-On (SSO)",
+            "SSO with SAML",
+            "FIDO2 Authentication"
+          ]
+        },
+        {
+          "title": "Enabling FIDO2 Authentication in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_FIDO2_Authentication_in_Jamf_Pro",
+          "snippet": "...for Self Service for macOS must be enabled in Jamf Pro. FIDO2 authentication must be configured through your IdP. In Jamf Pro, click Settings in the sidebar. In the Self Service section, click macOS . Click Edit . Under Login, select Single Sign-On. Select Enable FIDO2 authentication. Click Save .",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "ZTd1oQvvYoJowFWdgifT8A",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "Single Sign-On (SSO)",
+            "SSO with SAML",
+            "FIDO2 Authentication",
+            "Enabling FIDO2 Authentication in Jamf Pro"
+          ]
+        },
+        {
+          "title": "API Authentication and Base URL",
+          "url": "https://learn.jamf.com/r/en-US/fluidid-documentation/API_Authentication_and_Base_URL",
+          "snippet": "Authentication Headers Every API request must include two custom HTTP headers: Header Value FusionID-ClientID The Client ID from the FusionIDAPI credential object. FusionID-Key The API Key from the FusionIDAPI credential object. Base URL All FusionID API endpoints share this base URL prefix: /...",
+          "product": "",
+          "docType": "documentation",
+          "mapId": "ipa1nnT_VKXEPGVGiGJxTA",
+          "contentId": "Uhp0vlfqXiD~uu_Oayr5~g",
+          "breadcrumb": [
+            "FusionID API Overview",
+            "API Authentication and Base URL"
+          ]
+        },
+        {
+          "title": "Enabling OIDC Authentication in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_OIDC_Authentication_in_Jamf_Pro",
+          "snippet": "...not currently support authentication with Jamf ID. If administrators will log in to Jamf Pro using a cloud-...select Use SAML authentication for end users (using IdP settings from Jamf Pro). To configure SAML authentication, follow the instructions...process. After OIDC authentication is enabled, you will...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "05~5DUKnEeyNY_7RImg~gw",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "Single Sign-On (SSO)",
+            "SSO with OIDC Through Jamf Account",
+            "Enabling OIDC Authentication in Jamf Pro"
+          ]
+        },
+        {
+          "title": "Multi-factor Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Multi-factor_Authentication",
+          "snippet": "When Entra ID with multi-factor authentication (MFA) enabled is added as the cloud identity provider, some authentication workflows in Jamf Pro (e.g....SSO in Jamf Pro, see Single Sign...how multi-factor authentication (MFA) status in Entra ID affects Jamf Pro authentication workflows for Entra ID cloud...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "vfKRkuy2~ilSw83h0TSeWA",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "Cloud Identity Providers",
+            "Microsoft Entra ID Integration",
+            "Multi-factor Authentication"
+          ]
+        },
+        {
+          "title": "Jamf Pro API Changes and Enhancements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Jamf_Pro_API_Changes_and_Enhancements",
+          "snippet": "...for the Jamf Pro API and the Classic API in one of...page directly from Jamf Pro, append the API base URL (/..., see the Jamf Pro API Overview page in the Jamf Developer Portal. API Endpoint Changes For a list of new, deprecated, and removed endpoints, see the Jamf Pro API Changelog. Deprecated API...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "release-notes",
+          "mapId": "3NCZDwxnkFrs89jc8CgOuA",
+          "contentId": "wTDic6w5cIWIC4IYZdE62g",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "New Features and Enhancements",
+            "Jamf Pro API Changes and Enhancements"
+          ]
+        },
+        {
+          "title": "API Roles and Clients",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/API_Roles_and_Clients",
+          "snippet": "The API Roles and Clients functionality in Jamf Pro provides a dedicated interface for controlling access to the Jamf Pro API and the Classic API. You can create custom privilege sets as API roles and then assign them as needed, ensuring API clients have only the necessary capabilities for their...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "8~Su3s5iIX75mNlMixbcBg",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "API Roles and Clients"
+          ]
+        },
+        {
+          "title": "Disabling an API Client",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Disabling_an_API_Client",
+          "snippet": "...an API client that you no longer want to use to generate access tokens for Jamf Pro. Note: Deleting or disabling a client does not disable access for previously generated access tokens that are still valid. In Jamf Pro, navigate to the API client you want to disable. Click Disable API Client....",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "~e2jubHFkJ6BZqfbwopB2Q",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "API Roles and Clients",
+            "Disabling an API Client"
+          ]
+        },
+        {
+          "title": "Configuring the SMTP Server Settings for Google Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_SMTP_Server_Settings_for_Google_Authentication",
+          "snippet": "...Pro. In Jamf Pro, click Settings in the sidebar. In the System section, click SMTP server . Click Edit . Use the Enable SMTP server switch to enable SMTP server. Choose Google Auth from the Authentication method pop-up...the Google authentication workflow. To.... Click Save . Jamf Pro is now configured to...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "5yov0G6IAmAZsLScP~p_5w",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "SMTP Server Integration",
+            "Configuring the SMTP Server Settings for Google Authentication"
+          ]
+        },
+        {
+          "title": "Creating an API Role",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Role",
+          "snippet": "...to an API client in Jamf Pro, you must first create an API role that defines.... In Jamf Pro, click Settings in the sidebar. In the System section, click API Roles and Clients ....for the API role. In the Jamf Pro API role privileges field...of those apps. Jamf Pro will not allow any API roles to be deleted...",
+          "product": "Jamf Pro",
+          "version": "11.31.0",
+          "docType": "documentation",
+          "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+          "contentId": "cEv3adB0SK6QIYGzDGweuA",
+          "otherVersions": [
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "breadcrumb": [
+            "System Settings",
+            "API Roles and Clients",
+            "Creating an API Role"
+          ]
+        }
+      ],
+      "otherSources": [
+        {
+          "title": "Adfs Federation and Jamf Connect Authentication Errors",
+          "url": "https://support.jamf.com/en/articles/11003570-adfs-federation-and-jamf-connect-authentication-errors",
+          "source": "Jamf Support Knowledge Base"
+        }
+      ],
+      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
+    }
+  },
+  {
+    "key": "toc",
+    "label": "TOC — Jamf Pro",
+    "why": "A deep tree: exercises depth indentation and paging.",
+    "tool": "jamf_docs_get_toc",
+    "arguments": {
+      "product": "jamf-pro",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "product": "Jamf Pro",
+      "productId": "jamf-pro",
+      "version": "current",
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "totalEntries": 792,
+      "page": 1,
+      "totalPages": 2,
+      "hasMore": true,
+      "entries": [
+        {
+          "title": "Jamf Pro Documentation",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Documentation",
+          "contentId": "0XFbLuu08~WtiGacnRxp6g",
+          "depth": 0
+        },
+        {
+          "title": "Overview of Technologies",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Overview_of_Technologies",
+          "contentId": "cEHTy60xeNg6_~HxHGCbNQ",
+          "depth": 0
+        },
+        {
+          "title": "Applications and Utilities",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Applications_and_Utilities",
+          "contentId": "jeA~ByvKmmdNr5wbteFl7w",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Pro Web Application",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Web_Application",
+          "contentId": "KZf1OndbFP1amshDGZY80A",
+          "depth": 2
+        },
+        {
+          "title": "End User Apps",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Client_Applications",
+          "contentId": "Ie6kISE98PFevfezceDkxQ",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Administrator Apps",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Administrator_Applications",
+          "contentId": "C149PhXe7uzceHuULOnLfA",
+          "depth": 2
+        },
+        {
+          "title": "Utilities",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Utilities",
+          "contentId": "f2cT2NAz28wKWyUuXxkjHg",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Server Tools",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Server_Tools",
+          "contentId": "hHeAVsXchjThZP6zmuLwpQ",
+          "depth": 2
+        },
+        {
+          "title": "Security",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Security",
+          "contentId": "UOugIjulS8fTM1D7IZGbHA",
+          "depth": 1
+        },
+        {
+          "title": "Passwords",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Passwords",
+          "contentId": "RtlCyRTd5YXI9MxQlZqneA",
+          "depth": 2
+        },
+        {
+          "title": "Communication Protocols",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Communication_Protocols",
+          "contentId": "Dv7HXagQXII5WBidb9C9tg",
+          "depth": 2
+        },
+        {
+          "title": "Secure Shell (SSH)",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Secure_Shell_SSH",
+          "contentId": "_rMEl8mOUyGT58CD4i9SjA",
+          "depth": 3
+        },
+        {
+          "title": "Transport Layer Security (TLS)",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Transport_Layer_Security_TLS",
+          "contentId": "NfKLiSI~f~N8FAwLswoBGA",
+          "depth": 3
+        },
+        {
+          "title": "Public Key Infrastructure",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Public_Key_Infrastructure",
+          "contentId": "4mVLX_kmuJH8X61Wgeux_A",
+          "depth": 2
+        },
+        {
+          "title": "Certificate Authority",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Certificate_Authority",
+          "contentId": "VhSLKmzbwPLu3EHmainKIQ",
+          "depth": 3
+        },
+        {
+          "title": "Simple Certificate Enrollment Protocol",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Simple_Certificate_Enrollment_Protocol",
+          "contentId": "QyEnMP5avP8wuaTZfZnu9A",
+          "depth": 3
+        },
+        {
+          "title": "Certificates",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Certificates",
+          "contentId": "CVYkBlWIjrdpkIVoqOij2g",
+          "depth": 3
+        },
+        {
+          "title": "Signed Applications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Signed_Applications",
+          "contentId": "AfwDAjqOSbwg9ecp_FDNng",
+          "depth": 2
+        },
+        {
+          "title": "Components Installed on Managed Computers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Managed_Computers",
+          "contentId": "gBpAjjSRrqnKsoGVblqeUg",
+          "depth": 1
+        },
+        {
+          "title": "Removing Jamf Components from Computers Enrolled Using a PreStage Enrollment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Removing_Jamf_Components_from_Computers_Enrolled_Using_a_PreStage_Enrollment",
+          "contentId": "qMfLnPtMTwO1kl0a4eWpDQ",
+          "depth": 2
+        },
+        {
+          "title": "Removing Jamf Components from Computers Without an MDM Profile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Removing_Jamf_Components_from_Computers_Without_an_MDM_Profile",
+          "contentId": "~vJAU5RddOsC~BDCoD1Zyw",
+          "depth": 2
+        },
+        {
+          "title": "Components Installed on Mobile Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Mobile_Devices",
+          "contentId": "R4WJUJwMFfiwn~PofUZPvw",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Platform Services and Capabilities",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Platform_Services_and_Capabilities",
+          "contentId": "zMmPle4TVWi~NcF6BXMY8g",
+          "depth": 0
+        },
+        {
+          "title": "Before You Begin",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Before_You_Begin",
+          "contentId": "8AOoSsXQdiDxLl3q9Me8Og",
+          "depth": 0
+        },
+        {
+          "title": "Setting Up Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Setting_Up_Jamf_Pro",
+          "contentId": "Zl_dpDOcKlHngFJj3VW0Pg",
+          "depth": 1
+        },
+        {
+          "title": "The Jamf Pro Dashboard",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/The_Jamf_Pro_Dashboard",
+          "contentId": "Xd_uNUsEQzm0rU45Ypg_OA",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Pro Objects",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Objects",
+          "contentId": "lOhR~1vVzSd6UhG~DIOh0g",
+          "depth": 1
+        },
+        {
+          "title": "Cloning a Jamf Pro Object",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Cloning_a_Jamf_Pro_Object",
+          "contentId": "PWXlM3cEbi7~ot7knW6XYw",
+          "depth": 2
+        },
+        {
+          "title": "Editing a Jamf Pro Object",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Editing_a_Jamf_Pro_Object",
+          "contentId": "t9uD_PjwBXaCXUJMwL1BAQ",
+          "depth": 2
+        },
+        {
+          "title": "Deleting a Jamf Pro Object",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Deleting_a_Jamf_Pro_Object",
+          "contentId": "_TjZhIIOkj_92nZugpvFpg",
+          "depth": 2
+        },
+        {
+          "title": "Viewing the History of a Jamf Pro Object",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_the_History_of_a_Jamf_Pro_Object",
+          "contentId": "y3QkVT5MtYcTt_ABFm1WKw",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Keyboard Shortcuts",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Keyboard_Shortcuts",
+          "contentId": "fIiDB~vJDlqtG9sfwk5R~A",
+          "depth": 1
+        },
+        {
+          "title": "System Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/System_Settings",
+          "contentId": "aCU2J4GAqKvEU0ThTheQ8g",
+          "depth": 0
+        },
+        {
+          "title": "Jamf Pro User Accounts and Groups",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_User_Accounts_and_Groups",
+          "contentId": "P0dU8UZszOi9TtAqCjQ48Q",
+          "depth": 1
+        },
+        {
+          "title": "Creating a Jamf Pro User Group",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Jamf_Pro_User_Group",
+          "contentId": "4E53siaIi2HKCrEpw_qdrg",
+          "depth": 2
+        },
+        {
+          "title": "Creating a Jamf Pro User Account",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Jamf_Pro_User_Account",
+          "contentId": "pv3RslZEUbGPUFKBIaZljg",
+          "depth": 2
+        },
+        {
+          "title": "Configuring Account Preferences",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Account_Preferences",
+          "contentId": "QQ~Fs1xFobaTk7rpzWQd8w",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the Password Policy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_Password_Policy",
+          "contentId": "iI55xKK7ymep9loskklpzw",
+          "depth": 2
+        },
+        {
+          "title": "Unlocking a Jamf Pro User Account",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Unlocking_a_Jamf_Pro_User_Account",
+          "contentId": "w3IE5~BaSONP58D2PBHR1g",
+          "depth": 2
+        },
+        {
+          "title": "Deleting a Jamf Pro User Account",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Deleting_a_Jamf_Pro_User_Account",
+          "contentId": "uk99UT73S7MqWZhB73MA_w",
+          "depth": 2
+        },
+        {
+          "title": "Single Sign-On (SSO)",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Single_Sign-On",
+          "contentId": "BYT_PQyp36MNO_zVcs5dTg",
+          "depth": 1
+        },
+        {
+          "title": "SSO with OIDC Through Jamf Account",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_SSO",
+          "contentId": "2QD~k_oGq~dqyZE3cEyTqw",
+          "depth": 2
+        },
+        {
+          "title": "Enabling OIDC Authentication in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_OIDC_Authentication_in_Jamf_Pro",
+          "contentId": "05~5DUKnEeyNY_7RImg~gw",
+          "depth": 3
+        },
+        {
+          "title": "SSO with SAML",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/SAML-Based_Single_Sign-On",
+          "contentId": "_QESxQ5Ie5XZ14oH2m51Vw",
+          "depth": 2
+        },
+        {
+          "title": "Single Sign-On and Directory Service",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Single_Sign-On_and_LDAP",
+          "contentId": "b0nMBwJ6vMTSCQ6B0aPNqQ",
+          "depth": 3
+        },
+        {
+          "title": "Single Logout",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Single_Logout",
+          "contentId": "GputGDyYuT4bp4YXWK88Lg",
+          "depth": 3
+        },
+        {
+          "title": "Enabling SSO with SAML in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_Single_Sign-On_in_Jamf_Pro",
+          "contentId": "_GFQsyJMn_BfbOHe8PciAA",
+          "depth": 3
+        },
+        {
+          "title": "Testing the Single Sign-On Configuration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Testing_the_Single_Sign_On_Configuration",
+          "contentId": "0B4rx4iSAMBvcLPB9Za~uQ",
+          "depth": 3
+        },
+        {
+          "title": "FIDO2 Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/FIDO2_Authentication",
+          "contentId": "_yc94GpIG45H~CTwJlRJ3w",
+          "depth": 3
+        },
+        {
+          "title": "Enabling FIDO2 Authentication in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_FIDO2_Authentication_in_Jamf_Pro",
+          "contentId": "ZTd1oQvvYoJowFWdgifT8A",
+          "depth": 4
+        },
+        {
+          "title": "Troubleshooting SAML Single Sign-On in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Troubleshooting_Single_Sign-On_in_Jamf_Pro",
+          "contentId": "u7dgdhzgpcqAJK91VBFCfQ",
+          "depth": 3
+        },
+        {
+          "title": "LDAP Directory Service Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/LDAP_Directory_Service_Integration",
+          "contentId": "gWWD~rs1xh~3xD9MfkWKWA",
+          "depth": 1
+        },
+        {
+          "title": "Adding an LDAP Server Using the LDAP Server Assistant",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_an_LDAP_Server_Using_the_LDAP_Server_Assistant",
+          "contentId": "hrCQpWzhCcBAPAbLmc~WUQ",
+          "depth": 2
+        },
+        {
+          "title": "Manually Adding an LDAP Server",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Adding_an_LDAP_Server",
+          "contentId": "4hVgM1GkEhIMpgP8NKc30A",
+          "depth": 2
+        },
+        {
+          "title": "Testing LDAP Attribute Mappings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Testing_LDAP_Attribute_Mappings",
+          "contentId": "FKVp1EPE3ldfY4ktrya04Q",
+          "depth": 2
+        },
+        {
+          "title": "Cloud Identity Providers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Cloud_Identity_Providers",
+          "contentId": "56ePbmv1VNl8rw7IH2SJJw",
+          "depth": 1
+        },
+        {
+          "title": "Google Secure LDAP Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Google_Secure_LDAP_Integration",
+          "contentId": "kEwxj986X_dabHtzEvyTUw",
+          "depth": 2
+        },
+        {
+          "title": "Configuring a Google Cloud Identity Provider Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Google_Cloud_Identity_Provider_Connection",
+          "contentId": "niVkJI0RybXkOBxEiyWbKQ",
+          "depth": 3
+        },
+        {
+          "title": "Default Attribute Mappings for Google Secure LDAP",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Default_Attribute_Mappings_for_Google_Secure_LDAP",
+          "contentId": "HykIDLrO_TpamqCVLE~mug",
+          "depth": 3
+        },
+        {
+          "title": "Microsoft Entra ID Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Azure_AD_Integration",
+          "contentId": "HQn9NK30Yx1oVp3~KHwEDA",
+          "depth": 2
+        },
+        {
+          "title": "Configuring an Entra ID Cloud Identity Provider Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_an_Azure_AD_Cloud_Identity_Provider_Connection",
+          "contentId": "v8SK~VaUwNiVt_Lduy0Wsg",
+          "depth": 3
+        },
+        {
+          "title": "Multi-factor Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Multi-factor_Authentication",
+          "contentId": "vfKRkuy2~ilSw83h0TSeWA",
+          "depth": 3
+        },
+        {
+          "title": "Default Attribute Mappings for Entra ID as a Cloud Identity Provider",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Default_Attribute_Mappings_for_Azure_AD_as_a_Cloud_Identity_Provider",
+          "contentId": "qv5Q0mQZeGRjo7nwHa4DeQ",
+          "depth": 3
+        },
+        {
+          "title": "Support for onPremisesExtensionAttributes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Support_for_onPremisesExtensionAttributes",
+          "contentId": "CNUXBvOPezAyuv_FbW5eXQ",
+          "depth": 3
+        },
+        {
+          "title": "Microsoft Entra ID Migration Assistant",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Azure_AD_Migration_Assistant",
+          "contentId": "LsDnzplYPq_VuOgHh6uWew",
+          "depth": 3
+        },
+        {
+          "title": "Migrating an LDAP Server to an Entra ID Cloud Identity Provider Instance",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Migrating_an_LDAP_Server_to_an_Azure_AD_Cloud_Identity_Provider_Instance",
+          "contentId": "eVuqwQhTaFW_J0gXI5~ixQ",
+          "depth": 4
+        },
+        {
+          "title": "Testing Cloud Identity Provider Attribute Mappings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Testing_Cloud_Identity_Provider_Attribute_Mappings",
+          "contentId": "03buM~V1ciFRUTnjl4CGHA",
+          "depth": 2
+        },
+        {
+          "title": "SMTP Server Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/SMTP_Server_Integration",
+          "contentId": "bAVqwO9BNuYgsNo0k~ErnA",
+          "depth": 1
+        },
+        {
+          "title": "Configuring the SMTP Server Settings for Basic Credentials",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_SMTP_Server_Settings",
+          "contentId": "unmiAnGFf7Mc6xN_9~DehQ",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the SMTP Server Settings for Microsoft Graph API",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_SMTP_Server_Settings_for_Microsoft_Graph_API",
+          "contentId": "QJ_~nLWs8HXeUPSGmiA6aw",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the SMTP Server Settings for Google Authentication",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_SMTP_Server_Settings_for_Google_Authentication",
+          "contentId": "5yov0G6IAmAZsLScP~p_5w",
+          "depth": 2
+        },
+        {
+          "title": "Testing the SMTP Server Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Testing_the_SMTP_Server_Settings",
+          "contentId": "2QbSr8kG~GP5kRi26CMhqQ",
+          "depth": 2
+        },
+        {
+          "title": "Email Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Email_Notifications",
+          "contentId": "dkw3VJy5Au9gYDexfQQ9CA",
+          "depth": 1
+        },
+        {
+          "title": "Enabling Email Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_Email_Notifications",
+          "contentId": "qmErLKGFlwrLqayp7s3yfQ",
+          "depth": 2
+        },
+        {
+          "title": "Activation Code",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Activation_Code",
+          "contentId": "0oBERHtZtQf_bPrhYEKbaQ",
+          "depth": 1
+        },
+        {
+          "title": "Manually Updating the Activation Code",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Updating_the_Activation_Code",
+          "contentId": "9wVuL06Gph_ZNruuAfDaLw",
+          "depth": 2
+        },
+        {
+          "title": "Change Management",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Change_Management",
+          "contentId": "60Vfg3oAb1cuUud24pqqcg",
+          "depth": 1
+        },
+        {
+          "title": "General Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_ChangeMgmtLogs",
+          "contentId": "OQxqtZfDvzKhbi_pFYHFpA",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the Change Management Settings for On-Premise Environments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_Change_Management_Settings_for_On-Premise_Environments",
+          "contentId": "Xh4LVhD93Cw~rxY9us2UbQ",
+          "depth": 2
+        },
+        {
+          "title": "Viewing Change Management Logs in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_Change_Management_Logs_in_Jamf_Pro",
+          "contentId": "mtnKORVro9TatHVKXOypmw",
+          "depth": 2
+        },
+        {
+          "title": "Impact Alert Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Impact_Alert_Notifications",
+          "contentId": "OSo15BDgElC6vAzWC0P0xA",
+          "depth": 1
+        },
+        {
+          "title": "Configuring Impact Alert Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Impact_Alert_Notifications",
+          "contentId": "P_jNi_WeiXAHAQtIH7oM8w",
+          "depth": 2
+        },
+        {
+          "title": "SSL Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/SSL_Certificate",
+          "contentId": "TcYOMFX3dwO~leYs3mxpOQ",
+          "depth": 1
+        },
+        {
+          "title": "Uploading an SSL Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_or_Uploading_an_SSL_Certificate",
+          "contentId": "GI7bpzlLlun1Et0XWVMokA",
+          "depth": 2
+        },
+        {
+          "title": "Maintenance Pages",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Maintenance_Pages",
+          "contentId": "mQx21ApPQgESEbDMwCX1Zg",
+          "depth": 1
+        },
+        {
+          "title": "Creating a Maintenance Page Configuration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Maintenance_Page_Configuration",
+          "contentId": "iErHqSJQ48z~PRYtvGYZPw",
+          "depth": 2
+        },
+        {
+          "title": "Log Flushing",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Log_Flushing",
+          "contentId": "6zrAxQg1GyOLq2ODgDUohg",
+          "depth": 1
+        },
+        {
+          "title": "Scheduling Log Flushing",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Scheduling_Log_Flushing",
+          "contentId": "vHfBTurz6JazbqHJ41H_cw",
+          "depth": 2
+        },
+        {
+          "title": "Manually Flushing Logs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Flushing_Logs",
+          "contentId": "2zdc4s~X_x1kRK2VeSgTNg",
+          "depth": 2
+        },
+        {
+          "title": "API Roles and Clients",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/API_Roles_and_Clients",
+          "contentId": "8~Su3s5iIX75mNlMixbcBg",
+          "depth": 1
+        },
+        {
+          "title": "Creating an API Role",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Role",
+          "contentId": "cEv3adB0SK6QIYGzDGweuA",
+          "depth": 2
+        },
+        {
+          "title": "Creating an API Client",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Client",
+          "contentId": "Gzm_I7vshd9eh3SQH~T88w",
+          "depth": 2
+        },
+        {
+          "title": "Generating a Client Secret",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Generating_a_Client_Secret",
+          "contentId": "djimPeSuruzCRlaCIC6sjA",
+          "depth": 2
+        },
+        {
+          "title": "Rotating a Client Secret",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Rotating_a_Client_Secret",
+          "contentId": "JXAhiMxziHpWlJiW4sdHIw",
+          "depth": 2
+        },
+        {
+          "title": "Disabling an API Client",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Disabling_an_API_Client",
+          "contentId": "~e2jubHFkJ6BZqfbwopB2Q",
+          "depth": 2
+        },
+        {
+          "title": "Login Page",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Login_Page",
+          "contentId": "ZpoL4nY3t9ZFeL3_HNqJFg",
+          "depth": 1
+        },
+        {
+          "title": "Including a Login Message",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Including_a_Login_Message",
+          "contentId": "S645dHsQqUHe1PazfM_Gog",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Summary",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Summary",
+          "contentId": "js~ei6V~qRd0CCDLfjyQeQ",
+          "depth": 1
+        },
+        {
+          "title": "Viewing the Jamf Pro Summary",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_the_Jamf_Pro_Summary",
+          "contentId": "PSoQs7L3g0a9YQKT8k2DIg",
+          "depth": 2
+        },
+        {
+          "title": "Sending the Jamf Pro Summary to Jamf Automatically",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Sending_the_Jamf_Pro_Summary_to_Jamf",
+          "contentId": "c1YRaWsmZBNavDrcpmryqA",
+          "depth": 2
+        },
+        {
+          "title": "Sending the Jamf Pro Summary to Jamf Manually",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Sending_the_Jamf_Pro_Summary_to_Jamf_Manually",
+          "contentId": "Stm5tDTAJkUmTRBSIZ0E0Q",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Server Logs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Server_Logs",
+          "contentId": "yrAh0~imrlv2t6ptgBH49Q",
+          "depth": 1
+        },
+        {
+          "title": "Viewing and Downloading the Jamf Pro Server Log",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Downloading_the_Jamf_Pro_Server_Log",
+          "contentId": "tNGMxSABI_GqVFeI~WgWMQ",
+          "depth": 2
+        },
+        {
+          "title": "Viewing and Downloading the Volume Purchasing Log",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Downloading_the_Volume_Purchasing_Log",
+          "contentId": "rckT1NEFnKyvWTvWZa5m5A",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro Health Check Page",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_Health_Check_Page",
+          "contentId": "J4b4jQnAU6ewGfc~OaNyoA",
+          "depth": 1
+        },
+        {
+          "title": "Using the Jamf Pro Health Check Page",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Using_the_Jamf_Pro_Health_Check_Page",
+          "contentId": "xVLKZSdRP8AeOTSARN11XQ",
+          "depth": 2
+        },
+        {
+          "title": "Global Management Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Global_Management_Settings",
+          "contentId": "Srl5TW6jVAEV1KWUyYrejw",
+          "depth": 0
+        },
+        {
+          "title": "Push Certificates",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Push_Certificates",
+          "contentId": "o1~VpwscVa018fz6GeCLBg",
+          "depth": 1
+        },
+        {
+          "title": "Creating a Push Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Push_Certificate",
+          "contentId": "tx~Kja6v0uJt1CT5BwhW3g",
+          "depth": 2
+        },
+        {
+          "title": "Uploading a Push Certificate (.p12)",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_a_Push_Certificate_.p12",
+          "contentId": "zzfUceLp1gUQ6gJLGjA5MA",
+          "depth": 2
+        },
+        {
+          "title": "Renewing the Push Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Push_Certificate",
+          "contentId": "jhaRzrAeNYDDWe~3T8rdgw",
+          "depth": 2
+        },
+        {
+          "title": "Deleting the Push Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Deleting_the_Push_Certificate",
+          "contentId": "hhdRXYhe7uB3Hm6JHLF7_A",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Push Proxy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Push_Proxy",
+          "contentId": "tnAHZIb6fmVn7h6IDDguLA",
+          "depth": 1
+        },
+        {
+          "title": "Requesting or Renewing a Proxy Server Token",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Requesting_or_Renewing_a_Proxy_Server_Token",
+          "contentId": "PirHifHhuHPl0VYrubTlRw",
+          "depth": 2
+        },
+        {
+          "title": "GSX Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GSX_Connection",
+          "contentId": "kATbkEsNBUCJBdLH5~NWCw",
+          "depth": 1
+        },
+        {
+          "title": "Configuring the GSX Connection Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_GSX_Connection_Settings",
+          "contentId": "SYLAwZkYVZruzo1VU3_fHQ",
+          "depth": 2
+        },
+        {
+          "title": "Testing the GSX Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Testing_the_GSX_Connection",
+          "contentId": "uX89clfDPihAH5bC~0UbOA",
+          "depth": 2
+        },
+        {
+          "title": "Populating GSX Purchasing Information for Individual Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Populating_GSX_Purchasing_Information_for_Individual_Devices",
+          "contentId": "k5zoScNuJcCRaJmYwsktZg",
+          "depth": 2
+        },
+        {
+          "title": "Populating GSX Purchasing Information via Mass Action",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Populating_GSX_Purchasing_Information_via_Mass_Action",
+          "contentId": "D8Jh7gKyBABnKy_rYAKJJg",
+          "depth": 2
+        },
+        {
+          "title": "Renewing the Apple Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Apple_Certificate",
+          "contentId": "GJgWTPCBZG~XIHRpa5wBtw",
+          "depth": 2
+        },
+        {
+          "title": "Inventory Preload",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Inventory_Preload",
+          "contentId": "5X3ylQWwHa60kCxUVFvaIw",
+          "depth": 1
+        },
+        {
+          "title": "Example Workflow",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Example_Workflow",
+          "contentId": "IGE7hhcxgRAUkU4ZwnSZPg",
+          "depth": 2
+        },
+        {
+          "title": "Validation",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Validation",
+          "contentId": "4Y3V4XVzB_apU4t1x3OHdw",
+          "depth": 2
+        },
+        {
+          "title": "Users",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Users",
+          "contentId": "lXvFMSvL0NrlFdIqYN8EMQ",
+          "depth": 2
+        },
+        {
+          "title": "When Data is Applied",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/When_Data_is_Applied",
+          "contentId": "51L2Jk4QWOvquXQvrQ9QcQ",
+          "depth": 2
+        },
+        {
+          "title": "Extension Attributes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Extension_Attributes",
+          "contentId": "DyryJOCdaieVeYtEVCW4rg",
+          "depth": 2
+        },
+        {
+          "title": "Uploading a CSV File Using Inventory Preload",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_a_CSV_File_Using_Inventory_Preload",
+          "contentId": "k6zXjSey1QEQmNbC8OaHBw",
+          "depth": 2
+        },
+        {
+          "title": "Viewing and Exporting Active Data",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Exporting_Active_Data",
+          "contentId": "4P3Jnwm5o6V_wD29ro~9DA",
+          "depth": 2
+        },
+        {
+          "title": "Deleting Active Data",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Deleting_Active_Data",
+          "contentId": "hWKUfmve4gMmfSvy8h8q7w",
+          "depth": 2
+        },
+        {
+          "title": "Viewing Inventory Preload Activity History",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_Inventory_Preload_Activity_History",
+          "contentId": "PvCd2v4pxaHjJq7sFn0hCw",
+          "depth": 2
+        },
+        {
+          "title": "User-Initiated Enrollment Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/User-Initiated_Enrollment_Settings",
+          "contentId": "1qQBfpeYP9POBZMzaEvT8w",
+          "depth": 1
+        },
+        {
+          "title": "Configuring User-Initiated Enrollment Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_User-Initiated_Enrollment_Settings",
+          "contentId": "jb8ueZuhdTSLKug3WNtTsQ",
+          "depth": 2
+        },
+        {
+          "title": "User-Initiated Enrollment Messaging Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Messaging_Settings",
+          "contentId": "jkUYHHuMfWexBoLSsGRBpw",
+          "depth": 3
+        },
+        {
+          "title": "Managed Local Administrator Account Creation During Computer Enrollment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Management_Account_Creation_During_Computer_Enrollment",
+          "contentId": "Ib5g2g8ulBuKhf5ataKRfA",
+          "depth": 2
+        },
+        {
+          "title": "Enrollment of Personally Owned Mobile Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enrollment_of_Personally_Owned_Mobile_Devices",
+          "contentId": "6_396VnuEu4_WaX_yd4HWg",
+          "depth": 2
+        },
+        {
+          "title": "Automated Device Enrollment Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_Integration",
+          "contentId": "baBJgkbwWsX2X9emI4I7cQ",
+          "depth": 1
+        },
+        {
+          "title": "Downloading a Public Key",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Downloading_a_Public_Key",
+          "contentId": "z377AC0v8X3pOooX2yHgcA",
+          "depth": 2
+        },
+        {
+          "title": "Obtaining the Service Token File",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Obtaining_the_Server_Token_File",
+          "contentId": "rs~t7~ZlmAtXbEyHuDjtNA",
+          "depth": 2
+        },
+        {
+          "title": "Obtaining the Service Token File from Apple Business",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Obtaining_the_Service_Token_File_from_Apple_Business",
+          "contentId": "tY0iMcFFI2WMC5r~IKI35Q",
+          "depth": 3
+        },
+        {
+          "title": "Obtaining the Service Token File from Apple School Manager",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Obtaining_the_Service_Token_File_from_Apple_School_Manager",
+          "contentId": "9ka9t41joXYbdrcSXix6yQ",
+          "depth": 3
+        },
+        {
+          "title": "Uploading the Service Token File to Configure Automated Device Enrollment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_the_Server_Token_File_to_Configure_Automated_Device_Enrollment",
+          "contentId": "Sw_oR54ZZ8txlj7eaRtPoA",
+          "depth": 2
+        },
+        {
+          "title": "Replacing the Server Token File to Renew an Automated Device Enrollment Instance",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Replacing_the_Service_Token_File_to_Renew_an_Automated_Device_Enrollment_Instance",
+          "contentId": "ZBTleCIeicPuOxdm7HtR0A",
+          "depth": 2
+        },
+        {
+          "title": "Replacing the Server Token File with Apple Business",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Replacing_the_Service_Token_File_with_Apple_Business",
+          "contentId": "sVqXV~6o2qPOJmDDnNigMQ",
+          "depth": 3
+        },
+        {
+          "title": "Replacing the Server Token with Apple School Manager",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Replacing_the_Service_Token_File_with_Apple_School_Manager",
+          "contentId": "fBVzCr78eofPPpfNPYuSig",
+          "depth": 3
+        },
+        {
+          "title": "Computer or Mobile Device Removal from Apple Business or Apple School Manager",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Device_Removal_from_Apple_School_Manager_or_Apple_Business_Manager",
+          "contentId": "5Kc9DdI6t9cTdEl15IaBzQ",
+          "depth": 2
+        },
+        {
+          "title": "Enrollment Customization Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enrollment_Customization_Settings",
+          "contentId": "PH8J1bBR2tebtctBN83xGw",
+          "depth": 1
+        },
+        {
+          "title": "Creating an Enrollment Customization Configuration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_Enrollment_Customization_Configuration",
+          "contentId": "AclFCh2FS9OkeQdEWId5~g",
+          "depth": 2
+        },
+        {
+          "title": "PreStage Panes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/PreStage_Panes",
+          "contentId": "xDvE4hyZU2xvC7Ny2nPI1A",
+          "depth": 2
+        },
+        {
+          "title": "Settings for Branding",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Settings_for_Branding",
+          "contentId": "uMYAdLhnKt2Zi_HRpcaMfA",
+          "depth": 2
+        },
+        {
+          "title": "Re-enrollment Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Re-enrollment_Settings",
+          "contentId": "mbSo2b5Q5~fwc4t~pfkwBg",
+          "depth": 1
+        },
+        {
+          "title": "Configuring the Re-enrollment Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_Re-enrollment_Settings",
+          "contentId": "q2ERCBW9O5zXMh7eIuozRQ",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Pro URL",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Pro_URL",
+          "contentId": "DZtBTUBZ~0uvTDc1Lr~rhQ",
+          "depth": 1
+        },
+        {
+          "title": "Viewing or Configuring the Jamf Pro URLs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_or_Configuring_the_Jamf_Pro_URLs",
+          "contentId": "w_L6OomSHKTRTChWLoSc9w",
+          "depth": 2
+        },
+        {
+          "title": "MDM Profile Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/MDM_Profile_Settings",
+          "contentId": "RaPpiEpJyzcYxJvL1gaAYw",
+          "depth": 1
+        },
+        {
+          "title": "Configuring MDM Profile Renewal for Computers or Mobile Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_MDM_Profile_Renewal_for_Computers_or_Mobile_Devices",
+          "contentId": "P9QnbP_6Ksa6ZAVmtxE5DQ",
+          "depth": 2
+        },
+        {
+          "title": "PKI Certificates",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/PKI_Certificates",
+          "contentId": "05lQjg~NavA8HI49aGJV_Q",
+          "depth": 1
+        },
+        {
+          "title": "Viewing and Exporting Certificates",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Exporting_Certificates",
+          "contentId": "OuH3y7KigEEb4PfV2xPH4g",
+          "depth": 2
+        },
+        {
+          "title": "The Built-in CA",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/The_Built-in_CA",
+          "contentId": "yAGWT7UtKbDDQ_a0wQ0WWA",
+          "depth": 2
+        },
+        {
+          "title": "Downloading the Built-in CA Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Downloading_the_Built-in_CA_Certificate",
+          "contentId": "N6XKxlSBcAewif2nQH63Gg",
+          "depth": 3
+        },
+        {
+          "title": "Revoking a Certificate from the Built-in CA",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Revoking_a_Certificate_from_the_Built-in_CA",
+          "contentId": "Fg0D45rsAFkffKVvO0kFiw",
+          "depth": 3
+        },
+        {
+          "title": "Creating a Built-in CA Certificate from a CSR",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Built-in_CA_Certificate_from_a_CSR",
+          "contentId": "FcA~aH_dg8pnO0gevPIIow",
+          "depth": 3
+        },
+        {
+          "title": "Creating a Backup of the Built-in CA Certificate",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Backup_of_the_Built-in_CA_Certificate",
+          "contentId": "oq404iSoiYSJFxZOApEw7Q",
+          "depth": 3
+        },
+        {
+          "title": "Renewing the Built-in CA",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Built-in_CA",
+          "contentId": "pcVDYvkm0LtQANtzvgGneQ",
+          "depth": 3
+        },
+        {
+          "title": "Further Considerations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Further_Considerations_Renewing_Built-in_CA",
+          "contentId": "uhm6Nb3kiHVu9hcEq53mbg",
+          "depth": 4
+        },
+        {
+          "title": "Third-Party CAs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Third-Party_CAs",
+          "contentId": "~gU1vUokLqVrCKv927zbEA",
+          "depth": 2
+        },
+        {
+          "title": "Adding a Third-Party PKI Certificate Authority to the Jamf Pro Dashboard",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Third_Party_PKI_Certificate_Authority_to_the_Jamf_Pro_Dashboard",
+          "contentId": "8eTG9VEYNb4QS0GLlphDNA",
+          "depth": 3
+        },
+        {
+          "title": "External CAs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/External_CAs",
+          "contentId": "mb7F0Dtx09GFnEHj6lqPcA",
+          "depth": 2
+        },
+        {
+          "title": "Specifying SCEP Parameters for an External CA",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Specifying_SCEP_Parameters_for_an_External_CA",
+          "contentId": "idetwuBVANDeulJSj~s6WQ",
+          "depth": 3
+        },
+        {
+          "title": "Uploading Signing and CA Certificates for an External CA",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_Signing_and_CA_Certificates_for_an_External_CA",
+          "contentId": "pQa6Ll3t6lT6FMomjBAreA",
+          "depth": 3
+        },
+        {
+          "title": "Volume Purchasing Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Volume_Purchasing_Integration",
+          "contentId": "8izGKXMLjfubP_aQjTiElQ",
+          "depth": 1
+        },
+        {
+          "title": "Volume Purchase Location Considerations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Volume_Purchase_Location_Considerations",
+          "contentId": "fYK_B3FohQ4NrsmMUx5FvQ",
+          "depth": 2
+        },
+        {
+          "title": "Obtaining the Content Token from Apple Business",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Obtaining_the_Content_Token_from_Apple_Business",
+          "contentId": "uuf4ToNqOjLe48dlky_zaQ",
+          "depth": 2
+        },
+        {
+          "title": "Obtaining the Content Token from Apple School Manager",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Obtaining_the_Content_Token_from_Apple_School_Manager",
+          "contentId": "2dnctqPCzAP0pAVvCyCtIQ",
+          "depth": 2
+        },
+        {
+          "title": "Adding a Volume Purchasing Location to Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Location",
+          "contentId": "1OXoi4v7JANu80WaE3R2JA",
+          "depth": 2
+        },
+        {
+          "title": "Adding Volume Purchasing Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_Volume_Purchasing_Notifications",
+          "contentId": "KWCw46aiOBd28WYCuY6M9Q",
+          "depth": 2
+        },
+        {
+          "title": "Renewing or Replacing a Content Token from Apple Business",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_or_Replacing_a_Service_Token_from_Apple_Business_Manager",
+          "contentId": "9OLKoqcRyRbUiu7YlV6EAw",
+          "depth": 2
+        },
+        {
+          "title": "Renewing or Replacing a Content Token from Apple School Manager",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_or_Replacing_a_Content_Token_from_Apple_School_Manager",
+          "contentId": "zO4IzhFrJbPbWFzylduDag",
+          "depth": 2
+        },
+        {
+          "title": "Categories",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Categories",
+          "contentId": "8QRlK34Mpzphzv276_L50w",
+          "depth": 1
+        },
+        {
+          "title": "Adding a Category to Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Category_to_Jamf_Pro",
+          "contentId": "8hLGazb0kZ1PI6AQMll5Zg",
+          "depth": 2
+        },
+        {
+          "title": "Event Logs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Event_Logs",
+          "contentId": "5k3ZVskw3AocMrwIZXzNzA",
+          "depth": 1
+        },
+        {
+          "title": "Viewing Event Logs",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_Event_Logs",
+          "contentId": "kCHTSZsk6KeA1HBE8wxiKw",
+          "depth": 2
+        },
+        {
+          "title": "Webhooks",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Webhooks",
+          "contentId": "5dbAiTZA0jJiCpVMyrD4~w",
+          "depth": 1
+        },
+        {
+          "title": "Configuring a Webhook",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Webhook",
+          "contentId": "D~o5LADZZtynHc4_6j0tfA",
+          "depth": 2
+        },
+        {
+          "title": "AirPlay Permissions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/AirPlay_Permissions",
+          "contentId": "spx~FM_foTG9jAqZL_itrA",
+          "depth": 1
+        },
+        {
+          "title": "Creating an AirPlay Permission",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_AirPlay_Permission",
+          "contentId": "FrfPE7UC6zvFizmByyYpPQ",
+          "depth": 2
+        },
+        {
+          "title": "Device Compliance",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Device_Compliance",
+          "contentId": "OJ5BOYXhm~Wc2Yq6g_tYVQ",
+          "depth": 1
+        },
+        {
+          "title": "Context-Aware Access with Google Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Google_BeyondCorp_Enterprise_Integration",
+          "contentId": "HTG7E2MISWIvnnSCFlqUHQ",
+          "depth": 1
+        },
+        {
+          "title": "Integrating Jamf Pro with Context-Aware Access",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Integrating_Jamf_Pro_with_BeyondCorp_Enterprise_Integration_for_macOS",
+          "contentId": "RMcNkaes_Lfs8HOA2Aishw",
+          "depth": 2
+        },
+        {
+          "title": "General Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_BeyondCorp",
+          "contentId": "O9Gpl2YFC5HC64yvVG8dqA",
+          "depth": 2
+        },
+        {
+          "title": "Creating Context-Aware Access Smart Groups",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_BeyondCorp_Enterprise_Smart_Groups",
+          "contentId": "6T0Me2dB1M9r6UL2WyJp3w",
+          "depth": 2
+        },
+        {
+          "title": "Enabling the Context-Aware Access Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_the_BeyondCorp_Enterprise_Integration",
+          "contentId": "47m_aFPKNSW0icbOGVN1XA",
+          "depth": 2
+        },
+        {
+          "title": "Computer Registration End User Experience with Context-Aware Access",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Registration_with_Google_End_User_Experience",
+          "contentId": "nq96lW0KO3yqtneNAyOBWA",
+          "depth": 2
+        },
+        {
+          "title": "Mobile Device Registration End User Experience with Context-Aware Access",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Registering_a_Device_with_Google",
+          "contentId": "~wTbgr6KrYKwbqwoY~ig2w",
+          "depth": 2
+        },
+        {
+          "title": "Creating and Assigning a Context-Aware Access Policy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_and_Assigning_a_Context-Aware_Policy",
+          "contentId": "VdkQSJGYJSnQN0i9Xq3jxg",
+          "depth": 2
+        },
+        {
+          "title": "Cloud Services Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Cloud_Services_Connection",
+          "contentId": "fygVzUWdq~iw~ialB7P86g",
+          "depth": 1
+        },
+        {
+          "title": "Enabling the Cloud Services Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_the_Cloud_Services_Connection",
+          "contentId": "kk7zZBJ6fOckd9nrF~MaMQ",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Application Integrations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Application_Integrations",
+          "contentId": "tSxV8NrYoo8siGxsid96nw",
+          "depth": 0
+        },
+        {
+          "title": "Jamf Parent Integration with Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Parent_Integration_with_Jamf_Pro",
+          "contentId": "vgA9P91p4JBNHuuJLJRMAA",
+          "depth": 1
+        },
+        {
+          "title": "Integrating Jamf Parent with Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Integrating_Jamf_Parent_with_Jamf_Pro",
+          "contentId": "m1~ezW8RQog1mv8~xtRm1g",
+          "depth": 2
+        },
+        {
+          "title": "Parent Experience for Jamf Pro Integrations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Parent_Experience_for_Jamf_Pro_Integrations",
+          "contentId": "HvpftFSDPtApO_wbME_Zdw",
+          "depth": 2
+        },
+        {
+          "title": "Safelisting Apps from Jamf Parent Restrictions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Safelisting_Apps_from_Jamf_Parent_Restrictions",
+          "contentId": "TBrSwPiNI1ZG~9K7vkuDRA",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Teacher Integration with Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Teacher_Integration_with_Jamf_Pro",
+          "contentId": "Job1rsaIlJ7H74ad6ChZfg",
+          "depth": 1
+        },
+        {
+          "title": "Configuring Jamf Teacher Settings in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Jamf_Teacher_Settings_in_Jamf_Pro",
+          "contentId": "Nj3LaSpAhBZCfDWJjR_Ulw",
+          "depth": 2
+        },
+        {
+          "title": "Configuring and Distributing the Jamf Teacher App",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_and_Distributing_the_Jamf_Teacher_App",
+          "contentId": "xnATz8_arFuQSTaG92brOA",
+          "depth": 2
+        },
+        {
+          "title": "Safelisting Apps from Jamf Teacher Restrictions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Safelisting_Apps_from_Jamf_Teacher_Restrictions",
+          "contentId": "4IjGfe9t3HLFhRS5kbEkUw",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Protect Integration with Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Protect_Integration_with_Jamf_Pro",
+          "contentId": "mMj8qgFHbg1u0a4m9nWIlQ",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Protect Plans in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Protect_Plans_in_Jamf_Pro",
+          "contentId": "EInGvZHgoiPn1uTRkfmWvA",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Connect Integration with Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Connect_Integration_with_Jamf_Pro",
+          "contentId": "V1JQJ816QochGMLsk02IBQ",
+          "depth": 1
+        },
+        {
+          "title": "Creating Jamf Connect Configuration Profiles Using Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Configuration_Profile_using_Jamf_Pro",
+          "contentId": "mFK8RZ1RoYqL_mwJI4s4Bg",
+          "depth": 2
+        },
+        {
+          "title": "Configuring Jamf Connect Deployment and Update Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Jamf_Connect__Deployment_and_Update_Settings",
+          "contentId": "7Bq5IB3UWyVW0o~WNB8~SQ",
+          "depth": 2
+        },
+        {
+          "title": "Viewing and Retrying Jamf Connect Deployments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Retrying_Jamf_Connect_Deployments",
+          "contentId": "VJBbcSGxYVZPbzIw_Y6tlw",
+          "depth": 2
+        },
+        {
+          "title": "Self Service",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service",
+          "contentId": "E_1XqKwMrCZKDY3OqBKqqw",
+          "depth": 0
+        },
+        {
+          "title": "Self Service for macOS",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS",
+          "contentId": "ZYTPv7SGezVYzil4rTG0Tw",
+          "depth": 1
+        },
+        {
+          "title": "Self Service Classic for macOS Installation Methods",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_Installation_Methods",
+          "contentId": "ndYPWucr9GtYqV0apS90dA",
+          "depth": 2
+        },
+        {
+          "title": "General Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_SSmacOSInstall",
+          "contentId": "ta~7KCwI42mpCzkUCgoggQ",
+          "depth": 3
+        },
+        {
+          "title": "Installing Self Service for macOS Automatically",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Installing_Self_Service_for_macOS_Automatically",
+          "contentId": "dY1x5gF8PC7s12pva6cfqA",
+          "depth": 3
+        },
+        {
+          "title": "Installing Self Service for macOS Using a Policy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Installing_Self_Service_for_macOS_Using_a_Policy",
+          "contentId": "wmVLGxH28LGIw9B0VFZgdQ",
+          "depth": 3
+        },
+        {
+          "title": "macOS Onboarding",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/macOS_Onboarding",
+          "contentId": "9raZneRTAUmwrX1M7AKBMA",
+          "depth": 2
+        },
+        {
+          "title": "Excluding Computers from macOS Onboarding",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Excluding_Computers_from_macOS_Onboarding",
+          "contentId": "4F8URQ5XUusCMaLzQTn4YQ",
+          "depth": 3
+        },
+        {
+          "title": "Creating a Smart Group to Identify Computers for Exclusion",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Smart_Group_for_macOS_Onboarding",
+          "contentId": "jCqL5ngcpDx~fP~tDmx2nA",
+          "depth": 4
+        },
+        {
+          "title": "Creating a Script for macOS Onboarding Exclusion",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Script_for_macOS_Onboarding",
+          "contentId": "E70~aGDk3UkaX1ILNlH95Q",
+          "depth": 4
+        },
+        {
+          "title": "Creating a Policy for macOS Onboarding Exclusion",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Policy_for_macOS_Onboarding",
+          "contentId": "9hiCeMyxZ~IScJciAflMqA",
+          "depth": 4
+        },
+        {
+          "title": "Enabling macOS Onboarding",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_macOS_Onboarding",
+          "contentId": "3XL7XJrzMPTnHQVxBhqRsA",
+          "depth": 3
+        },
+        {
+          "title": "Adding Items to macOS Onboarding",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_macOS_Onboarding",
+          "contentId": "pDPoqdNswP72jzQgHOJObg",
+          "depth": 3
+        },
+        {
+          "title": "Self Service for macOS User Login Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_User_Login_Settings",
+          "contentId": "nrw4Jgq6kdWRGQziTR~O1Q",
+          "depth": 2
+        },
+        {
+          "title": "Configuring Self Service for macOS User Login",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Jamf_Self_Service_for_macOS_User_Login",
+          "contentId": "I0gLq6BrrkvbZHNVNidJWA",
+          "depth": 3
+        },
+        {
+          "title": "Self Service for macOS Configuration Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_Configuration_Settings",
+          "contentId": "KVxtPSoKQHsqC0COFW0Irw",
+          "depth": 2
+        },
+        {
+          "title": "Configuring Self Service for macOS",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Jamf_Self_Service_for_macOS",
+          "contentId": "CL3Er4IDMIn3jX6UN8PnoA",
+          "depth": 3
+        },
+        {
+          "title": "Self Service for macOS Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_Notifications",
+          "contentId": "zRRxORrMH66hmMhSMzwImw",
+          "depth": 2
+        },
+        {
+          "title": "Enabling Self Service Notifications",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_Self_Service_Notifications",
+          "contentId": "CITTkiGyTNn9xnGH~NllzQ",
+          "depth": 3
+        },
+        {
+          "title": "Self Service for macOS Branding Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_Branding_Settings",
+          "contentId": "A2urIBkYSSXsgJui8Xu0CQ",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the Branding Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring-the-Branding-Settings",
+          "contentId": "0nogkohSmN7SEAGQHhFTbw",
+          "depth": 3
+        },
+        {
+          "title": "Bookmarks",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Bookmarks",
+          "contentId": "tClMrYAlZsRbE5FVWpldFg",
+          "depth": 2
+        },
+        {
+          "title": "Configuring a Bookmark",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Bookmark",
+          "contentId": "EtGZnApq~vdGiSRx1oW8WA",
+          "depth": 3
+        },
+        {
+          "title": "Items Available to Users in Self Service for macOS",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/items_Available_to_Users_in_Jamf_Self_Service_for_macOS",
+          "contentId": "ecRx6V3I0fZra2WesX0~EQ",
+          "depth": 2
+        },
+        {
+          "title": "Self Service for macOS URL Schemes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_macOS_URL_Schemes",
+          "contentId": "7Ojl0FC6DCSez3ZMEfoPEA",
+          "depth": 2
+        },
+        {
+          "title": "Self Service for Mobile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_Mobile_Devices",
+          "contentId": "db_YC~~fy8Q~JZHITgijeQ",
+          "depth": 1
+        },
+        {
+          "title": "Self Service for Mobile Settings in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_iOS",
+          "contentId": "QAm5usOEMYTbgU8n7wAMCw",
+          "depth": 2
+        },
+        {
+          "title": "Self Service Version Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_Self_Service",
+          "contentId": "hQ~vOFy0oPsmSf~bUj3rew",
+          "depth": 3
+        },
+        {
+          "title": "Manually Installing Self Service with Volume Purchasing",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Install_Self_Service_with_Volume_Purchasing",
+          "contentId": "sE6yZ7sfR6SZfNiFJZfXvw",
+          "depth": 3
+        },
+        {
+          "title": "Automatically Installing Self Service for Mobile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automatically_Installing_Self_Service_for_iOS",
+          "contentId": "eouoMKD7BKjsCA4qwqAiug",
+          "depth": 3
+        },
+        {
+          "title": "Manually Installing Self Service for Mobile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Installing_Self_Service_for_iOS",
+          "contentId": "rqXlDxef6YZboFA8rDxhsw",
+          "depth": 3
+        },
+        {
+          "title": "Installation Experience",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Installation_Experience",
+          "contentId": "7WZBXbmdbpaCntkBVa8nJA",
+          "depth": 3
+        },
+        {
+          "title": "Self Service for Mobile Branding Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_iOS_Branding_Settings",
+          "contentId": "iH1YC7XIcHNm3Cgl4v6lcg",
+          "depth": 2
+        },
+        {
+          "title": "Configuring the Branding Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring-the-Branding-Settings",
+          "contentId": "0nogkohSmN7SEAGQHhFTbw",
+          "depth": 3
+        },
+        {
+          "title": "App Request",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/App_Request",
+          "contentId": "2QztDCeTa554zkJdUTl2ZA",
+          "depth": 2
+        },
+        {
+          "title": "Configuring App Request",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_App_Request",
+          "contentId": "r9FQMg~wAa9HHCNOD6P5wA",
+          "depth": 3
+        },
+        {
+          "title": "App Request User Experience",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/App_Request_User_Experience",
+          "contentId": "Arrn9oH5bDqXxgCdyUeBwg",
+          "depth": 3
+        },
+        {
+          "title": "Items Available to Users in Self Service for Mobile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Items_Available_to_Users_in_Jamf_Self_Service_for_iOS",
+          "contentId": "mbvCBB13RR5Ciay7t7__gQ",
+          "depth": 2
+        },
+        {
+          "title": "Self Service for Mobile URL Schemes",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Self_Service_for_iOS_URL_Schemes",
+          "contentId": "gjKL87Tx9iz2jCsTDdlr~Q",
+          "depth": 2
+        },
+        {
+          "title": "Configuring a URL Scheme",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_URL_Scheme",
+          "contentId": "3AxFJEfkNaNycwTmNsc8fA",
+          "depth": 3
+        },
+        {
+          "title": "Providing a URL Scheme Using a Third-party App",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Providing_a_URL_Scheme_Using_a_Third-party_App",
+          "contentId": "f2r_nJGELbTr9wRsu3X64A",
+          "depth": 3
+        },
+        {
+          "title": "Server Infrastructure",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Server_Infrastructure",
+          "contentId": "s8pJeuKpSQYCL7DxSZY9_w",
+          "depth": 0
+        },
+        {
+          "title": "About Distribution Points",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/About_Distribution_Points",
+          "contentId": "q7dROTrX0VdRH_q0PuhBBw",
+          "depth": 1
+        },
+        {
+          "title": "Distribution Point Types Comparison",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Distribution_Point_Types_Comparison",
+          "contentId": "HqPSOe9cBTvc_KbkjmSAtw",
+          "depth": 2
+        },
+        {
+          "title": "File Share Distribution Points",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/File_Share_Distribution_Points",
+          "contentId": "zdin~E6daYwAq6uyigEvQw",
+          "depth": 1
+        },
+        {
+          "title": "Adding a File Share Distribution Point",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_File_Share_Distribution_Point",
+          "contentId": "9NyDEpzgoEk4tWwJ66ZRcA",
+          "depth": 2
+        },
+        {
+          "title": "Cloud Distribution Point",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Cloud_Distribution_Point",
+          "contentId": "N~q3HG0EFoUAmBgLwPSDxg",
+          "depth": 1
+        },
+        {
+          "title": "Configuring the Cloud Distribution Point",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_Cloud_Distribution_Point",
+          "contentId": "91BWhkJRbGtCbu0wNe11Vw",
+          "depth": 2
+        },
+        {
+          "title": "Software Update Servers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Software_Update_Servers",
+          "contentId": "w3WrR9Q9hwSSdRLFTyI09Q",
+          "depth": 1
+        },
+        {
+          "title": "Adding a Software Update Server",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Software_Update_Server",
+          "contentId": "FvRg~x6bQQON5jvrr2cTog",
+          "depth": 2
+        },
+        {
+          "title": "Jamf Infrastructure Manager Instances",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Jamf_Infrastructure_Manager_Instances",
+          "contentId": "7Z0KmVF8_d7dqxooKqza6A",
+          "depth": 1
+        },
+        {
+          "title": "Managing a Jamf Infrastructure Manager Instance",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Managing_a_Jamf_Infrastructure_Manager_Instance",
+          "contentId": "YNADGuh4qdO7aq6sP_9xBQ",
+          "depth": 2
+        },
+        {
+          "title": "LDAP Proxy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/LDAP_Proxy",
+          "contentId": "a72WwR4vmR1xzReDWoZQgQ",
+          "depth": 1
+        },
+        {
+          "title": "Configuring the LDAP Proxy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_LDAP_Proxy",
+          "contentId": "rcpQc08yXqKTl7oBAgJLpQ",
+          "depth": 2
+        },
+        {
+          "title": "Healthcare Listener",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Healthcare_Listener",
+          "contentId": "tUqmXZtGcKTcJxFQbqoaQw",
+          "depth": 1
+        },
+        {
+          "title": "Network Organization",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Network_Organization",
+          "contentId": "3zIKX2ln2bhmkLk1H2Advg",
+          "depth": 0
+        },
+        {
+          "title": "Buildings and Departments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Buildings_and_Departments",
+          "contentId": "okJ~aeGKAOkyMYmJNj10yw",
+          "depth": 1
+        },
+        {
+          "title": "Adding a Building or Department",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Building_or_Department",
+          "contentId": "2mXS3S5YEz1fgcQbATUTfA",
+          "depth": 2
+        },
+        {
+          "title": "Adding a Single Device to a Building or Department",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Single_Device_to_a_Building_or_Department",
+          "contentId": "ZyhwxDkJ7PJcakxGmyQKpw",
+          "depth": 2
+        },
+        {
+          "title": "Adding Multiple Devices to a Building or Department",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_Multiple_Devices_to_a_Building_or_Department",
+          "contentId": "5vjfEZmlCu5fI9VZc9vHog",
+          "depth": 2
+        },
+        {
+          "title": "Network Segments",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Network_Segments",
+          "contentId": "RxnxEvWzZI9mA0_d3LNK2Q",
+          "depth": 1
+        },
+        {
+          "title": "Adding a Network Segment",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Network_Segment",
+          "contentId": "bgb~SywjAOonDAi_sXEdTg",
+          "depth": 2
+        },
+        {
+          "title": "iBeacon Regions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/iBeacon_Regions",
+          "contentId": "DkIA3MnEioa5lBurW0zivQ",
+          "depth": 1
+        },
+        {
+          "title": "General Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_iBeacon",
+          "contentId": "sFT~IPPhmdBjKFgjUluVmA",
+          "depth": 2
+        },
+        {
+          "title": "Adding an iBeacon Region",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_an_iBeacon_Region",
+          "contentId": "ymDB22ZvjRNm_QSz0bgBCQ",
+          "depth": 2
+        },
+        {
+          "title": "Sites",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Sites",
+          "contentId": "GLXHIc0aW~jk0ickwQttag",
+          "depth": 1
+        },
+        {
+          "title": "Creating a Site",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_a_Site",
+          "contentId": "SzhE563JvFf_nojDxRjzSA",
+          "depth": 2
+        },
+        {
+          "title": "Site Objects",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Site_Objects",
+          "contentId": "pv7NIuYc0eeNXpR9sIUYlA",
+          "depth": 2
+        },
+        {
+          "title": "Network Integration",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Network_Integration",
+          "contentId": "ptkNo3rFx6M~UARyiJzWQw",
+          "depth": 1
+        },
+        {
+          "title": "Adding a Network Integration Instance",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Network_Integration_Instance",
+          "contentId": "yJgRalcKm4tlRM_RNA6vcg",
+          "depth": 2
+        },
+        {
+          "title": "Scope",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Scope",
+          "contentId": "YN_yFADF0cpxjzdtfStzEg",
+          "depth": 1
+        },
+        {
+          "title": "Configuring Scope",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_Scope",
+          "contentId": "bKNKsbtoC2SEOGrs~86Gjg",
+          "depth": 2
+        },
+        {
+          "title": "Adding Targets",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_Targets",
+          "contentId": "yWWXDDxqYQ9ts9eL7jRCfQ",
+          "depth": 3
+        },
+        {
+          "title": "Adding Limitations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_Limitations",
+          "contentId": "V0QiJUyXrAh2IDyogV8gug",
+          "depth": 3
+        },
+        {
+          "title": "Adding Exclusions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_Exclusions",
+          "contentId": "uVAX7QCn3OzvJlVyrFu6Gg",
+          "depth": 3
+        },
+        {
+          "title": "Removing Targets",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Removing_Targets",
+          "contentId": "WDYEAsBuGmxkjdDubOPOYQ",
+          "depth": 3
+        }
+      ]
+    }
+  },
+  {
+    "key": "toc-shallow",
+    "label": "TOC — small product",
+    "why": "A short flat TOC, where indentation carries nothing and the layout has to hold up anyway.",
+    "tool": "jamf_docs_get_toc",
+    "arguments": {
+      "product": "jamf-routines",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "product": "Jamf Routines",
+      "productId": "jamf-routines",
+      "version": "current",
+      "mapId": "C~Tmp9IxyjJUYOFsJQew8g",
+      "totalEntries": 13,
+      "page": 1,
+      "totalPages": 1,
+      "hasMore": false,
+      "entries": [
+        {
+          "title": "Jamf Routines",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/jamf_workflow_automation",
+          "contentId": "NMlsAx2ZHiz5S_fdXbdF4g",
+          "depth": 0
+        },
+        {
+          "title": "Signing in to Jamf Routines",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Signing_in_to_Jamf_Routines",
+          "contentId": "6k7aBfbvcKUyZ8onhs8_KQ",
+          "depth": 0
+        },
+        {
+          "title": "Single Sign-On in Jamf Account",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Single_Sign-On_in_Jamf_Account_for_Jamf_Routines",
+          "contentId": "6PoyiuEztwsQymXCIOe6jQ",
+          "depth": 1
+        },
+        {
+          "title": "Connections",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Connections",
+          "contentId": "GaxNMW31J1zNo71Wpx1KSQ",
+          "depth": 0
+        },
+        {
+          "title": "Jamf Connections",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Jamf_Connections",
+          "contentId": "vRBQ6jzbWo~Do2ZsjfSJBA",
+          "depth": 1
+        },
+        {
+          "title": "Third-Party Connections",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Third-Party_Connections",
+          "contentId": "Pe_HBiwRmFvxB60I3b5KfA",
+          "depth": 1
+        },
+        {
+          "title": "Removing a Connection",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Removing_a_Connection",
+          "contentId": "6piJ9Vh6uHnBOrCMgtNmaw",
+          "depth": 1
+        },
+        {
+          "title": "Routine Management",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Workflow_Management",
+          "contentId": "5O5XvjcAXqyBkptDtyX6Vg",
+          "depth": 0
+        },
+        {
+          "title": "Creating a Routine",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Creating_a_Routine",
+          "contentId": "C7AiS1~aSo7ksXrRE5Am2g",
+          "depth": 1
+        },
+        {
+          "title": "Disabling a Routine",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Disabling_an_Automated_Workflow",
+          "contentId": "4zHom6eInxWPCqkYi89Jvg",
+          "depth": 1
+        },
+        {
+          "title": "Deleting a Routine",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Deleting_a_Workflow",
+          "contentId": "d9QRXp9eBv5UZcwtvWQCzw",
+          "depth": 1
+        },
+        {
+          "title": "Routine Templates Reference",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Routine_Templates_Reference",
+          "contentId": "xaa7~Hdfs4794HzwEzNpsA",
+          "depth": 0
+        },
+        {
+          "title": "Copyright and Trademarks",
+          "url": "https://learn.jamf.com/r/en-US/jamf-routines-documentation/Copyright",
+          "contentId": "ScDRoW2d0QR1BSHEeclqRQ",
+          "depth": 0
+        }
+      ]
+    }
+  },
+  {
+    "key": "article-parent",
+    "label": "Article — with children",
+    "why": "A parent topic. On learn.jamf.com its nine <h2> sections are this page; through the API they are nine separate topics, and navigation.children is the only thing that says so.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "title": "Computer Configuration Profiles",
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2025-07-31",
+      "breadcrumb": [
+        "Managing Computers",
+        "Settings and Security Management for Computers"
+      ],
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "contentId": "fFa7Mu0YJW87Bs~ZXE_j2Q",
+      "navigation": {
+        "self": {
+          "title": "Computer Configuration Profiles",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles"
+        },
+        "parent": {
+          "title": "Settings and Security Management for Computers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Settings_and_Security_Management_for_Computers"
+        },
+        "siblings": [
+          {
+            "title": "Best Practices for Computer Configuration Profiles",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Best_Practices_for_Computer_Configuration_Profiles"
+          },
+          {
+            "title": "Remote Commands for Computers",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Remote_Commands_for_Computers"
+          },
+          {
+            "title": "Printers",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Printers"
+          },
+          {
+            "title": "Dock Items",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Dock_Items"
+          },
+          {
+            "title": "Local Accounts",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Local_Accounts"
+          },
+          {
+            "title": "MDM-Enabled Local User Accounts",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/MDM-Enabled_Local_User_Accounts"
+          },
+          {
+            "title": "Managed Local Administrator Accounts",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Management_Accounts"
+          },
+          {
+            "title": "Directory Bindings",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Directory_Bindings"
+          }
+        ],
+        "children": [
+          {
+            "title": "Payload Variables for Configuration Profiles",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_macOS_Configuration_Profiles"
+          },
+          {
+            "title": "General Requirements",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_ConfigurationProfiles"
+          },
+          {
+            "title": "Creating a Computer Configuration Profile in Jamf Pro",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Creating_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Uploading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Editing the Settings or Scope of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Editing_the_Settings_or_Scope_of_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Downloading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Downloading-a-Configuration-Profile"
+          },
+          {
+            "title": "Viewing the Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing-the-Status-of-a-Configuration-Profile"
+          },
+          {
+            "title": "Troubleshooting a Failed Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Troubleshooting_a_Failed_Status_of_a_Configuration_Profile"
+          }
+        ],
+        "siblingCount": 11,
+        "childCount": 9
+      },
+      "content": "Configuration profiles are XML files (.mobileconfig) that provide an easy way to define settings and restrictions for devices, computers, and users.\n\nYou can use Jamf Pro to create a configuration profile or you can upload a configuration profile that was created using third-party software.\n\nWhen you create a computer configuration profile, you must specify the level at which to apply the profile—computer-level or user-level. Each level has a unique set of payloads and a few that are common to both. User-level profiles may not apply until the MDM-enabled user logs out of the computer and logs back in, or when the computer is restarted.\n\nThere are two different ways to distribute a configuration profile: install it automatically (requires no interaction from the user) or make it available in Self Service.\n\n**Related content**\n\n-   [Computer Management Information](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Management_Information)\n-   [Items Available to Users in Self Service for macOS](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/items_Available_to_Users_in_Jamf_Self_Service_for_macOS)\n-   [Deploying Custom Computer Configuration Profiles Using the Application and Custom Settings Payload](https://learn.jamf.com/bundle/technical-articles/page/Deploying_Custom_Computer_Configuration_Profiles_Using_the_Application_and_Custom_Settings_Payload.html)",
+      "tokenCount": 353,
+      "sections": [],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-tables",
+    "label": "Article — tables",
+    "why": "A 22-row settings table. Turndown had no table rule, so this page used to arrive as an undifferentiated run of variable names and descriptions with nothing saying which belonged to which.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_Configuration_Profiles",
+      "responseFormat": "json",
+      "maxTokens": 20000
+    },
+    "structuredContent": {
+      "title": "Payload Variables for Configuration Profiles",
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_Configuration_Profiles",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2025-03-18",
+      "breadcrumb": [
+        "Managing Computers",
+        "Settings and Security Management for Computers",
+        "Computer Configuration Profiles"
+      ],
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "contentId": "3Mpui0ZOoQ3uGb7cGLsTfQ",
+      "navigation": {
+        "self": {
+          "title": "Payload Variables for Configuration Profiles",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_macOS_Configuration_Profiles"
+        },
+        "parent": {
+          "title": "Computer Configuration Profiles",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles"
+        },
+        "siblings": [
+          {
+            "title": "General Requirements",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_ConfigurationProfiles"
+          },
+          {
+            "title": "Creating a Computer Configuration Profile in Jamf Pro",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Creating_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Uploading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Editing the Settings or Scope of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Editing_the_Settings_or_Scope_of_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Downloading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Downloading-a-Configuration-Profile"
+          },
+          {
+            "title": "Viewing the Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing-the-Status-of-a-Configuration-Profile"
+          },
+          {
+            "title": "Troubleshooting a Failed Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Troubleshooting_a_Failed_Status_of_a_Configuration_Profile"
+          },
+          {
+            "title": "Adding a Computer Configuration Profile to the Jamf Pro Dashboard",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Computer_Configuration_Policy_to_the_Jamf_Pro_Dashboard"
+          }
+        ],
+        "children": [],
+        "siblingCount": 8,
+        "childCount": 0
+      },
+      "content": "You can use payload variables to populate configuration profile settings with computer, mobile device, or user attribute values stored in Jamf Pro. This allows you to deploy settings specific to each device or user. For example, you can display the unique serial number on the Lock Screen for an iPad.\n\nTo use a payload variable, enter a variable from the list below into any text field when creating a configuration profile in Jamf Pro. When the profile is installed, the `$VARIABLE` is replaced with the value of the corresponding attribute in Jamf Pro.\n\nNote:\n\nPayload variables are case-sensitive.\n\n| Variable | Inventory Information |\n| --- | --- |\n| `$MANAGEMENTID` | Device management ID assigned by Jamf Pro |\n| `$COMPUTERNAME` | Computer Name |\n| `$SITENAME` | Site Name |\n| `$SITEID` | Site ID |\n| `$UDID` | UDID |\n| `$SERIALNUMBER` | Serial Number |\n| `$USERNAME` | Username associated with the computer in Jamf Pro (computer-level profiles only) Username of the user logging in to the computer (user-level profiles only) |\n| `$FULLNAME` or `$REALNAME` | Full Name |\n| `$EMAIL` | Email Address |\n| `$PHONE` | Phone Number |\n| `$POSITION` | Position |\n| `$DEPARTMENTNAME` | Department Name |\n| `$DEPARTMENTID` | Department ID |\n| `$BUILDINGNAME` | Building Name |\n| `$BUILDINGID` | Building ID |\n| `$ROOM` | Room |\n| `$MACADDRESS` | MAC Address |\n| `$JSSID` | Jamf Pro ID |\n| `$PROFILEJSSID` | Jamf Pro ID of the Configuration Profile |\n| `$EXTENSIONATTRIBUTE_#` | Extension Attribute ID Number Note: The ID number is found in the extension attribute URL. In the example URL below, \"id=2\" indicates the extension attribute ID number: ``` https://JAMF_PRO_URL.jamfcloud.com/computerExtensionAttributes.html?id=2&o=r ``` For more information, see [Computer Extension Attributes](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Extension_Attributes). |",
+      "tokenCount": 478,
+      "sections": [],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-prose",
+    "label": "Article — prose only",
+    "why": "The common shape: no headings, so sections[] is empty and the section nav must not render. 20 of 22 sampled Jamf pages look like this.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Information",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "title": "Computer Inventory Information",
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Information",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2023-10-17",
+      "breadcrumb": [
+        "Managing Computers",
+        "Inventory for Computers"
+      ],
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "contentId": "7LY8uCD1ZnCrmgDEBpnMcA",
+      "navigation": {
+        "self": {
+          "title": "Computer Inventory Information",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Information"
+        },
+        "parent": {
+          "title": "Inventory for Computers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Inventory_for_Computers"
+        },
+        "siblings": [
+          {
+            "title": "Computer Inventory and Criteria Reference",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_and_Criteria_Reference"
+          },
+          {
+            "title": "Computer Inventory Collection Settings",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Collection_Settings"
+          },
+          {
+            "title": "Computer Extension Attributes",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Extension_Attributes"
+          },
+          {
+            "title": "Computer Inventory Display Settings",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Display_Settings"
+          },
+          {
+            "title": "Simple Computer Searches",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Simple_Computer_Searches"
+          },
+          {
+            "title": "Advanced Computer Searches",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Advanced_Computer_Searches"
+          },
+          {
+            "title": "Computer Reports",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Reports"
+          },
+          {
+            "title": "Mass Actions for Computers",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mass_Actions_for_Computers"
+          }
+        ],
+        "children": [
+          {
+            "title": "Viewing and Editing Inventory Information",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing_and_Editing_Inventory_Information_macOS"
+          }
+        ],
+        "siblingCount": 12,
+        "childCount": 1
+      },
+      "content": "Jamf Pro stores detailed inventory information for every enrolled computer.\n\nJamf Pro includes a preconfigured policy called \"Update Inventory\". By default, the Maintenance payload in the policy instructs all computers to submit inventory information to Jamf Pro once a week. You can change the frequency to meet your needs, or you can delete the policy. Jamf recommends keeping this policy active to ensure Jamf Pro's inventory information stays up to date.\n\nNote:\n\nYou can trigger an inventory update on a local computer by executing the `jamf recon` command in Terminal.\n\nComputer inventory information is collected using a combination of the following:\n\n-   Jamf management framework —The Jamf management framework is installed on every enrolled computer. For more information, see [Applications and Utilities](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Applications_and_Utilities).\n-   MDM commands —MDM commands are typically issued immediately after Jamf management framework inventory commands are executed. You can view the sent MDM commands by navigating to the Management History category in the History tab of the computer inventory information.\n-   Declarative status channel —Inventory attributes that are reported via the declarative status channel will autonomously report inventory changes when attribute values change. For example, if a computer updates to a new macOS version, the computer will report the new macOS version value to Jamf Pro immediately after the update is complete. For more information, see [Declarative Device Management](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Declarative_Device_Management).\n\n**Related content**\n\n-   [Recurring Check-in Frequency](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Recurring_Check-in_Frequency)\n-   [Renaming a Computer](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renaming_a_Computer)\n-   [Deleting a Computer from Jamf Pro](https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Deleting_a_Computer_from_Jamf_Pro)",
+      "tokenCount": 517,
+      "sections": [],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-zh",
+    "label": "Article — zh-TW request",
+    "why": "Jamf publishes no translation for most pages, so this returns en-US with a localeNote. Also the RTL/CJK line-breaking case.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html",
+      "language": "zh-TW",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "title": "智慧型群組",
+      "url": "https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2026-08-13",
+      "breadcrumb": [
+        "群組管理"
+      ],
+      "mapId": "4kb1DtYoF_9qkNBfTY7EuA",
+      "contentId": "M~iOG2el1plv1cPmbxTsWg",
+      "navigation": {
+        "self": {
+          "title": "智慧型群組",
+          "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Smart_Groups"
+        },
+        "parent": {
+          "title": "群組管理",
+          "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Group_Management"
+        },
+        "siblings": [
+          {
+            "title": "靜態群組",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Static_Groups"
+          }
+        ],
+        "children": [
+          {
+            "title": "規則運算子",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/規則運算子"
+          },
+          {
+            "title": "和/或群組",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/和/或群組"
+          },
+          {
+            "title": "目錄服務群組條件",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Directory_Service_Group_Criteria"
+          },
+          {
+            "title": "建立智慧型群組",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Creating_a_Smart_Group"
+          },
+          {
+            "title": "檢視智慧型群組成員資格",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Viewing_Smart_Group_Memberships"
+          },
+          {
+            "title": "檢視智慧型群組的相依性",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Viewing_Smart_Group_Dependencies"
+          },
+          {
+            "title": "新增智慧型群組至 Jamf Pro 儀表板",
+            "url": "https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Adding_a_Smart_Group_to_the_Jamf_Pro_Dashboard"
+          }
+        ],
+        "siblingCount": 1,
+        "childCount": 7
+      },
+      "content": "Jamf Pro 可讓您針對管理式電腦、行動裝置或使用者建立智慧型群組。智慧型群組成員資格會根據您新增至智慧型群組的規則而動態更新。您可以根據一或多個資產規則建立智慧型群組。例如，您可以建立智慧型群組，其中僅包含安裝了最新版本 macOS 的 MacBook 電腦，或僅包含兩週內未更新資產的 iPad 裝置。\n\n智慧型群組規則應合理定義，並且避免發生兩個智慧型群組成員資格彼此依賴而造成使用循環計算。如果兩個智慧型群組皆依賴另一個群組的成員資格，則當任一群組發生變更時，兩個群組都會重新計算其成員資格，這可能會影響伺服器效能。\n\nJamf 建議您將智慧型群組用於範圍設定、部署和可操作項目。若是資訊蒐集、查詢和報告，請使用進階搜尋功能。\n\n重要事項：\n\n建立智慧型群組時，請注意以下事項：\n\n-   如果在智慧型群組或進階搜尋中，將裝置上同一類項目（例如已安裝的 App、憑證或設定描述檔）的兩項規則組合使用，則您所列的規則順序會影響結果。Jamf 建議先列出名稱規則（例如將「App 名稱」列在「App 管理狀態」之前），以取得預期的結果。如果將名稱規則列在後面，則每項規則可能會比對裝置上的不同項目，導致產生比預期寬鬆的比對結果。\n-   智慧型群組過多的 Nesting 是導致伺服器效能下降的常見原因。Jamf 建議僅在絕對必要情況下使用巢狀智慧型群組。\n\n如需可作為智慧型群組之基礎的資產屬性的更多資訊，請參閱下列各部分：\n\n-   [電腦資產和條件參考](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Computer_Inventory_and_Criteria_Reference)\n    \n-   [行動裝置資產和規則參考](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Mobile_Device_Inventory_and_Criteria_Reference)\n    \n-   [使用者資產和規則參考](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/User_Inventory_and_Criteria_Reference)\n    \n\n建立智慧型群組後，您可以檢視其成員資格。\n\n**相關資訊**\n\n-   [電腦報告](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Computer_Reports)\n-   [電腦的大量動作](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Mass_Actions_for_Computers)\n-   [行動裝置報告](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Mobile_Device_Reports)\n-   [行動裝置的大量動作](https://learn.jamf.com/r/zh-TW/jamf-pro-documentation-current/Mass_Actions_for_Mobile_Devices)\n\n---\n*Note: Language \"zh-TW\" was requested but this article was resolved from a \"en-US\" URL. Content may be in the original language if a localized version is unavailable.*\n",
+      "tokenCount": 360,
+      "sections": [],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-sections",
+    "label": "Article — with sections",
+    "why": "One of the ~10% of topics whose author put headings inside a single topic. The only fixture that exercises the section rail, the id stamping and anchor navigation.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Managed_Computers",
+      "responseFormat": "json",
+      "maxTokens": 20000
+    },
+    "structuredContent": {
+      "title": "Components Installed on Managed Computers",
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Managed_Computers",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2026-08-13",
+      "breadcrumb": [
+        "Overview of Technologies"
+      ],
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "contentId": "gBpAjjSRrqnKsoGVblqeUg",
+      "navigation": {
+        "self": {
+          "title": "Components Installed on Managed Computers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Managed_Computers"
+        },
+        "parent": {
+          "title": "Overview of Technologies",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Overview_of_Technologies"
+        },
+        "siblings": [
+          {
+            "title": "Applications and Utilities",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Applications_and_Utilities"
+          },
+          {
+            "title": "Security",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Security"
+          },
+          {
+            "title": "Components Installed on Mobile Devices",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Mobile_Devices"
+          }
+        ],
+        "children": [
+          {
+            "title": "Removing Jamf Components from Computers Enrolled Using a PreStage Enrollment",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Removing_Jamf_Components_from_Computers_Enrolled_Using_a_PreStage_Enrollment"
+          },
+          {
+            "title": "Removing Jamf Components from Computers Without an MDM Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Removing_Jamf_Components_from_Computers_Without_an_MDM_Profile"
+          }
+        ],
+        "siblingCount": 3,
+        "childCount": 2
+      },
+      "content": "## Jamf Apps and Binaries\n\n-   /usr/local/jamf/bin/jamf—The binary used to execute most tasks for Jamf Pro.\n    \n-   /usr/local/bin/jamf—Symbolic link to the jamf binary so it can be found in the default search paths.\n    \n-   /Library/Application Support/JAMF/Jamf.app—App bundle that groups together components of the management framework.\n    \n    This bundle contains the following notable components among others:\n    \n    -   .../Contents/MacOS/Jamf Conditional Access.app—App bundle used for integration with Microsoft Entra ID.\n        \n    -   .../Contents/MacOS/JamfDaemon.app—App bundle containing the jamf launch daemon. This process will be launched during the macOS startup to perform tasks for the Jamf management framework (e.g., coordinating policy execution for Self Service, monitoring for restricted software, and monitoring application usage).\n        \n    -   .../Contents/JamfAgent.app—Allows computers to continue reporting compliance status to Microsoft Entra device compliance after a Microsoft Platform Single Sign-on configuration is deployed.\n        \n-   /Library/Application Support/JAMF/bin/jamfHelper.app—Application used to display messages to an end user.\n    \n-   /Library/Application Support/JAMF/bin/Management Action.app—Application used to display messages to an end user in the macOS Notification Center.\n    \n-   /usr/local/jamf/bin/jamfAAD—Symbolic link to /Library/Application Support/JAMF/Jamf.app/Contents/MacOS/JamfAAD.app/Contents/MacOS/Jamf Conditional Access.\n    \n\n## LaunchDaemons and Agents\n\n-   /Library/LaunchDaemons/com.jamfsoftware.task.1.plist—Manages the recurring check-in to the Jamf Pro server.\n    \n-   /Library/LaunchDaemons/com.jamfsoftware.startupItem.plist—Used to check for policies with a startup trigger.\n    \n-   /Library/LaunchAgents/com.jamf.management.login.plist—Used to monitor user login events.\n    \n-   /Library/LaunchAgents/com.jamf.management.agent.plist—Launches the JamfAgent.app.\n    \n-   /Library/LaunchDaemons/com.jamf.management.daemon.plist—Used for Application Usage, Network State Changes, iBeacons, FileVault information sent to the Jamf Pro server, Restricted Software, and Self Service-related tasks.\n    \n\n## Jamf Remote Assist Components\n\n-   /Library/Application Support/JAMF/JamfRemoteAssist—Contains the initial installation of the Jamf Remote Assist app.\n    \n-   /Library/Application Support/JAMF/Remote Assist—Contains the current version of the Jamf Remote Assist app.\n    \n-   /Library/LaunchAgents/com.jamf.remoteassist.connect.preloginagent.plist—Required for Jamf Remote Assist sessions.\n    \n-   `/Library/LaunchAgents/com.jamf.remoteassist.connect.userloginagent.plist`—Required for Jamf Remote Assist sessions.\n    \n-   `/Library/LaunchDaemons/com.jamf.remoteassist.connector.plist`—Required for Jamf Remote Assist sessions.\n    \n\n## Preferences\n\n/Library/Preferences/com.jamfsoftware.jamf.plist—Defines settings for the Jamf management framework (e.g., the Jamf Pro server URL, Management Framework Change ID, and security settings).\n\n## Jamf Application Support Directory\n\n-   /Library/Application Support/JAMF/.jmf\\_settings.json—Contains settings used by the JamfDaemon.app (e.g., the restricted software list).\n    \n-   /Library/Application Support/JAMF/.userdelay.plist—Contains policies that have been deferred.\n    \n-   /Library/Application Support/JAMF/Composer/—Contains working directory for Composer to save package sources.\n    \n-   /Library/Application Support/JAMF/Config/—Contains Jamf Pro server-defined iBeacons.\n    \n-   /Library/Application Support/JAMF/Downloads/—Temporary storage for downloaded packages.\n    \n-   /Library/Application Support/JAMF/JAMF.keychain—Enables certificate-based authentication with the Jamf Pro server.\n    \n-   /Library/Application Support/JAMF/Offline Policies/—Contains the contents of the policies marked to be Available Offline.\n    \n-   /Library/Application Support/JAMF/Receipts/—Contains receipts for all packages installed by Jamf Pro.\n    \n-   /Library/Application Support/JAMF/tmp/—Contains temporary storage for logs and other files.\n    \n-   /Library/Application Support/JAMF/usage\\_reports/—Contains the application usage data to be sent to the Jamf Pro server.\n    \n-   /Library/Application Support/JAMF/Waiting Room/—Contains temporary storage for Cached Packages.\n    \n\n## Jamf Client Logging\n\n-   /var/log/jamf.log—Contains log messages written by the jamf binary.\n    \n    Note:\n    \n    Other logging can be accessed via macOS logging commands. To view debug logging for the JamfDaemon, execute the following command:\n    \n    ```\n    log stream --level debug --predicate 'subsystem BEGINSWITH \"com.jamf.management.daemon\"' --style compact\n    ```",
+      "tokenCount": 1192,
+      "sections": [
+        {
+          "id": "jamf-apps-and-binaries",
+          "title": "Jamf Apps and Binaries",
+          "level": 2,
+          "tokenCount": 379
+        },
+        {
+          "id": "launchdaemons-and-agents",
+          "title": "LaunchDaemons and Agents",
+          "level": 2,
+          "tokenCount": 171
+        },
+        {
+          "id": "jamf-remote-assist-components",
+          "title": "Jamf Remote Assist Components",
+          "level": 2,
+          "tokenCount": 160
+        },
+        {
+          "id": "preferences",
+          "title": "Preferences",
+          "level": 2,
+          "tokenCount": 52
+        },
+        {
+          "id": "jamf-application-support-directory",
+          "title": "Jamf Application Support Directory",
+          "level": 2,
+          "tokenCount": 325
+        },
+        {
+          "id": "jamf-client-logging",
+          "title": "Jamf Client Logging",
+          "level": 2,
+          "tokenCount": 106
+        }
+      ],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-truncated",
+    "label": "Article — truncated",
+    "why": "A long article under a small token budget, so truncated=true and the notice that goes with it actually render.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_Configuration_Profiles",
+      "responseFormat": "json",
+      "maxTokens": 400
+    },
+    "structuredContent": {
+      "title": "Payload Variables for Configuration Profiles",
+      "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_Configuration_Profiles",
+      "product": "Jamf Pro",
+      "version": "11.31.0",
+      "lastUpdated": "2025-03-18",
+      "breadcrumb": [
+        "Managing Computers",
+        "Settings and Security Management for Computers",
+        "Computer Configuration Profiles"
+      ],
+      "mapId": "wqin5wmqOhRZNP0CChQ8MQ",
+      "contentId": "3Mpui0ZOoQ3uGb7cGLsTfQ",
+      "navigation": {
+        "self": {
+          "title": "Payload Variables for Configuration Profiles",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_macOS_Configuration_Profiles"
+        },
+        "parent": {
+          "title": "Computer Configuration Profiles",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles"
+        },
+        "siblings": [
+          {
+            "title": "General Requirements",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/GenReq_ConfigurationProfiles"
+          },
+          {
+            "title": "Creating a Computer Configuration Profile in Jamf Pro",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Creating_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Uploading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Uploading_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Editing the Settings or Scope of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Editing_the_Settings_or_Scope_of_a_Configuration_Profile_macOS"
+          },
+          {
+            "title": "Downloading a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Downloading-a-Configuration-Profile"
+          },
+          {
+            "title": "Viewing the Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Viewing-the-Status-of-a-Configuration-Profile"
+          },
+          {
+            "title": "Troubleshooting a Failed Status of a Configuration Profile",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Troubleshooting_a_Failed_Status_of_a_Configuration_Profile"
+          },
+          {
+            "title": "Adding a Computer Configuration Profile to the Jamf Pro Dashboard",
+            "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Adding_a_Computer_Configuration_Policy_to_the_Jamf_Pro_Dashboard"
+          }
+        ],
+        "children": [],
+        "siblingCount": 8,
+        "childCount": 0
+      },
+      "content": "You can use payload variables to populate configuration profile settings with computer, mobile device, or user attribute values stored in Jamf Pro. This allows you to deploy settings specific to each device or user. For example, you can display the unique serial number on the Lock Screen for an iPad.\n\nTo use a payload variable, enter a variable from the list below into any text field when creating a configuration profile in Jamf Pro. When the profile is installed, the `$VARIABLE` is replaced with the value of the corresponding attribute in Jamf Pro.\n\nNote:\n\nPayload variables are case-sensitive.\n\n| Variable | Inventory Information |\n| --- | --- |\n| `$MANAGEMENTID` | Device management ID assigned by Jamf Pro |\n| `$COMPUTERNAME` | Computer Name |\n| `$SITENAME` | Site Name |\n| `$SITEID` | Site ID |\n| `$UDID` | UDID |\n| `$SERIALNUMBER` | Serial Number |\n| `$USERNAME` | Username associated with the computer in Jamf Pro (computer-level profiles only) Username of the user logging in to the computer (user-level profiles only) |\n| `$FULLNAME` or `$REALNAME` | Full Name |\n| `$EMAIL` | Email Address |\n| `$PHONE` | Phone Number |\n| `$POSITION` | Position |\n| `$DEPARTMENTNAME` | Department Name |\n| `$DEPARTMENTID` | Department ID |\n| `$BUILDINGNAME` | Building Name |\n| `$BUILDINGID` | Building ID |\n| `$ROOM` | Room |\n| `$MACADDRESS` | MAC Address |\n| `$JSSID` | Jamf Pro ID |\n\n---\n\n*[Content truncated due to token limit]*\n",
+      "tokenCount": 358,
+      "sections": [],
+      "truncated": true
+    }
+  },
+  {
+    "key": "toc-publication",
+    "label": "TOC — by publication",
+    "why": "Addressed on the publication axis, so it reports publicationId and no productId. The Load more path for this used to send product: undefined and fail.",
+    "tool": "jamf_docs_get_toc",
+    "arguments": {
+      "publication": "jamf-pro-release-notes",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "product": "Jamf Pro Release Notes 11.31.0",
+      "publicationId": "jamf-pro-release-notes",
+      "version": "current",
+      "mapId": "3NCZDwxnkFrs89jc8CgOuA",
+      "totalEntries": 23,
+      "page": 1,
+      "totalPages": 1,
+      "hasMore": false,
+      "entries": [
+        {
+          "title": "New Features and Enhancements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/New_Features_and_Enhancements",
+          "contentId": "8MiY2En7icUlly1dKMLgrw",
+          "depth": 0
+        },
+        {
+          "title": "Mobile Device Smart Group/Advanced Search Criteria",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Smart_Group_Advanced_Search_Criteria",
+          "contentId": "JaFLpzBM38M5kY~QzPnjLg",
+          "depth": 1
+        },
+        {
+          "title": "Other Changes and Improvements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Other_Changes_and_Improvements",
+          "contentId": "1yKAvZoYPm32po29colZQA",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Pro API Changes and Enhancements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Jamf_Pro_API_Changes_and_Enhancements",
+          "contentId": "wTDic6w5cIWIC4IYZdE62g",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Platform Services and Capabilities Resources",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Jamf_Platform_Services_and_Capabilities_Resources",
+          "contentId": "FhuQuMMvWKt_z4NtDpsvIg",
+          "depth": 1
+        },
+        {
+          "title": "Further Considerations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Further_Considerations",
+          "contentId": "2Z542fz0D~VHHkyxEH1org",
+          "depth": 1
+        },
+        {
+          "title": "Important Notices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Important_Notices",
+          "contentId": "eUAr_7o0PxURgaYu1F8ShA",
+          "depth": 0
+        },
+        {
+          "title": "OS 27 Software Update Deprecations and Affected Jamf Pro Features",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/OS_27_Software_Update_Deprecations_for_Jamf_Pro",
+          "contentId": "xdgaLv8f3ZGfQVEFFu6ZlQ",
+          "depth": 1
+        },
+        {
+          "title": "Upcoming New Privileges for Mass Actions",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/New_Privileges_for_Mass_Actions",
+          "contentId": "Kb62otQxdxs6eAZ~wSwhfA",
+          "depth": 1
+        },
+        {
+          "title": "Self Service+ for Mobile Now Available",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Self_Service_Plus_Mobile_Announcement",
+          "contentId": "HDpmZX4au37ZYESqNpl2LA",
+          "depth": 1
+        },
+        {
+          "title": "Notice History by Release",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Notice_History_by_Release",
+          "contentId": "sm6zLjGvi1ef6NINqCtD7Q",
+          "depth": 1
+        },
+        {
+          "title": "Jamf Pro System Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/System_Requirements",
+          "contentId": "H_hxZbDJDA8drOxc2Hf8og",
+          "depth": 0
+        },
+        {
+          "title": "Installation",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Installation",
+          "contentId": "xHCn73vzPgvXTngeGXBroA",
+          "depth": 0
+        },
+        {
+          "title": "New Installations",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/New_Installations",
+          "contentId": "jvXU0KMZ7~uMpjbFmf_hfg",
+          "depth": 1
+        },
+        {
+          "title": "Upgrades",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Upgrades",
+          "contentId": "Hq_AQK7s~JLI5nPTalu~1Q",
+          "depth": 1
+        },
+        {
+          "title": "Preparing to Upgrade",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Preparing_to_Upgrade",
+          "contentId": "amF3DceZR3a0S~BuF66q5A",
+          "depth": 2
+        },
+        {
+          "title": "Installed Components",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Installed_Components",
+          "contentId": "4TixHyQNeu52lexO_bKsWQ",
+          "depth": 2
+        },
+        {
+          "title": "Requirements",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Installation_Requirements",
+          "contentId": "hfUYQI_b2kYhDqcxRq~w0g",
+          "depth": 2
+        },
+        {
+          "title": "Upgrading Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Upgrading_Jamf_Pro",
+          "contentId": "Srz3sJTvxnJK~t12pzwOtQ",
+          "depth": 2
+        },
+        {
+          "title": "Upgrading Composer",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Upgrading_the_Jamf_Pro_Apps",
+          "contentId": "oM_Oe58zR01Eu58mTXXAGA",
+          "depth": 2
+        },
+        {
+          "title": "Deprecations and Removals",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Deprecations_and_Removals",
+          "contentId": "eSHPPzfZD~2_f8TJGK5jVA",
+          "depth": 0
+        },
+        {
+          "title": "Resolved Issues",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Resolved_Issues",
+          "contentId": "Uxf5ejoB_z8uPpXUFz2qDA",
+          "depth": 0
+        },
+        {
+          "title": "Copyright and Trademarks",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current/Copyright",
+          "contentId": "uc7gzsbAuvYWwVjEk_4yzg",
+          "depth": 0
+        }
+      ]
+    }
+  },
+  {
+    "key": "glossary",
+    "label": "Glossary lookup",
+    "why": "The fourth tool, which has an output schema and no view yet.",
+    "tool": "jamf_docs_glossary_lookup",
+    "arguments": {
+      "term": "PreStage",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "term": "PreStage",
+      "totalMatches": 1,
+      "entries": [
+        {
+          "term": "PreStage enrollment",
+          "definition": "Jamf Pro's built-in feature for configuring enrollment profiles used for Apple's Automated Device Enrollment process.",
+          "url": "https://learn.jamf.com/r/en-US/jamf-technical-glossary/PreStage_Enrollment"
+        }
+      ],
+      "truncated": false
+    }
+  }
+]

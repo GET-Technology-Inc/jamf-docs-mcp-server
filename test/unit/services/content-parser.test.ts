@@ -435,3 +435,107 @@ describe('htmlToMarkdown', () => {
     expect(result).toContain('Paragraph');
   });
 });
+
+describe('htmlToMarkdown renders tables as tables', () => {
+  // Turndown's core has no table handling. Left to itself it walks the cells as
+  // ordinary block content and emits their text separated by blank lines, so a
+  // two-column settings reference arrives as an alternating run of labels and
+  // descriptions with nothing saying which belongs to which — and the damage is
+  // done before any client sees it, on the text channel the model reads as much
+  // as on the structured one the MCP App renders.
+  //
+  // Jamf's admin guides are full of these; the captured article fixture in this
+  // repo carries two of them.
+
+  it('keeps the header row and the column relationship', () => {
+    const markdown = htmlToMarkdown(
+      '<table><thead><tr><th>Setting</th><th>Description</th></tr></thead>'
+      + '<tbody><tr><td>Display Name</td><td>Name shown to the user</td></tr>'
+      + '<tr><td>Scope</td><td>Computers to target</td></tr></tbody></table>',
+    );
+
+    expect(markdown).toContain('| Setting | Description |');
+    expect(markdown).toMatch(/\|\s*---\s*\|\s*---\s*\|/);
+    expect(markdown).toContain('| Display Name | Name shown to the user |');
+    expect(markdown).toContain('| Scope | Computers to target |');
+  });
+
+  it('keeps inline markup inside a cell', () => {
+    // Half the reason a Jamf settings table is worth reading is the variable
+    // name in it, and a cell converted with textContent loses the code span.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Variable</th></tr><tr><td>The <code>$UDID</code> token</td></tr></table>',
+    );
+
+    expect(markdown).toContain('`$UDID`');
+  });
+
+  it('escapes a pipe inside a cell', () => {
+    // An unescaped pipe ends the cell early and shifts every column after it,
+    // silently — the table still renders, with the wrong values under the
+    // wrong headings.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Value</th><th>Note</th></tr>'
+      + '<tr><td>Computers | devices</td><td>both</td></tr></table>',
+    );
+
+    expect(markdown).toContain('Computers \\| devices');
+    expect(markdown).toContain('| Computers \\| devices | both |');
+  });
+
+  it('escapes a backslash before escaping a pipe', () => {
+    // Escaping the pipe alone is not enough. A cell containing a backslash
+    // immediately before a pipe becomes `\\|` — a doubled backslash, which is
+    // itself an escaped backslash, followed by a *live* pipe. The row then
+    // breaks at exactly the input the escaping exists to handle, and every
+    // column after it shifts.
+    //
+    // Flagged by CodeQL as js/incomplete-sanitization on the first version of
+    // this rule.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Path</th><th>Note</th></tr>'
+      + '<tr><td>C:\\|next</td><td>ok</td></tr></table>',
+    );
+
+    const rows = markdown.split('\n').filter((line) => line.startsWith('|'));
+    expect(rows).toHaveLength(3);
+    // Split on pipes that are not themselves escaped: the row must still be
+    // two columns, not three.
+    const cells = (rows[2] ?? '').split(/(?<!\\)\|/).filter((cell) => cell.trim() !== '');
+    expect(cells).toHaveLength(2);
+    expect(rows[2]).toContain('\\\\');
+  });
+
+  it('still emits a divider for a table with no header row', () => {
+    // Jamf frequently omits `<thead>`. A pipe table without a divider is not a
+    // table to any renderer, so an unlabelled table gets an empty header rather
+    // than no table.
+    const markdown = htmlToMarkdown('<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>');
+
+    expect(markdown).toMatch(/\|\s*---\s*\|\s*---\s*\|/);
+    expect(markdown).toContain('| a | b |');
+    expect(markdown).toContain('| c | d |');
+  });
+
+  it('pads a short row so the columns stay aligned', () => {
+    // A row with fewer cells than the header — a merged cell, usually — would
+    // otherwise shift the remaining values one column left.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td></tr></table>',
+    );
+
+    expect(markdown).toContain('| 1 |  |  |');
+  });
+
+  it('does not recurse into a nested table', () => {
+    // A table cannot be nested inside a Markdown pipe row at all, so the inner
+    // one degrades to its text rather than emitting pipes that break the outer.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Outer</th></tr>'
+      + '<tr><td><table><tr><td>inner</td></tr></table></td></tr></table>',
+    );
+
+    expect(markdown).toContain('| inner |');
+    expect(markdown.split('\n').filter((line) => line.startsWith('|'))).toHaveLength(3);
+  });
+});

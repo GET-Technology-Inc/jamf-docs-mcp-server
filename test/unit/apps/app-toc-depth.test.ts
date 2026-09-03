@@ -61,9 +61,27 @@ describe('TOC rows carry their nesting level', () => {
     ]);
 
     expect(html).toContain('data-url="https://learn.jamf.com/page/SmartGroups.html"');
-    expect(html).toContain('>Smart Groups</li>');
-    expect(html).toContain('role="button"');
-    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('>Smart Groups</a>');
+
+    // A real anchor with a real href, not the `<li role="button" tabindex="0">`
+    // this replaced. A TOC row opens a document, so the affordance should not
+    // be a lie: keyboard activation, the status-bar URL preview and "copy link
+    // address" all come back for free, and a modifier-click reaches the host's
+    // own link handling instead of being swallowed. The ARIA role and the
+    // manual tabindex existed only to fake the first of those.
+    expect(html).toContain('<a class="row"');
+    expect(html).toContain('href="https://learn.jamf.com/page/SmartGroups.html"');
+    expect(html).not.toContain('role="button"');
+  });
+
+  it('marks a top-level row so the stylesheet can rank it', () => {
+    // Depth alone cannot separate a section from an article inside it once the
+    // indent is capped, and a 792-entry Jamf Pro TOC is otherwise one
+    // undifferentiated column of titles.
+    const html = renderTocItems(nestedEntries());
+
+    expect(html.match(/data-top/g)).toHaveLength(2);
+    expect(html).toContain('<a class="row" data-top');
   });
 
   // CONTROL. Every assertion above is also satisfied by a renderer that
@@ -159,7 +177,19 @@ describe('the indent is wired up end to end', () => {
     // An attribute nothing reads is not an indent. The rule has to consume
     // `--depth` and has to have a fallback, or a pre-4.2.0 payload renders
     // with `calc()` invalid and no padding at all.
-    expect(CSS).toMatch(/\.row\s*\{[^}]*padding-left:\s*calc\([^)]*var\(--depth,\s*0\)/);
+    //
+    // `padding-inline-start`, not `padding-left`: the app sets `dir="rtl"` from
+    // `hostContext.locale`, and a physical property indents an Arabic or Hebrew
+    // TOC away from the text it belongs to.
+    expect(CSS).toMatch(/\.row\s*\{[^}]*padding-inline-start:[^}]*var\(--depth,\s*0\)/);
+  });
+
+  it('clamps the depth a second time in CSS', () => {
+    // `indentSteps` bounds the value written into the attribute, and the rule
+    // bounds it again against a cap measured from the panel width. The two
+    // guards are independent on purpose: neither a hostile payload nor a bug in
+    // one of them alone can push a row off the panel.
+    expect(CSS).toMatch(/min\(var\(--depth,\s*0\),\s*var\(--cap,\s*\d+\)\)/);
   });
 
   it('ships in the generated bundle', () => {

@@ -455,19 +455,40 @@ function buildNoResultsResponse(
 ): ToolResult {
   const suggestions = generateSearchSuggestions(query, hasProductFilter, hasTopicFilter);
 
+  /**
+   * Queries a client can run, and nothing else.
+   *
+   * `generateSearchSuggestions` already separates what is runnable
+   * (`simplifiedQuery`, `alternativeKeywords`) from what is advice (`tips`,
+   * and the locale note below), and this array used to flatten all of it
+   * together. A structured client cannot tell the two apart afterwards, so
+   * the MCP App rendered "Try removing filters to broaden your search" as a
+   * clickable search and, when clicked, searched Jamf for that sentence. The
+   * `Try: ` prefix had the same fault one step earlier: it made the one
+   * genuinely runnable entry un-runnable, because the prefix went into the
+   * query too.
+   *
+   * Nothing is lost by dropping the prose here. The advice reaches the model
+   * through `formatSearchSuggestions` on the text channel below, which is the
+   * channel prose belongs on; `structuredContent.suggestions` is read only by
+   * clients that are going to *do* something with each entry.
+   */
   const suggestionTexts = [
-    ...(locale !== undefined && locale !== DEFAULT_LOCALE
-      ? [`Not all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`]
-      : []),
-    ...(suggestions.simplifiedQuery !== null ? [`Try: ${suggestions.simplifiedQuery}`] : []),
-    ...suggestions.alternativeKeywords,
-    ...suggestions.tips
+    ...(suggestions.simplifiedQuery !== null ? [suggestions.simplifiedQuery] : []),
+    ...suggestions.alternativeKeywords
   ];
+
+  // The locale caveat is advice, so it rides the text channel with the rest of
+  // the advice rather than being mixed into the runnable list above.
+  const localeNote =
+    locale !== undefined && locale !== DEFAULT_LOCALE
+      ? `\n\nNot all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`
+      : '';
 
   return {
     content: [{
       type: 'text',
-      text: formatSearchSuggestions(query, suggestions)
+      text: `${formatSearchSuggestions(query, suggestions)}${localeNote}`
     }],
     structuredContent: {
       query,

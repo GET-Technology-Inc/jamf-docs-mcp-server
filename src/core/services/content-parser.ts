@@ -41,6 +41,96 @@ turndown.addRule('stripScripts', {
   replacement: (): string => '',
 });
 
+/**
+ * A cell's text, flattened onto one line and safe inside a pipe row.
+ *
+ * Cells are converted through Turndown again so inline markup survives — a
+ * `<code>` in a settings table is half the reason the row is worth reading —
+ * but a cell holding a nested table falls back to plain text, because a table
+ * cannot be nested inside a Markdown pipe row at all and the recursion would
+ * not terminate usefully.
+ */
+function cellMarkdown(cell: { innerHTML: string; textContent: string | null }): string {
+  const nested = /<table[\s>]/i.test(cell.innerHTML);
+  const raw = nested ? (cell.textContent ?? '') : turndown.turndown(cell.innerHTML);
+  return raw
+    // A pipe row is one line by definition, so paragraphs and list items in a
+    // cell collapse to sentences rather than breaking the table apart.
+    .replace(/\s*\n+\s*/g, ' ')
+    // Backslash first, then pipe. Escaping the pipe alone is not enough: a cell
+    // containing `\|` becomes `\\|`, where the doubled backslash is itself an
+    // escaped backslash and the pipe is live again — so the row breaks at
+    // exactly the input the escaping exists to handle.
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .trim();
+}
+
+/**
+ * Tables, as GFM pipe tables.
+ *
+ * Turndown's core has no table handling: left to itself it visits the cells as
+ * ordinary block content and emits their text separated by blank lines, so a
+ * two-column settings reference arrives as an alternating run of labels and
+ * descriptions with nothing saying which belongs to which. It is not a
+ * rendering problem a client can fix — the relationship is gone before the
+ * markdown is written — and it reaches the model on the text channel and the
+ * MCP App on the structured one identically.
+ *
+ * Jamf's admin guides are full of these: the repo's own captured article
+ * fixture carries two tables and twenty-six rows.
+ *
+ * Written here rather than pulled from `turndown-plugin-gfm` because the
+ * plugin brings strikethrough and task lists that this pipeline has no source
+ * for, and because the header-row fallback below is specific to Jamf's markup,
+ * which frequently omits `<thead>`.
+ */
+turndown.addRule('tables', {
+  filter: 'table',
+  replacement: (_content, node): string => {
+    interface Row {
+      children: ArrayLike<{ innerHTML: string; textContent: string | null; tagName: string }>;
+      closest: (s: string) => unknown;
+    }
+    const table = node as unknown as { querySelectorAll: (s: string) => ArrayLike<Row> };
+
+    // `querySelectorAll` is a descendant query, so on a table containing
+    // another it returns the inner table's rows too — and they were emitted a
+    // second time, as extra rows of the outer table. `closest` puts each row
+    // back with the table it belongs to.
+    const rows = Array.from(table.querySelectorAll('tr')).filter(
+      (row) => row.closest('table') === node,
+    );
+    if (rows.length === 0) {
+      return '';
+    }
+
+    const cells = rows.map((row) => Array.from(row.children).map(cellMarkdown));
+    const width = Math.max(...cells.map((row) => row.length));
+    if (width === 0) {
+      return '';
+    }
+
+    const pad = (row: string[]): string =>
+      `| ${[...row, ...Array<string>(width - row.length).fill('')].join(' | ')} |`;
+
+    // A table whose first row is all `<th>` has a header; one that is not still
+    // needs a divider, because a pipe table without one is not a table. An
+    // empty header row is the honest rendering of "these columns are unlabelled".
+    const firstRow = rows[0];
+    const hasHeader =
+      firstRow !== undefined &&
+      Array.from(firstRow.children).length > 0 &&
+      Array.from(firstRow.children).every((cell) => cell.tagName.toLowerCase() === 'th');
+
+    const header = hasHeader ? (cells[0] ?? []) : Array<string>(width).fill('');
+    const body = hasHeader ? cells.slice(1) : cells;
+    const divider = `|${' --- |'.repeat(width)}`;
+
+    return `\n\n${pad(header)}\n${divider}\n${body.map(pad).join('\n')}\n\n`;
+  },
+});
+
 // ─── HTML cleaning ──────────────────────────────────────────────
 
 /** Per-source overrides for {@link cleanHtml}; every field defaults to learn.jamf.com's. */

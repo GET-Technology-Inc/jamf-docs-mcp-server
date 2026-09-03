@@ -22,6 +22,7 @@ import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
   fetchTopicAncestors,
+  fetchTopicNavigation,
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
@@ -151,6 +152,26 @@ export async function fetchArticleFromFt(
 
   const { title, parsed, displayUrl, product, version, lastUpdated } = cached;
 
+  // Read off the same cached map index the breadcrumb came from, so this is a
+  // second lookup rather than a second fetch — and read outside the article
+  // cache entry on purpose: the index has its own TTL, and burying navigation
+  // inside `CachedArticle` would freeze one map's tree into every article
+  // cached from it until each of those entries expired separately.
+  //
+  // Why it is worth having: the Fluid Topics API serves one topic per call
+  // while the website concatenates a topic and its children into one page, so
+  // every `<h2>` a reader sees on learn.jamf.com is a separate topic here.
+  // Without this the structured channel says nothing about where a page sits,
+  // and a client showing "Computer Configuration Profiles" has no route to the
+  // nine procedures that page consists of on the site.
+  const navigation = await fetchTopicNavigation({
+    cache,
+    mapId,
+    contentId,
+    ...(options.cacheTtl !== undefined ? { ttl: options.cacheTtl } : {}),
+    logger: options.logger,
+  });
+
   // Build base result (shared across all code paths)
   const allSections: ArticleSection[] = extractSections(parsed.content);
   const base = {
@@ -169,6 +190,7 @@ export async function fetchArticleFromFt(
       ? parsed.relatedArticles : undefined,
     mapId,
     contentId,
+    navigation,
     sections: allSections,
   };
 
