@@ -1,3 +1,11 @@
+## [5.10.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.1...v5.10.2) (2026-09-09)
+
+### Dependencies
+
+* bump @types/node from 26.4.0 to 26.4.1 ([#275](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/275)) ([1cd4478](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1cd4478a6a4df5a533607ed8e8c74cb20033d791))
+* bump eslint from 10.9.1 to 10.10.0 ([#276](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/276)) ([40b6d5d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/40b6d5dbf9a41decdb29fa02b6c4888aec7fa957))
+* bump typescript-eslint from 8.68.0 to 8.69.0 ([#273](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/273)) ([30ddda5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/30ddda5ba7c75cb18f0c84ec6dd2529daad7cb13))
+
 ## [5.10.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.0...v5.10.1) (2026-09-03)
 
 ### Bug Fixes
