@@ -1,3 +1,10 @@
+## [5.10.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.2...v5.10.3) (2026-09-09)
+
+### Dependencies
+
+* bump hono from 4.13.1 to 4.13.7 ([#278](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/278)) ([192a231](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/192a231a97c2060b91221930ca21dbda94cbec1a))
+* bump js-yaml from 4.3.1 to 4.3.2 ([#277](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/277)) ([387505e](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/387505ea3bb7effe0754742cedd557028662347b))
+
 ## [5.10.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.1...v5.10.2) (2026-09-09)
 
 ### Dependencies
