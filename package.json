@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run test/unit",
     "test:integration": "ALLOW_LIVE_REQUESTS=1 vitest run test/integration",
+    "test:contract": "ALLOW_LIVE_REQUESTS=1 vitest run test/integration/data-contracts.test.ts",
     "test:e2e": "ALLOW_LIVE_REQUESTS=1 vitest run test/e2e",
     "test:all": "vitest run test/unit && ALLOW_LIVE_REQUESTS=1 vitest run test/integration && ALLOW_LIVE_REQUESTS=1 vitest run test/e2e",
     "test:coverage": "ALLOW_LIVE_REQUESTS=1 vitest run --coverage",

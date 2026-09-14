@@ -38,6 +38,20 @@ jobs:
 
       # Retry to absorb transient network/rate-limit blips — a genuine contract
       # break fails all attempts, a flake usually passes on retry.
+      #
+      # Go through the npm script rather than calling vitest directly. The suite
+      # only reaches upstream when ALLOW_LIVE_REQUESTS=1 is set, and package.json
+      # is the single place recording which tiers may do that. `npx vitest run`
+      # bypassed it: from 2026-09-03, when the global fetch guard in
+      # test/helpers/no-network.setup.ts landed, the guard threw inside beforeAll
+      # and every assertion was reported as skipped. That reads as a suite
+      # failure, so this job opened upstream-drift issues for twelve days without
+      # having contacted learn.jamf.com once — the exact silent-breakage class it
+      # exists to detect, aimed at itself.
+      #
+      # `npm run test:integration -- <file>` is NOT an alternative: vitest unions
+      # positional filters, so it would widen the job to the whole integration
+      # tier instead of narrowing it to the contract suite.
       - name: Run live API contract tests
         id: contract
         uses: nick-fields/retry@v4
@@ -45,7 +59,7 @@ jobs:
           timeout_minutes: 5
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npx vitest run test/integration/data-contracts.test.ts
+          command: npm run test:contract
 
       - name: Open issue on upstream drift
         if: failure()
