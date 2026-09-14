@@ -1,9 +1,13 @@
 name: Upstream Contract Check
 
-# Detects when Jamf's learn.jamf.com API drifts from the shape our code depends on
-# (metadata fields, product labels, clustering, content format). The data-contracts
-# integration suite hits the REAL API; if it fails on a schedule it means upstream
-# changed — the same class of change that silently broke non-Pro search/ingestion.
+# Detects when a Jamf documentation source drifts from the shape our code depends
+# on. Two suites, two upstreams: `data-contracts` covers the learn.jamf.com Fluid
+# Topics API (metadata fields, product labels, clustering, content format), and
+# `support-kb-contracts` covers the support.jamf.com Intercom Help Center, above
+# all the block-type vocabulary the renderer dispatches on. Both hit the REAL
+# service; if either fails on a schedule it means upstream changed — the same
+# class of change that silently broke non-Pro search and ingestion, and that
+# dropped every table out of a support article.
 #
 # This runs OUT OF BAND (cron) and opens an issue on drift. It is deliberately NOT
 # part of the merge gate — live-API flakiness must never block PRs.
@@ -76,7 +80,9 @@ jobs:
               'ingestion. Investigate before it degrades production silently.',
               '',
               `- Failed run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              '- Start from the failing assertions in `test/integration/data-contracts.test.ts`.',
+              '- Start from the failing assertions: learn.jamf.com is covered by',
+              '  `test/integration/data-contracts.test.ts`, support.jamf.com by',
+              '  `test/integration/support-kb-contracts.test.ts`.',
               '- Remember the downstream consumers: `jamf-docs-mcp-worker` (ingestion) and',
               '  `jamf-docs-chatbot` (via RPC).',
             ].join('\n');

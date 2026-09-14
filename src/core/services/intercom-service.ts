@@ -71,12 +71,56 @@ interface IntercomBlock {
   text?: string;
   items?: IntercomBlock[];
   content?: IntercomBlock[];
-  summary?: string;
+  /**
+   * `collapsibleSection` — its label. Typed as a string here until 2026-09-14
+   * and an object on all 42 live sections: a `subheading` or `subheading3`
+   * block carrying the label in `text`.
+   */
+  summary?: string | IntercomBlock;
   url?: string;
   style?: string;
+  /** `table` — one entry per row, each holding its own cells. */
+  rows?: IntercomTableRow[];
+  /**
+   * `table` — presentation flags, declared because they are on the payload
+   * and not read because Markdown has no equivalent. Every one of the 36 live
+   * tables sends `container: false, responsive: false, stacked: true`.
+   */
+  container?: boolean;
+  responsive?: boolean;
+  stacked?: boolean;
+  /** `code` — a fence hint. Present on 1 of the 149 live code blocks. */
+  language?: string;
+  /** `video` — the hosting service and its id. No text, no url. */
+  provider?: string;
+  id?: string;
 }
 
-/** Inline HTML inside a block's `text`, flattened to Markdown-safe text. */
+/** One row of a `table` block. */
+interface IntercomTableRow {
+  cells?: IntercomTableCell[];
+}
+
+/**
+ * One cell of a `table` row.
+ *
+ * `content` is a block array, not a string — the same shape a list item uses.
+ * `style` carries presentation only (a background colour on header rows) and
+ * is deliberately not read here.
+ */
+interface IntercomTableCell {
+  content?: IntercomBlock[];
+  style?: Record<string, string>;
+}
+
+/**
+ * Inline HTML inside a block's `text`, flattened to Markdown-safe text.
+ *
+ * Anything not converted here is stripped by the closing `.text()`, so a tag
+ * this does not know about is content lost without a trace. That is what
+ * happened to inline images: 221 of them across 15 live articles, and for 212
+ * the image was the entire paragraph, so the whole block rendered to nothing.
+ */
 function inlineText(html: string): string {
   const $ = cheerio.load(`<div>${html}</div>`);
   $('a[href]').each((_, el) => {
@@ -84,10 +128,127 @@ function inlineText(html: string): string {
     const label = $(el).text();
     if (href !== '' && label !== '') { $(el).replaceWith(`[${label}](${href})`); }
   });
+  $('img[src]').each((_, el) => {
+    const src = $(el).attr('src') ?? '';
+    if (src !== '') { $(el).replaceWith(`![${$(el).attr('alt') ?? ''}](${src})`); }
+  });
   $('code').each((_, el) => { $(el).replaceWith(`\`${$(el).text()}\``); });
   $('strong, b').each((_, el) => { $(el).replaceWith(`**${$(el).text()}**`); });
   $('em, i').each((_, el) => { $(el).replaceWith(`*${$(el).text()}*`); });
   return $('div').text().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The label of a `collapsibleSection`.
+ *
+ * Every live section carries `summary` as a block, not a string, so handing
+ * it to {@link inlineText} interpolated it as "[object Object]" — and it is
+ * the section's title, the one line telling a reader what is folded away.
+ * 18 articles rendered that. The narrowing belongs here, at the boundary,
+ * for exactly the reason {@link asString} gives further down.
+ */
+function summaryText(summary: string | IntercomBlock | undefined): string {
+  if (typeof summary === 'string') { return inlineText(summary); }
+  return inlineText(summary?.text ?? '');
+}
+
+/**
+ * Render a `video` block as a link.
+ *
+ * `{provider, id}` — no `text` and no `url`, so this fell through to the
+ * default arm, which returns '' for a block with no text. The video left no
+ * trace at all. Only youtube occurs live (2 blocks); an unknown provider
+ * keeps the identifiers rather than inventing a URL scheme for it.
+ */
+function renderVideo(block: IntercomBlock): string {
+  const { provider, id } = block;
+  if (id === undefined || id === '') { return ''; }
+  return provider === 'youtube'
+    ? `[Video](https://www.youtube.com/watch?v=${id})\n\n`
+    : `Video (${provider ?? 'unknown source'}): ${id}\n\n`;
+}
+
+/**
+ * The literal text of a `code` block.
+ *
+ * Upstream puts HTML in this field, so copying it into a fence verbatim
+ * emitted one unusable line — `fdesetup list -extended<br>sysadminctl …` —
+ * for exactly the content a reader means to copy. Measured across all 149
+ * code blocks in the live corpus on 2026-09-14: 826 `<br>` tags, no other
+ * tag, and `&lt;` / `&gt;` / `&amp;` as the only entities.
+ *
+ * `<br>` becomes a newline BEFORE the entities are decoded. The other order
+ * would give a line break to a sample that legitimately contains the text
+ * `&lt;br&gt;`, which plist and XML samples do.
+ */
+function codeText(html: string): string {
+  const withBreaks = html.replace(/<\s*br\s*\/?\s*>/gi, '\n');
+  return cheerio.load(`<div>${withBreaks}</div>`)('div').text();
+}
+
+/**
+ * Wrap code in a fence long enough to survive its own content.
+ *
+ * No live sample carries a backtick run today. One that did would not just
+ * break its own block — it would end the fence early and leave the rest of
+ * the article inside code formatting, so the cheap guard is worth it.
+ */
+function fencedCode(text: string, language: string | undefined): string {
+  const longest = [...text.matchAll(/`+/g)]
+    .reduce((n, match) => Math.max(n, match[0].length), 0);
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}${language ?? ''}\n${text}\n${fence}\n\n`;
+}
+
+/**
+ * One table cell, flattened to something a Markdown row can hold.
+ *
+ * A cell holds a block array, and 254 of the 1,118 live cells hold more than
+ * one block — 45 contain a list, 17 an image. Markdown has nowhere to put
+ * that, so the cell is rendered normally and then collapsed onto one line:
+ * every word survives, the bullets do not.
+ *
+ * Escaping runs last, after the rendering that could introduce a pipe, and
+ * backslashes go first: escaping only the pipe turns `a\|b` into `a\\|b`,
+ * which renders as a literal backslash followed by a column break — the
+ * escape defeated by the very character it is made of.
+ */
+function cellText(cell: IntercomTableCell | undefined): string {
+  return renderBlocks(cell?.content ?? [])
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|');
+}
+
+/**
+ * Render a `table` block as a Markdown table.
+ *
+ * This type was dropped entirely until 2026-09-14: it carries no `text`, so
+ * it fell through to the default arm and returned the empty string, and a
+ * whole table left no trace in the output.
+ *
+ * Markdown demands a header row and Intercom marks none. Of the 36 live
+ * tables, 21 style their first row and 9 more bold it; the remaining 6 give
+ * no signal either way. The first row becomes the header regardless — it is
+ * the header wherever there is one, and for those 6 it costs presentation
+ * rather than data, since the row is still rendered.
+ *
+ * Rows are uniform in every live table, but a ragged one is padded to the
+ * widest rather than producing a table that renderers disagree about.
+ */
+function renderTable(block: IntercomBlock): string {
+  const rows = (block.rows ?? []).filter(row => (row.cells ?? []).length > 0);
+  const [header, ...body] = rows;
+  if (header === undefined) { return ''; }
+
+  const width = rows.reduce((n, row) => Math.max(n, (row.cells ?? []).length), 0);
+  const line = (row: IntercomTableRow): string => {
+    const cells = row.cells ?? [];
+    return `| ${Array.from({ length: width }, (_, i) => cellText(cells[i])).join(' | ')} |\n`;
+  };
+
+  return `${line(header)}|${' --- |'.repeat(width)}\n${body.map(line).join('')}\n`;
 }
 
 /**
@@ -120,19 +281,64 @@ function renderList(items: IntercomBlock[], ordered: boolean, depth: number): st
 }
 
 /**
+ * Every block type {@link renderBlock} has a case for.
+ *
+ * Exported so `test/integration/support-kb-contracts.test.ts` can hold the
+ * live corpus to it once a week. Reviewing the switch by hand is what failed
+ * twice — the docstring on renderBlock claimed a complete list while `table`,
+ * `subheading3` and `video` were all live and unhandled — and the two
+ * failures looked nothing alike: a table rendered to nothing, while a
+ * subheading3 rendered to a perfectly ordinary paragraph. Only an inventory
+ * check catches the second kind.
+ *
+ * Keep this in step with the switches below; a live type in neither is the
+ * failure it exists to produce.
+ */
+export const HANDLED_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  'callout',
+  'code',
+  'collapsibleSection',
+  'heading',
+  'horizontalRule',
+  'image',
+  'orderedNestedList',
+  'paragraph',
+  'subheading',
+  'subheading3',
+  'table',
+  'unorderedNestedList',
+  'video',
+]);
+
+/**
+ * One construct at three depths.
+ *
+ * Kept as a table rather than three switch arms because that is what the
+ * upstream vocabulary is: `subheading3` was added after `subheading`, and was
+ * rendered as a plain paragraph for as long as this was a list of cases. A
+ * fourth level is now one line.
+ */
+const HEADING_PREFIX: Record<string, string> = {
+  heading: '##',
+  subheading: '###',
+  subheading3: '####',
+};
+
+/**
  * The blocks that map to one Markdown construct each.
  *
- * Split from {@link renderBlock} so the two nesting types — `callout` and
- * `collapsibleSection`, which recurse — stay legible next to each other
- * rather than at the bottom of one long switch. Returns null for anything it
- * does not handle.
+ * Split from {@link renderBlock} so the types that need a helper — `callout`
+ * and `collapsibleSection`, which recurse, and `table` — stay legible next to
+ * each other rather than at the bottom of one long switch. Returns null for
+ * anything it does not handle.
  */
 function renderSimpleBlock(block: IntercomBlock, depth: number): string | null {
+  const prefix = HEADING_PREFIX[block.type ?? ''];
+  if (prefix !== undefined) {
+    return `${prefix} ${inlineText(block.text ?? '')}\n\n`;
+  }
+
   switch (block.type) {
-    case 'heading':
-      return `## ${inlineText(block.text ?? '')}\n\n`;
-    case 'subheading':
-      return `### ${inlineText(block.text ?? '')}\n\n`;
     case 'paragraph': {
       const text = inlineText(block.text ?? '');
       return text === '' ? '' : `${text}\n\n`;
@@ -142,11 +348,13 @@ function renderSimpleBlock(block: IntercomBlock, depth: number): string | null {
     case 'unorderedNestedList':
       return `${renderList(block.items ?? [], false, depth)}\n`;
     case 'code':
-      return `\`\`\`\n${block.text ?? ''}\n\`\`\`\n\n`;
+      return fencedCode(codeText(block.text ?? ''), block.language);
     case 'horizontalRule':
       return '---\n\n';
     case 'image':
       return block.url !== undefined ? `![](${block.url})\n\n` : '';
+    case 'video':
+      return renderVideo(block);
     case undefined:
     default:
       return null;
@@ -156,12 +364,20 @@ function renderSimpleBlock(block: IntercomBlock, depth: number): string | null {
 /**
  * Render one Intercom block.
  *
- * Ten types occur across the live corpus, not the four the integration notes
- * listed. `callout` and `collapsibleSection` nest their body under `content`
- * rather than `text`, and `subheading`, `unorderedNestedList`,
- * `collapsibleSection`, `image`, `code` and `horizontalRule` would all be
- * dropped by a renderer that only knew the four — silently, since a missing
- * block leaves no trace in the output.
+ * Thirteen types reach this function, measured over all 817 live articles on
+ * 2026-09-14 and counting every path that arrives here: the article's own
+ * block list, `callout` and `collapsibleSection` bodies, list item bodies,
+ * and table cells. `callout` and `collapsibleSection` nest their body under
+ * `content` rather than `text`.
+ *
+ * That count has been wrong twice, in the same direction both times, because
+ * an unhandled type leaves no trace to notice: this comment claimed four,
+ * then ten, while `table` (36 blocks), `subheading3` (34) and `video` (2)
+ * were being dropped or flattened into body text. Counting by hand is what
+ * failed, so it is no longer the mechanism —
+ * `test/integration/support-kb-contracts.test.ts` asserts the inventory
+ * against the live corpus, and a fourteenth type fails a check instead of
+ * quietly costing content.
  */
 export function renderBlock(block: IntercomBlock, depth = 0): string {
   const simple = renderSimpleBlock(block, depth);
@@ -177,7 +393,9 @@ export function renderBlock(block: IntercomBlock, depth = 0): string {
         .map(line => `> ${line}`)
         .join('\n')}\n\n`;
     case 'collapsibleSection':
-      return `**${inlineText(block.summary ?? '')}**\n\n${renderBlocks(block.content ?? [])}`;
+      return `**${summaryText(block.summary)}**\n\n${renderBlocks(block.content ?? [])}`;
+    case 'table':
+      return renderTable(block);
     case undefined:
     default:
       // Unknown type: keep whatever text it has rather than dropping the
