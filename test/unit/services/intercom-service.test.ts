@@ -206,6 +206,20 @@ describe('renderBlock', () => {
     expect(out).toContain('| a \\| b |');
   });
 
+  it('escapes a backslash so it cannot defeat the pipe escape', () => {
+    // Escaping only the pipe turns `a\|b` into `a\\|b`, which renders as a
+    // literal backslash followed by a column break — one cell silently
+    // becoming two, by way of the character the escape is made of.
+    const out = renderBlock({
+      type: 'table',
+      rows: [
+        { cells: [{ content: [{ type: 'paragraph', text: 'Pattern' }] }] },
+        { cells: [{ content: [{ type: 'paragraph', text: 'a\\|b' }] }] },
+      ],
+    });
+    expect(out).toContain('| a\\\\\\|b |');
+  });
+
   it('pads a ragged row rather than emitting a table renderers disagree on', () => {
     const out = renderBlock({
       type: 'table',

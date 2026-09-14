@@ -206,13 +206,18 @@ function fencedCode(text: string, language: string | undefined): string {
  * A cell holds a block array, and 254 of the 1,118 live cells hold more than
  * one block — 45 contain a list, 17 an image. Markdown has nowhere to put
  * that, so the cell is rendered normally and then collapsed onto one line:
- * every word survives, the bullets do not. Pipes are escaped last, after the
- * rendering that could introduce them.
+ * every word survives, the bullets do not.
+ *
+ * Escaping runs last, after the rendering that could introduce a pipe, and
+ * backslashes go first: escaping only the pipe turns `a\|b` into `a\\|b`,
+ * which renders as a literal backslash followed by a column break — the
+ * escape defeated by the very character it is made of.
  */
 function cellText(cell: IntercomTableCell | undefined): string {
   return renderBlocks(cell?.content ?? [])
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|');
 }
 

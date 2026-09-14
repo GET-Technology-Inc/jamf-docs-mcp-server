@@ -20,6 +20,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import * as cheerio from 'cheerio';
 import {
   parseNextData,
   renderBlock,
@@ -140,12 +141,16 @@ function reachableBlocks(blocks: Block[]): Block[] {
  * A paragraph whose text is only whitespace is a spacer — there are 4,478 of
  * them live — and rendering it to nothing is right. One whose text is only an
  * `<img>` is not a spacer: the image is the whole block.
+ *
+ * Parsed rather than regex-stripped. `text.replace(/<[^>]+>/g, '')` leaves
+ * behind anything that does not close cleanly, so it answers "is there
+ * visible text" wrongly for exactly the malformed markup worth noticing —
+ * and this predicate decides whether a block is allowed to render to nothing.
  */
 function hasContent(block: Block): boolean {
-  const text = block.text ?? '';
-  const visible = text.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim() !== '';
-  return visible
-    || /<(img|a)\b/i.test(text)
+  const $ = cheerio.load(`<div>${block.text ?? ''}</div>`);
+  return $('div').text().trim() !== ''
+    || $('img[src], a[href]').length > 0
     || (block.url ?? '') !== ''
     || (block.id ?? '') !== ''
     || (block.items ?? []).length > 0
