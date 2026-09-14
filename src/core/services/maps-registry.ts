@@ -366,12 +366,12 @@ export class MapsRegistry {
    *
    * Sourced from the same `/api/khub/maps` payload the registry already
    * builds from, so it needs no extra request and cannot drift from what
-   * `resolveMapId` can actually reach: 97 families as of 2026-09-02, against
+   * `resolveMapId` can actually reach: 97 families as of 2026-09-14, against
    * the 12 reachable through {@link JAMF_PRODUCTS}.
    *
    * `locale` selects which locale's title to report and nothing else — the
    * list is not filtered by it, because a caller asking in zh-TW still needs
-   * to see the en-US-only families (24 of them) rather than have them
+   * to see the en-US-only families (42 of them) rather than have them
    * silently vanish. Each entry's `locales` says what it actually has.
    */
   async listPublications(locale?: LocaleId): Promise<PublicationInfo[]> {

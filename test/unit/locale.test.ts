@@ -18,7 +18,7 @@ import { extractLocaleFromUrl } from '../../src/core/utils/url.js';
 import { completeLanguage } from '../../src/core/completions.js';
 
 // Ground truth: every locale that carries at least one map in
-// `/api/khub/maps`, re-measured over all 662 maps on 2026-09-02.
+// `/api/khub/maps`, re-measured over all 676 maps on 2026-09-14.
 //
 // The previous note here said it-IT, pt-BR and zh-CN appeared in
 // availableContentLocales "but they have no content". That has stopped being

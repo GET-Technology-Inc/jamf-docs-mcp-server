@@ -50,10 +50,10 @@ export async function search(
 /**
  * GET /api/khub/maps
  *
- * Returns all publications: 662 maps across all locales and versions,
+ * Returns all publications: 676 maps across all locales and versions,
  * which collapse to 97 bundle families once the version suffix is
- * stripped. Measured against the live endpoint on 2026-09-02
- * (2,903,611 bytes); the previous "~577" in this comment predated
+ * stripped. Measured against the live endpoint on 2026-09-14
+ * (2,968,856 bytes); the previous "~577" in this comment predated
  * several publication families and was never a hard contract — the
  * scheduled upstream-contract job is what pins the real shape.
  *
