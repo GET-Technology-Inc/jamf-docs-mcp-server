@@ -1,3 +1,9 @@
+## [5.10.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.3...v5.10.4) (2026-09-14)
+
+### Bug Fixes
+
+* **ci:** let the upstream contract check actually reach learn.jamf.com ([#279](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/279)) ([1b00daa](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/1b00daab14943ae735853fa39a7846fbe2979c09)), closes [#271](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/271)
+
 ## [5.10.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.2...v5.10.3) (2026-09-09)
 
 ### Dependencies
