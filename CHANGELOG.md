@@ -1,3 +1,9 @@
+## [5.10.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.4...v5.10.5) (2026-09-14)
+
+### Bug Fixes
+
+* **sources:** stop losing content from support.jamf.com articles, and hold it to a live contract ([#284](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/284)) ([ea67b82](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ea67b822c2516d9159009bb8f89e744e5638d7a7)), closes [#280](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/280) [#281](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/281)
+
 ## [5.10.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.3...v5.10.4) (2026-09-14)
 
 ### Bug Fixes
