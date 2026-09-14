@@ -1,13 +1,14 @@
 name: Upstream Contract Check
 
 # Detects when a Jamf documentation source drifts from the shape our code depends
-# on. Two suites, two upstreams: `data-contracts` covers the learn.jamf.com Fluid
-# Topics API (metadata fields, product labels, clustering, content format), and
-# `support-kb-contracts` covers the support.jamf.com Intercom Help Center, above
-# all the block-type vocabulary the renderer dispatches on. Both hit the REAL
-# service; if either fails on a schedule it means upstream changed — the same
-# class of change that silently broke non-Pro search and ingestion, and that
-# dropped every table out of a support article.
+# on. One suite per upstream: `data-contracts` covers the learn.jamf.com Fluid
+# Topics API (metadata fields, product labels, clustering, content format),
+# `support-kb-contracts` the support.jamf.com Intercom Help Center — above all
+# the block-type vocabulary the renderer dispatches on — and
+# `concepts-contracts` the concepts.jamf.com sitemap and page structure. All
+# three hit the REAL service; a failure on a schedule means upstream changed:
+# the same class of change that silently broke non-Pro search and ingestion,
+# and that dropped every table out of a support article.
 #
 # This runs OUT OF BAND (cron) and opens an issue on drift. It is deliberately NOT
 # part of the merge gate — live-API flakiness must never block PRs.
@@ -82,7 +83,8 @@ jobs:
               `- Failed run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               '- Start from the failing assertions: learn.jamf.com is covered by',
               '  `test/integration/data-contracts.test.ts`, support.jamf.com by',
-              '  `test/integration/support-kb-contracts.test.ts`.',
+              '  `test/integration/support-kb-contracts.test.ts`, and',
+              '  concepts.jamf.com by `test/integration/concepts-contracts.test.ts`.',
               '- Remember the downstream consumers: `jamf-docs-mcp-worker` (ingestion) and',
               '  `jamf-docs-chatbot` (via RPC).',
             ].join('\n');
