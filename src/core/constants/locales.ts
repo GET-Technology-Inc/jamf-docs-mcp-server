@@ -8,15 +8,20 @@ export const DEFAULT_LOCALE = 'en-US';
 /**
  * Every locale Jamf actually publishes documentation in.
  *
- * Measured against all 662 maps of `/api/khub/maps` on 2026-09-02, ordered by
+ * Measured against all 676 maps of `/api/khub/maps` on 2026-09-14, ordered by
  * how much content each carries:
  *
- *   en-US 194 maps / 97 families    nl-NL 10 / 10
- *   fr-FR  92 / 55                  pt-BR  2 / 2
- *   de-DE  91 / 54                  th-TH  2 / 2
- *   es-ES  91 / 54                  zh-CN  2 / 2
- *   ja-JP  91 / 54                  it-IT  2 / 2
- *   zh-TW  85 / 48
+ *   en-US 198 maps / 97 families    nl-NL 10 / 10
+ *   fr-FR  94 / 55                  pt-BR  2 / 2
+ *   de-DE  93 / 54                  th-TH  2 / 2
+ *   es-ES  93 / 54                  zh-CN  2 / 2
+ *   ja-JP  93 / 54                  it-IT  2 / 2
+ *   zh-TW  87 / 48
+ *
+ * The map column moves with every Jamf release — 11.32.0 alone added 14 maps
+ * between the 2026-09-02 and 2026-09-14 measurements — while the family column
+ * did not move at all. Only the ordering is load-bearing here, so a later
+ * mismatch in the map counts is Jamf publishing, not drift.
  *
  * `it-IT`, `pt-BR` and `zh-CN` were previously left undeclared on the reading
  * that Fluid Topics listed them in `availableContentLocales` without shipping
@@ -25,7 +30,8 @@ export const DEFAULT_LOCALE = 'en-US';
  * language ("Introduzione a Jamf Parent", "Introdução ao Jamf Parent",
  * "开始使用Jamf Parent"). They sit at the bottom of the list for the same
  * reason th-TH does — those two guides are published in 11 locales, the
- * widest in the library, while everything else tops out at six.
+ * widest in the library, while everything else tops out at seven (the Jamf
+ * Parent, Jamf Teacher and Jamf School Blueprints configuration guides).
  */
 export const SUPPORTED_LOCALES = {
   'en-US': { name: 'English' },

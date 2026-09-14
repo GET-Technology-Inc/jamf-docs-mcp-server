@@ -27,20 +27,28 @@ export const FT_META = {
   PRODNAME: 'prodname',
 
   /**
-   * Jamf's own publication classification, present on all 662 maps.
+   * Jamf's own publication classification, carried by 629 of the 676 maps.
    *
    * Unlike the `product-*` values inside `zoominmetadata` — a legacy Zoomin
    * vocabulary where one label covers many publications (`product-pro` alone
    * spans 38 bundle families) — these three name the platform, client app or
-   * utility a publication documents, and each map carries at most one of
-   * each. Measured across all 97 bundle families and 11 locales, every family
-   * reports the same value in every locale: 0 disagreements. That is what
-   * makes them usable as a stable classification rather than display text,
-   * and it is the opposite of `jamf:contentType`, whose values ARE translated
-   * (see DOC_TYPE_CONTENT_TYPE_MAP).
+   * utility a publication documents. Measured across all 97 bundle families
+   * and 11 locales, every family reports the same value in every locale: 0
+   * disagreements. That is what makes them usable as a stable classification
+   * rather than display text, and it is the opposite of `jamf:contentType`,
+   * whose values ARE translated (see DOC_TYPE_CONTENT_TYPE_MAP).
    *
-   * Live distribution: portal 12 distinct values over 550 maps, app 9 over
-   * 92, utility 9 over 25. A map may carry none of them.
+   * Two things this comment used to assert are false. A map may carry none of
+   * the three — 17 of the 97 families never do — and it may carry several:
+   * 29 maps list two or three `jamf:portal` values and 12 list two `jamf:app`
+   * values, so Jamf files "Jamf 170 Course" under Jamf Pro and Jamf Protect
+   * alike. `jamf:utility` is the only genuinely single-valued one. The
+   * registry reads all three through {@link getMetaValue}, which keeps
+   * `values[0]` and discards the rest — a known defect tracked in #282, not
+   * the intent.
+   *
+   * Live distribution, measured 2026-09-14: portal 12 distinct values over
+   * 564 maps, app 9 over 92, utility 9 over 25.
    */
   PORTAL: 'jamf:portal',
   APP: 'jamf:app',
