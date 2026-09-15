@@ -34,12 +34,21 @@ export interface MapEntry {
   locale: string;
   isLatest: boolean;
   bundleValues: string[];
-  /** `jamf:portal` — the platform this publication documents. '' when absent. */
-  portal: string;
-  /** `jamf:app` — the client app this publication documents. '' when absent. */
-  app: string;
-  /** `jamf:utility` — the utility this publication documents. '' when absent. */
-  utility: string;
+  /**
+   * `jamf:portal` — the platforms this publication documents, in Jamf's own
+   * order. Empty when Jamf assigns none.
+   *
+   * Plural because Jamf files a document under every product it covers, not
+   * one: 29 of 676 maps carry two or three portal values today, in 7 distinct
+   * combinations. All three keys are present on every map — what varies is
+   * whether `values` is empty — so an empty array here means "Jamf classified
+   * this under nothing", never "the key was missing".
+   */
+  portal: string[];
+  /** `jamf:app` — the client apps this publication documents. 12 maps carry two. */
+  app: string[];
+  /** `jamf:utility` — the utilities this publication documents. None carries two today. */
+  utility: string[];
 }
 
 export interface RegistryProductInfo {
@@ -62,12 +71,12 @@ export interface PublicationInfo {
   id: string;
   /** Title of the family's map in the requested locale. */
   title: string;
-  /** `jamf:portal` — platform. '' when Jamf assigns none. */
-  portal: string;
-  /** `jamf:app` — client app. '' when Jamf assigns none. */
-  app: string;
-  /** `jamf:utility` — utility. '' when Jamf assigns none. */
-  utility: string;
+  /** `jamf:portal` — platforms, in Jamf's order. Empty when Jamf assigns none. */
+  portal: string[];
+  /** `jamf:app` — client apps, in Jamf's order. Empty when Jamf assigns none. */
+  app: string[];
+  /** `jamf:utility` — utilities, in Jamf's order. Empty when Jamf assigns none. */
+  utility: string[];
   /** Locales this family actually publishes in, sorted. */
   locales: string[];
   /** Versions, newest first. Empty for the unversioned majority. */
@@ -85,8 +94,15 @@ interface PublicationDraft extends PublicationInfo {
 /**
  * Derive bundleStem from metadata.
  * Prefers `version_bundle_stem` (clean stem), otherwise parses `bundle` values.
+ *
+ * Exported for the live data contracts, which have to group maps into families
+ * the same way the registry does. Reading `version_bundle_stem` directly there
+ * instead looks equivalent and is not: only 310 of 676 maps carry that key, and
+ * it spans 5 stems against the 97 this derivation reaches, so a contract built
+ * on the raw key silently checks the five Jamf Pro and Jamf Connect families
+ * and skips every other one.
  */
-function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): string {
+export function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): string {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
   if (stem !== '') {return stem;}
 
@@ -118,20 +134,39 @@ function parseMap(map: FtMapInfo): MapEntry {
     locale: getMetaValue(metadata, FT_META.LOCALE),
     isLatest: getMetaValue(metadata, FT_META.LATEST_VERSION) === 'yes',
     bundleValues: getMetaValues(metadata, FT_META.BUNDLE),
-    portal: getMetaValue(metadata, FT_META.PORTAL),
-    app: getMetaValue(metadata, FT_META.APP),
-    utility: getMetaValue(metadata, FT_META.UTILITY),
+    // All three read every value, not `values[0]`. Jamf classifies a document
+    // under every product it covers — "Jamf 170 Course" is filed under Jamf
+    // Pro *and* Jamf Protect — and `getMetaValue` kept whichever the payload
+    // happened to list first, which is array order, not a ranking (#282).
+    // Jamf's order is preserved rather than sorted: it is stable, and the
+    // registry has nothing better to rank by.
+    portal: getMetaValues(metadata, FT_META.PORTAL),
+    app: getMetaValues(metadata, FT_META.APP),
+    utility: getMetaValues(metadata, FT_META.UTILITY),
   };
 }
 
 // ─── Registry ───────────────────────────────────────────────────
 
+// The namespace carries the shape of MapEntry, because `cache.get<MapEntry[]>`
+// below is an unchecked cast: whatever is on disk is trusted to be this type.
+//
 // v2: MapEntry gained portal/app/utility. A v1 payload deserialises into
 // entries missing those fields, which would surface as every publication
-// reporting no classification rather than as an error — so the namespace
-// moves rather than the shape being widened in place. Entries left under the
-// old namespace expire on their TTL and are reclaimed by the startup sweep.
-const CACHE_KEY = cacheKey('maps-registry-v2');
+// reporting no classification rather than as an error.
+//
+// v3: those three became `string[]` (#282). A v2 payload is worse than a v1
+// one, because it deserialises into something that is present and wrong — the
+// bare string "Jamf Pro" where an array belongs. Most array operations on it
+// do not throw: `[...portal]` spreads into eight one-character classifications
+// and renders groups named J, a, m, f, so the list would look plausible and be
+// nonsense. Nothing validates the payload on read, and the default
+// `CACHE_TTL_PRODUCTS` is 7 days, so an in-place upgrade would carry a stale
+// entry for up to a week. Moving the namespace is what makes that impossible.
+//
+// Entries left under the old namespace expire on their TTL and are reclaimed
+// by the startup sweep in `src/index.ts`.
+const CACHE_KEY = cacheKey('maps-registry-v3');
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GLOSSARY_BUNDLE_STEM = 'jamf-technical-glossary';
 
@@ -391,6 +426,12 @@ export class MapsRegistry {
         info = {
           id: entry.bundleStem,
           title: '',
+          // The first map of a family decides the family's classification,
+          // which is safe because Jamf publishes the same one on every map of
+          // it: measured across all 97 families x 3 keys, every map agrees on
+          // the exact value array, order included — 0 disagreements. So there
+          // is nothing to merge here, and merging would invent a family-level
+          // classification Jamf never published.
           portal: entry.portal,
           app: entry.app,
           utility: entry.utility,

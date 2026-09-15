@@ -132,7 +132,7 @@ export interface CacheKeySpaces {
   'intercom-collections': { source: string; locale: string };
   /** One Intercom collection's article tree. Keyed on the collection, which is locale-specific. */
   'intercom-collection-toc': { source: string; collection: string };
-  'maps-registry-v2': null;
+  'maps-registry-v3': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
   'metadata-product-availability': null;
@@ -192,7 +192,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'static-search-index': true,
   'intercom-collections': true,
   'intercom-collection-toc': true,
-  'maps-registry-v2': true,
+  'maps-registry-v3': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
   'metadata-product-availability': true,

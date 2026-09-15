@@ -1035,9 +1035,9 @@ describe('publication axis', () => {
 
   const PUBLICATIONS = [
     { id: 'technical-paper-laps', title: 'Technical Paper: Local Administrator Password Solution for Jamf Pro',
-      portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US', 'ja-JP'], versions: [] },
+      portal: ['Jamf Pro'], app: [], utility: [], locales: ['en-US', 'ja-JP'], versions: [] },
     { id: 'jamf-pro-release-notes', title: 'Jamf Pro Release Notes 11.31.0',
-      portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
+      portal: ['Jamf Pro'], app: [], utility: [], locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
   ];
 
   let pubServer: McpServer;

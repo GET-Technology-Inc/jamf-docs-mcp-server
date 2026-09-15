@@ -41,18 +41,27 @@ const mockGetProductsMetadata = vi.fn(async () => await Promise.resolve(
 /**
  * Shaped like the live data: one family per classification slot Jamf uses,
  * one carrying no classification at all, one versioned and one single-locale.
+ *
+ * The last two are the shapes #282 was about, and both are copied from real
+ * `/api/khub/maps` rows rather than invented. `jamf-170-course` carries two
+ * `jamf:portal` values, which the registry used to truncate to the first;
+ * `title-editor` carries a portal *and* a utility, which the old
+ * `portal ?? app ?? utility` grouping discarded the second half of. Without
+ * them the suite cannot tell cross-listing from the old behaviour.
  */
 const PUBLICATIONS = [
   { id: 'technical-paper-laps', title: 'Technical Paper: LAPS for Jamf Pro',
-    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US', 'ja-JP'], versions: [] },
+    portal: ['Jamf Pro'], app: [], utility: [], locales: ['en-US', 'ja-JP'], versions: [] },
   { id: 'jamf-pro-release-notes', title: 'Jamf Pro Release Notes 11.31.0',
-    portal: 'Jamf Pro', app: '', utility: '', locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
+    portal: ['Jamf Pro'], app: [], utility: [], locales: ['en-US'], versions: ['11.31.0', '11.30.0'] },
   { id: 'composer-user-guide', title: 'Composer User Guide',
-    portal: '', app: 'Composer', utility: '', locales: ['en-US'], versions: [] },
+    portal: [], app: ['Composer'], utility: [], locales: ['en-US'], versions: [] },
+  { id: 'jamf-170-course', title: 'Jamf 170 Course',
+    portal: ['Jamf Pro', 'Jamf Protect'], app: [], utility: [], locales: ['en-US'], versions: [] },
   { id: 'title-editor', title: 'Title Editor Documentation',
-    portal: '', app: '', utility: 'Title Editor', locales: ['en-US'], versions: [] },
+    portal: ['Jamf Pro'], app: [], utility: ['Title Editor'], locales: ['en-US'], versions: [] },
   { id: 'welcome-to-jamf', title: 'Welcome to Jamf',
-    portal: '', app: '', utility: '', locales: ['en-US'], versions: [] },
+    portal: [], app: [], utility: [], locales: ['en-US'], versions: [] },
 ];
 
 /**
@@ -649,6 +658,67 @@ describe('publications section', () => {
     // A family Jamf files under none of the three still has to be reachable.
     expect(text).toContain('## Other');
     expect(text).toContain('welcome-to-jamf');
+  });
+
+  it('should list a publication under every product Jamf files it under', async () => {
+    // #282: Jamf files the 170 Course under Jamf Pro *and* Jamf Protect.
+    // Grouping by `values[0]` put it under Jamf Pro alone, so browsing Jamf
+    // Protect said the course did not exist. Both headings must find it, and
+    // "Jamf Protect" must be a heading at all — no other fixture creates it.
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+
+    // Scoped to the Publications section: the Products section above renders
+    // `## Jamf Pro` too, and reading that one would pass for the wrong reason.
+    const section = text.split('# Publications (')[1] ?? '';
+    const groupOf = (heading: string): string =>
+      section.split(`## ${heading}\n`)[1]?.split('\n## ')[0] ?? '';
+
+    expect(groupOf('Jamf Pro')).toContain('jamf-170-course');
+    expect(groupOf('Jamf Protect')).toContain('jamf-170-course');
+
+    // The other half of the same defect: a publication carrying two *axes*
+    // was filed under the portal only, which is why `## Title Editor` listed
+    // nothing on live data even though the heading existed.
+    expect(groupOf('Jamf Pro')).toContain('title-editor');
+    expect(groupOf('Title Editor')).toContain('title-editor');
+  });
+
+  it('should count publications once however many groups list them', async () => {
+    // Cross-listing repeats rows; the headline number is documents, not rows,
+    // and the preamble has to say so or the two read as a contradiction.
+    const text = getTextContent(await client.callTool({ name: 'jamf_docs_list_products' }));
+    const sc = (await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    })).structuredContent as { publications?: unknown[] };
+
+    expect(text).toContain(`# Publications (${String(sc.publications?.length ?? 0)})`);
+    expect(text).toContain('listed under each');
+
+    // One PublicationRow per document, even for the cross-listed ones.
+    const ids = (sc.publications as { id: string }[]).map(p => p.id);
+    expect(ids.filter(id => id === 'jamf-170-course')).toHaveLength(1);
+  });
+
+  it('should report every classification Jamf assigns, not the first', async () => {
+    const sc = (await client.callTool({
+      name: 'jamf_docs_list_products',
+      arguments: { responseFormat: 'json' },
+    })).structuredContent as {
+      publications?: { id: string; portal?: string[]; app?: string[]; utility?: string[] }[];
+    };
+    const byId = (id: string): { portal?: string[]; app?: string[]; utility?: string[] } =>
+      sc.publications?.find(p => p.id === id) ?? {};
+
+    // Jamf's own order, both values kept.
+    expect(byId('jamf-170-course').portal).toEqual(['Jamf Pro', 'Jamf Protect']);
+    // Both axes survive, rather than the portal masking the utility.
+    expect(byId('title-editor').portal).toEqual(['Jamf Pro']);
+    expect(byId('title-editor').utility).toEqual(['Title Editor']);
+    // An unclassified family omits the keys rather than reporting empty ones.
+    expect(byId('welcome-to-jamf')).not.toHaveProperty('portal');
+    expect(byId('welcome-to-jamf')).not.toHaveProperty('app');
+    expect(byId('welcome-to-jamf')).not.toHaveProperty('utility');
   });
 
   it('should mark a versioned family and a single-locale family', async () => {

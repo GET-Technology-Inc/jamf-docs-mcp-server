@@ -34,10 +34,18 @@ export const ProductListOutputSchema = z.object({
   publications: z.array(z.object({
     id: z.string(),
     title: z.string(),
-    /** Jamf's own classification. Fields absent when Jamf assigns none. */
-    portal: z.string().optional(),
-    app: z.string().optional(),
-    utility: z.string().optional(),
+    /**
+     * Jamf's own classification, in Jamf's order. Fields absent when Jamf
+     * assigns none, rather than present and empty.
+     *
+     * Arrays because a document belongs to every product it covers: Jamf files
+     * "Jamf 170 Course" under both Jamf Pro and Jamf Protect, and the Jamf
+     * Trust documentation under two portals and two apps. Reporting one of
+     * them was #282.
+     */
+    portal: z.array(z.string()).optional(),
+    app: z.array(z.string()).optional(),
+    utility: z.array(z.string()).optional(),
     locales: z.array(z.string()),
     versions: z.array(z.string()),
   })).optional(),
