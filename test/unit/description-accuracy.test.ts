@@ -35,6 +35,8 @@ interface DescribedText {
   where: string;
   /** The schema field this text describes, when it describes one */
   param?: string;
+  /** The tool this text belongs to, for params whose bounds are per-tool */
+  tool?: string;
   text: string;
 }
 
@@ -59,13 +61,13 @@ beforeAll(async () => {
   const { tools } = await client.listTools();
   for (const tool of tools) {
     if (typeof tool.description === 'string') {
-      corpus.push({ where: `tool ${tool.name} description`, text: tool.description });
+      corpus.push({ where: `tool ${tool.name} description`, tool: tool.name, text: tool.description });
     }
     const properties = (tool.inputSchema as JsonSchemaObject).properties ?? {};
     for (const [param, schema] of Object.entries(properties)) {
       const description = schema?.description;
       if (typeof description === 'string') {
-        corpus.push({ where: `tool ${tool.name} arg "${param}"`, param, text: description });
+        corpus.push({ where: `tool ${tool.name} arg "${param}"`, param, tool: tool.name, text: description });
       }
     }
   }
@@ -165,14 +167,30 @@ const NUMERIC_CLAIMS: Record<string, NumericClaim | undefined> = {
   },
 };
 
+/**
+ * Defaults that are deliberately not the shared one.
+ *
+ * `maxTokens` was one number for every tool until `jamf_docs_list_products`
+ * needed its own: it answers with a whole catalogue, and its full markdown
+ * does not fit 5000. Keying the claim on the parameter name alone asserted a
+ * uniformity that had stopped being true, which would have passed a
+ * description quoting 5000 over a schema defaulting to 8000 — the exact drift
+ * (#199) this file exists to catch.
+ */
+const PER_TOOL_DEFAULTS: Record<string, Record<string, number | undefined> | undefined> = {
+  jamf_docs_list_products: { maxTokens: TOKEN_CONFIG.CATALOGUE_MAX_TOKENS },
+};
+
 /** Counts every claim actually checked, so the tests cannot pass vacuously. */
 let claimsChecked = 0;
 
-function checkNumericClaims(where: string, param: string, text: string): void {
-  const claim = NUMERIC_CLAIMS[param];
-  if (claim === undefined) {
+function checkNumericClaims(where: string, param: string, text: string, tool?: string): void {
+  const base = NUMERIC_CLAIMS[param];
+  if (base === undefined) {
     return;
   }
+  const override = tool !== undefined ? PER_TOOL_DEFAULTS[tool]?.[param] : undefined;
+  const claim = override !== undefined ? { ...base, default: override } : base;
   for (const match of text.matchAll(/\d+-\d+/g)) {
     claimsChecked += 1;
     expect(
@@ -202,7 +220,7 @@ describe('description accuracy: numeric bounds', () => {
     for (const entry of corpus) {
       if (entry.param !== undefined) {
         // A schema `.describe()` string: the whole text is about that param.
-        checkNumericClaims(entry.where, entry.param, entry.text);
+        checkNumericClaims(entry.where, entry.param, entry.text, entry.tool);
         continue;
       }
       for (const line of entry.text.split('\n')) {
@@ -210,7 +228,7 @@ describe('description accuracy: numeric bounds', () => {
         if (declared === null) {
           continue;
         }
-        checkNumericClaims(`${entry.where} line "${line.trim()}"`, declared[1], line);
+        checkNumericClaims(`${entry.where} line "${line.trim()}"`, declared[1], line, entry.tool);
       }
     }
     expect(claimsChecked, 'no numeric claims were found to check').toBeGreaterThan(0);

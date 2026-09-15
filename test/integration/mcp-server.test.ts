@@ -8,6 +8,7 @@ import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject, resourceText } from '../helpers/fixtures.js';
 import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
 import { PRODUCT_IDS } from '../../src/core/constants/products.js';
+import { TOKEN_CONFIG } from '../../src/core/constants/limits.js';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
@@ -412,6 +413,67 @@ describe('Jamf Docs MCP Server', () => {
       expect(text).toContain('Jamf School');
       expect(text).toContain('Jamf Connect');
       expect(text).toContain('Jamf Protect');
+    });
+
+    it('list-products-fits-its-budget: a default call is not truncated', async () => {
+      // The catalogue has to arrive whole, because the sections the cut lands
+      // on are vocabularies rather than prose: `topic` and `docType` are the
+      // search filters, and `publication` addresses get_toc. A caller that
+      // cannot see a value cannot pass it, and the truncation notice names
+      // only the section, not the values inside it.
+      //
+      // This is why TOKEN_CONFIG.CATALOGUE_MAX_TOKENS is 10000 rather than the
+      // shared 5000: measured live when it was set, the markdown is ~5639
+      // tokens and the JSON payload ~8006. Jamf publishing enough new
+      // documents to overrun it fails here — raise the constant and
+      // re-measure, do not relax this.
+      //
+      // The JSON path is checked through `tokenInfo` and the markdown path
+      // through the rendered text, because they fail differently: JSON is
+      // never actually cut and only reports the flag, while markdown really is
+      // cut, line by line, from the end.
+      const json = await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: { responseFormat: 'json' }
+      });
+      const { tokenInfo } = JSON.parse(
+        (json.content[0] as { type: 'text'; text: string }).text
+      ) as { tokenInfo: { tokenCount: number; truncated: boolean; maxTokens: number } };
+
+      expect(tokenInfo.maxTokens).toBe(TOKEN_CONFIG.CATALOGUE_MAX_TOKENS);
+      expect(
+        tokenInfo.truncated,
+        `The JSON catalogue no longer fits its own budget: ${String(tokenInfo.tokenCount)} ` +
+        `tokens against maxTokens ${String(tokenInfo.maxTokens)}. Nothing is actually ` +
+        'dropped on this path, but every caller is told the catalogue was cut.'
+      ).toBe(false);
+
+      const markdown = (await client.callTool({
+        name: 'jamf_docs_list_products',
+        arguments: {}
+      }).then(r => r.content[0] as { type: 'text'; text: string })).text;
+
+      // Every section has to survive, named individually: the truncation
+      // notice below would also be absent if a section were simply never
+      // rendered, and that failure should not read as success.
+      expect(markdown).toContain('# Publications (');
+      expect(markdown).toContain('# Available Topics for Filtering');
+      expect(markdown).toContain('# Document Types for Filtering');
+      expect(
+        markdown,
+        'The markdown catalogue was truncated at the default budget. The cut ' +
+        'lands on filter vocabularies, so a caller silently loses values it ' +
+        'could have passed.'
+      ).not.toContain('[Content truncated due to token limit]');
+
+      // A floor under the headroom too, so the constant cannot be left at a
+      // value the catalogue has quietly grown up against.
+      const headroom = TOKEN_CONFIG.CATALOGUE_MAX_TOKENS - tokenInfo.tokenCount;
+      expect(
+        headroom,
+        `Only ${String(headroom)} tokens of headroom remain against the larger ` +
+        'of the two formats. Raise CATALOGUE_MAX_TOKENS before it truncates in the field.'
+      ).toBeGreaterThan(500);
     });
 
     it('should return products in JSON format', async () => {

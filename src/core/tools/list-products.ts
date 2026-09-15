@@ -37,7 +37,7 @@ Returns two separate catalogues:
 Also lists available topic and docType filters for search.
 
 Args:
-  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.CATALOGUE_MAX_TOKENS}, higher than other tools because this one answers with a whole catalogue)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief list
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -266,7 +266,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         };
       }
       const params = parseResult.data;
-      const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+      const maxTokens = params.maxTokens ?? TOKEN_CONFIG.CATALOGUE_MAX_TOKENS;
 
       try {
         await reportProgress(extra, { progress: 0, total: 3, message: 'Fetching product info...' });

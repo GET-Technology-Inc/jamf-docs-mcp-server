@@ -78,9 +78,15 @@ const PRODUCT_REQUIRED_DESCRIPTION = `Product ID: ${PRODUCT_ID_LIST}`;
  * Schema for jamf_docs_list_products
  */
 export const ListProductsInputSchema = z.object({
-  maxTokens: MaxTokensSchema
+  // Not MaxTokensSchema: this tool returns a catalogue, and its full markdown
+  // does not fit the shared 5000. See TOKEN_CONFIG.CATALOGUE_MAX_TOKENS.
+  maxTokens: z.number()
+    .int()
+    .min(TOKEN_CONFIG.MIN_TOKENS)
+    .max(TOKEN_CONFIG.MAX_TOKENS_LIMIT)
+    .default(TOKEN_CONFIG.CATALOGUE_MAX_TOKENS)
     .optional()
-    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.CATALOGUE_MAX_TOKENS})`),
 
   outputMode: OutputModeSchema
     .default(OutputMode.FULL)

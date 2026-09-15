@@ -122,7 +122,7 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
 - Use outputMode: "full" when reading a specific article in detail.
 
 ## Token Management
-- Use the maxTokens parameter to control response size (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}, max: ${TOKEN_CONFIG.MAX_TOKENS_LIMIT}).
+- Use the maxTokens parameter to control response size (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS} unless a tool's own description names a different one, max: ${TOKEN_CONFIG.MAX_TOKENS_LIMIT}).
 - Start with a lower maxTokens value and increase only when more detail is needed.
 - Use summaryOnly: true on jamf_docs_get_article to get an article outline before fetching full content.
 
