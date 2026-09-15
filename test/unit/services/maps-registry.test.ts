@@ -10,6 +10,7 @@ vi.mock('../../../src/core/services/ft-client.js', () => ({
 
 import { fetchMaps } from '../../../src/core/services/ft-client.js';
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
+import type { PublicationInfo } from '../../../src/core/services/maps-registry.js';
 import { createMockCache } from '../../helpers/mock-context.js';
 import type { FtMapInfo } from '../../../src/core/types.js';
 
@@ -261,5 +262,111 @@ describe('caching', () => {
     expect(mockedFetchMaps).toHaveBeenCalledTimes(2);
 
     vi.useRealTimers();
+  });
+});
+
+describe('Jamf classification', () => {
+  /**
+   * Copied from live `/api/khub/maps` rows, because the shapes that broke are
+   * not the ones anyone would invent: Jamf files a document under every
+   * product it covers, so 35 of the 676 maps carry two or three values on
+   * `jamf:portal` or `jamf:app`. 29 and 12 respectively, overlapping on the
+   * six locales of `jamf-trust-documentation`, which is multi-valued on both
+   * axes at once and is why the two counts do not simply add. All three keys
+   * are present on every map —
+   * an unclassified one carries them with an empty `values` array, which is
+   * why `jamf-technical-glossary` below spells them out rather than omitting
+   * them.
+   */
+  const CLASSIFIED_MAPS = [
+    makeMap('course-170-en', 'Jamf 170 Course', {
+      'version_bundle_stem': ['jamf-170-course'],
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-170-course'],
+      'jamf:portal': ['Jamf Pro', 'Jamf Protect'],
+      'jamf:app': [],
+      'jamf:utility': [],
+    }),
+    makeMap('trust-en', 'Jamf Trust Release Notes', {
+      'version_bundle_stem': ['jamf-trust-documentation'],
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-trust-documentation'],
+      'jamf:portal': ['Jamf Safe Internet', 'Jamf Protect'],
+      'jamf:app': ['Jamf Connect', 'Jamf Trust'],
+      'jamf:utility': [],
+    }),
+    makeMap('trust-ja', 'Jamf Trust リリースノート', {
+      'version_bundle_stem': ['jamf-trust-documentation'],
+      'ft:locale': ['ja-JP'],
+      'bundle': ['jamf-trust-documentation'],
+      'jamf:portal': ['Jamf Safe Internet', 'Jamf Protect'],
+      'jamf:app': ['Jamf Connect', 'Jamf Trust'],
+      'jamf:utility': [],
+    }),
+    makeMap('title-editor-en', 'Title Editor Documentation', {
+      'version_bundle_stem': ['title-editor'],
+      'ft:locale': ['en-US'],
+      'bundle': ['title-editor'],
+      'jamf:portal': ['Jamf Pro'],
+      'jamf:app': [],
+      'jamf:utility': ['Title Editor'],
+    }),
+    makeMap('glossary-only-en', 'Jamf Platform Technical Glossary', {
+      'version_bundle_stem': ['jamf-technical-glossary'],
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-technical-glossary'],
+      'jamf:portal': [],
+      'jamf:app': [],
+      'jamf:utility': [],
+    }),
+  ];
+
+  let classified: MapsRegistry;
+
+  beforeEach(() => {
+    mockedFetchMaps.mockResolvedValue(CLASSIFIED_MAPS);
+    classified = new MapsRegistry(createMockCache());
+  });
+
+  const find = async (id: string): Promise<PublicationInfo> => {
+    const pub = (await classified.listPublications()).find(p => p.id === id);
+    if (pub === undefined) { throw new Error(`no publication ${id}`); }
+    return pub;
+  };
+
+  it('keeps every value Jamf assigns, in Jamf\'s order', async () => {
+    // #282: `getMetaValue` returned values[0], so the course was Jamf Pro's
+    // alone and, classified by Jamf Protect, did not exist. Array order is
+    // Jamf's and is not a ranking, so nothing here sorts it.
+    expect((await find('jamf-170-course')).portal).toEqual(['Jamf Pro', 'Jamf Protect']);
+  });
+
+  it('keeps all four classifications of a publication that carries two axes', async () => {
+    const trust = await find('jamf-trust-documentation');
+    expect(trust.portal).toEqual(['Jamf Safe Internet', 'Jamf Protect']);
+    expect(trust.app).toEqual(['Jamf Connect', 'Jamf Trust']);
+    expect(trust.utility).toEqual([]);
+  });
+
+  it('keeps a second axis the portal used to mask', async () => {
+    const editor = await find('title-editor');
+    expect(editor.portal).toEqual(['Jamf Pro']);
+    expect(editor.utility).toEqual(['Title Editor']);
+  });
+
+  it('reports an empty array, not a missing field, when Jamf assigns none', async () => {
+    const glossary = await find('jamf-technical-glossary');
+    expect(glossary.portal).toEqual([]);
+    expect(glossary.app).toEqual([]);
+    expect(glossary.utility).toEqual([]);
+  });
+
+  it('reports one classification per family however many locales publish it', async () => {
+    // Every map of a family carries the same classification — 0 disagreements
+    // across all 97 live families — so the family-level value is the first
+    // map's, and a second locale must not append or reorder anything.
+    const trust = await find('jamf-trust-documentation');
+    expect(trust.locales).toEqual(['en-US', 'ja-JP']);
+    expect(trust.portal).toEqual(['Jamf Safe Internet', 'Jamf Protect']);
   });
 });

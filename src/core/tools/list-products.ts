@@ -37,7 +37,7 @@ Returns two separate catalogues:
 Also lists available topic and docType filters for search.
 
 Args:
-  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
+  - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.CATALOGUE_MAX_TOKENS}, higher than other tools because this one answers with a whole catalogue)
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief list
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
 
@@ -65,13 +65,18 @@ Examples:
 
 Note: This is a read-only operation that does not modify any state.`;
 
-/** One publication as `list_products` reports it. */
+/**
+ * One publication as `list_products` reports it.
+ *
+ * The three classification fields are arrays, and absent rather than empty
+ * when Jamf assigns none — see {@link PublicationInfo}.
+ */
 interface PublicationRow {
   id: string;
   title: string;
-  portal?: string;
-  app?: string;
-  utility?: string;
+  portal?: string[];
+  app?: string[];
+  utility?: string[];
   locales: string[];
   versions: string[];
 }
@@ -90,7 +95,7 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
   const staticRows: PublicationRow[] = STATIC_SECTIONS.map(({ source, section }) => ({
     id: section.id,
     title: section.title,
-    portal: source.name,
+    portal: [source.name],
     locales: Object.keys(source.locales).sort(),
     versions: [],
   }));
@@ -105,7 +110,7 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
         staticRows.push({
           id: dynamicSectionId(source, collection.slug),
           title: `${source.name}: ${collection.name}`,
-          portal: source.name,
+          portal: [source.name],
           locales: Object.keys(source.locales).sort(),
           versions: [],
         });
@@ -122,9 +127,9 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
     return [...staticRows, ...pubs.map(pub => ({
       id: pub.id,
       title: pub.title,
-      ...(pub.portal !== '' ? { portal: pub.portal } : {}),
-      ...(pub.app !== '' ? { app: pub.app } : {}),
-      ...(pub.utility !== '' ? { utility: pub.utility } : {}),
+      ...(pub.portal.length > 0 ? { portal: pub.portal } : {}),
+      ...(pub.app.length > 0 ? { app: pub.app } : {}),
+      ...(pub.utility.length > 0 ? { utility: pub.utility } : {}),
       locales: pub.locales,
       versions: pub.versions,
     }))];
@@ -136,16 +141,58 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
   }
 }
 
+/** The heading a publication Jamf classifies under nothing is filed under. */
+const UNCLASSIFIED_GROUP = 'Other';
+
 /**
- * How Jamf files a publication, as one display string.
+ * Every way Jamf files a publication, as display strings.
  *
  * `jamf:portal`, `jamf:app` and `jamf:utility` are three slots of one
- * taxonomy — a map carries at most one of each and most carry exactly one —
- * so they read as a single answer to "what is this about" rather than three
- * independent fields. Grouping by it is what keeps 97 rows navigable.
+ * taxonomy, and a publication can occupy several of them at once: 10 of the 97
+ * families carry more than one value on a single axis and 11 carry more than
+ * one axis. So this returns a list, not a first choice.
+ *
+ * Both of the old narrowings lost real classifications, and between them nine
+ * headings never appeared at all. The `portal ?? app ?? utility` fallback
+ * chain dropped whole axes, which alone hid seven — Title Editor, Jamf App
+ * Catalog, Jamf Assessment, Jamf Reset, Jamf Remote Assist, Healthcare
+ * Listener and Jamf AD CS Connector, each of them a publication that also
+ * carries a portal. Jamf Setup and Jamf Trust needed both fixes, because Jamf
+ * lists them second in `jamf:app` and `values[0]` had already discarded them
+ * (#282).
+ *
+ * Order is Jamf's own within an axis, then portal, app, utility across them.
+ * The dedupe has nothing to collapse today — the three axes draw on disjoint
+ * vocabularies, 0 names shared between any pair of them across all 676 maps —
+ * and is here because nothing upstream guarantees that, and the cost of Jamf
+ * filing one name on two axes would be a group silently listing a row twice.
  */
-function classificationOf(pub: PublicationRow): string {
-  return pub.portal ?? pub.app ?? pub.utility ?? 'Other';
+function classificationsOf(pub: PublicationRow): string[] {
+  const all = [...(pub.portal ?? []), ...(pub.app ?? []), ...(pub.utility ?? [])];
+  return all.length > 0 ? [...new Set(all)] : [UNCLASSIFIED_GROUP];
+}
+
+/**
+ * Publications grouped under every heading Jamf files them under.
+ *
+ * A publication Jamf classifies under two products appears under both, which
+ * is the point: the Jamf 170 Course is Jamf's own answer to "what Jamf Protect
+ * documentation is there", and it was not under that heading. Measured live,
+ * the section goes from 108 rows in 24 groups to 131 appearances in 33 — 23
+ * repeated rows bought against 9 headings nothing could reach.
+ */
+function groupByClassification(
+  publications: PublicationRow[],
+): [string, PublicationRow[]][] {
+  const groups = new Map<string, PublicationRow[]>();
+  for (const pub of publications) {
+    for (const key of classificationsOf(pub)) {
+      groups.set(key, [...(groups.get(key) ?? []), pub]);
+    }
+  }
+  // 'Other' last; everything else alphabetical.
+  return [...groups.entries()].sort(([a], [b]) =>
+    a === UNCLASSIFIED_GROUP ? 1 : b === UNCLASSIFIED_GROUP ? -1 : a.localeCompare(b));
 }
 
 /**
@@ -158,14 +205,7 @@ function classificationOf(pub: PublicationRow): string {
 function renderPublications(publications: PublicationRow[] | null, mode: OutputMode): string {
   if (publications === null || publications.length === 0) { return ''; }
 
-  const groups = new Map<string, PublicationRow[]>();
-  for (const pub of publications) {
-    const key = classificationOf(pub);
-    groups.set(key, [...(groups.get(key) ?? []), pub]);
-  }
-  // 'Other' last; everything else alphabetical.
-  const ordered = [...groups.entries()].sort(([a], [b]) =>
-    a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b));
+  const ordered = groupByClassification(publications);
 
   if (mode === OutputMode.COMPACT) {
     let out = `\n## Publications (${String(publications.length)})\n`;
@@ -181,7 +221,9 @@ function renderPublications(publications: PublicationRow[] | null, mode: OutputM
   out += 'Every document Jamf publishes, grouped the way Jamf classifies it. ';
   out += 'Pass an ID as the `publication` parameter of `jamf_docs_get_toc` to browse one. ';
   out += 'These are documents, not products — the `product` filter in `jamf_docs_search` ';
-  out += 'takes the product IDs above, not these.\n\n';
+  out += 'takes the product IDs above, not these. ';
+  out += 'A document Jamf files under more than one product is listed under each, ';
+  out += 'so the count above is of documents, not of the rows below.\n\n';
 
   for (const [group, rows] of ordered) {
     out += `## ${group}\n\n`;
@@ -224,7 +266,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         };
       }
       const params = parseResult.data;
-      const maxTokens = params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
+      const maxTokens = params.maxTokens ?? TOKEN_CONFIG.CATALOGUE_MAX_TOKENS;
 
       try {
         await reportProgress(extra, { progress: 0, total: 3, message: 'Fetching product info...' });

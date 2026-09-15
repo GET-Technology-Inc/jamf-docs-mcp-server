@@ -42,12 +42,15 @@ export const FT_META = {
    * the three — 17 of the 97 families never do — and it may carry several:
    * 29 maps list two or three `jamf:portal` values and 12 list two `jamf:app`
    * values, so Jamf files "Jamf 170 Course" under Jamf Pro and Jamf Protect
-   * alike. `jamf:utility` is the only genuinely single-valued one. The
-   * registry reads all three through {@link getMetaValue}, which keeps
-   * `values[0]` and discards the rest — a known defect tracked in #282, not
-   * the intent.
+   * alike. `jamf:utility` is the only genuinely single-valued one today, which
+   * is a fact about the current catalogue rather than a rule — so the registry
+   * reads all three through {@link getMetaValues} and keeps every value (#282).
    *
-   * Live distribution, measured 2026-09-14: portal 12 distinct values over
+   * All three keys are present on all 676 maps; what varies is whether
+   * `values` is empty. An absent classification is therefore an empty array,
+   * never a missing key, and {@link getMetaValues} returns [] for both.
+   *
+   * Live distribution, measured 2026-09-15: portal 12 distinct values over
    * 564 maps, app 9 over 92, utility 9 over 25.
    */
   PORTAL: 'jamf:portal',

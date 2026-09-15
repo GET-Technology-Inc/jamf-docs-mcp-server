@@ -19,6 +19,7 @@ import {
 } from '../../src/core/services/ft-client.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
+import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
 import type { ProductId } from '../../src/core/constants.js';
 
 // ─── Regex patterns for opaque ID format ────────────────────────────────────
@@ -290,6 +291,116 @@ describe('FT API data contracts', () => {
       expect(proMapId).toBeTruthy();
       expect(OPAQUE_ID_RE.test(proMapId)).toBe(true);
       expect(READABLE_BUNDLE_STEM_RE.test(proMapId)).toBe(false);
+    });
+
+    // ─── Jamf's own classification (#282) ──────────────────────────────────
+    //
+    // This surface WAS covered before #282 — the suite simply asserted the
+    // wrong thing. Nothing pinned how many values a classification key may
+    // carry, so a docstring claiming "at most one of each" stood for months
+    // while `getMetaValue` silently discarded the rest. The assertions below
+    // pin the vocabulary the registry's shape depends on, in both directions:
+    // that multi-valued keys exist (or `string[]` is unjustified) and that
+    // they are the same on every map of a family (or the family-level value
+    // is arbitrary).
+
+    it('classification keys are present on every map, with values optional', () => {
+      // An unclassified map carries the key with an empty `values` array
+      // rather than omitting it, which is what makes [] the honest sentinel
+      // for "Jamf assigns none" — there is no "key missing" case to tell
+      // apart. 629 of 676 maps carry at least one value today.
+      for (const key of ['jamf:portal', 'jamf:app', 'jamf:utility']) {
+        const present = maps.filter(m => metaOf(m).some(meta => meta.key === key));
+        expect(
+          present.length,
+          `${key} is missing entirely from ${String(maps.length - present.length)} maps; ` +
+          'an absent key and an empty values array would then mean different things.'
+        ).toBe(maps.length);
+      }
+
+      const classified = maps.filter(m => metaOf(m).some(
+        meta => ['jamf:portal', 'jamf:app', 'jamf:utility'].includes(meta.key) && meta.values.length > 0
+      ));
+      expect(
+        classified.length,
+        'No map carries any Jamf classification. The publication grouping in ' +
+        'list_products would collapse to a single "Other" heading.'
+      ).toBeGreaterThan(maps.length / 2);
+    });
+
+    it('jamf:portal and jamf:app are multi-valued upstream', () => {
+      // The premise `string[]` exists for. Measured 2026-09-15: 29 portal
+      // maps over 7 combinations, 12 app maps over 2. Asserted as floors, not
+      // counts — Jamf reclassifying a course must not turn this red — but a
+      // drop to zero means the multi-value handling has become dead code and
+      // should be revisited rather than quietly kept.
+      const multi = (key: string): string[][] => maps
+        .map(m => metaOf(m).find(meta => meta.key === key)?.values ?? [])
+        .filter(values => values.length > 1);
+
+      expect(
+        multi('jamf:portal').length,
+        'No live map carries more than one jamf:portal value. Either Jamf ' +
+        'changed how it classifies, or the fetch returned something unexpected.'
+      ).toBeGreaterThan(0);
+      expect(multi('jamf:app').length).toBeGreaterThan(0);
+
+      // Three values on one key is the deepest live case (Instructor-Led
+      // Training at Jamf: School + Pro + Protect). Nothing in the code caps
+      // the arity, and this records that two is not the ceiling — so it has
+      // to assert 3, not 2. `multi` has already filtered to length > 1, so a
+      // `>= 2` here would be true by construction and would survive Jamf
+      // dropping the only three-way classification it publishes.
+      expect(
+        Math.max(...multi('jamf:portal').map(v => v.length)),
+        'No live map carries three jamf:portal values any more. The arity ' +
+        'ceiling recorded here has moved; re-measure before relaxing this.'
+      ).toBeGreaterThanOrEqual(3);
+    });
+
+    it('every map of a bundle family agrees on its classification', () => {
+      // `listPublications` takes the family's classification from whichever
+      // map it meets first. That is only defensible because Jamf publishes
+      // the same values, in the same order, on every map of the family —
+      // measured at 0 disagreements across all 97 families and 11 locales.
+      // If this ever fails, the first-map shortcut must become a merge.
+      //
+      // Grouping goes through the registry's own `deriveBundleStem`, not
+      // through the `version_bundle_stem` key it prefers. Only 310 of the 676
+      // maps carry that key and it spans 5 stems, all of them Jamf Pro or Jamf
+      // Connect — so reading it directly would check five families, pass, and
+      // skip every multi-locale family this shortcut actually matters for
+      // (jamf-trust-documentation and title-editor publish in six locales
+      // each and carry no `version_bundle_stem` at all).
+      const byStem = new Map<string, Set<string>>();
+      for (const map of maps) {
+        const stem = deriveBundleStem(map.metadata);
+        if (stem === '') { continue; }
+        const signature = ['jamf:portal', 'jamf:app', 'jamf:utility']
+          .map(key => (metaOf(map).find(meta => meta.key === key)?.values ?? []).join('|'))
+          .join(' / ');
+        byStem.set(stem, (byStem.get(stem) ?? new Set()).add(signature));
+      }
+
+      // A floor, not a count — Jamf adding or retiring a publication must not
+      // turn this red. But it has to be high enough to fail if the grouping
+      // ever collapses back to the handful of families the raw metadata key
+      // reaches, which is the way this test can silently stop testing.
+      expect(
+        byStem.size,
+        `Only ${String(byStem.size)} bundle families were derived from ${String(maps.length)} maps. ` +
+        'Live is 97; 5 would mean the stem derivation has fallen back to the ' +
+        'raw version_bundle_stem key and this contract now checks almost nothing.'
+      ).toBeGreaterThan(50);
+      const disagreeing = [...byStem.entries()]
+        .filter(([, signatures]) => signatures.size > 1)
+        .map(([stem, signatures]) => ({ stem, signatures: [...signatures] }));
+
+      expect(
+        disagreeing,
+        'These families report different classifications on different maps, so ' +
+        `the family-level value listPublications reports is now arbitrary: ${JSON.stringify(disagreeing)}`
+      ).toEqual([]);
     });
   });
 
