@@ -1,3 +1,9 @@
+## [5.10.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.5...v5.10.6) (2026-09-15)
+
+### Bug Fixes
+
+* **registry:** keep every product Jamf files a publication under ([#288](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/288)) ([fd048a6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/fd048a6708010b3c4e925a6ad7e20731ab1df10b)), closes [#282](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/282) [#199](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/199)
+
 ## [5.10.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.4...v5.10.5) (2026-09-14)
 
 ### Bug Fixes
