@@ -363,7 +363,7 @@ is fullscreen-only.
 
 The article preview is counted in blocks rather than characters. A character
 budget does not predict height: 900 characters of prose is three short
-paragraphs, and 900 characters containing a 22-row settings table is 700px of
+paragraphs, and 900 characters containing a settings table is 700px of
 panel.
 
 Style variables in `app-ui/styles.ts` are transcribed from the same guidelines.

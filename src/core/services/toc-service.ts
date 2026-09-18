@@ -118,7 +118,8 @@ async function resolveMapQuietly(
  * actually keys a publication on. Both reduce to a bundle stem before the
  * registry sees them, because that is the only thing `resolveMapId` has ever
  * needed; binding this parameter to the product enum is what limited
- * reachable content to 12 of the 97 families Jamf publishes.
+ * reachable content to the handful of families the product enum names,
+ * rather than everything Jamf publishes.
  *
  * Deliberately `string` rather than a discriminated union: every existing
  * caller passes a product id positionally, and a union would have rewritten

@@ -163,7 +163,7 @@ const UNCLASSIFIED_GROUP = 'Other';
  *
  * Order is Jamf's own within an axis, then portal, app, utility across them.
  * The dedupe has nothing to collapse today — the three axes draw on disjoint
- * vocabularies, 0 names shared between any pair of them across all 676 maps —
+ * vocabularies, sharing 0 names between any pair of them —
  * and is here because nothing upstream guarantees that, and the cost of Jamf
  * filing one name on two axes would be a group silently listing a row twice.
  */
@@ -177,9 +177,10 @@ function classificationsOf(pub: PublicationRow): string[] {
  *
  * A publication Jamf classifies under two products appears under both, which
  * is the point: the Jamf 170 Course is Jamf's own answer to "what Jamf Protect
- * documentation is there", and it was not under that heading. Measured live,
- * the section goes from 108 rows in 24 groups to 131 appearances in 33 — 23
- * repeated rows bought against 9 headings nothing could reach.
+ * documentation is there", and it was not under that heading. The cost is a
+ * repeated row for every extra product a document is filed under, bought
+ * against headings that nothing could reach at all. Measured 2026-09-15, when
+ * this landed: 108 rows in 24 groups became 131 appearances in 33.
  */
 function groupByClassification(
   publications: PublicationRow[],

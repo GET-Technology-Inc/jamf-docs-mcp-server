@@ -6,7 +6,7 @@
 
 讓 AI 助手 (Claude、Cursor 等) 直接存取 Jamf 官方文件。當你詢問 Jamf 相關問題時，AI 可以即時搜尋並引用最新的官方文件內容。
 
-**支援產品**: Jamf Pro、Jamf School、Jamf Connect、Jamf Protect、Jamf Now、Jamf Safe Internet、Jamf Insights、RapidIdentity、Jamf Trust、Jamf Routines、Self Service+、Jamf App Catalog
+**支援產品** (28): Jamf Pro、Jamf School、Jamf Connect、Jamf Protect、Jamf Now、Jamf Safe Internet、Jamf Insights、RapidIdentity、Jamf Trust、Jamf Routines、Self Service+、Jamf App Catalog、Jamf Account、Jamf Security Cloud、Elevate、Composer、Jamf Parent、Jamf Teacher、Jamf Setup and Reset、Jamf Assessment、Title Editor、Jamf Infrastructure Manager、Jamf AD CS Connector、Jamf PKI Proxy、Jamf Migrate、Jamf Remote Assist、Jamf Cloud Distribution Service、Healthcare Listener
 
 [English](../README.md)
 

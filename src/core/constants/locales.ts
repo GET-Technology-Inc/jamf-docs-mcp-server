@@ -18,10 +18,13 @@ export const DEFAULT_LOCALE = 'en-US';
  *   ja-JP  93 / 54                  it-IT  2 / 2
  *   zh-TW  87 / 48
  *
- * The map column moves with every Jamf release — 11.32.0 alone added 14 maps
- * between the 2026-09-02 and 2026-09-14 measurements — while the family column
- * did not move at all. Only the ordering is load-bearing here, so a later
- * mismatch in the map counts is Jamf publishing, not drift.
+ * Both columns move with Jamf's publishing: 11.32.0 alone added 14 maps
+ * between the 2026-09-02 and 2026-09-14 measurements, and en-US went from 97
+ * families to 98 by 2026-09-18. An earlier version of this comment said the
+ * family column "did not move at all" and invited the reader to ignore drift
+ * in it — which is exactly the drift that then happened. Only the ORDERING is
+ * load-bearing here, so any later mismatch in either column is Jamf
+ * publishing rather than a defect.
  *
  * `it-IT`, `pt-BR` and `zh-CN` were previously left undeclared on the reading
  * that Fluid Topics listed them in `availableContentLocales` without shipping

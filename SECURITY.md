@@ -4,8 +4,14 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.2.x   | :white_check_mark: |
-| < 1.2.0 | :x:                |
+| 5.x     | :white_check_mark: |
+| < 5.0.0 | :x:                |
+
+Releases are automated, so the supported line is whatever `npm view
+@get-technology-inc/jamf-docs-mcp-server version` reports. This table said
+`1.2.x` until 2026-09-18, four majors behind — which told anyone reporting a
+vulnerability that the current release was unsupported and a long-retired one
+was not.
 
 ## Reporting a Vulnerability
 

@@ -114,6 +114,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `test:integration` deliberately EXCLUDES the three `*contracts.test.ts`
+      # suites. They assert the shape of live Jamf endpoints, so they go red when
+      # Jamf changes something — which is a fact about Jamf, not about this PR.
+      # upstream-contract.yml runs them on a cron and opens an issue instead;
+      # its header has always said they are "deliberately NOT part of the merge
+      # gate", and until 2026-09-18 this directory glob quietly swept them back
+      # in. `test/unit/ci-gating.test.ts` fails if that happens again.
       - name: Integration Test (with retry)
         uses: nick-fields/retry@v4
         with:

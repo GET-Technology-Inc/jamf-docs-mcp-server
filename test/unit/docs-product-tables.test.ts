@@ -68,4 +68,17 @@ describe('docs/README.zh-TW.md product table', () => {
       expect(row.name, `name for ${row.id}`).toBe(JAMF_PRODUCTS[row.id as ProductId].name);
     }
   });
+
+  // The English summary line has been guarded since this file was written; this
+  // one was not, and by 2026-09-18 it named 12 products against a registry of
+  // 28. Same claim, same file pair, and only the guarded half stayed true —
+  // which is the argument for asserting a live figure rather than writing it
+  // down and hoping.
+  it('keeps the summary line in sync with the table', () => {
+    const summary = /\*\*支援產品\*\* \((\d+)\): (.+)/.exec(readmeZh);
+    expect(summary, 'the "支援產品" summary line is missing').not.toBeNull();
+    expect(Number(summary?.[1])).toBe(PRODUCT_IDS.length);
+    expect(summary?.[2].split('、')).toEqual(
+      PRODUCT_IDS.map(id => JAMF_PRODUCTS[id as ProductId].name));
+  });
 });

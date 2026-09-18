@@ -27,31 +27,40 @@ export const FT_META = {
   PRODNAME: 'prodname',
 
   /**
-   * Jamf's own publication classification, carried by 629 of the 676 maps.
+   * Jamf's own publication classification.
    *
    * Unlike the `product-*` values inside `zoominmetadata` — a legacy Zoomin
-   * vocabulary where one label covers many publications (`product-pro` alone
-   * spans 38 bundle families) — these three name the platform, client app or
-   * utility a publication documents. Measured across all 97 bundle families
-   * and 11 locales, every family reports the same value in every locale: 0
-   * disagreements. That is what makes them usable as a stable classification
-   * rather than display text, and it is the opposite of `jamf:contentType`,
-   * whose values ARE translated (see DOC_TYPE_CONTENT_TYPE_MAP).
+   * vocabulary where one label covers many publications — these three name the
+   * platform, client app or utility a publication documents. Every map of a
+   * family reports the same values in every locale, which is what makes them
+   * usable as a stable classification rather than display text, and is the
+   * opposite of `jamf:contentType`, whose values ARE translated (see
+   * DOC_TYPE_CONTENT_TYPE_MAP). That locale-invariance is asserted against the
+   * live API in `data-contracts`, not merely recorded here.
    *
    * Two things this comment used to assert are false. A map may carry none of
-   * the three — 17 of the 97 families never do — and it may carry several:
-   * 29 maps list two or three `jamf:portal` values and 12 list two `jamf:app`
-   * values, so Jamf files "Jamf 170 Course" under Jamf Pro and Jamf Protect
-   * alike. `jamf:utility` is the only genuinely single-valued one today, which
-   * is a fact about the current catalogue rather than a rule — so the registry
-   * reads all three through {@link getMetaValues} and keeps every value (#282).
+   * the three, and it may carry several — so Jamf files "Jamf 170 Course"
+   * under Jamf Pro and Jamf Protect alike, and the registry reads all three
+   * through {@link getMetaValues} and keeps every value (#282). `jamf:utility`
+   * happens to be single-valued, which is a fact about the catalogue rather
+   * than a rule, so nothing depends on it.
    *
-   * All three keys are present on all 676 maps; what varies is whether
-   * `values` is empty. An absent classification is therefore an empty array,
-   * never a missing key, and {@link getMetaValues} returns [] for both.
+   * All three keys are present on every map; what varies is whether `values`
+   * is empty. An absent classification is therefore an empty array, never a
+   * missing key, and {@link getMetaValues} returns [] for both. That one IS
+   * depended on, and `data-contracts` asserts it.
    *
-   * Live distribution, measured 2026-09-15: portal 12 distinct values over
-   * 564 maps, app 9 over 92, utility 9 over 25.
+   * Live shape, measured 2026-09-18 (678 maps). Figures are dated because they
+   * decay: this block said 676 / 629 / 97 three days earlier and every number
+   * had moved. Nothing below is load-bearing — what the code needs is asserted
+   * in the contract suite — so a stale figure here is a stale note, not a bug.
+   *   - classified maps: 631 of 678; 17 of the 98 families carry nothing
+   *   - `jamf:portal`   12 distinct values over 566 maps; 29 carry more than
+   *     one, spread 27x2, 1x3, 1x5
+   *   - `jamf:app`       9 distinct values over  92 maps; 12 carry two, which
+   *     is the maximum
+   *   - `jamf:utility`   9 distinct values over  25 maps; none carries two
+   *   - `product-pro`, for contrast, spans 39 bundle families on its own
    */
   PORTAL: 'jamf:portal',
   APP: 'jamf:app',

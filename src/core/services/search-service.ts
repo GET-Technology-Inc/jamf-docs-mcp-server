@@ -103,7 +103,7 @@ function productNameToId(name: string | null): ProductId | null {
  *
  * Read straight off the result rather than translated: every topic carries
  * `jamf:portal` / `jamf:app` / `jamf:utility` in its own search metadata
- * (994 of 994 results on a live Jamf Pro query), and those values already ARE
+ * (every result carried one when measured), and those values already ARE
  * product names. The previous version matched `zoominmetadata` against a
  * hand-written `searchLabel` per product, which meant a legacy Zoomin label
  * Jamf keeps re-tagging stood between a result and its own name.
@@ -185,13 +185,13 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
  * - version → `version` filter (only when a specific version is requested)
  *
- * Both `zoominmetadata` filters are pushed as *separate* entries. Fluid Topics
- * intersects filter objects and unions the values inside one, measured against
- * the live API on a zh-TW corpus: `product-protect` alone matched 1182 topics
- * and `content-releasenotes` alone 940, two filter objects matched 387 (the
- * intersection) and one object holding both values matched 1735 (the union,
- * exactly 1182 + 940 − 387). Merging them into a single entry would therefore
- * widen a product+docType search instead of narrowing it.
+ * Both filters are pushed as *separate* entries. Fluid Topics intersects
+ * filter objects and unions the values inside one — verified against the live
+ * API when this was written, and again on 2026-09-18 for the classification
+ * keys — so merging them into a single entry would widen a product+docType
+ * search instead of narrowing it. The counts that first demonstrated it are
+ * not repeated here: the union/intersection behaviour is the durable part, and
+ * the numbers moved within days.
  *
  * NOTE: we intentionally do NOT add `latestVersion=yes` when no version is given.
  * Jamf migrated all non-Pro products (School, Connect, Protect, Now, …) to an
@@ -204,12 +204,13 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * The upstream filter for a `product`, in Jamf's own vocabulary.
  *
  * Replaces the hand-written `searchLabel` translation into `zoominmetadata`'s
- * legacy `product-*` values. Measured over 224 product x query cells on the
- * live API, filtering on `jamf:portal` / `jamf:app` / `jamf:utility` returns
- * 4850 results against the labels' 4861 — 24 of 28 products byte-identical,
- * and nothing gained that should not be. The 11 it loses are tail entries of
- * result windows large enough that the classification matches a slightly wider
- * upstream set; each still carries the classification.
+ * legacy `product-*` values. Measured 2026-09-18 over 224 product x query
+ * cells on the live API: filtering on `jamf:portal` / `jamf:app` /
+ * `jamf:utility` returned 4850 results against the labels' 4861, 24 of 28
+ * products byte-identical, and nothing gained that should not be. The few it
+ * loses are tail entries of result windows large enough that the
+ * classification matches a slightly wider upstream set; each still carries the
+ * classification.
  *
  * What it buys is that nothing here is maintained by hand. `product-*` is a
  * legacy Zoomin vocabulary Jamf re-tags without warning — one map gaining
@@ -254,17 +255,20 @@ export function buildSearchFilters(
   //
   // Filters on the `content-*` label rather than `jamf:contentType`, because
   // the latter's *values* are translated per locale while its key is not:
-  // `jamf:contentType = 'Release Notes'` matched 1323 topics under en-US and 0
-  // under zh-TW, where the same topics carry '版本資訊' (940) — and ja-JP
-  // 'リリースノート' (1207), de-DE 'Versionshinweise', and so on for every
-  // locale this server supports. Sending the English string therefore returned
-  // an empty upstream result for seven of the eight supported locales, and
+  // `jamf:contentType = 'Release Notes'` matched topics under en-US and 0
+  // under zh-TW, where the same topics carry '版本資訊' — and ja-JP
+  // 'リリースノート', de-DE 'Versionshinweise', and so on for every locale this
+  // server supports. Sending the English string therefore returned an empty
+  // upstream result for every locale but en-US, and
   // because that emptiness arrives from the API, the client-side relaxation in
   // {@link applyFiltersWithFallback} has nothing left to relax.
   //
-  // The `content-*` vocabulary is locale-invariant (`content-releasenotes`:
-  // 1323 en-US / 940 zh-TW / 1207 ja-JP / 1207 de-DE) and is already what the
-  // docType post-filter matches on, so both ends now agree on one vocabulary.
+  // The `content-*` vocabulary is locale-invariant — the same label matches in
+  // every locale, where the translated value matched only one — and is already
+  // what the docType post-filter matches on, so both ends agree on one
+  // vocabulary. `data-contracts` asserts every `content-*` label is still live;
+  // the per-locale counts that first showed this are not repeated, because they
+  // move with every Jamf release and prove nothing the assertion does not.
   if (params.docType !== undefined) {
     // Widened deliberately: DOC_TYPE_LABEL_MAP is total over DocTypeId, so the
     // type says this cannot miss — but params reach here from a JSON-RPC

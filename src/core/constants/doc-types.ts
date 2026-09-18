@@ -85,7 +85,7 @@ export const DOC_TYPE_PRECEDENCE: readonly DocTypeId[] = [
  * translated per locale: the topics that carry 'Release Notes' under en-US
  * carry '版本資訊' under zh-TW, 'リリースノート' under ja-JP,
  * 'Versionshinweise' under de-DE, and so on. Sending the English string as an
- * upstream filter matched 1323 topics under en-US and exactly 0 under every
+ * upstream filter matched topics under en-US and exactly 0 under every
  * other locale this server supports. {@link DOC_TYPE_LABEL_MAP}'s `content-*`
  * vocabulary is locale-invariant and is what `buildSearchFilters` uses.
  *
