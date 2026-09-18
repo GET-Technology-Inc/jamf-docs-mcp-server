@@ -1,3 +1,9 @@
+## [5.10.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.8...v5.10.9) (2026-09-18)
+
+### Bug Fixes
+
+* **sources:** make concepts.jamf.com breadcrumbs reachable ([#295](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/295)) ([01dbad9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/01dbad96b33b31c76efce9d6c5e9b1cc05fd7282)), closes [#287](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/287) [#285](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/285)
+
 ## [5.10.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.7...v5.10.8) (2026-09-18)
 
 ### Bug Fixes
