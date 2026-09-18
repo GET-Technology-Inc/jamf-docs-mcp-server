@@ -3,6 +3,7 @@
  */
 
 import * as fs from 'fs';
+import { JAMF_PRODUCTS, classificationValuesFor, type ProductId } from '../../src/core/constants.js';
 import * as path from 'path';
 import type {
   SearchResult,
@@ -205,6 +206,51 @@ export function createRealisticTocResponse(
  * has to declare `contentLabels`, because the two are not interchangeable
  * ('Technical Documentation' covers four docTypes).
  */
+/**
+ * The axis each classification value sits on, for {@link createClassifyingMapsRegistry}.
+ *
+ * Written down HERE and derived in production. A fixture is allowed to assert
+ * the shape it stands in for; the live contract is what checks the real one.
+ */
+export const CLASSIFICATION_AXIS: Record<string, string> = {
+  'Composer': 'jamf:app',
+  'Jamf Connect': 'jamf:app',
+  'Jamf Parent': 'jamf:app',
+  'Jamf Teacher': 'jamf:app',
+  'Jamf Assessment': 'jamf:app',
+  'Jamf Setup': 'jamf:app',
+  'Jamf Reset': 'jamf:app',
+  'Self Service+': 'jamf:app',
+  'Title Editor': 'jamf:utility',
+  'Jamf App Catalog': 'jamf:utility',
+  'Jamf Infrastructure Manager': 'jamf:utility',
+  'Jamf AD CS Connector': 'jamf:utility',
+  'Jamf PKI Proxy': 'jamf:utility',
+  'Jamf Migrate': 'jamf:utility',
+  'Jamf Remote Assist': 'jamf:utility',
+  'Jamf Cloud Distribution Service': 'jamf:utility',
+  'Healthcare Listener': 'jamf:utility',
+};
+
+/**
+ * The classification a fixture's `mapId` implies, matched against the product
+ * registry's bundleIds so a fixture does not have to spell it out.
+ */
+function classificationForMap(mapId: string): { key: string; value: string } | null {
+  for (const id of Object.keys(JAMF_PRODUCTS) as ProductId[]) {
+    if (!mapId.startsWith(JAMF_PRODUCTS[id].bundleId)) { continue; }
+    // Length-checked rather than `[0] === undefined`: test/tsconfig.json turns
+    // noUncheckedIndexedAccess OFF, so the index signature claims `string` for
+    // what is genuinely undefined on the one product Jamf classifies under
+    // nothing (jamf-routines, whose override is an empty list).
+    const values = classificationValuesFor(id);
+    if (values.length === 0) { return null; }
+    const value = values[0];
+    return { key: CLASSIFICATION_AXIS[value] ?? 'jamf:portal', value };
+  }
+  return null;
+}
+
 export function makeFtSearchResponse(
   entries: {
     title: string;
@@ -212,6 +258,15 @@ export function makeFtSearchResponse(
     contentId?: string;
     snippet?: string;
     productLabel?: string;
+    /**
+     * Jamf's own classification for the topic, which is what the product
+     * filter and the product attribution both read. Defaults to the product
+     * name implied by `mapId`, so a fixture that only sets `productLabel`
+     * still looks like a live topic — every live result carrying a legacy
+     * `product-*` label carries a classification too (3997 of 3997 measured
+     * across six unfiltered queries).
+     */
+    classification?: { key: string; value: string };
     contentLabels?: string[];
     contentType?: string;
   }[]
@@ -246,6 +301,14 @@ export function makeFtSearchResponse(
             key: 'zoominmetadata',
             label: 'zoominmetadata',
             values: zoominValues,
+          });
+        }
+        const classification = e.classification ?? classificationForMap(e.mapId);
+        if (classification !== null) {
+          metadata.push({
+            key: classification.key,
+            label: classification.key,
+            values: [classification.value],
           });
         }
         if (e.contentType !== undefined && e.contentType !== '') {

@@ -20,6 +20,7 @@ import {
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
 import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
+import { classificationValuesFor, PRODUCT_IDS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
 
 // ─── Regex patterns for opaque ID format ────────────────────────────────────
@@ -542,114 +543,67 @@ describe('FT API data contracts', () => {
     // so they cannot be product-filtered via clustered-search. Documented gaps,
     // not regressions — see products.ts. jamf-routines docs are tagged product-pro
     // upstream, so 'product-routines' never appears as a label.
-    const SEARCH_LABEL_ALLOWLIST = new Set<ProductId>(['jamf-routines']);
+    // ─── What the `product` filter now depends on ─────────────────────────
+    //
+    // The filter used to translate each product into `zoominmetadata`'s legacy
+    // `product-*` vocabulary, and the contract here checked that every map
+    // under a label belonged to the product. That assertion went red whenever
+    // Jamf cross-tagged one map — it did in September 2026, when the Platform
+    // Services video gained `product-elevate` — which is a fact about Jamf's
+    // tagging, not about this server being broken.
+    //
+    // What replaced it asserts only what the code now depends on: that the
+    // classification values it sends still exist upstream, and that the axis
+    // key still filters. Both fail loudly and neither moves when Jamf re-tags.
 
-    it('every configured searchLabel still exists in the live zoominmetadata label set', () => {
-      // Collect every live `product-*` zoominmetadata value from the maps registry.
-      const liveLabels = new Set<string>();
-      for (const map of maps) {
-        for (const meta of metaOf(map)) {
-          if (meta.key === 'zoominmetadata') {
-            for (const v of meta.values) {
-              if (v.startsWith('product-')) { liveLabels.add(v); }
-            }
-          }
-        }
-      }
-      expect(liveLabels.size).toBeGreaterThan(0);
+    it('every product this server filters by is still a live classification value', () => {
+      const live = new Set(maps.flatMap(m => metaOf(m).flatMap(
+        meta => ['jamf:portal', 'jamf:app', 'jamf:utility'].includes(meta.key) ? meta.values : []
+      )));
+      expect(live.size, 'no classification values found at all').toBeGreaterThan(0);
 
-      const missing = (Object.keys(JAMF_PRODUCTS) as ProductId[])
-        .filter(id => !SEARCH_LABEL_ALLOWLIST.has(id))
-        .map(id => ({ id, label: JAMF_PRODUCTS[id].searchLabel }))
-        .filter(({ label }) => !liveLabels.has(label));
+      const missing = (PRODUCT_IDS as readonly ProductId[])
+        .flatMap(id => classificationValuesFor(id).map(value => ({ id, value })))
+        .filter(({ value }) => !live.has(value));
 
       expect(
         missing,
-        `searchLabel(s) no longer present in live zoominmetadata: ${JSON.stringify(missing)}. ` +
-        'Jamf may have renamed/dropped the label (this is exactly how jamf-routines broke).'
+        'These products name a classification value Jamf no longer publishes, so ' +
+        `their product filter now returns nothing: ${JSON.stringify(missing)}. ` +
+        'Jamf renamed or retired the product — update the name in JAMF_PRODUCTS ' +
+        'or add a row to CLASSIFICATION_OVERRIDES.'
       ).toEqual([]);
     });
 
-    // Existing-label checks only prove a searchLabel is *live*, not that it is
-    // the *right* one. `product-self-service` and `product-selfservice` both
-    // exist upstream, and self-service-plus was configured with the first —
-    // which belongs to the retired iOS Self Service app. Its six maps are all
-    // "Jamf Self Service for iOS Release Notes"; none is a Self Service+ doc.
-    // The search returned results, so nothing looked broken.
-    //
-    // Add a row here for any product whose label has a plausible sibling.
-    const LABEL_TITLE_CONTRACTS: readonly {
-      product: ProductId;
-      titlePattern: RegExp;
-    }[] = [
-      { product: 'self-service-plus', titlePattern: /Self Service\+/ },
+    it('the classification axis is a working upstream filter key', async () => {
+      // The whole design rests on this: `jamf:portal` and friends are accepted
+      // by clustered-search as filter keys. If Jamf stopped honouring them the
+      // filter would silently widen to every product, which is the failure this
+      // server has been bitten by before (#243) and cannot detect from results.
+      const filtered = await search({
+        query: 'enrollment',
+        contentLocale: 'en-US',
+        paging: { perPage: 20, page: 1 },
+        filters: [{ key: 'jamf:portal', values: ['Jamf Protect'] }],
+      });
+      const hits = filtered.results.flatMap(c => c.entries);
+      expect(hits.length, 'jamf:portal=Jamf Protect returned nothing').toBeGreaterThan(0);
 
-      // The products registered from Jamf's own `jamf:portal` / `jamf:app` /
-      // `jamf:utility` classification. Each was verified against the live
-      // clustered-search endpoint before being added — every label returned
-      // only that product's own documentation — and this pins that, because
-      // "the label exists upstream" is exactly the check that let
-      // `product-self-service` through.
-      //
-      // Patterns match the locale-invariant part of the title, not the
-      // English one: `ft:title` IS translated per map, so
-      // /Jamf Setup and Reset/ passes on en-US and fails on the same
-      // publication's five other locales
-      // ("Jamf Setup und Reset Konfigurationsleitfaden",
-      // "Jamf Setup 和 Reset 設定指南"). Product names and initialisms survive
-      // translation; the surrounding prose does not.
-      { product: 'jamf-account', titlePattern: /Jamf Account|AI Governance|Jamf Platform Services/ },
-      { product: 'jamf-security-cloud', titlePattern: /Jamf Security Cloud/ },
-      { product: 'elevate', titlePattern: /Elevate/ },
-      { product: 'composer', titlePattern: /Composer/ },
-      { product: 'jamf-parent', titlePattern: /Jamf Parent/ },
-      { product: 'jamf-teacher', titlePattern: /Jamf Teacher/ },
-      { product: 'jamf-setup-reset', titlePattern: /Jamf Setup/ },
-      { product: 'jamf-assessment', titlePattern: /Jamf Assessment/ },
-      { product: 'title-editor', titlePattern: /Title Editor/ },
-      { product: 'jamf-infrastructure-manager', titlePattern: /Jamf Infrastructure Manager/ },
-      { product: 'jamf-adcs-connector', titlePattern: /AD CS/ },
-      { product: 'jamf-pki-proxy', titlePattern: /Jamf PKI/ },
-      { product: 'jamf-migrate', titlePattern: /Jamf Migrate/ },
-      { product: 'jamf-remote-assist', titlePattern: /Jamf Remote Assist/ },
-      { product: 'jamf-cloud-distribution-service', titlePattern: /Jamf Cloud Distribution Service/ },
-      { product: 'healthcare-listener', titlePattern: /Healthcare Listener/ },
-    ];
+      // Every hit must actually carry the value. A key the server ignores
+      // returns the unfiltered ranking, which looks like a working filter.
+      const strays = hits
+        .map(e => e.topic?.metadata ?? e.map?.metadata)
+        .filter(meta => !(meta ?? []).some(
+          m => m.key === 'jamf:portal' && m.values.includes('Jamf Protect')
+        ));
+      expect(
+        strays.length,
+        `${String(strays.length)} of ${String(hits.length)} results do not carry ` +
+        'jamf:portal=Jamf Protect. Upstream is ignoring the filter key rather ' +
+        'than applying it, so every product-filtered search is now unfiltered.'
+      ).toBe(0);
+    });
 
-    it.each(LABEL_TITLE_CONTRACTS)(
-      'searchLabel for $product tags maps whose titles match $titlePattern',
-      ({ product, titlePattern }) => {
-        const label = JAMF_PRODUCTS[product].searchLabel;
-        const titles = maps
-          .filter(m => metaOf(m).some(
-            meta => meta.key === 'zoominmetadata' && meta.values.includes(label)
-          ))
-          .map(m => m.title ?? '');
-
-        expect(
-          titles.length,
-          `no live map carries zoominmetadata '${label}' for ${product}`
-        ).toBeGreaterThan(0);
-
-        // Every map under the label must belong to the product, not merely one
-        // of them — a label shared with a retired sibling is exactly the bug.
-        const strays = titles.filter(t => !titlePattern.test(t));
-        expect(
-          strays,
-          `${product} is configured with searchLabel '${label}', but these maps ` +
-          `under it do not match ${String(titlePattern)}: ${JSON.stringify(strays)}. ` +
-          'The label likely belongs to a different (possibly retired) product.'
-        ).toEqual([]);
-      }
-    );
-
-    // `content-*` is now an upstream QUERY value, not just something read back
-    // off a result: buildSearchFilters sends it to clustered-search for every
-    // docType. An unknown label there returns 0 rather than being ignored
-    // (verified: `content-solution-guide`, with the stray hyphen, returns 0),
-    // so a Jamf-side rename would reproduce #243 exactly — silent empty
-    // results in every locale — and nothing else in the suite would notice.
-    // Same guard the product-* labels already have, on the same fetched maps.
     it('every docType content-* label still exists in the live zoominmetadata set', () => {
       const liveLabels = new Set<string>();
       for (const map of maps) {
@@ -703,10 +657,10 @@ describe('FT API data contracts', () => {
         query: 'enrollment',
         contentLocale: 'en-US',
         paging: { perPage: 5, page: 1 },
-        filters: [{ key: 'zoominmetadata', values: [JAMF_PRODUCTS['jamf-school'].searchLabel] }],
+        filters: [{ key: 'jamf:portal', values: [JAMF_PRODUCTS['jamf-school'].name] }],
       });
       const entries = res.results.flatMap(c => c.entries);
-      expect(entries.length, 'product-school filtered search must return results').toBeGreaterThan(0);
+      expect(entries.length, 'Jamf School filtered search must return results').toBeGreaterThan(0);
 
       // Every returned entry should be School and carry no `version` metadata.
       for (const entry of entries) {

@@ -31,7 +31,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Pro',
     description: 'Apple device management for enterprise',
     bundleId: 'jamf-pro-documentation',
-    searchLabel: 'product-pro',  // Legacy metadata label for FT search filter
     latestVersion: 'current',
     versions: ['current']  // learn.jamf.com uses latest version only
   },
@@ -40,7 +39,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf School',
     description: 'Apple device management for education',
     bundleId: 'jamf-school-documentation',
-    searchLabel: 'product-school',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -49,7 +47,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Connect',
     description: 'Identity and access management',
     bundleId: 'jamf-connect-documentation',
-    searchLabel: 'product-connect',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -58,7 +55,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Protect',
     description: 'Endpoint security for Apple',
     bundleId: 'jamf-protect-documentation',
-    searchLabel: 'product-protect',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -67,7 +63,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Now',
     description: 'Simple Apple device management for small businesses',
     bundleId: 'jamf-now-documentation',
-    searchLabel: 'product-now',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -76,7 +71,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Safe Internet',
     description: 'Content filtering and web security for education and business',
     bundleId: 'jamf-safe-internet-documentation',
-    searchLabel: 'product-safeinternet',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -85,7 +79,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Insights',
     description: 'Analytics and reporting platform for Apple fleet',
     bundleId: 'jamf-insights-documentation',
-    searchLabel: 'product-insights',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -94,7 +87,6 @@ export const JAMF_PRODUCTS = {
     name: 'RapidIdentity',
     description: 'Identity and access management platform',
     bundleId: 'jamf-rapididentity-documentation',
-    searchLabel: 'product-rapididentity',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -103,7 +95,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Trust',
     description: 'Zero-trust network access for Apple devices',
     bundleId: 'jamf-trust-documentation',
-    searchLabel: 'product-trust',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -112,12 +103,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Routines',
     description: 'Automated workflow orchestration for device management',
     bundleId: 'jamf-routines-documentation',
-    // NOTE: Jamf tags the "Jamf Routines Documentation" map with zoominmetadata
-    // `product-pro` (not `product-routines`), so product-filtered SEARCH for
-    // jamf-routines returns 0 results. TOC/article fetch still work via the
-    // bundle. This searchLabel is kept for forward-compat and is explicitly
-    // allow-listed in the searchLabel contract test (see data-contracts.test.ts).
-    searchLabel: 'product-routines',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -134,7 +119,6 @@ export const JAMF_PRODUCTS = {
     // Guide" (55) and "Self Service+ for Mobile Deployment Guide" (14). The
     // wrong label returned results rather than an error, so the mismatch was
     // invisible; the contract test below now pins the map titles.
-    searchLabel: 'product-selfservice',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -143,7 +127,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf App Catalog',
     description: 'Curated application catalog for managed deployments',
     bundleId: 'jamf-app-catalog',
-    searchLabel: 'product-appcatalog',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -169,7 +152,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Account',
     description: 'Identity, licensing, and platform services portal',
     bundleId: 'jamf-account-documentation',
-    searchLabel: 'product-account',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -178,7 +160,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Security Cloud',
     description: 'Cloud security portal for Jamf Connect and Jamf Protect',
     bundleId: 'jamf-security-cloud-setup-guide',
-    searchLabel: 'product-security',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -187,7 +168,6 @@ export const JAMF_PRODUCTS = {
     name: 'Elevate',
     description: 'Guided remediation and device health portal',
     bundleId: 'elevate-documentation',
-    searchLabel: 'product-elevate',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -196,7 +176,6 @@ export const JAMF_PRODUCTS = {
     name: 'Composer',
     description: 'macOS package building and editing',
     bundleId: 'composer-user-guide',
-    searchLabel: 'product-composer',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -211,7 +190,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Parent',
     description: 'Parental device controls for school-issued devices',
     bundleId: 'jamf-parent-configuration-guide',
-    searchLabel: 'product-parent',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -222,7 +200,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Teacher',
     description: 'Classroom device management for teachers',
     bundleId: 'jamf-teacher-configuration-guide',
-    searchLabel: 'product-teacher',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -235,7 +212,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Setup and Reset',
     description: 'Device personalisation and wipe-and-reprovision apps',
     bundleId: 'jamf-setup-reset-configuration-guide',
-    searchLabel: 'product-setup',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -244,7 +220,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Assessment',
     description: 'Locked-down assessment mode for education devices',
     bundleId: 'jamf-assessment-configuration-guide',
-    searchLabel: 'product-assessment',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -253,7 +228,6 @@ export const JAMF_PRODUCTS = {
     name: 'Title Editor',
     description: 'Custom software title patch definitions',
     bundleId: 'title-editor',
-    searchLabel: 'product-titleeditor',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -262,7 +236,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Infrastructure Manager',
     description: 'On-premises proxy for LDAP and other internal services',
     bundleId: 'jamf-infrastructure-manager-ldap-proxy-install-guide',
-    searchLabel: 'product-infrastructuremanager',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -271,7 +244,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf AD CS Connector',
     description: 'Certificate issuance via Active Directory Certificate Services',
     bundleId: 'technical-paper-integrating-ad-cs',
-    searchLabel: 'product-adcsconnector',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -280,7 +252,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf PKI Proxy',
     description: 'Proxy for certificate authorities behind a firewall',
     bundleId: 'jamf-pki-proxy-install-guide',
-    searchLabel: 'product-pki-proxy',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -289,7 +260,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Migrate',
     description: 'Migrating macOS devices between Jamf Pro instances',
     bundleId: 'jamf-migrate-user-guide',
-    searchLabel: 'product-migrate',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -298,7 +268,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Remote Assist',
     description: 'Remote screen sharing and support sessions',
     bundleId: 'jamf-remote-assist-release-notes',
-    searchLabel: 'product-remote-assist',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -307,7 +276,6 @@ export const JAMF_PRODUCTS = {
     name: 'Jamf Cloud Distribution Service',
     description: 'Jamf-hosted package distribution (JCDS)',
     bundleId: 'jamf-cloud-distribution-service-release-notes',
-    searchLabel: 'product-jcds',
     latestVersion: 'current',
     versions: ['current']
   },
@@ -316,7 +284,6 @@ export const JAMF_PRODUCTS = {
     name: 'Healthcare Listener',
     description: 'Integration with healthcare information systems',
     bundleId: 'healthcare-listener-install-guide',
-    searchLabel: 'product-healthcarelistener',
     latestVersion: 'current',
     versions: ['current']
   }
@@ -340,3 +307,48 @@ export const PRODUCT_IDS = Object.keys(JAMF_PRODUCTS) as [string, ...string[]];
  * subset.
  */
 export const PRODUCT_ID_LIST = PRODUCT_IDS.join(', ');
+
+/**
+ * Products whose Jamf classification value is not simply their `name`.
+ *
+ * The `product` search filter used to carry a hand-written `searchLabel` per
+ * product — a translation into `zoominmetadata`'s legacy Zoomin vocabulary
+ * (`product-pro`, `product-selfservice`, `product-jcds`). That vocabulary is
+ * not derivable from anything: measured live, 22 of 30 classification names
+ * have several `product-*` labels co-occurring, three labels are irregular
+ * spellings, and two classified products carry no `product-*` label at all.
+ * So every row had to be maintained by hand, and Jamf re-tagging one map was
+ * enough to turn the contract that guarded them red.
+ *
+ * `jamf:portal` / `jamf:app` / `jamf:utility` is Jamf's current vocabulary,
+ * accepted by `clustered-search` as a filter key, and 26 of the 28 product
+ * names appear in it verbatim — so those 26 need no table at all. Only these
+ * two do:
+ *
+ * - `jamf-setup-reset` is one product ID over two `jamf:app` values, because
+ *   Jamf files Setup and Reset separately. Filtering on either value or on
+ *   both returns the same 6 maps (the two apps share one publication), so the
+ *   pair is listed for accuracy rather than coverage.
+ * - `jamf-routines` has no classification value at all, and an empty list
+ *   here means "no product filter is possible". That is not a gap this table
+ *   can close: measured 2026-09-18, NO Jamf Routines topic is in the
+ *   clustered-search index under any query, filtered or not — searching its
+ *   own name returns 0 of 999 results. Its `product-routines` label was never
+ *   the cause; the content is simply not indexed. TOC and article fetch still
+ *   work, because those address the bundle directly.
+ */
+const CLASSIFICATION_OVERRIDES: Partial<Record<string, readonly string[]>> = {
+  'jamf-setup-reset': ['Jamf Setup', 'Jamf Reset'],
+  'jamf-routines': [],
+};
+
+/**
+ * Jamf's own classification values for a product — what the `product` search
+ * filter sends upstream.
+ *
+ * Empty when Jamf names nothing by this product, in which case no product
+ * filter can be built and the caller must say so rather than search unfiltered.
+ */
+export function classificationValuesFor(id: ProductId): readonly string[] {
+  return CLASSIFICATION_OVERRIDES[id] ?? [JAMF_PRODUCTS[id].name];
+}

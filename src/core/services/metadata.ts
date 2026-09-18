@@ -38,7 +38,6 @@ export interface ProductMetadata {
   bundleId: string;
   latestVersion: string;
   availableVersions: string[];  // All discovered versions
-  labelKey: string;  // e.g., 'product-pro'
 }
 
 export interface TopicMetadata {
@@ -90,7 +89,6 @@ function buildProductMetadata(
     bundleId,
     latestVersion,
     availableVersions: info.versions.length > 0 ? info.versions : [latestVersion],
-    labelKey: staticProduct.searchLabel,
   };
 }
 
@@ -107,7 +105,6 @@ function buildFallbackMetadata(productId: ProductId): ProductMetadata {
     bundleId: product.bundleId,
     latestVersion: product.latestVersion,
     availableVersions: [product.latestVersion],
-    labelKey: product.searchLabel,
   };
 }
 

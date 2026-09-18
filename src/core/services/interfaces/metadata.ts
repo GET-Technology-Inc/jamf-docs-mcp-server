@@ -12,7 +12,6 @@ export interface ProductMetadata {
   bundleId: string;
   latestVersion: string;
   availableVersions: string[];
-  labelKey: string;
 }
 
 /**

@@ -500,6 +500,33 @@ export class MapsRegistry {
   }
 
   /**
+   * The metadata key a classification value lives on — `jamf:portal`,
+   * `jamf:app` or `jamf:utility` — or null when Jamf names nothing by it.
+   *
+   * The `product` search filter needs this because Fluid Topics intersects
+   * filter objects across keys and unions values within one: sending all
+   * three axes at once returns nothing (measured: `jamf:app=Jamf Connect`
+   * plus `jamf:portal=Jamf Pro` gives 0 results, against 151 and 994 alone).
+   * So the right key has to be known, and it is derived here rather than
+   * written down, which is the whole point — the axis is Jamf's to decide.
+   *
+   * A value can only sit on one axis: measured across all 678 maps, the three
+   * vocabularies share 0 names with each other, so the first hit is the
+   * answer. Scanning the entries costs nothing worth indexing against (678
+   * entries, three `includes` each) and cannot go stale the way a cached
+   * index rebuilt on a different schedule could.
+   */
+  async classificationAxis(value: string): Promise<string | null> {
+    await this.ensureBuilt();
+    for (const entry of this.entries) {
+      if (entry.portal.includes(value)) { return FT_META.PORTAL; }
+      if (entry.app.includes(value)) { return FT_META.APP; }
+      if (entry.utility.includes(value)) { return FT_META.UTILITY; }
+    }
+    return null;
+  }
+
+  /**
    * Whether a bundle family exists at all, in any locale.
    *
    * `resolveMapId` returning null cannot distinguish "no such publication"

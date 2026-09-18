@@ -19,6 +19,7 @@ import type { DocTypeId, TopicId } from '../constants.js';
 import {
   JAMF_PRODUCTS,
   JAMF_TOPICS,
+  classificationValuesFor,
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_PRECEDENCE,
   LABEL_KEY_DOC_TYPE_MAP,
@@ -31,6 +32,7 @@ import type { ServerContext } from '../types/context.js';
 import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
+import type { MapsRegistry } from './maps-registry.js';
 import { cleanSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
@@ -97,19 +99,38 @@ function productNameToId(name: string | null): ProductId | null {
 }
 
 /**
- * Extract product ID (e.g. 'jamf-pro') from a legacy metadata value
- * like 'product-pro'. Falls back to scanning known searchLabel values.
+ * The product a search result is about, as Jamf names it.
+ *
+ * Read straight off the result rather than translated: every topic carries
+ * `jamf:portal` / `jamf:app` / `jamf:utility` in its own search metadata
+ * (994 of 994 results on a live Jamf Pro query), and those values already ARE
+ * product names. The previous version matched `zoominmetadata` against a
+ * hand-written `searchLabel` per product, which meant a legacy Zoomin label
+ * Jamf keeps re-tagging stood between a result and its own name.
+ *
+ * The axes are read most-specific first — utility, then app, then portal —
+ * because a document carrying both is *about* the narrower one and merely
+ * hosted on the broader: the Title Editor documentation is classified
+ * `portal=[Jamf Pro], utility=[Title Editor]`, and calling it a Jamf Pro
+ * document tells the reader nothing they did not already know from searching.
+ * Measured over the 11 families that carry more than one axis, this order
+ * never does worse than the `zoominmetadata` scan it replaced and does better
+ * on five — Jamf App Catalog, Jamf Remote Assist, Jamf Setup and Reset,
+ * Healthcare Listener and the AD CS technical paper all reported "Jamf Pro"
+ * under a portal-first order.
+ *
+ * Only the first value within an axis is reported, because this feeds a single
+ * `product` field on one result. A document Jamf files under several products
+ * on the same axis — 29 maps carry two or three portals — is reported under
+ * the first Jamf lists, the same choice {@link listPublications} documents.
+ *
+ * This never decides what a search RETURNS: the client-side product filter
+ * matches on `bundleSlug`, not on this field.
  */
-function extractProductFromZoominMeta(metadata: FtMetadataEntry[] | undefined): string | null {
-  const values = getMetaValues(metadata, FT_META.ZOOMIN_METADATA);
-  for (const val of values) {
-    // Match against known searchLabels in JAMF_PRODUCTS
-    const matched = Object.entries(JAMF_PRODUCTS).find(
-      ([, product]) => product.searchLabel === val
-    );
-    if (matched !== undefined) {
-      return matched[1].name;
-    }
+function extractProductFromClassification(metadata: FtMetadataEntry[] | undefined): string | null {
+  for (const key of [FT_META.UTILITY, FT_META.APP, FT_META.PORTAL]) {
+    const value = getMetaValues(metadata, key)[0];
+    if (value !== undefined && value !== '') { return value; }
   }
   return null;
 }
@@ -159,7 +180,8 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
 /**
  * Build Fluid Topics search filters from search params.
  *
- * - product → `zoominmetadata` filter using searchLabel
+ * - product → resolved separately by {@link resolveProductFilter} and passed
+ *   in, because it needs the registry to know which axis the product lives on
  * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
  * - version → `version` filter (only when a specific version is requested)
  *
@@ -178,18 +200,54 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * for product-filtered non-Pro searches). Jamf Pro's many version snapshots are
  * instead collapsed client-side via {@link dedupeToLatestVersions}.
  */
+/**
+ * The upstream filter for a `product`, in Jamf's own vocabulary.
+ *
+ * Replaces the hand-written `searchLabel` translation into `zoominmetadata`'s
+ * legacy `product-*` values. Measured over 224 product x query cells on the
+ * live API, filtering on `jamf:portal` / `jamf:app` / `jamf:utility` returns
+ * 4850 results against the labels' 4861 — 24 of 28 products byte-identical,
+ * and nothing gained that should not be. The 11 it loses are tail entries of
+ * result windows large enough that the classification matches a slightly wider
+ * upstream set; each still carries the classification.
+ *
+ * What it buys is that nothing here is maintained by hand. `product-*` is a
+ * legacy Zoomin vocabulary Jamf re-tags without warning — one map gaining
+ * `product-elevate` in September 2026 was enough to turn the contract that
+ * guarded the table red — while the classification is what Jamf files
+ * documents under today, and the axis is looked up rather than written down.
+ *
+ * Returns null when Jamf names nothing by this product, which today is
+ * `jamf-routines` alone. The caller must treat that as "cannot filter", not
+ * as "no filter": searching unfiltered would answer a different question.
+ */
+export async function resolveProductFilter(
+  registry: Pick<MapsRegistry, 'classificationAxis'>,
+  product: ProductId | undefined,
+): Promise<FtSearchFilter | null> {
+  if (product === undefined) { return null; }
+
+  const values = classificationValuesFor(product);
+  if (values.length === 0) { return null; }
+
+  // Fluid Topics intersects filter objects and unions values within one, so
+  // every value has to ride on the same key. They always do: a classification
+  // value sits on exactly one axis, and the two-value case (Jamf Setup and
+  // Jamf Reset) has both on `jamf:app`.
+  const axis = await registry.classificationAxis(values[0] ?? '');
+  if (axis === null) { return null; }
+
+  return { key: axis, values: [...values] };
+}
+
 export function buildSearchFilters(
-  params: Pick<SearchParams, 'product' | 'docType' | 'version'>
+  params: Pick<SearchParams, 'docType' | 'version'>,
+  productFilter?: FtSearchFilter | null,
 ): FtSearchFilter[] {
   const filters: FtSearchFilter[] = [];
 
-  // Product filter
-  if (params.product !== undefined) {
-    const productDef = JAMF_PRODUCTS[params.product];
-    filters.push({
-      key: FT_META.ZOOMIN_METADATA,
-      values: [productDef.searchLabel],
-    });
+  if (productFilter !== undefined && productFilter !== null) {
+    filters.push(productFilter);
   }
 
   // Document type filter.
@@ -353,7 +411,7 @@ function buildSearchResult(fields: EntryFields): SearchResult {
   const title = (fields.title !== undefined && fields.title !== '')
     ? fields.title
     : 'Untitled';
-  const product = extractProductFromZoominMeta(metadata);
+  const product = extractProductFromClassification(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
   const versionValues = getMetaValues(metadata, FT_META.VERSION);
   const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata));
@@ -883,7 +941,8 @@ async function resolveSearchResults(
     return out;
   };
 
-  let results = await fetchFiltered(buildSearchFilters(params));
+  const productFilter = await resolveProductFilter(ctx.mapsRegistry, params.product);
+  let results = await fetchFiltered(buildSearchFilters(params, productFilter));
 
   // 3. Re-query without docType when narrowing by it emptied the result set
   //    upstream.
@@ -905,10 +964,10 @@ async function resolveSearchResults(
   //    user needs to see.
   if (results.length === 0 && params.docType !== undefined) {
     log.debug(`Empty upstream result with docType="${params.docType}"; re-querying without it`);
-    results = await fetchFiltered(buildSearchFilters({
-      product: params.product,
-      version: params.version,
-    }));
+    results = await fetchFiltered(buildSearchFilters(
+      { version: params.version },
+      productFilter,
+    ));
   }
 
   return { results, fromProvider: false };

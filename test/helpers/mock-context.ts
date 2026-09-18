@@ -21,6 +21,9 @@ import { createDefaultConfig } from '../../src/core/config.js';
 import type { PublicationInfo } from '../../src/core/services/maps-registry.js';
 import { MapsRegistry } from '../../src/core/services/maps-registry.js';
 import { TopicResolver } from '../../src/core/services/topic-resolver.js';
+import { JAMF_PRODUCTS, classificationValuesFor, type ProductId } from '../../src/core/constants.js';
+import type { FtMapInfo } from '../../src/core/types.js';
+import { CLASSIFICATION_AXIS } from './fixtures.js';
 
 export function createMockLogger(): Logger {
   return {
@@ -108,6 +111,47 @@ export function createStubMapsRegistry(
     ensureBuilt: vi.fn(async () => { await Promise.resolve(); }),
     reset: vi.fn(),
   } as unknown as ServerContext['mapsRegistry'];
+}
+
+/**
+ * A `MapsRegistry` that answers offline, one map per product carrying Jamf's
+ * own classification for it.
+ *
+ * Opt-in rather than the default for `createMockContext`, which deliberately
+ * builds a provider-less registry so a test can mock the http client
+ * *underneath* it — that is how the TOC tests drive map resolution, and
+ * injecting a provider by default silently took their fixtures away.
+ *
+ * Pass this where a test exercises something that resolves a product's
+ * classification axis, which today means any product-filtered search.
+ */
+export function createClassifyingMapsRegistry(): MapsRegistry {
+  const maps = fixtureMaps();
+  return new MapsRegistry(createMockCache(), undefined, {
+    getMaps: async () => await Promise.resolve(maps),
+  });
+}
+
+function fixtureMaps(): FtMapInfo[] {
+  return (Object.keys(JAMF_PRODUCTS) as ProductId[]).flatMap((id, i) => {
+    const values = classificationValuesFor(id);
+    if (values.length === 0) { return []; }
+    const axis = CLASSIFICATION_AXIS[values[0] ?? ''] ?? 'jamf:portal';
+    const product = JAMF_PRODUCTS[id];
+    return [{
+      id: `fixture-map-${String(i)}`,
+      title: product.name,
+      mapApiEndpoint: `/api/khub/maps/fixture-map-${String(i)}`,
+      metadata: [
+        { key: 'version_bundle_stem', label: 'version_bundle_stem', values: [product.bundleId] },
+        { key: 'ft:locale', label: 'ft:locale', values: ['en-US'] },
+        { key: 'bundle', label: 'bundle', values: [product.bundleId] },
+        { key: 'jamf:portal', label: 'jamf:portal', values: axis === 'jamf:portal' ? [...values] : [] },
+        { key: 'jamf:app', label: 'jamf:app', values: axis === 'jamf:app' ? [...values] : [] },
+        { key: 'jamf:utility', label: 'jamf:utility', values: axis === 'jamf:utility' ? [...values] : [] },
+      ],
+    }];
+  });
 }
 
 export function createMockContext(overrides?: Partial<ServerContext>): ServerContext {
