@@ -97,7 +97,10 @@ export const SELECTORS = {
   TITLE: 'h1',
 
   // Navigation - learn.jamf.com structure
-  BREADCRUMB: '[class*="breadcrumb"] a, nav[aria-label="breadcrumb"] a',
+  // The ARIA clause carries `i` because CSS attribute values are case-sensitive
+  // by default and sites do not agree on the casing: concepts.jamf.com marks its
+  // trail `aria-label="Breadcrumb"`, which the lowercase form missed entirely.
+  BREADCRUMB: '[class*="breadcrumb"] a, nav[aria-label="breadcrumb" i] a',
 
   // Related content
   RELATED: 'nav.related-links a, .related-topics a, [class*="related"] a',
