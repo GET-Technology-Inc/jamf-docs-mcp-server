@@ -120,7 +120,7 @@ export const STATIC_DOC_SOURCES = {
       // index in ahead of the content.
       CONTENT: 'article, [class*="prose"]',
       TITLE: 'h1',
-      BREADCRUMB: '[class*="breadcrumb"] a',
+      BREADCRUMB: '[class*="breadcrumb"] a, nav[aria-label="breadcrumb" i] a',
       RELATED: '[class*="related"] a',
       REMOVE: STATIC_PAGE_REMOVE,
     },
@@ -156,7 +156,7 @@ export const STATIC_DOC_SOURCES = {
     selectors: {
       CONTENT: 'article, main',
       TITLE: 'h1',
-      BREADCRUMB: '[class*="breadcrumb"] a',
+      BREADCRUMB: '[class*="breadcrumb"] a, nav[aria-label="breadcrumb" i] a',
       RELATED: '[class*="related"] a',
       REMOVE: STATIC_PAGE_REMOVE,
     },

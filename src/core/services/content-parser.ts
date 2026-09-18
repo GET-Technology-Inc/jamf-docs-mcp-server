@@ -248,6 +248,29 @@ export function parseArticle(
 ): ParsedArticleContent {
   const $ = cheerio.load(html);
   const selectors = options?.selectors ?? SELECTORS;
+
+  // Read the breadcrumb BEFORE cleanHtml, which is the only order that works.
+  // A static source's REMOVE list includes `nav` — a documentation shell is
+  // mostly navigation, and leaving it in put a sidebar in every article — and
+  // the breadcrumb trail is itself a `nav`, so extracting afterwards read an
+  // element that had already been deleted. That is why concepts.jamf.com
+  // returned `breadcrumb: []` for every page while the selector looked right
+  // (#285): two independent causes, and fixing either one alone still yields
+  // nothing. Verified on a live guide page — correct selector plus stripped
+  // nav gives [], early extraction plus the old selector gives [], and only
+  // both together give ["Guides", "AI Governance"].
+  //
+  // Nothing else moves with it. Only the breadcrumb is read this early, and it
+  // reads text rather than hrefs, so it needs neither the link rewriting nor
+  // the internal-link resolution that follow. The generic `SELECTORS.REMOVE`
+  // does not list `nav` at all, so the Fluid Topics path is unaffected either
+  // way — and `article-service` already documents that `parsed.breadcrumb` is
+  // empty for every FT article and takes its trail from the map index instead.
+  const breadcrumb = $(selectors.BREADCRUMB)
+    .map((_, el) => $(el).text().trim())
+    .get()
+    .filter(Boolean);
+
   cleanHtml($, {
     selectors,
     ...(options?.linkBase !== undefined ? { linkBase: options.linkBase } : {}),
@@ -293,12 +316,6 @@ export function parseArticle(
   // Convert to Markdown and strip Turndown anchor artifacts from headings
   const content = turndown.turndown(contentHtml)
     .replace(/^(#{1,6}\s+)\[([^\]]*)\]\(#[^)]*\)/gm, '$1$2');
-
-  // Extract breadcrumb
-  const breadcrumb = $(selectors.BREADCRUMB)
-    .map((_, el) => $(el).text().trim())
-    .get()
-    .filter(Boolean);
 
   // Extract related articles
   const relatedArticles = options?.includeRelated === true

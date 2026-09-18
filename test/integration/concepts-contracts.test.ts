@@ -16,13 +16,17 @@
  * service, never through `parseArticle` alone, or the fallback is skipped and
  * the result looks broken when it is not.
  *
- * Deliberately NOT asserted: breadcrumbs. `SELECTORS.BREADCRUMB` matches
- * nothing here and cannot — the live markup marks the trail with
- * `nav[aria-label="Breadcrumb"]` rather than a class, and `cleanHtml` removes
- * every `<nav>` before the extraction runs anyway. That costs no content, so
- * it is tracked separately rather than pinned red here. Related links are
- * likewise absent: the site publishes no related section at all, so a check
- * would assert an intention rather than a contract.
+ * Breadcrumbs ARE asserted now (#285). They used to be deliberately skipped
+ * because they could not work: the selector looked for a class while the site
+ * marks its trail `nav[aria-label="Breadcrumb"]`, and `cleanHtml` stripped
+ * every `<nav>` before the extraction ran. Both are fixed, so the trail is
+ * real and worth pinning — and pinning it is what would catch the site moving
+ * back to a class, or the extraction drifting after the removal again.
+ *
+ * Only guide pages carry a trail; `/en/concepts/…` pages have no breadcrumb
+ * nav at all, so the assertion below is on the guides in the sample rather
+ * than on all of it. Related links remain unasserted: the site publishes no
+ * related section at all, so a check would assert an intention.
  *
  * Cost, measured 2026-09-14: one sitemap (~6 KB) plus SAMPLE_SIZE pages,
  * CONCURRENCY at a time — a few seconds against the job's 5-minute timeout.
@@ -56,6 +60,7 @@ interface Fetched {
   url: string;
   title: string;
   content: string;
+  breadcrumb: string[];
 }
 
 let xml: string;
@@ -95,7 +100,12 @@ beforeAll(async () => {
   const ctx = createMockContext();
   sampled = await mapLimit(sample, async (entry) => {
     const article = await fetchStaticArticle(ctx, SOURCE, entry.url);
-    return { url: entry.url, title: article.title, content: article.content };
+    return {
+      url: entry.url,
+      title: article.title,
+      content: article.content,
+      breadcrumb: article.breadcrumb ?? [],
+    };
   });
 }, 300_000);
 
@@ -193,5 +203,37 @@ describe('concepts.jamf.com contracts', () => {
 
     const empty = sampled.filter(page => page.content.trim() === '');
     expect(empty.map(p => p.url), 'pages that render no content at all').toEqual([]);
+  });
+
+  it('reads the breadcrumb trail off the guides that publish one', () => {
+    // #285: this returned [] for every page until two independent bugs were
+    // fixed — the selector matched a class the site does not use, and
+    // `cleanHtml` deleted every `<nav>` (the trail among them) before the
+    // extraction ran. Fixing either alone still yielded nothing, which is why
+    // it survived so long looking like working code.
+    //
+    // Guides only. `/en/concepts/…` pages carry no breadcrumb nav at all, so
+    // asserting across the whole sample would pin an absence as a failure.
+    const guides = sampled.filter(page => page.url.includes('/guides/'));
+    expect(guides.length, 'the sample contains no guide pages to check').toBeGreaterThan(0);
+
+    const empty = guides.filter(page => page.breadcrumb.length === 0);
+    expect(
+      empty.map(page => page.url),
+      'These guides returned no breadcrumb. Either the site stopped marking ' +
+      'the trail with nav[aria-label="Breadcrumb"], or something is stripping ' +
+      'nav before parseArticle reads it again — both are silent, and both ' +
+      'produce exactly this.'
+    ).toEqual([]);
+
+    // The last crumb is the page itself, which is what makes the trail worth
+    // reading rather than a duplicate of the title.
+    for (const page of guides) {
+      expect(
+        page.breadcrumb.length,
+        `${page.url} has a one-element trail; a breadcrumb of just the page ` +
+        'says nothing about where it sits.'
+      ).toBeGreaterThan(1);
+    }
   });
 });
