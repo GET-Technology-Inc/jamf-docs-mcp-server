@@ -1,3 +1,9 @@
+## [5.10.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.7...v5.10.8) (2026-09-18)
+
+### Bug Fixes
+
+* **search:** filter by Jamf's own product classification, not the legacy labels ([#293](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/293)) ([5d68253](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/5d682536a836be3cac5586868b10a922882a49f3))
+
 ## [5.10.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.6...v5.10.7) (2026-09-16)
 
 ### Dependencies
