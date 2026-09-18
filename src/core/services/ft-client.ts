@@ -50,12 +50,13 @@ export async function search(
 /**
  * GET /api/khub/maps
  *
- * Returns all publications: 676 maps across all locales and versions,
- * which collapse to 97 bundle families once the version suffix is
- * stripped. Measured against the live endpoint on 2026-09-14
- * (2,968,856 bytes); the previous "~577" in this comment predated
- * several publication families and was never a hard contract — the
- * scheduled upstream-contract job is what pins the real shape.
+ * Returns every publication across all locales and versions, which collapse
+ * to bundle families once the version suffix is stripped.
+ *
+ * Measured 2026-09-18: 678 maps, 98 families, 2,977,345 bytes. The figures are
+ * dated because they move constantly — this comment has read "~577", then 676
+ * / 97 — and none of them is a contract. The scheduled upstream-contract job
+ * is what pins the shape the code actually depends on.
  *
  * Each map includes metadata with version_bundle_stem, version,
  * latestVersion, ft:locale, etc.

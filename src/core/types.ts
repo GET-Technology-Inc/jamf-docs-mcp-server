@@ -185,7 +185,7 @@ export interface FetchTocResult {
    * The locale of the map that actually answered.
    *
    * Differs from the requested one whenever Jamf does not publish this
-   * publication in it — 42 of 97 families are en-US only, and
+   * publication in it — most families are en-US only, and
    * `jamf-school-documentation` has no zh-TW map at all. The registry has
    * always fallen back to en-US; carrying the answer out is what lets the
    * caller say so rather than presenting English as a translation.

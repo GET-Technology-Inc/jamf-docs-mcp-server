@@ -309,7 +309,8 @@ describe('FT API data contracts', () => {
       // An unclassified map carries the key with an empty `values` array
       // rather than omitting it, which is what makes [] the honest sentinel
       // for "Jamf assigns none" — there is no "key missing" case to tell
-      // apart. 629 of 676 maps carry at least one value today.
+      // apart. Most maps carry at least one value; the assertion below only
+      // needs that it is not vanishingly few.
       for (const key of ['jamf:portal', 'jamf:app', 'jamf:utility']) {
         const present = maps.filter(m => metaOf(m).some(meta => meta.key === key));
         expect(
@@ -346,16 +347,23 @@ describe('FT API data contracts', () => {
       ).toBeGreaterThan(0);
       expect(multi('jamf:app').length).toBeGreaterThan(0);
 
-      // Three values on one key is the deepest live case (Instructor-Led
-      // Training at Jamf: School + Pro + Protect). Nothing in the code caps
-      // the arity, and this records that two is not the ceiling — so it has
-      // to assert 3, not 2. `multi` has already filtered to length > 1, so a
-      // `>= 2` here would be true by construction and would survive Jamf
-      // dropping the only three-way classification it publishes.
+      // Nothing in the code caps the arity, and this records that two is not
+      // the ceiling — `multi` has already filtered to length > 1, so a `>= 2`
+      // here would be true by construction and would survive Jamf flattening
+      // every deep classification it publishes.
+      //
+      // The floor is 3 rather than today's actual maximum on purpose: Jamf
+      // moves it. Measured 2026-09-15 the deepest case was 3 (Instructor-Led
+      // Training at Jamf); by 2026-09-18 it was 5 (the Jamf Platform Services
+      // training video, filed under Account, School, Pro, Elevate and Now).
+      // Asserting the exact maximum would have gone red on that, which is Jamf
+      // classifying more carefully, not a defect here.
       expect(
         Math.max(...multi('jamf:portal').map(v => v.length)),
-        'No live map carries three jamf:portal values any more. The arity ' +
-        'ceiling recorded here has moved; re-measure before relaxing this.'
+        'No live map carries three or more jamf:portal values any more. The ' +
+        'arity this server handles has collapsed to two; re-measure before ' +
+        'relaxing the floor, because a flatter catalogue may mean Jamf has ' +
+        'changed how it classifies rather than that this check is wrong.'
       ).toBeGreaterThanOrEqual(3);
     });
 
@@ -363,11 +371,11 @@ describe('FT API data contracts', () => {
       // `listPublications` takes the family's classification from whichever
       // map it meets first. That is only defensible because Jamf publishes
       // the same values, in the same order, on every map of the family —
-      // measured at 0 disagreements across all 97 families and 11 locales.
+      // and this asserts exactly that, across every family and locale.
       // If this ever fails, the first-map shortcut must become a merge.
       //
       // Grouping goes through the registry's own `deriveBundleStem`, not
-      // through the `version_bundle_stem` key it prefers. Only 310 of the 676
+      // through the `version_bundle_stem` key it prefers. Only a minority of
       // maps carry that key and it spans 5 stems, all of them Jamf Pro or Jamf
       // Connect — so reading it directly would check five families, pass, and
       // skip every multi-locale family this shortcut actually matters for
@@ -390,7 +398,8 @@ describe('FT API data contracts', () => {
       expect(
         byStem.size,
         `Only ${String(byStem.size)} bundle families were derived from ${String(maps.length)} maps. ` +
-        'Live is 97; 5 would mean the stem derivation has fallen back to the ' +
+        'Live was 98 on 2026-09-18; 5 would mean the stem derivation has ' +
+        'fallen back to the ' +
         'raw version_bundle_stem key and this contract now checks almost nothing.'
       ).toBeGreaterThan(50);
       const disagreeing = [...byStem.entries()]

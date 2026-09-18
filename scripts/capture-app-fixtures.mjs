@@ -92,7 +92,7 @@ const CAPTURES = [
   {
     key: 'article-tables',
     label: 'Article — tables',
-    why: 'A 22-row settings table. Turndown had no table rule, so this page used to arrive as an undifferentiated run of variable names and descriptions with nothing saying which belonged to which.',
+    why: 'A multi-row settings table. Turndown had no table rule, so this page used to arrive as an undifferentiated run of variable names and descriptions with nothing saying which belonged to which.',
     tool: 'jamf_docs_get_article',
     args: {
       url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Payload_Variables_for_Configuration_Profiles',
@@ -103,7 +103,7 @@ const CAPTURES = [
   {
     key: 'article-prose',
     label: 'Article — prose only',
-    why: 'The common shape: no headings, so sections[] is empty and the section nav must not render. 20 of 22 sampled Jamf pages look like this.',
+    why: 'The common shape: no headings, so sections[] is empty and the section nav must not render. Almost every Jamf page looks like this (118 of 120 sampled in the Jamf Pro map, measured 2026-09-18).',
     tool: 'jamf_docs_get_article',
     args: {
       url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Inventory_Information',
@@ -124,7 +124,7 @@ const CAPTURES = [
   {
     key: 'article-sections',
     label: 'Article — with sections',
-    why: 'One of the ~10% of topics whose author put headings inside a single topic. The only fixture that exercises the section rail, the id stamping and anchor navigation.',
+    why: 'One of the minority of topics whose author put headings inside a single topic (~2% within the Jamf Pro documentation map, measured 2026-09-18 — every fixture URL here comes from that map). The only fixture that exercises the section rail, the id stamping and anchor navigation.',
     tool: 'jamf_docs_get_article',
     args: {
       url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Components_Installed_on_Managed_Computers',

@@ -24,7 +24,7 @@ export const ProductListOutputSchema = z.object({
    * Separate from `products` on purpose. `products` is the curated set the
    * `product` search filter accepts; this is the set `jamf_docs_get_toc`'s
    * `publication` parameter accepts, and it is an order of magnitude larger
-   * (97 vs 12) because most Jamf documents share a product label with
+   * because most Jamf documents share a product label with
    * another document rather than having one of their own. Folding them
    * together would turn "which product" into "which document".
    *
@@ -312,7 +312,7 @@ export const TocOutputSchema = z.object({
    * Set when Jamf does not publish this document in the requested language and
    * the en-US edition was served instead.
    *
-   * 42 of the 97 publication families are en-US only and several products are
+   * Most publication families are en-US only and several products are
    * translated into a different six locales than the rest, so this is a
    * routine outcome rather than an error — but without saying so, an English
    * table of contents returned for a zh-TW request is indistinguishable from

@@ -331,8 +331,8 @@ a.txt:hover { text-decoration: underline; text-underline-offset: 2px; }
 .filter[hidden] { display: none; }
 
 /* Zero resting pixels until a printable key opens it, and zero tokens ever: it
-   filters entries already in memory and never calls a tool. A 792-entry TOC is
-   otherwise 12,000px of scrolling in a panel the host clips at 640. */
+   filters entries already in memory and never calls a tool. A TOC this size is
+   otherwise thousands of pixels of scrolling in a panel the host clips at 640. */
 .filter { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); }
 .filter input {
   flex: 1 1 auto; min-width: 0;

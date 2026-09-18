@@ -102,8 +102,8 @@ export function renderTocItems(entries: TocEntry[]): string {
     .map((entry) => {
       const steps = indentSteps(entry.depth);
       // `data-top` marks a root entry so the stylesheet can give it the weight
-      // that says "section", which is the only ranking a flat list of 792
-      // titles has.
+      // that says "section", which is the only ranking a flat list of several
+      // hundred titles has.
       const top = steps === 0 ? ' data-top' : '';
       return (
         `<li><a class="row"${top} href="${esc(entry.url)}" data-url="${esc(entry.url)}"`

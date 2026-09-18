@@ -269,10 +269,11 @@ describe('Jamf classification', () => {
   /**
    * Copied from live `/api/khub/maps` rows, because the shapes that broke are
    * not the ones anyone would invent: Jamf files a document under every
-   * product it covers, so 35 of the 676 maps carry two or three values on
-   * `jamf:portal` or `jamf:app`. 29 and 12 respectively, overlapping on the
-   * six locales of `jamf-trust-documentation`, which is multi-valued on both
-   * axes at once and is why the two counts do not simply add. All three keys
+   * product it covers, so a map can carry several values on one key. Measured
+   * 2026-09-18: 35 of 678 maps are multi-valued on `jamf:portal` or
+   * `jamf:app` — 29 and 12 respectively, overlapping on the six locales of
+   * `jamf-trust-documentation`, which is multi-valued on both axes at once and
+   * is why the two counts do not simply add. All three keys
    * are present on every map —
    * an unclassified one carries them with an empty `values` array, which is
    * why `jamf-technical-glossary` below spells them out rather than omitting

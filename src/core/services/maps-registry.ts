@@ -39,15 +39,18 @@ export interface MapEntry {
    * order. Empty when Jamf assigns none.
    *
    * Plural because Jamf files a document under every product it covers, not
-   * one: 29 of 676 maps carry two or three portal values today, in 7 distinct
-   * combinations. All three keys are present on every map — what varies is
-   * whether `values` is empty — so an empty array here means "Jamf classified
-   * this under nothing", never "the key was missing".
+   * one. All three keys are present on every map — what varies is whether
+   * `values` is empty — so an empty array here means "Jamf classified this
+   * under nothing", never "the key was missing". Counts and arity live in one
+   * dated block on {@link FT_META.PORTAL} rather than being repeated here:
+   * repeating a live figure is repeating something that will rot, and the
+   * previous version of this comment said "two or three", true when written
+   * and false a week later when one map reached five.
    */
   portal: string[];
-  /** `jamf:app` — the client apps this publication documents. 12 maps carry two. */
+  /** `jamf:app` — the client apps this publication documents. */
   app: string[];
-  /** `jamf:utility` — the utilities this publication documents. None carries two today. */
+  /** `jamf:utility` — the utilities this publication documents. */
   utility: string[];
 }
 
@@ -64,7 +67,8 @@ export interface RegistryProductInfo {
  * whereas {@link JAMF_PRODUCTS} answers "which product is this about". Fluid
  * Topics keeps them separate and so does this type — `get_toc` and
  * `get_article` only ever needed a bundle stem, and binding them to the
- * product registry is what limited reachable content to 12 of 97 families.
+ * product registry is what limited reachable content to a fraction of the
+ * families Jamf publishes.
  */
 export interface PublicationInfo {
   /** The bundle family stem, e.g. `technical-paper-laps`. Addresses get_toc. */
@@ -97,10 +101,11 @@ interface PublicationDraft extends PublicationInfo {
  *
  * Exported for the live data contracts, which have to group maps into families
  * the same way the registry does. Reading `version_bundle_stem` directly there
- * instead looks equivalent and is not: only 310 of 676 maps carry that key, and
- * it spans 5 stems against the 97 this derivation reaches, so a contract built
- * on the raw key silently checks the five Jamf Pro and Jamf Connect families
- * and skips every other one.
+ * instead looks equivalent and is not: most maps do not carry that key, and
+ * those that do span a handful of Jamf Pro and Jamf Connect stems, so a
+ * contract built on the raw key silently checks those few families and skips
+ * every other one. Measured 2026-09-18: 311 of 678 maps carry it, over 5
+ * stems, against the 98 families this derivation reaches.
  */
 export function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): string {
   const stem = getMetaValue(metadata, FT_META.VERSION_BUNDLE_STEM);
@@ -255,11 +260,13 @@ export class MapsRegistry {
    *
    * The fallback to en-US has always been here; what was missing is any way
    * for a caller to know it happened. Jamf does not publish every family in
-   * every locale — 42 of the 97 are en-US only, `jamf-school-documentation`
-   * has no zh-TW map at all (de/en/es/fr/ja/nl), and nl-NL covers 10 families
-   * against en-US's 97 — so a zh-TW request silently returning English is a
-   * routine outcome, not an edge case. Returning `resolvedLocale` lets the
-   * tool say so instead of implying the content is translated.
+   * every locale — most families are en-US only, `jamf-school-documentation`
+   * has no zh-TW map at all, and nl-NL covers a tenth of what en-US does — so
+   * a zh-TW request silently returning English is a routine outcome, not an
+   * edge case. Returning `resolvedLocale` lets the tool say so instead of
+   * implying the content is translated. Measured 2026-09-18: 43 of 98
+   * families are en-US only, nl-NL has 10, and jamf-school-documentation
+   * publishes in de/en/es/fr/ja/nl.
    */
   async resolveMap(
     bundleStem: string,
@@ -401,13 +408,13 @@ export class MapsRegistry {
    *
    * Sourced from the same `/api/khub/maps` payload the registry already
    * builds from, so it needs no extra request and cannot drift from what
-   * `resolveMapId` can actually reach: 97 families as of 2026-09-14, against
-   * the 12 reachable through {@link JAMF_PRODUCTS}.
+   * `resolveMapId` can actually reach — far more than the product registry
+   * exposes. Measured 2026-09-18: 98 families, against the 28 products.
    *
    * `locale` selects which locale's title to report and nothing else — the
    * list is not filtered by it, because a caller asking in zh-TW still needs
-   * to see the en-US-only families (42 of them) rather than have them
-   * silently vanish. Each entry's `locales` says what it actually has.
+   * to see the en-US-only families, which are the majority, rather than
+   * have them silently vanish. Each entry's `locales` says what it has.
    */
   async listPublications(locale?: LocaleId): Promise<PublicationInfo[]> {
     await this.ensureBuilt();
@@ -428,8 +435,8 @@ export class MapsRegistry {
           title: '',
           // The first map of a family decides the family's classification,
           // which is safe because Jamf publishes the same one on every map of
-          // it: measured across all 97 families x 3 keys, every map agrees on
-          // the exact value array, order included — 0 disagreements. So there
+          // it: every map agrees on the exact value array, order included,
+          // which `data-contracts` asserts against the live API. So there
           // is nothing to merge here, and merging would invent a family-level
           // classification Jamf never published.
           portal: entry.portal,
@@ -504,17 +511,24 @@ export class MapsRegistry {
    * `jamf:app` or `jamf:utility` — or null when Jamf names nothing by it.
    *
    * The `product` search filter needs this because Fluid Topics intersects
-   * filter objects across keys and unions values within one: sending all
-   * three axes at once returns nothing (measured: `jamf:app=Jamf Connect`
-   * plus `jamf:portal=Jamf Pro` gives 0 results, against 151 and 994 alone).
-   * So the right key has to be known, and it is derived here rather than
-   * written down, which is the whole point — the axis is Jamf's to decide.
+   * filter objects across keys and unions values within one, so the axes
+   * cannot simply all be sent: their intersection is empty. The right key has
+   * to be known, and it is derived here rather than written down, which is the
+   * whole point — the axis is Jamf's to decide.
    *
-   * A value can only sit on one axis: measured across all 678 maps, the three
-   * vocabularies share 0 names with each other, so the first hit is the
-   * answer. Scanning the entries costs nothing worth indexing against (678
-   * entries, three `includes` each) and cannot go stale the way a cached
-   * index rebuilt on a different schedule could.
+   * A value can only sit on one axis, so the first hit is the answer. Scanning
+   * the entries costs nothing worth indexing against — three `includes` per
+   * entry — and cannot go stale the way a cached index rebuilt on a different
+   * schedule could.
+   *
+   * Measured 2026-09-18, en-US: `jamf:app=Jamf Connect` returns 151 topics for
+   * "policy" and `jamf:portal=Jamf Pro` 994; the two together return 0 topics
+   * under every query tried. Stated precisely, because a first draft of this
+   * comment said "returns nothing" while the raw payload does carry 11 entries
+   * for that pair — all of them `DOCUMENT`, a type `FtSearchEntry` does not
+   * declare, which `transformFtSearchResult` drops through its fallback for
+   * want of a URL. Nothing reaches a caller either way, but "nothing comes
+   * back" and "nothing survives the transform" are different claims.
    */
   async classificationAxis(value: string): Promise<string | null> {
     await this.ensureBuilt();

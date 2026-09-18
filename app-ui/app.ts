@@ -1032,7 +1032,7 @@ function renderNearby(tree: ArticleView['navigation']): string {
  *
  * Counted in blocks, not characters. A character budget does not predict
  * height: 900 characters of prose is three short paragraphs, and 900
- * characters containing a 22-row settings table is 700px of panel. Blocks are
+ * characters containing a settings table is 700px of panel. Blocks are
  * what the reader sees, so blocks are what is budgeted.
  *
  * A table or a code block ends the preview wherever it appears, for the same
@@ -1709,9 +1709,9 @@ root.addEventListener('keydown', (event) => {
   }
 
   // Any printable key opens the TOC filter. Zero resting pixels, zero tokens:
-  // it filters entries already in memory and never calls a tool. A 792-entry
-  // table of contents is otherwise 12,000px of scrolling in a panel the host
-  // clips at 640.
+  // it filters entries already in memory and never calls a tool. A table of
+  // contents this size is otherwise thousands of pixels of scrolling in a
+  // panel the host clips at 640.
   if (
     current?.kind === 'toc' &&
     isFullscreen() &&

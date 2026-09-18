@@ -288,7 +288,7 @@ interface TocNotices {
  * Say so when the answer is not in the language that was asked for.
  *
  * The registry has always fallen back to en-US, and Jamf genuinely does not
- * translate everything: 42 of the 97 publication families are en-US only, and
+ * translate everything: most publication families are en-US only, and
  * `jamf-school-documentation` has no zh-TW map at all (de/en/es/fr/ja/nl). A
  * silent fallback presents English as though it were the translation, and the
  * reader has no way to tell that from a document that simply happens to have
@@ -475,7 +475,7 @@ async function resolveTocSource(
   const dynamic = await resolveDynamicSection(ctx, publication, params.language ?? DEFAULT_LOCALE);
   if (dynamic !== null) { return dynamic; }
 
-  // Not an enum: there are 97 families and the set is upstream's to change,
+  // Not an enum: the family set is upstream's to change and grows without
   // so the check is a registry lookup and a miss carries suggestions rather
   // than a wall of every id.
   if (!(await ctx.mapsRegistry.hasPublication(publication))) {

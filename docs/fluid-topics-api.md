@@ -6,7 +6,7 @@ Research findings for the Fluid Topics (FT) platform powering Jamf's documentati
 
 | Property | Value |
 |----------|-------|
-| Platform | Fluid Topics 5.2.58 |
+| Platform | Fluid Topics 5.3.50 (`ft-called-app-version`, 2026-09-18) |
 | Base URL | `https://learn.jamf.com` |
 | Auth | None required -- all endpoints below are unauthenticated |
 | Old API | `learn-be.jamf.com` -- **decommissioned**, returns HTTP 410 Gone |
@@ -55,17 +55,24 @@ Primary search endpoint. Returns results grouped into clusters.
 `jamf:contentType` key is real and is returned on every topic, but its *values*
 are translated per locale — the topics that read `Release Notes` under `en-US`
 read `版本資訊` under `zh-TW`, `リリースノート` under `ja-JP` and
-`Versionshinweise` under `de-DE`. Filtering on the English string matched 1323
-topics under `en-US` and **exactly 0** under all seven other locales. The
+`Versionshinweise` under `de-DE`. Filtering on the English string matched
+topics under `en-US` and **exactly 0** under every other locale — of which
+there are ten, not the seven this line claimed before 2026-09-18. The
 `content-*` vocabulary under `zoominmetadata` is locale-invariant
-(`content-releasenotes`: 1323 / 940 / 1207 / 1207 for those four locales).
+(`content-releasenotes` matches in every locale, where the translated value matched only its own).
 See `DOC_TYPE_LABEL_MAP` in `src/core/constants/doc-types.ts`.
 
 **Filter objects intersect; values inside one filter union.** Product and
 content type share the `zoominmetadata` key, so they must be sent as two
-separate objects. Measured: `product-protect` alone 1182, `content-releasenotes`
-alone 940, two objects 387 (the intersection), one object holding both values
-1735 (the union). Merging them widens the search instead of narrowing it.
+separate objects. Measured 2026-09-18, en-US: `product-protect` alone
+1239, `content-releasenotes` alone 1366, two objects 394 (the intersection),
+one object holding both values 2211 (the union, exactly 1239 + 1366 - 394).
+Merging them widens the search instead of narrowing it.
+
+An earlier version of this line read `content-releasenotes alone 940` while the
+paragraph above said 1323 for the same en-US filter. Both cannot have been
+en-US at one moment — a zh-TW number was pasted into an en-US measurement — and
+nobody could tell, because neither figure carried a date.
 
 **Do not send `latestVersion=yes`.** See architectural note 4 below.
 
@@ -96,7 +103,8 @@ alone 940, two objects 387 (the intersection), one object holding both values
 
 #### `GET /api/khub/maps`
 
-Returns all publications (~577 maps). Each map represents a product/version/locale combination.
+Returns all publications. Each map represents a product/version/locale combination.
+Measured 2026-09-18: 678 maps collapsing to 98 bundle families.
 
 #### `GET /api/khub/maps/{mapId}/toc`
 
@@ -122,7 +130,7 @@ Returns available sort options for search.
 
 #### `GET /api/configuration/metadata`
 
-Returns all 15 filterable metadata descriptors (see section 3).
+Returns the filterable metadata descriptors (see section 3). 15 of them as of 2026-09-18 — but the count is a poor health check: it stayed at 15 while 9 of the 15 keys turned over, so re-read the list rather than the number.
 
 #### `GET /api/khub/locales`
 
@@ -136,21 +144,21 @@ These are the metadata descriptors returned by `GET /api/configuration/metadata`
 
 | # | Key | Description |
 |---|-----|-------------|
-| 1 | `zoominmetadata` | Product identifier (product-pro, product-connect, etc.) |
+| 1 | `zoominmetadata` | Legacy Zoomin vocabulary: `product-*` and `content-*` values. Still the source for docType filtering (`content-*`); no longer used for product filtering — see rows 4-6. |
 | 2 | `jamf:contentType` | Content type. **Descriptive only — do not filter on it**; its values are localised (see the search section above). Use the `content-*` values of `zoominmetadata` instead. |
-| 3 | `latestVersion` | Whether the content is from the latest version |
-| 4 | `version` | Specific product version string |
-| 5 | `bundle` | Bundle identifier (maps to legacy bundleId format) |
-| 6 | `ft:locale` | Content locale |
-| 7 | `ft:editorialType` | Editorial type classification |
-| 8 | `ft:title` | Publication title |
-| 9 | `ft:originId` | Origin system identifier |
-| 10 | `ft:lastEdition` | Last edited date |
-| 11 | `ft:lastPublication` | Last published date |
-| 12 | `ft:creationDate` | Creation date |
-| 13 | `ft:sourceType` | Source format type |
-| 14 | `ft:mapTitle` | Map/publication title |
-| 15 | `ft:topicTitle` | Topic title |
+| 3 | `jamf:product` | Jamf product descriptor. |
+| 4 | `jamf:portal` | Platform a publication documents. **This is what the `product` search filter sends.** Multi-valued. |
+| 5 | `jamf:app` | Client app a publication documents. Multi-valued. |
+| 6 | `jamf:utility` | Utility a publication documents. |
+| 7 | `jamf:solution` | Solution grouping. |
+| 8 | `latestVersion` | Whether the content is from the latest version |
+| 9 | `version` | Specific product version string |
+| 10 | `revised_modified` | Revision timestamp |
+| 11 | `SkillJarLastModification` | Training-platform modification timestamp |
+| 12 | `ft:lastEdition` | Last edited date (per topic) |
+| 13 | `ft:lastPublication` | Last published date |
+| 14 | `ft:lastTechChange` | Last technical change (per bundle, not per topic) |
+| 15 | `ft:searchableFrom` | Date the content became searchable |
 
 ---
 
