@@ -16,6 +16,7 @@ export {
   buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
+  classificationValuesFor,
   PRODUCT_ID_LIST,
 
   // locales

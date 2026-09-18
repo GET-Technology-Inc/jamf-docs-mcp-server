@@ -49,7 +49,6 @@ vi.mock('../../src/core/services/metadata.js', async () => {
       bundleId: p.bundleId,
       latestVersion: p.latestVersion,
       availableVersions: [...p.versions],
-      labelKey: p.searchLabel,
     }))
   ),
   getProductAvailability: vi.fn().mockResolvedValue({

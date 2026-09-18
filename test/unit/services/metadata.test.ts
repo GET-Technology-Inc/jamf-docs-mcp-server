@@ -78,7 +78,6 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
     expect(pro?.latestVersion).toBe('11.24.0');
     expect(pro?.availableVersions).toEqual(['11.24.0', '11.23.0']);
     expect(pro?.bundleId).toBe('jamf-pro-documentation-11.24.0');
-    expect(pro?.labelKey).toBe('product-pro');
   });
 
   it('should fall back to static JAMF_PRODUCTS when MapsRegistry throws', async () => {
@@ -121,8 +120,7 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
         description: 'Cached',
         bundleId: 'jamf-pro-documentation-11.0.0',
         latestVersion: '11.0.0',
-        availableVersions: ['11.0.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.0.0']
       }
     ];
 
@@ -240,8 +238,7 @@ describe('getProductsMetadata - degradation reporting', () => {
         description: 'Cached',
         bundleId: 'jamf-pro-documentation-11.0.0',
         latestVersion: '11.0.0',
-        availableVersions: ['11.0.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.0.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: true });
@@ -287,8 +284,7 @@ describe('getBundleIdForVersion', () => {
         description: 'Desc',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0', '11.23.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0', '11.23.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -305,8 +301,7 @@ describe('getBundleIdForVersion', () => {
         description: 'Desc',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -323,8 +318,7 @@ describe('getBundleIdForVersion', () => {
         description: 'Desc',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -341,8 +335,7 @@ describe('getBundleIdForVersion', () => {
         description: 'Desc',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0', '11.23.0', '11.22.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0', '11.23.0', '11.22.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -359,8 +352,7 @@ describe('getBundleIdForVersion', () => {
         description: 'Desc',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -533,8 +525,7 @@ describe('getProductsResourceData', () => {
         description: 'Apple device management',
         bundleId: 'jamf-pro-documentation',
         latestVersion: 'current',
-        availableVersions: ['current'],
-        labelKey: 'product-pro'
+        availableVersions: ['current']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
@@ -559,8 +550,7 @@ describe('getProductsResourceData', () => {
         description: 'Enterprise MDM',
         bundleId: 'jamf-pro-documentation-11.24.0',
         latestVersion: '11.24.0',
-        availableVersions: ['11.24.0', '11.23.0'],
-        labelKey: 'product-pro'
+        availableVersions: ['11.24.0', '11.23.0']
       }
     ];
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });

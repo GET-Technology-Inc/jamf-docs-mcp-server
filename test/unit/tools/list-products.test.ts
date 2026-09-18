@@ -34,7 +34,6 @@ const mockGetProductsMetadata = vi.fn(async () => await Promise.resolve(
     bundleId: p.bundleId,
     latestVersion: p.id === 'jamf-pro' ? '11.31.0' : 'current',
     availableVersions: p.id === 'jamf-pro' ? ['11.31.0', '11.30.0'] : ['current'],
-    labelKey: p.searchLabel,
   }))
 ));
 

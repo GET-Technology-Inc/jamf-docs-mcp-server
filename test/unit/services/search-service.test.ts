@@ -40,7 +40,7 @@ import type {
   SearchResult,
 } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
-import { createMockContext } from '../../helpers/mock-context.js';
+import { createMockContext, createClassifyingMapsRegistry } from '../../helpers/mock-context.js';
 
 const mockedPostJson = vi.mocked(httpPostJson);
 
@@ -83,6 +83,10 @@ function makeTopicEntry(overrides?: {
       htmlExcerpt: overrides?.htmlExcerpt ?? '<b>Learn</b> about configuration profiles in Jamf Pro for managing device settings.',
       metadata: overrides?.metadata ?? makeMetadata({
         'zoominmetadata': ['product-pro'],
+        // Live topics carry their own classification alongside the legacy
+        // label — 994 of 994 results on a Jamf Pro query — and that is what
+        // the product attribution now reads.
+        'jamf:portal': ['Jamf Pro'],
         'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html'],
         'version': ['11.5.0'],
         'jamf:contentType': ['Technical Documentation'],
@@ -111,6 +115,7 @@ function makeMapEntry(overrides?: {
       htmlExcerpt: overrides?.htmlExcerpt ?? 'Complete documentation for <b>Jamf Pro</b>.',
       metadata: overrides?.metadata ?? makeMetadata({
         'zoominmetadata': ['product-pro'],
+        'jamf:portal': ['Jamf Pro'],
         'version': ['current'],
         'jamf:contentType': ['Technical Documentation'],
       }),
@@ -178,35 +183,14 @@ describe('buildSearchFilters()', () => {
     ]);
   });
 
-  it('should map product to zoominmetadata filter', () => {
-    const filters = buildSearchFilters({ product: 'jamf-pro' });
+  it('pushes the product filter it is handed, whatever key it carries', () => {
+    // The product filter is resolved by resolveProductFilter, which needs the
+    // registry to know the axis; buildSearchFilters only places it.
+    const filters = buildSearchFilters({}, { key: 'jamf:portal', values: ['Jamf Pro'] });
     expect(filters).toContainEqual({
-      key: 'zoominmetadata',
-      values: ['product-pro'],
+      key: 'jamf:portal',
+      values: ['Jamf Pro'],
     });
-  });
-
-  // Offline guard against constants drift for a non-Pro product. The live
-  // counterpart (data-contracts: searchLabel must exist in live zoominmetadata)
-  // catches Jamf-side renames; this catches an accidental constants edit without
-  // needing the network. (This is exactly the chain that silently broke for
-  // jamf-routines.)
-  it('maps a non-Pro product to its exact zoominmetadata search label', () => {
-    expect(buildSearchFilters({ product: 'jamf-school' })).toEqual([
-      { key: 'zoominmetadata', values: ['product-school'] },
-    ]);
-  });
-
-  // Pinned offline and by exact string. `product-self-service` also exists
-  // upstream and also returns results — it is the retired iOS Self Service
-  // app's label — so reverting this one character produces a green suite and
-  // wrong answers. The live contract test that checks the map titles lives in
-  // the integration job, which does not block a merge; this one runs in the
-  // unit job, which does.
-  it('maps self-service-plus to product-selfservice, not the retired iOS label', () => {
-    expect(buildSearchFilters({ product: 'self-service-plus' })).toEqual([
-      { key: 'zoominmetadata', values: ['product-selfservice'] },
-    ]);
   });
 
   // docType filters on the `content-*` label, NOT `jamf:contentType`. The
@@ -243,10 +227,16 @@ describe('buildSearchFilters()', () => {
   // inside one, so product and docType must stay in two entries even though
   // they share the `zoominmetadata` key. Merged into one entry, a
   // product+docType search widens to the union instead of narrowing.
-  it('keeps product and docType as two separate zoominmetadata entries', () => {
-    const filters = buildSearchFilters({ product: 'jamf-protect', docType: 'release-notes' });
+  it('keeps product and docType as two separate filter entries', () => {
+    // Fluid Topics intersects filter objects and unions values within one, so
+    // merging these would widen a product+docType search instead of narrowing
+    // it. That is why they stay apart even now that they carry different keys.
+    const filters = buildSearchFilters(
+      { docType: 'release-notes' },
+      { key: 'jamf:portal', values: ['Jamf Protect'] },
+    );
     expect(filters).toEqual([
-      { key: 'zoominmetadata', values: ['product-protect'] },
+      { key: 'jamf:portal', values: ['Jamf Protect'] },
       { key: 'zoominmetadata', values: ['content-releasenotes'] },
     ]);
   });
@@ -260,13 +250,12 @@ describe('buildSearchFilters()', () => {
   });
 
   it('should combine product, docType, and version filters', () => {
-    const filters = buildSearchFilters({
-      product: 'jamf-connect',
-      docType: 'documentation',
-      version: '2.30.0',
-    });
+    const filters = buildSearchFilters(
+      { docType: 'documentation', version: '2.30.0' },
+      { key: 'jamf:app', values: ['Jamf Connect'] },
+    );
     expect(filters).toHaveLength(3);
-    expect(filters).toContainEqual({ key: 'zoominmetadata', values: ['product-connect'] });
+    expect(filters).toContainEqual({ key: 'jamf:app', values: ['Jamf Connect'] });
     expect(filters).toContainEqual({ key: 'zoominmetadata', values: ['content-techdocs'] });
     expect(filters).toContainEqual({ key: 'version', values: ['2.30.0'] });
   });
@@ -294,11 +283,13 @@ describe('buildSearchFilters()', () => {
 // ============================================================================
 
 /** Build a TOPIC entry carrying a cluster id, version, and product label. */
+/** `product` is a legacy `product-*` label; `portal` is Jamf's own name for it. */
 function makeVersionedEntry(
   clusterId: string,
   version: string,
   product: string,
-  contentId: string
+  contentId: string,
+  portal = 'Jamf Pro'
 ): FtSearchEntry {
   return makeTopicEntry({
     contentId,
@@ -307,6 +298,7 @@ function makeVersionedEntry(
       'ft:clusterId': [clusterId],
       ...(version !== '' ? { version: [version] } : {}),
       'zoominmetadata': [product],
+      'jamf:portal': [portal],
     }),
   });
 }
@@ -416,15 +408,31 @@ describe('transformFtSearchResult()', () => {
       expect(result.snippet).toContain('Learn');
     });
 
-    it('should extract product from zoominmetadata', () => {
+    it("names the product from Jamf's classification, not the legacy label", () => {
+      const entry = makeTopicEntry({
+        metadata: makeMetadata({
+          // A stale `product-*` label and the current classification disagreeing
+          // is the whole reason the label is no longer the source: Jamf re-tags
+          // these without warning.
+          'zoominmetadata': ['product-pro'],
+          'jamf:app': ['Jamf Connect'],
+          'ft:prettyUrl': ['/en-US/bundle/jamf-connect-documentation/page/test.html'],
+        }),
+      });
+      expect(transformFtSearchResult(entry).product).toBe('Jamf Connect');
+    });
+
+    it('reports no product when Jamf classifies the topic under nothing', () => {
+      // 47 of 678 live maps carry no classification (the glossary, Welcome to
+      // Jamf, the solution guides). Attributing those to a product would be an
+      // invention, so the field stays empty.
       const entry = makeTopicEntry({
         metadata: makeMetadata({
           'zoominmetadata': ['product-pro'],
-          'ft:prettyUrl': ['/en-US/bundle/jamf-pro-documentation/page/test.html'],
+          'ft:prettyUrl': ['/en-US/bundle/jamf-technical-glossary/page/test.html'],
         }),
       });
-      const result = transformFtSearchResult(entry);
-      expect(result.product).toBe('Jamf Pro');
+      expect(transformFtSearchResult(entry).product).toBeNull();
     });
 
     it('should extract version from metadata', () => {
@@ -673,7 +681,9 @@ describe('searchDocumentation()', () => {
   let ctx: ReturnType<typeof createMockContext>;
 
   beforeEach(() => {
-    ctx = createMockContext();
+    // Product-filtered searches resolve their classification axis through the
+    // registry, so this one has to answer without reaching learn.jamf.com.
+    ctx = createMockContext({ mapsRegistry: createClassifyingMapsRegistry() });
   });
 
   it('should return results from FT API', async () => {
@@ -713,7 +723,7 @@ describe('searchDocumentation()', () => {
     );
   });
 
-  it('should pass product filter as zoominmetadata', async () => {
+  it("sends the product filter under Jamf's own classification key", async () => {
     mockedPostJson.mockResolvedValueOnce(makeFtResponse([]));
 
     await searchDocumentation(ctx, { query: 'test', product: 'jamf-protect' });
@@ -722,7 +732,7 @@ describe('searchDocumentation()', () => {
       `${FT_API_BASE}/api/khub/clustered-search`,
       expect.objectContaining({
         filters: expect.arrayContaining([
-          { key: 'zoominmetadata', values: ['product-protect'] },
+          { key: 'jamf:portal', values: ['Jamf Protect'] },
         ]),
       })
     );
@@ -740,8 +750,8 @@ describe('searchDocumentation()', () => {
           makeVersionedEntry('jamf-pro-documentation-current/Enrollment', '11.27.0', 'product-pro', 'pro-old'),
           makeVersionedEntry('jamf-pro-documentation-current/Enrollment', '11.29.0', 'product-pro', 'pro-new'),
         ]),
-        makeCluster([makeVersionedEntry('jamf-school-documentation/Enrollment_Settings', '', 'product-school', 'school')]),
-        makeCluster([makeVersionedEntry('jamf-connect-documentation/Enrollment', '', 'product-connect', 'connect')]),
+        makeCluster([makeVersionedEntry('jamf-school-documentation/Enrollment_Settings', '', 'product-school', 'school', 'Jamf School')]),
+        makeCluster([makeVersionedEntry('jamf-connect-documentation/Enrollment', '', 'product-connect', 'connect', 'Jamf Connect')]),
       ])
     );
 
@@ -777,6 +787,7 @@ describe('searchDocumentation()', () => {
             'content-releasenotes',
             'product-pro-11.24.0',
           ],
+          'jamf:portal': ['Jamf Pro'],
           'ft:prettyUrl': [`/en-US/bundle/jamf-pro-release-notes-11.24.0/page/${contentId}.html`],
           'jamf:contentType': ['Technical Documentation', 'Release Notes'],
         }),

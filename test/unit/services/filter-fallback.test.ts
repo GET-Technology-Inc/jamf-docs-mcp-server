@@ -15,10 +15,12 @@ vi.mock('../../../src/core/services/ft-client.js', () => ({
 
 import { search as ftSearch } from '../../../src/core/services/ft-client.js';
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
-import { createMockContext } from '../../helpers/mock-context.js';
+import { createMockContext, createClassifyingMapsRegistry } from '../../helpers/mock-context.js';
 import { makeFtSearchResponse } from '../../helpers/fixtures.js';
 
-const ctx = createMockContext();
+// Product-filtered searches resolve their classification axis through the
+// registry, so it has to answer without reaching learn.jamf.com.
+const ctx = createMockContext({ mapsRegistry: createClassifyingMapsRegistry() });
 
 const mockedFtSearch = vi.mocked(ftSearch);
 
@@ -177,7 +179,7 @@ describe('Search filter fallback', () => {
     expect(first.filters?.some(f => f.values.includes('content-solutionguide'))).toBe(true);
     expect(second.filters?.some(f => f.values.some(v => v.startsWith('content-')))).toBe(false);
     // The product filter must survive the retry — only docType is relaxed.
-    expect(second.filters?.some(f => f.values.includes('product-pro'))).toBe(true);
+    expect(second.filters?.some(f => f.values.includes('Jamf Pro'))).toBe(true);
 
     expect(result.results).toHaveLength(1);
     expect(result.filterRelaxation?.removed).toContain('docType');
