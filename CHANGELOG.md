@@ -1,3 +1,9 @@
+## [5.11.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.9...v5.11.0) (2026-09-21)
+
+### Features
+
+* **config:** make the five request settings real ([34b16f6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/34b16f622df2bb34736f6016d460324c8239650d)), closes [#296](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/296) [#296](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/296)
+
 ## [5.10.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.8...v5.10.9) (2026-09-18)
 
 ### Bug Fixes
