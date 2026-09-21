@@ -19,7 +19,7 @@ import {
   DEFAULT_LOCALE
 } from '../constants.js';
 import { completeProduct, completeTopic, completeVersion, completeLanguage } from '../completions.js';
-import { isAllowedHostname } from '../utils/url.js';
+import { isAllowedHostname, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 
 // Response format enum
 const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
@@ -172,7 +172,7 @@ export const GetArticleInputSchema = z.object({
     .url('Must be a valid URL')
     .refine(
       (url) => isAllowedHostname(url),
-      'URL must be from docs.jamf.com or learn.jamf.com'
+      ALLOWED_HOSTNAME_MESSAGE
     )
     .optional()
     .describe('Full URL of the Jamf documentation article. Alternative: use mapId + contentId for direct fetch.'),
