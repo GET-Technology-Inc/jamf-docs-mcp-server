@@ -66,22 +66,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The five steps below are decided by the tool versions npm ci pins, not by
+      # the Node runtime, so running them on both matrix legs produces the same
+      # answer twice. Pinned to 22.x rather than hoisted into a job of their own:
+      # branch protection requires a check named "Test (Node <version>)" — which
+      # is the only reason the test-gate no-op below exists — and a new job would
+      # publish a name it does not know about.
       - name: Type check
+        if: matrix.node-version == '22.x'
         run: npm run typecheck
 
       # app-ui/ has its own tsconfig (DOM lib, bundler resolution) and is not
       # covered by the root one. esbuild only strips types, so without this
       # step the bundle's sources are never type-checked at all.
       - name: Type check (app-ui)
+        if: matrix.node-version == '22.x'
         run: npm run typecheck:app-ui
 
       # test/ is likewise outside the root tsconfig, which only includes src/**.
       # Without this step no test file is ever type-checked, and eslint's
       # type-aware rules have no project to consult for them either.
       - name: Type check (test)
+        if: matrix.node-version == '22.x'
         run: npm run typecheck:test
 
       - name: Lint
+        if: matrix.node-version == '22.x'
         run: npm run lint
 
       # src/core/apps/generated/app-html.ts is committed but generated. Rebuild
@@ -91,6 +101,7 @@ jobs:
       # This must stay ahead of the Build step below: `npm run build` runs
       # `build:app-ui` too, and would overwrite the evidence before it is read.
       - name: App UI bundle is up to date
+        if: matrix.node-version == '22.x'
         run: |
           npm run build:app-ui
           git diff --exit-code -- src/core/apps/generated/app-html.ts
