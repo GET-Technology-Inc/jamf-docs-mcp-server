@@ -1,55 +1,14 @@
 /**
- * Constants barrel — backward-compatible re-export.
+ * Constants barrel — the path 35 modules import from.
  *
- * The actual constants are split into sub-modules under ./constants/:
- *   products.ts, topics.ts, doc-types.ts, limits.ts, locales.ts
+ * The constants themselves live in ./constants/: products.ts, locales.ts,
+ * topics.ts, doc-types.ts, limits.ts. ./constants/index.ts gathers them.
  *
- * This file ensures existing imports from '../constants.js' keep working.
+ * This file used to re-list all 32 names that barrel already lists, so adding a
+ * constant meant editing two files, and forgetting the second was invisible:
+ * every `../constants.js` importer would simply not see it, with no error
+ * anywhere. The two lists were verified identical before collapsing them, so
+ * `export *` is exactly what the explicit list already meant.
  */
 
-export {
-  // products
-  SERVER_ICON,
-  DOCS_BASE_URL,
-  FT_API_BASE,
-  buildDocUrl,
-  buildUrlPattern,
-  JAMF_PRODUCTS,
-  PRODUCT_IDS,
-  classificationValuesFor,
-  PRODUCT_ID_LIST,
-
-  // locales
-  DEFAULT_LOCALE,
-  SUPPORTED_LOCALES,
-  SUPPORTED_LOCALE_IDS,
-  toValidLocale,
-
-  // topics
-  JAMF_TOPICS,
-  TOPIC_IDS,
-  COMMON_TOPIC_IDS,
-
-  // doc-types
-  DOC_TYPES,
-  DOC_TYPE_LABEL_MAP,
-  DOC_TYPE_CONTENT_TYPE_MAP,
-  LABEL_KEY_DOC_TYPE_MAP,
-  DOC_TYPE_PRECEDENCE,
-  DOC_TYPE_IDS,
-
-  // limits
-  ResponseFormat,
-  OutputMode,
-  CONTENT_LIMITS,
-  TOKEN_CONFIG,
-  PAGINATION_CONFIG,
-  SELECTORS,
-} from './constants/index.js';
-
-export type {
-  ProductId,
-  LocaleId,
-  TopicId,
-  DocTypeId,
-} from './constants/index.js';
+export * from './constants/index.js';
