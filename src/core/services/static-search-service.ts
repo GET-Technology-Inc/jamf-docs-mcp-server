@@ -16,7 +16,6 @@
  */
 
 import Fuse, { type IFuseOptions } from 'fuse.js';
-import { httpGetText } from '../http-client.js';
 import { cacheKey } from './cache-key.js';
 import { titleFromSlug } from './sitemap-service.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
@@ -83,7 +82,7 @@ export async function loadStaticIndex(
   const cached = await ctx.cache.get<StaticSearchEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const xml = await httpGetText(`${source.baseUrl}/sitemap.xml`);
+  const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries: StaticSearchEntry[] = [];
   for (const match of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
     const entry = entryFor(source, match[1] ?? '', locale);

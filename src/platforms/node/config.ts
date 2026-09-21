@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import { createRequire } from 'module';
-import { createDefaultConfig } from '../../core/config.js';
+import { createDefaultConfig, defaultUserAgent } from '../../core/config.js';
 import type { ServerConfig } from '../../core/config.js';
 
 // ============================================================================
@@ -101,10 +101,14 @@ export function createNodeConfig(): ServerConfig {
     },
     request: {
       timeout: getEnvNumber('REQUEST_TIMEOUT', 15000, 1000, 60000),
-      maxRetries: getEnvNumber('MAX_RETRIES', 3, 0, 10),
+      // 0, not 3. The README claimed 3 for years while the client shipped 0;
+      // making the knob real is not a reason to also change what it defaults to.
+      maxRetries: getEnvNumber('MAX_RETRIES', 0, 0, 10),
       retryDelay: getEnvNumber('RETRY_DELAY', 1000, 100, 30000),
-      rateLimitDelay: getEnvNumber('RATE_LIMIT_DELAY', 500, 0, 10000),
-      userAgent: getEnvString('USER_AGENT', 'JamfDocsMCP/1.0 (https://github.com/GET-Technology-Inc/jamf-docs-mcp-server)'),
+      // 0 keeps parallel fetches parallel. batch_get_articles fans out, and a
+      // non-zero default would stagger every one of those requests.
+      rateLimitDelay: getEnvNumber('RATE_LIMIT_DELAY', 0, 0, 10000),
+      userAgent: getEnvString('USER_AGENT', defaultUserAgent(pkg.version)),
     },
     cache: {
       maxEntries: getEnvNumber('CACHE_MAX_ENTRIES', 500, 10, 10000),

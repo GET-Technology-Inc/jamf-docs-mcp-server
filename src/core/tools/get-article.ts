@@ -19,6 +19,7 @@ import type {
   ParsedArticle,
 } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { ALLOWED_HOSTNAME_LIST } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import {
   buildArticleContentView,
@@ -142,10 +143,10 @@ function buildArticleStructuredContent(
 const TOOL_DESCRIPTION = `Retrieve the full content of a specific Jamf documentation article.
 
 This tool fetches and parses a Jamf documentation article, converting it to
-a clean, readable format. Works with any article from docs.jamf.com or learn.jamf.com.
+a clean, readable format. Works with any article from ${ALLOWED_HOSTNAME_LIST}.
 
 Args:
-  - url (string, required): Full URL of the article (must be from docs.jamf.com or learn.jamf.com)
+  - url (string, required): Full URL of the article (must be from ${ALLOWED_HOSTNAME_LIST})
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article
   - includeRelated (boolean, optional): Include links to related articles (default: false)
@@ -188,7 +189,7 @@ Examples:
 
 Errors:
   - "Article not found (404)" if the URL returns a 404 error
-  - "Invalid URL" if the URL is not from docs.jamf.com or learn.jamf.com
+  - "Invalid URL" if the URL is not from ${ALLOWED_HOSTNAME_LIST}
   - "Section not found" if the specified section doesn't exist (will list available sections)
 
 Note: Large articles are intelligently truncated with remaining sections listed.

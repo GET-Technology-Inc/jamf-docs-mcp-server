@@ -524,23 +524,6 @@ describe('truncateToTokenLimit - more than 10 remaining sections', () => {
     // The notice should mention "...and N more sections" because >10 sections remain
     expect(result.content).toMatch(/\.\.\.and \d+ more sections/);
   });
-
-  it('remaining-sections count in notice matches actual overflow', () => {
-    const content = Array.from({ length: 20 }, (_, i) => {
-      const heading = i === 0 ? '#' : '##';
-      return `${heading} S${i + 1}\n\ny.`;
-    }).join('\n\n');
-
-    const result = truncateToTokenLimit(content, 30);
-
-    if (result.tokenInfo.truncated) {
-      const match = /\.\.\.and (\d+) more sections/.exec(result.content);
-      if (match !== null) {
-        const moreCount = parseInt(match.at(1) ?? '0', 10);
-        expect(moreCount).toBeGreaterThan(0);
-      }
-    }
-  });
 });
 
 describe('calculatePagination - additional edge cases', () => {

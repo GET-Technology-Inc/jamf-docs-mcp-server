@@ -30,8 +30,6 @@ export type {
   CacheStats,
   ProductMetadata,
   TopicMetadata,
-  TocEntry as TocEntryInterface,
-  TocData,
   Logger,
   LoggerFactory,
   SearchProvider,
@@ -48,9 +46,7 @@ export type {
 export type {
   ServerConfig,
   CacheTtlConfig,
-  RequestConfig,
   CacheConfig,
-  CorsConfig,
 } from './config.js';
 export { createDefaultConfig } from './config.js';
 

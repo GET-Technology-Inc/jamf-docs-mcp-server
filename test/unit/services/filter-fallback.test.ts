@@ -175,7 +175,8 @@ describe('Search filter fallback', () => {
     });
 
     expect(mockedFtSearch).toHaveBeenCalledTimes(2);
-    const [first, second] = mockedFtSearch.mock.calls.map(c => c[0]);
+    // arg 0 is the HttpClient; the request is arg 1.
+    const [first, second] = mockedFtSearch.mock.calls.map(c => c[1]);
     expect(first.filters?.some(f => f.values.includes('content-solutionguide'))).toBe(true);
     expect(second.filters?.some(f => f.values.some(v => v.startsWith('content-')))).toBe(false);
     // The product filter must survive the retry — only docType is relaxed.

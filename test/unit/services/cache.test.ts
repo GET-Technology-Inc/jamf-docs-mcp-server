@@ -281,10 +281,9 @@ describe('schema validation edge cases', () => {
     fs.readFile.mockResolvedValue(invalidEntry);
 
     const key = `schema:missing-timestamp-${  Date.now()}`;
-    // Without timestamp, Date.now() - undefined = NaN, NaN > ttl is false
-    // so the code won't expire it — but NaN arithmetic means it may return data or null
-    // We just verify no exception is thrown
-    await expect(cache.get<unknown>(key)).resolves.not.toThrow();
+    // CacheEntrySchema requires timestamp, so the entry never reaches the
+    // NaN arithmetic this used to hand-wave about — safeParse rejects first.
+    expect(await cache.get<unknown>(key)).toBeNull();
   });
 
   it('should return null for valid JSON missing the ttl field', async () => {
@@ -292,9 +291,7 @@ describe('schema validation edge cases', () => {
     fs.readFile.mockResolvedValue(invalidEntry);
 
     const key = `schema:missing-ttl-${  Date.now()}`;
-    // Without ttl, Date.now() - timestamp > undefined evaluates to false
-    // so the code won't expire it — but we just verify no exception is thrown
-    await expect(cache.get<unknown>(key)).resolves.not.toThrow();
+    expect(await cache.get<unknown>(key)).toBeNull();
   });
 
   it('should return null for valid JSON missing the data field', async () => {
@@ -320,16 +317,14 @@ describe('schema validation edge cases', () => {
     fs.readFile.mockResolvedValue('[1, 2, 3]');
 
     const key = `schema:json-array-${  Date.now()}`;
-    // The cache code casts to CacheEntry<T>; timestamp/ttl will be undefined on array
-    // No crash expected; result will likely be null or the array won't be valid
-    await expect(cache.get<unknown>(key)).resolves.not.toThrow();
+    expect(await cache.get<unknown>(key)).toBeNull();
   });
 
   it('should return null for valid JSON null value in file', async () => {
     fs.readFile.mockResolvedValue('null');
 
     const key = `schema:json-null-${  Date.now()}`;
-    await expect(cache.get<unknown>(key)).resolves.not.toThrow();
+    expect(await cache.get<unknown>(key)).toBeNull();
   });
 });
 

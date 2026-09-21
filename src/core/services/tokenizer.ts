@@ -507,28 +507,16 @@ export function truncateItemsToTokenLimit<T>(
   const pagination = calculatePagination(items.length, page, pageSize);
   const pageItems = items.slice(pagination.startIndex, pagination.endIndex);
 
-  // Check if page items fit in token limit
-  const includedItems: T[] = [];
-  let runningTokens = 0;
-  let truncated = false;
-
-  for (const item of pageItems) {
-    const itemString = itemToString(item);
-    const itemTokens = estimateTokens(itemString);
-
-    if (runningTokens + itemTokens > maxTokens) {
-      truncated = true;
-      break;
-    }
-
-    includedItems.push(item);
-    runningTokens += itemTokens;
-  }
+  // Same stop-at-first-overflow rule as the standalone helper, which this used
+  // to re-implement inline: break-then-build and return-early produce the same
+  // items, the same running total and the same flag.
+  const { items: includedItems, tokenCount, truncated } =
+    truncateListByTokens(pageItems, maxTokens, itemToString);
 
   return {
     items: includedItems,
     tokenInfo: {
-      tokenCount: runningTokens,
+      tokenCount,
       truncated,
       maxTokens
     },

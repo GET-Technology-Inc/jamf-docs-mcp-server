@@ -13,6 +13,7 @@ import type {
   TocProvider,
 } from '../services/interfaces/index.js';
 import type { ServerConfig } from '../config.js';
+import type { HttpClient } from '../http-client.js';
 import type { MapsRegistry } from '../services/maps-registry.js';
 import type { TopicResolver } from '../services/topic-resolver.js';
 
@@ -20,6 +21,8 @@ export interface ServerContext {
   cache: CacheProvider;
   logger: LoggerFactory;
   config: ServerConfig;
+  /** Bound to `config.request`, so the request settings actually apply. */
+  http: HttpClient;
   mapsRegistry: MapsRegistry;
   topicResolver: TopicResolver;
 

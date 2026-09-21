@@ -11,8 +11,6 @@ import {
   SUPPORTED_LOCALES,
   SUPPORTED_LOCALE_IDS,
   DEFAULT_LOCALE,
-  buildDocUrl,
-  buildUrlPattern,
 } from '../../src/core/constants.js';
 import { extractLocaleFromUrl } from '../../src/core/utils/url.js';
 import { completeLanguage } from '../../src/core/completions.js';
@@ -54,40 +52,6 @@ describe('SUPPORTED_LOCALES', () => {
     for (const [code, name] of Object.entries(OFFICIAL_LOCALES)) {
       expect(SUPPORTED_LOCALES[code as keyof typeof SUPPORTED_LOCALES].name).toBe(name);
     }
-  });
-});
-
-describe('buildDocUrl', () => {
-  it('should build URL with en-US locale', () => {
-    expect(buildDocUrl('en-US', 'jamf-pro-documentation', 'Overview.html'))
-      .toBe('https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Overview.html');
-  });
-
-  it('should build URL with ja-JP locale', () => {
-    expect(buildDocUrl('ja-JP', 'jamf-pro-documentation', 'Overview.html'))
-      .toBe('https://learn.jamf.com/ja-JP/bundle/jamf-pro-documentation/page/Overview.html');
-  });
-
-  it('should build URL with zh-TW locale', () => {
-    expect(buildDocUrl('zh-TW', 'jamf-pro-documentation', 'Overview.html'))
-      .toBe('https://learn.jamf.com/zh-TW/bundle/jamf-pro-documentation/page/Overview.html');
-  });
-
-  it('should build URL with th-TH locale', () => {
-    expect(buildDocUrl('th-TH', 'jamf-pro-documentation', 'Overview.html'))
-      .toBe('https://learn.jamf.com/th-TH/bundle/jamf-pro-documentation/page/Overview.html');
-  });
-});
-
-describe('buildUrlPattern', () => {
-  it('should build pattern with locale prefix', () => {
-    expect(buildUrlPattern('ja-JP', 'jamf-pro-documentation'))
-      .toBe('ja-JP/bundle/jamf-pro-documentation/page');
-  });
-
-  it('should build pattern with default locale', () => {
-    expect(buildUrlPattern('en-US', 'jamf-pro-documentation'))
-      .toBe('en-US/bundle/jamf-pro-documentation/page');
   });
 });
 

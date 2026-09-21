@@ -6,7 +6,7 @@
  * All functions map 1:1 to FT REST API endpoints.
  */
 
-import { httpGetJson, httpGetText, httpPostJson } from '../http-client.js';
+import type { HttpClient } from '../http-client.js';
 import { FT_API_BASE } from '../constants.js';
 import type {
   FtClusteredSearchResponse,
@@ -39,10 +39,11 @@ function mapsUrl(mapId: string, ...segments: string[]): string {
  * each cluster may contain multiple version entries.
  */
 export async function search(
+  http: HttpClient,
   request: FtSearchRequest
 ): Promise<FtClusteredSearchResponse> {
   const url = `${FT_API_BASE}/api/khub/clustered-search`;
-  return await httpPostJson<FtClusteredSearchResponse>(url, request);
+  return await http.postJson<FtClusteredSearchResponse>(url, request);
 }
 
 // ─── Maps (Publications) ────────────────────────────────────────
@@ -61,9 +62,9 @@ export async function search(
  * Each map includes metadata with version_bundle_stem, version,
  * latestVersion, ft:locale, etc.
  */
-export async function fetchMaps(): Promise<FtMapInfo[]> {
+export async function fetchMaps(http: HttpClient): Promise<FtMapInfo[]> {
   const url = `${FT_API_BASE}/api/khub/maps`;
-  return await httpGetJson<FtMapInfo[]>(url);
+  return await http.getJson<FtMapInfo[]>(url);
 }
 
 // ─── TOC ────────────────────────────────────────────────────────
@@ -75,10 +76,11 @@ export async function fetchMaps(): Promise<FtMapInfo[]> {
  * The response is either a single root node or an array of root nodes.
  */
 export async function fetchMapToc(
+  http: HttpClient,
   mapId: string
 ): Promise<FtTocNode[]> {
   const url = mapsUrl(mapId, 'toc');
-  const raw = await httpGetJson<FtTocNode | FtTocNode[]>(url);
+  const raw = await http.getJson<FtTocNode | FtTocNode[]>(url);
   return Array.isArray(raw) ? raw : [raw];
 }
 
@@ -91,10 +93,11 @@ export async function fetchMapToc(
  * Richer than TOC: includes readerUrl, breadcrumb, and full metadata.
  */
 export async function fetchMapTopics(
+  http: HttpClient,
   mapId: string
 ): Promise<FtTopicInfo[]> {
   const url = mapsUrl(mapId, 'topics');
-  return await httpGetJson<FtTopicInfo[]>(url);
+  return await http.getJson<FtTopicInfo[]>(url);
 }
 
 /**
@@ -104,11 +107,12 @@ export async function fetchMapTopics(
  * Always returns text/html regardless of Accept header.
  */
 export async function fetchTopicContent(
+  http: HttpClient,
   mapId: string,
   contentId: string
 ): Promise<string> {
   const url = mapsUrl(mapId, 'topics', contentId, 'content');
-  return await httpGetText(url);
+  return await http.getText(url);
 }
 
 /**
@@ -118,9 +122,10 @@ export async function fetchTopicContent(
  * and all metadata key-value pairs.
  */
 export async function fetchTopicMetadata(
+  http: HttpClient,
   mapId: string,
   contentId: string
 ): Promise<FtTopicInfo> {
   const url = mapsUrl(mapId, 'topics', contentId);
-  return await httpGetJson<FtTopicInfo>(url);
+  return await http.getJson<FtTopicInfo>(url);
 }

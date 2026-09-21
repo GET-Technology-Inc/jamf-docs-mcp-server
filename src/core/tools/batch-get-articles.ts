@@ -11,7 +11,7 @@ import { reportProgress } from '../utils/progress.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
-import { isAllowedHostname } from '../utils/url.js';
+import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import {
   buildArticleContentView,
@@ -93,7 +93,7 @@ Fetches up to 10 articles in parallel with concurrency control. Useful for
 comparing articles, gathering information from multiple pages, or bulk research.
 
 Args:
-  - urls (string[], required): Array of 1-10 article URLs (must be from docs.jamf.com or learn.jamf.com)
+  - urls (string[], required): Array of 1-10 article URLs (must be from ${ALLOWED_HOSTNAME_LIST})
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
   - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
@@ -151,7 +151,7 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
           if (!isAllowedHostname(url)) {
             completedCount++;
             await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });
-            return { status: 'error', url, error: 'URL must be from docs.jamf.com or learn.jamf.com' };
+            return { status: 'error', url, error: ALLOWED_HOSTNAME_MESSAGE };
           }
           try {
             const options: FetchArticleOptions = {

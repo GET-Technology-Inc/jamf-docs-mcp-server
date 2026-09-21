@@ -180,8 +180,6 @@ export const STATIC_DOC_SOURCES = {
   },
 } as const satisfies Record<string, StaticDocSource>;
 
-export type StaticSourceId = keyof typeof STATIC_DOC_SOURCES;
-
 /** Every non-Fluid-Topics hostname this server will fetch from. */
 export const STATIC_SOURCE_HOSTNAMES: readonly string[] =
   Object.values(STATIC_DOC_SOURCES).map(source => source.hostname);

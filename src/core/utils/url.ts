@@ -23,6 +23,21 @@ export const ALLOWED_HOSTNAMES = new Set<string>([
   ...STATIC_SOURCE_HOSTNAMES,
 ]);
 
+/**
+ * The hostnames a rejection message may name, derived from
+ * {@link ALLOWED_HOSTNAMES} so it can never name fewer than the guard accepts.
+ *
+ * It did: concepts.jamf.com and support.jamf.com became fetchable when the
+ * static sources landed, but every message still read "docs.jamf.com or
+ * learn.jamf.com" — so a caller passing a valid concepts URL was told it was
+ * invalid, which is the "names the wrong problem" failure the comment above
+ * already warns about.
+ */
+export const ALLOWED_HOSTNAME_LIST = [...ALLOWED_HOSTNAMES].join(', ');
+
+/** Keeps the "must be from" prefix the error-path tests match on. */
+export const ALLOWED_HOSTNAME_MESSAGE = `URL must be from ${ALLOWED_HOSTNAME_LIST}`;
+
 /** Check whether a URL string points to an allowed Jamf documentation hostname with HTTPS. */
 export function isAllowedHostname(urlStr: string): boolean {
   try {
@@ -43,7 +58,7 @@ export function extractLocaleFromUrl(urlStr: string): LocaleId {
   try {
     const url = new URL(urlStr);
     const pathSegments = url.pathname.split('/').filter(Boolean);
-    // First segment is the locale (e.g., "en-US", "ja", "zh-Hans")
+    // First segment is the locale (e.g., "en-US", "ja-JP", "zh-TW")
     const candidate = pathSegments[0];
     if (candidate !== undefined && candidate in SUPPORTED_LOCALES) {
       return candidate as LocaleId;

@@ -94,7 +94,7 @@ beforeEach(() => {
   // Echo the title exactly as the TOC published it. Deriving it from the id
   // instead drops the parentheses that carry the abbreviation, which is the
   // one part of the title these assertions are about.
-  mockedFetchTopicContent.mockImplementation(async (_mapId: string, contentId: string) => {
+  mockedFetchTopicContent.mockImplementation(async (_http, _mapId: string, contentId: string) => {
     await Promise.resolve();
     return glossaryHtml(TITLE_BY_ID.get(contentId) ?? contentId);
   });

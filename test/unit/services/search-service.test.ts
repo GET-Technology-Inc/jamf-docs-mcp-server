@@ -11,6 +11,9 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 vi.mock('../../../src/core/http-client.js', async () => {
   const actual = await import('../../../src/core/http-client.js');
   return {
+    // Spread first: the module also exports createHttpClient, which
+    // MapsRegistry and TopicResolver fall back to when none is injected.
+    ...actual,
     httpGetJson: vi.fn(),
     httpGetText: vi.fn(),
     httpPostJson: vi.fn(),

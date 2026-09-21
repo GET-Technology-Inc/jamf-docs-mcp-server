@@ -132,10 +132,6 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
 
 /**
  * Create a fully-configured MCP server with all tools, resources, and prompts.
- *
- * @param ctx - Platform-specific server context (cache, metadata, logger, config)
- * @param options - Optional configuration (e.g., tool whitelist)
- * @returns An McpServer ready to be connected to a transport
  */
 export function createMcpServer(ctx: ServerContext, options?: CreateServerOptions): McpServer {
   const server = new McpServer(

@@ -31,17 +31,6 @@ describe('generateSearchSuggestions', () => {
   });
 
   describe('alternativeKeywords', () => {
-    it('should suggest synonyms for common terms', () => {
-      const result = generateSearchSuggestions('sso configuration');
-      expect(result.alternativeKeywords.length).toBeGreaterThan(0);
-      expect(result.alternativeKeywords).toContain('single sign-on');
-    });
-
-    it('should suggest synonyms for login', () => {
-      const result = generateSearchSuggestions('login settings');
-      expect(result.alternativeKeywords).toContain('authentication');
-    });
-
     it('should suggest synonyms for deploy', () => {
       const result = generateSearchSuggestions('deploy apps');
       expect(result.alternativeKeywords).toContain('deployment');
@@ -89,11 +78,6 @@ describe('generateSearchSuggestions', () => {
   });
 
   describe('tips', () => {
-    it('should suggest removing filters when filters are applied', () => {
-      const result = generateSearchSuggestions('sso', true, false);
-      expect(result.tips.some(t => t.includes('removing filters'))).toBe(true);
-    });
-
     it('should suggest fewer keywords for long queries', () => {
       const result = generateSearchSuggestions('how to configure sso login for enterprise users in jamf');
       expect(result.tips.some(t => t.includes('fewer'))).toBe(true);

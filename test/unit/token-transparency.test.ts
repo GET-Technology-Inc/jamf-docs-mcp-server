@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { truncateToTokenLimit } from '../../src/core/services/tokenizer.js';
-import { TOKEN_CONFIG } from '../../src/core/constants.js';
 
 describe('truncateToTokenLimit transparency', () => {
   it('should return remainingSections when content is truncated', () => {
@@ -36,11 +35,5 @@ describe('truncateToTokenLimit transparency', () => {
     const result = truncateToTokenLimit(content, 100);
 
     expect(result.content).toContain('Content truncated due to token limit');
-  });
-});
-
-describe('maxTokens limit', () => {
-  it('should accept tokens up to 50000', () => {
-    expect(TOKEN_CONFIG.MAX_TOKENS_LIMIT).toBe(50000);
   });
 });

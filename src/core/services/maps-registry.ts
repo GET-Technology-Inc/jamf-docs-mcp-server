@@ -12,6 +12,8 @@
  */
 
 import { fetchMaps } from './ft-client.js';
+import { createHttpClient, type HttpClient } from '../http-client.js';
+import { createDefaultConfig } from '../config.js';
 import { DEFAULT_LOCALE, type LocaleId } from '../constants.js';
 import type { FtMapInfo, FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
@@ -183,12 +185,18 @@ export class MapsRegistry {
   private readonly mapsProvider: MapsProvider | undefined;
   private readonly cacheTtl: number;
 
+  private readonly http: HttpClient;
+
   constructor(
     private readonly cache: CacheProvider,
     fetchMapsFn?: typeof fetchMaps,
     mapsProvider?: MapsProvider,
     cacheTtl?: number,
+    // Last and optional so the positional callers that predate it still
+    // compile, and defaulted the same way fetchMapsFn is.
+    http?: HttpClient,
   ) {
+    this.http = http ?? createHttpClient(createDefaultConfig().request);
     this.fetchMapsFn = fetchMapsFn ?? fetchMaps;
     this.mapsProvider = mapsProvider;
     this.cacheTtl = cacheTtl ?? DEFAULT_CACHE_TTL;
@@ -236,7 +244,7 @@ export class MapsRegistry {
 
     const maps = this.mapsProvider !== undefined
       ? await this.mapsProvider.getMaps()
-      : await this.fetchMapsFn();
+      : await this.fetchMapsFn(this.http);
     this.entries = maps.map(m => parseMap(m));
     this.builtAt = Date.now();
 

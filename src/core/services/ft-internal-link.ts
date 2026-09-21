@@ -31,6 +31,7 @@
  */
 
 import { fetchMapToc } from './ft-client.js';
+import type { HttpClient } from '../http-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/logger.js';
@@ -102,8 +103,7 @@ export function collectInternalLinkMapIds(html: string): string[] {
  * to a URL, and also the only place that says where a topic sits in the
  * hierarchy — the topic's own HTML and metadata carry neither. Indexing both
  * in one pass keeps that to one fetch per map rather than two.
- */
-/**
+ *
  * Cached under the `ft-tocindex-v3` namespace. The version is load-bearing:
  * entries written under an older shape hold only the fields that shape had, so
  * they answer a newer lookup with nothing — a v1 entry makes every topic look
@@ -206,6 +206,7 @@ function indexTocNodes(
 }
 
 async function loadMapTocIndex(
+  http: HttpClient,
   cache: CacheProvider,
   mapId: string,
   ttl: number | undefined,
@@ -225,7 +226,7 @@ async function loadMapTocIndex(
     tocIdByContentId: {},
     rootTocIds: [],
   };
-  indexTocNodes(await fetchMapToc(mapId), index, []);
+  indexTocNodes(await fetchMapToc(http, mapId), index, []);
   await cache.set(key, index, ttl);
   return index;
 }
@@ -233,6 +234,7 @@ async function loadMapTocIndex(
 // ─── Resolver construction ─────────────────────────────────────
 
 export interface InternalLinkResolverOptions {
+  http: HttpClient;
   cache: CacheProvider;
   /** Maps to index, normally from {@link collectInternalLinkMapIds}. */
   mapIds: readonly string[];
@@ -250,7 +252,7 @@ export interface InternalLinkResolverOptions {
 export async function buildInternalLinkResolver(
   options: InternalLinkResolverOptions,
 ): Promise<InternalLinkResolver> {
-  const { cache, mapIds, ttl, logger } = options;
+  const { http, cache, mapIds, ttl, logger } = options;
 
   if (mapIds.length === 0) {
     return NO_INTERNAL_LINKS;
@@ -260,7 +262,7 @@ export async function buildInternalLinkResolver(
   await Promise.all(
     mapIds.map(async (mapId): Promise<void> => {
       try {
-        indexes.set(mapId, await loadMapTocIndex(cache, mapId, ttl));
+        indexes.set(mapId, await loadMapTocIndex(http, cache, mapId, ttl));
       } catch (error) {
         // A TOC that will not load costs its links, not the article. The map
         // stays unindexed, every link into it stays plain text, and the rest
@@ -297,6 +299,7 @@ export async function buildInternalLinkResolver(
  * exist.
  */
 export interface TopicAncestryOptions {
+  http: HttpClient;
   cache: CacheProvider;
   /** The topic's own map — ancestry is only defined within it. */
   mapId: string;
@@ -339,11 +342,11 @@ const MAX_NAV_LINKS = 8;
 export async function fetchTopicNavigation(
   options: TopicAncestryOptions,
 ): Promise<ArticleNavigation | undefined> {
-  const { cache, mapId, contentId, ttl, logger } = options;
+  const { http, cache, mapId, contentId, ttl, logger } = options;
 
   let index: MapTocIndex;
   try {
-    index = await loadMapTocIndex(cache, mapId, ttl);
+    index = await loadMapTocIndex(http, cache, mapId, ttl);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     logger?.warning(
@@ -407,9 +410,9 @@ function isLink(value: ArticleNavigationLink | undefined): value is ArticleNavig
 export async function fetchTopicAncestors(
   options: TopicAncestryOptions,
 ): Promise<string[]> {
-  const { cache, mapId, contentId, ttl, logger } = options;
+  const { http, cache, mapId, contentId, ttl, logger } = options;
   try {
-    const index = await loadMapTocIndex(cache, mapId, ttl);
+    const index = await loadMapTocIndex(http, cache, mapId, ttl);
     return index.ancestorsByContentId[contentId] ?? [];
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);

@@ -220,9 +220,7 @@ interface SearchExample {
   label: string;
   /** Search keywords passed as `query` */
   query: string;
-  /** Optional product filter */
   product?: ProductId;
-  /** Optional topic filter */
   topic?: TopicId;
   /** Optional page (used for the pagination demo) */
   page?: number;
@@ -312,9 +310,6 @@ to fetch that article directly instead of resolving its URL. The pair is omitted
 when a result comes from a source that does not resolve one — fall back to the
 URL in that case.`;
 
-/**
- * Build structured content for a search result set
- */
 /**
  * The filters a result set was produced under.
  *

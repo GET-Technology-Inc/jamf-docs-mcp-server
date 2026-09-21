@@ -159,21 +159,6 @@ function makeFakeServer(): {
 // ---------------------------------------------------------------------------
 
 describe('registerResources', () => {
-  it('should be a function', () => {
-    expect(typeof registerResources).toBe('function');
-  });
-
-  it('should not throw when called with a compatible server', () => {
-    const { server } = makeFakeServer();
-    expect(() => { registerResources(server, ctx); }).not.toThrow();
-  });
-
-  it('should call server.registerResource at least once', () => {
-    const { server, registerResourceSpy } = makeFakeServer();
-    registerResources(server, ctx);
-    expect(registerResourceSpy).toHaveBeenCalled();
-  });
-
   it('should register the "products" static resource', () => {
     const { server, registerResourceSpy } = makeFakeServer();
     registerResources(server, ctx);

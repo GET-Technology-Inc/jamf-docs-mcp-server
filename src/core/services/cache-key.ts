@@ -126,9 +126,9 @@ export interface CacheKeySpaces {
   'static-article': { source: string; url: string };
   /** A static source's sitemap, whole. One per source, so no per-locale part. */
   'static-sitemap': { source: string };
-  /** An Intercom Help Center's top-level collections, per locale. */
   /** A static source's title index for one locale, derived from its sitemap. */
   'static-search-index': { source: string; locale: string };
+  /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
   /** One Intercom collection's article tree. Keyed on the collection, which is locale-specific. */
   'intercom-collection-toc': { source: string; collection: string };

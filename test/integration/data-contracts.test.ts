@@ -22,6 +22,9 @@ import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
 import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
 import { classificationValuesFor, PRODUCT_IDS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
+import { createTestHttpClient } from '../helpers/mock-context.js';
+
+const http = createTestHttpClient();
 
 // ─── Regex patterns for opaque ID format ────────────────────────────────────
 
@@ -57,7 +60,7 @@ let proTocNodes: FtTocNode[];
 
 beforeAll(async () => {
   // Fetch search results once — reused by all search contract tests
-  const searchResponse = await search({
+  const searchResponse = await search(http, {
     query: 'enrollment',
     contentLocale: 'en-US',
     paging: { perPage: 5, page: 1 },
@@ -65,7 +68,7 @@ beforeAll(async () => {
   searchClusters = searchResponse.results;
 
   // Fetch the maps registry once — reused by all maps contract tests
-  maps = await fetchMaps();
+  maps = await fetchMaps(http);
 
   // Find the Jamf Pro latest English map to use for TOC and content tests
   const proMap = maps.find(m =>
@@ -84,7 +87,7 @@ beforeAll(async () => {
   proMapId = proMap!.id;
 
   // Fetch the TOC once — reused by TOC contract tests
-  proTocNodes = await fetchMapToc(proMapId);
+  proTocNodes = await fetchMapToc(http, proMapId);
 }, 30000);
 
 // ─── Search response contracts ───────────────────────────────────────────────
@@ -506,7 +509,7 @@ describe('FT API data contracts', () => {
       const leaf = findLeaf(proTocNodes);
       expect(leaf, 'Expected to find at least one leaf TOC node').not.toBeNull();
 
-      const html = await fetchTopicContent(proMapId, leaf!.contentId);
+      const html = await fetchTopicContent(http, proMapId, leaf!.contentId);
 
       expect(html, 'Topic content should not be empty').toBeTruthy();
       expect(html).toContain('<');
@@ -532,7 +535,7 @@ describe('FT API data contracts', () => {
       const leaf = findLeaf(proTocNodes);
       expect(leaf).not.toBeNull();
 
-      const html = await fetchTopicContent(proMapId, leaf!.contentId);
+      const html = await fetchTopicContent(http, proMapId, leaf!.contentId);
 
       // Must be HTML, not a JSON object
       expect(html.trimStart()).not.toMatch(/^\{/);
@@ -589,7 +592,7 @@ describe('FT API data contracts', () => {
       // by clustered-search as filter keys. If Jamf stopped honouring them the
       // filter would silently widen to every product, which is the failure this
       // server has been bitten by before (#243) and cannot detect from results.
-      const filtered = await search({
+      const filtered = await search(http, {
         query: 'enrollment',
         contentLocale: 'en-US',
         paging: { perPage: 20, page: 1 },
@@ -662,7 +665,7 @@ describe('FT API data contracts', () => {
     });
 
     it('product-filtered search for an unversioned non-Pro product returns version-less results', async () => {
-      const res = await search({
+      const res = await search(http, {
         query: 'enrollment',
         contentLocale: 'en-US',
         paging: { perPage: 5, page: 1 },

@@ -1,5 +1,12 @@
 /**
- * Unit tests for version filter transparency
+ * Unit tests for the search tool's relevanceNote.
+ *
+ * The versionNote cases that used to live here drove a fully-mocked
+ * searchDocumentation, so they asserted the mock's own branch — and asserted
+ * the opposite of the real FT path, where the version filter goes upstream and
+ * no note is emitted. The rule is covered against the real service in
+ * services/search-service.test.ts and its rendering in
+ * tools/notice-rendering.test.ts.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
@@ -14,14 +21,10 @@ import { createMockContext } from '../helpers/mock-context.js';
 const ctx = createMockContext();
 
 const mockSearchDocumentation = vi.fn().mockImplementation(async (_ctx: ServerContext, params: SearchParams) => {
-  const isVersionMismatch = params.version !== undefined
-    && params.version !== 'current'
-    && params.version !== '';
   return await Promise.resolve({
-    results: [{ title: 'Test', url: 'https://learn.jamf.com/test.html', snippet: 'Test snippet content for version transparency', product: 'Jamf Pro', version: isVersionMismatch ? 'current' : (params.version ?? 'current'), docType: 'documentation' }],
+    results: [{ title: 'Test', url: 'https://learn.jamf.com/test.html', snippet: 'Test snippet content for the relevance note', product: 'Jamf Pro', version: params.version ?? 'current', docType: 'documentation' }],
     pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
     tokenInfo: { tokenCount: 50, truncated: false, maxTokens: 5000 },
-    ...(isVersionMismatch ? { versionNote: `Version "${String(params.version)}" was not available for some results. Showing the latest version instead.` } : {}),
   });
 });
 
@@ -33,7 +36,7 @@ import { registerSearchTool } from '../../src/core/tools/search.js';
 
 interface TextContent { type: 'text'; text: string }
 
-describe('Version filter transparency', () => {
+describe('Search notices', () => {
   let client: Client;
   let server: McpServer;
 
@@ -48,40 +51,6 @@ describe('Version filter transparency', () => {
 
   afterAll(async () => {
     await client.close();
-  });
-
-  it('should include versionNote only when version is not found in any follower', async () => {
-    // Using fixture data that has realistic versioned follower_result
-    // If requested version matches leading or a follower, no versionNote
-    // If no match found, versionNote should appear
-    const result = await client.callTool({
-      name: 'jamf_docs_search',
-      arguments: { query: 'enrollment', version: '99.0.0' },
-    });
-
-    const {text} = (result.content[0] as TextContent);
-    // The realistic fixture has specific versions — 99.0.0 doesn't exist, so note should appear
-    expect(text).toContain('Version Note');
-  });
-
-  it('should NOT include versionNote when version is current', async () => {
-    const result = await client.callTool({
-      name: 'jamf_docs_search',
-      arguments: { query: 'enrollment', version: 'current' },
-    });
-
-    const {text} = (result.content[0] as TextContent);
-    expect(text).not.toContain('Version Note');
-  });
-
-  it('should NOT include versionNote when no version specified', async () => {
-    const result = await client.callTool({
-      name: 'jamf_docs_search',
-      arguments: { query: 'enrollment' },
-    });
-
-    const {text} = (result.content[0] as TextContent);
-    expect(text).not.toContain('Version Note');
   });
 
   it('should include relevanceNote in JSON format', async () => {

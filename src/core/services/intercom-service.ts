@@ -11,17 +11,12 @@
  */
 
 import * as cheerio from 'cheerio';
-import { httpGetText } from '../http-client.js';
 import { cacheKey } from './cache-key.js';
+import { paginateTocEntries } from './toc-helpers.js';
 import type { StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
-import {
-  calculatePagination,
-  truncateListByTokens,
-  buildPaginationNote,
-} from './tokenizer.js';
 
 // ─── __NEXT_DATA__ ──────────────────────────────────────────────
 
@@ -490,7 +485,7 @@ export async function listIntercomCollections(
   const cached = await ctx.cache.get<IntercomCollection[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await httpGetText(`${source.baseUrl}/${locale}/`);
+  const html = await ctx.http.getText(`${source.baseUrl}/${locale}/`);
   const props = pageProps(html);
   const home = props?.home as { collections?: RawCollection[] } | undefined;
   const collections = (home?.collections ?? []).map((collection): IntercomCollection => {
@@ -527,7 +522,7 @@ export async function fetchIntercomCollectionToc(
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await httpGetText(collection.url);
+  const html = await ctx.http.getText(collection.url);
   const props = pageProps(html);
   const raw = props?.collection as RawCollection | undefined;
 
@@ -574,30 +569,5 @@ export async function fetchIntercomToc(
 
   const allToc = await fetchIntercomCollectionToc(ctx, source, collection);
 
-  const count = (entries: TocEntry[]): number => entries.reduce(
-    (total, entry) => total + 1 + (entry.children !== undefined ? count(entry.children) : 0), 0);
-  const serialise = (entry: TocEntry, depth = 0): string => {
-    const indent = '  '.repeat(depth);
-    const children = entry.children?.map(child => serialise(child, depth + 1)).join('') ?? '';
-    return `${indent}- ${entry.title}\n${children}`;
-  };
-
-  const calc = calculatePagination(allToc.length, page, PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
-  const { items, tokenCount, truncated } = truncateListByTokens(
-    allToc.slice(calc.startIndex, calc.endIndex), maxTokens, serialise);
-  const paginationNote = buildPaginationNote(calc);
-
-  return {
-    toc: items,
-    pagination: {
-      page: calc.page,
-      pageSize: calc.pageSize,
-      totalPages: calc.totalPages,
-      totalItems: count(allToc),
-      hasNext: calc.hasNext,
-      hasPrev: calc.hasPrev,
-    },
-    tokenInfo: { tokenCount, truncated, maxTokens },
-    ...(paginationNote !== undefined ? { paginationNote } : {}),
-  };
+  return paginateTocEntries(allToc, page, maxTokens);
 }

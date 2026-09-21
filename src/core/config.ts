@@ -20,13 +20,26 @@ export interface CacheTtlConfig {
 }
 
 /**
- * HTTP request configuration
+ * Outbound HTTP request configuration.
+ *
+ * Every default here is what the client already did before these became
+ * settable, so turning them on changed nothing:
+ *  - `maxRetries: 0` — the shipped behaviour. The README used to claim 3.
+ *  - `rateLimitDelay: 0` — there was no politeness delay, and defaulting to
+ *    one would stagger every parallel batch fetch.
+ * The exception is `userAgent`: not sending one at all was the defect, so it
+ * has no "current behaviour" worth preserving.
  */
 export interface RequestConfig {
+  /** Per-attempt timeout in ms. */
   timeout: number;
+  /** Retry attempts after the first. 0 disables retrying. */
   maxRetries: number;
+  /** Base for the exponential backoff between retries, in ms. */
   retryDelay: number;
+  /** Minimum gap between outbound requests from one client, in ms. */
   rateLimitDelay: number;
+  /** Sent as the User-Agent header on every request. */
   userAgent: string;
 }
 
@@ -39,13 +52,6 @@ export interface CacheConfig {
 }
 
 /**
- * CORS configuration for HTTP transport
- */
-export interface CorsConfig {
-  allowedOrigins: string[];
-}
-
-/**
  * Combined server configuration
  */
 export interface ServerConfig {
@@ -53,22 +59,24 @@ export interface ServerConfig {
   cacheTtl: CacheTtlConfig;
   request: RequestConfig;
   cache: CacheConfig;
-  cors?: CorsConfig;
 }
 
 // ============================================================================
 // Default Configuration
 // ============================================================================
 
+/** Identifies this client to the documentation hosts it fetches from. */
+export function defaultUserAgent(version: string): string {
+  return `jamf-docs-mcp-server/${version} (+https://github.com/GET-Technology-Inc/jamf-docs-mcp-server)`;
+}
+
 /**
  * Create a ServerConfig with sensible defaults, allowing partial overrides.
- *
- * @param overrides - Partial config to merge over defaults
- * @returns Complete ServerConfig
  */
 export function createDefaultConfig(overrides?: Partial<ServerConfig>): ServerConfig {
+  const version = overrides?.version ?? '1.0.0';
   const defaults: ServerConfig = {
-    version: '1.0.0',
+    version,
     cacheTtl: {
       search: 30 * 60 * 1000,          // 30 minutes
       article: 24 * 60 * 60 * 1000,    // 24 hours
@@ -77,10 +85,10 @@ export function createDefaultConfig(overrides?: Partial<ServerConfig>): ServerCo
     },
     request: {
       timeout: 15000,
-      maxRetries: 3,
+      maxRetries: 0,
       retryDelay: 1000,
-      rateLimitDelay: 500,
-      userAgent: 'JamfDocsMCP/1.0 (https://github.com/GET-Technology-Inc/jamf-docs-mcp-server)',
+      rateLimitDelay: 0,
+      userAgent: defaultUserAgent(version),
     },
     cache: {
       maxEntries: 500,
@@ -106,10 +114,6 @@ export function createDefaultConfig(overrides?: Partial<ServerConfig>): ServerCo
       ...overrides.cache,
     },
   };
-
-  if (overrides.cors !== undefined) {
-    merged.cors = overrides.cors;
-  }
 
   return merged;
 }

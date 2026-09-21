@@ -505,13 +505,15 @@ All settings are optional. Set them as environment variables before launching th
 
 ### Request Settings
 
+Applied to every outbound request to a documentation host.
+
 | Variable | Default | Range | Description |
 |----------|---------|-------|-------------|
-| `REQUEST_TIMEOUT` | `15000` | 1000–60000 ms | HTTP request timeout |
-| `MAX_RETRIES` | `3` | 0–10 | Number of retry attempts on failure |
-| `RETRY_DELAY` | `1000` | 100–30000 ms | Delay between retries |
-| `RATE_LIMIT_DELAY` | `500` | 0–10000 ms | Delay between outbound requests (politeness) |
-| `USER_AGENT` | `JamfDocsMCP/1.0 ...` | — | User-Agent header sent to learn.jamf.com |
+| `REQUEST_TIMEOUT` | `15000` | 1000–60000 ms | Per-attempt HTTP timeout |
+| `MAX_RETRIES` | `0` | 0–10 | Retry attempts after the first. Only 429, 5xx, network errors and timeouts are retried, with exponential backoff and `Retry-After` honoured. `0` disables retrying |
+| `RETRY_DELAY` | `1000` | 100–30000 ms | Base for the backoff between retries. No effect while `MAX_RETRIES` is `0` |
+| `RATE_LIMIT_DELAY` | `0` | 0–10000 ms | Minimum gap between outbound requests. `0` lets parallel fetches stay parallel |
+| `USER_AGENT` | `jamf-docs-mcp-server/<version> (+<repo url>)` | — | Sent on every request so this client is identifiable to Jamf |
 
 ### HTTP Transport Settings
 
@@ -539,11 +541,13 @@ npm run start:http # HTTP transport mode
 | `npm run dev:app-ui` | Live preview of the MCP Apps viewer at http://127.0.0.1:5173 |
 | `npm run fixtures:app-ui` | Re-capture the viewer's fixtures from the live tools |
 | `npm run start:http` | Start HTTP/SSE transport mode |
-| `npm test` | Run all tests |
-| `npm run test:unit` | Unit tests only |
-| `npm run test:integration` | Integration tests only |
-| `npm run test:e2e` | End-to-end tests only |
-| `npm run test:coverage` | Test coverage report |
+| `npm test` | Pre-PR run: unit, integration and e2e |
+| `npm run test:unit` | Unit tests only — hermetic, no network |
+| `npm run test:integration` | Integration tests only (live Jamf APIs) |
+| `npm run test:contract` | Upstream contract suites. Run out of band by `upstream-contract.yml`, not part of the merge gate |
+| `npm run test:e2e` | End-to-end tests only (live Jamf APIs) |
+| `npm run test:all` | Everything, contract suites included |
+| `npm run test:coverage` | Coverage over the unit tier, as CI reports it |
 | `npm run test:inspector` | Launch MCP Inspector against local build |
 | `npm run lint` | Lint source files |
 | `npm run typecheck` | TypeScript type check without emitting |

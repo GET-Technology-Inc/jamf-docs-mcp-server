@@ -20,13 +20,6 @@ import type { FetchArticleResult } from '../../../src/core/types.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
-
 // Import AFTER mocks are set up
 import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
 import { createMockContext, createMockArticleProvider } from '../../helpers/mock-context.js';

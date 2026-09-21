@@ -9,18 +9,17 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-import { z } from 'zod';
 import type { CacheProvider, CacheStats, Logger } from '../../core/services/interfaces/index.js';
 import type { CacheEntry } from '../../core/types.js';
 
-/**
- * Zod schema for validating cache entries read from disk
- */
-export const CacheEntrySchema = z.object({
-  data: z.unknown(),
-  timestamp: z.number(),
-  ttl: z.number()
-});
+// Imported, not re-declared. This file used to carry its own byte-identical
+// copy while core/services/cache.ts carried the one the tests asserted against,
+// so the guard protecting the disk read and the guard under test were two
+// different objects that only happened to agree. Re-exported because it was
+// exported from here before, and `./platforms/node` is a published path.
+import { CacheEntrySchema } from '../../core/services/cache.js';
+
+export { CacheEntrySchema };
 
 /**
  * Doubly-linked list node for LRU tracking
@@ -31,9 +30,6 @@ interface LruNode {
   next: LruNode | null;
 }
 
-/**
- * File-based cache implementation with LRU-bounded memory cache
- */
 /**
  * How long an abandoned `.tmp` write must sit before `prune()` reclaims it.
  *
@@ -65,6 +61,9 @@ export class FileCache implements CacheProvider {
   private readonly log: Logger;
   private readonly memoryCache = new Map<string, CacheEntry<unknown>>();
   private readonly lruMap = new Map<string, LruNode>();
+  // Sentinels. Most recently used sits behind lruHead, least recently used in
+  // front of lruTail — which is the whole reason lruEvictLeast reads
+  // `lruTail.prev`. Neither sentinel ever holds an entry.
   private readonly lruHead: LruNode = { key: '__head__', prev: null, next: null };
   private readonly lruTail: LruNode = { key: '__tail__', prev: null, next: null };
   private dirCreated = false;
@@ -97,9 +96,6 @@ export class FileCache implements CacheProvider {
     this.dirCreated = true;
   }
 
-  /**
-   * Move a node to the front of the LRU list (most recently used)
-   */
   private lruMoveToFront(node: LruNode): void {
     // Remove from current position
     if (node.prev !== null) { node.prev.next = node.next; }
@@ -111,9 +107,6 @@ export class FileCache implements CacheProvider {
     this.lruHead.next = node;
   }
 
-  /**
-   * Add a key to the LRU list (at front)
-   */
   private lruAdd(key: string): void {
     const existing = this.lruMap.get(key);
     if (existing !== undefined) {
@@ -125,9 +118,6 @@ export class FileCache implements CacheProvider {
     this.lruMoveToFront(node);
   }
 
-  /**
-   * Remove a key from the LRU list
-   */
   private lruRemove(key: string): void {
     const node = this.lruMap.get(key);
     if (node === undefined) { return; }
@@ -138,9 +128,6 @@ export class FileCache implements CacheProvider {
     this.lruMap.delete(key);
   }
 
-  /**
-   * Evict the least recently used entry from memory cache
-   */
   private lruEvictLeast(): void {
     const leastNode = this.lruTail.prev;
     if (leastNode === null || leastNode === this.lruHead) { return; }
@@ -148,11 +135,7 @@ export class FileCache implements CacheProvider {
     this.lruRemove(leastNode.key);
   }
 
-  /**
-   * Get a value from cache
-   */
   async get<T>(key: string): Promise<T | null> {
-    // Check memory cache first
     const memCached = this.memoryCache.get(key) as CacheEntry<T> | undefined;
     if (memCached !== undefined) {
       if (Date.now() - memCached.timestamp < memCached.ttl) {
@@ -164,13 +147,11 @@ export class FileCache implements CacheProvider {
       this.lruRemove(key);
     }
 
-    // Check file cache
     try {
       const cachePath = this.getCachePath(key);
       const content = await fs.readFile(cachePath, 'utf-8');
       const raw: unknown = JSON.parse(content);
 
-      // Validate cache entry structure
       const parsed = CacheEntrySchema.safeParse(raw);
       if (!parsed.success) {
         await this.delete(key);
@@ -179,13 +160,11 @@ export class FileCache implements CacheProvider {
 
       const entry = parsed.data as CacheEntry<T>;
 
-      // Check if expired
       if (Date.now() - entry.timestamp > entry.ttl) {
         await this.delete(key);
         return null;
       }
 
-      // Store in memory cache with LRU eviction
       this.memoryCacheSet(key, entry);
 
       return entry.data;
@@ -195,9 +174,6 @@ export class FileCache implements CacheProvider {
     }
   }
 
-  /**
-   * Store in memory cache, evicting LRU entry if at capacity
-   */
   private memoryCacheSet(key: string, entry: CacheEntry<unknown>): void {
     if (!this.memoryCache.has(key) && this.memoryCache.size >= this.maxEntries) {
       this.lruEvictLeast();
@@ -206,9 +182,6 @@ export class FileCache implements CacheProvider {
     this.lruAdd(key);
   }
 
-  /**
-   * Set a value in cache
-   */
   async set(key: string, value: unknown, ttl?: number): Promise<void> {
     await this.ensureCacheDir();
 
@@ -218,7 +191,6 @@ export class FileCache implements CacheProvider {
       ttl: ttl ?? this.defaultTtl
     };
 
-    // Store in memory with LRU
     this.memoryCacheSet(key, entry);
 
     // Store in file atomically (write to .tmp then rename)
@@ -233,9 +205,6 @@ export class FileCache implements CacheProvider {
     }
   }
 
-  /**
-   * Delete a cache entry
-   */
   async delete(key: string): Promise<boolean> {
     const existed = this.memoryCache.has(key);
     this.memoryCache.delete(key);
@@ -244,9 +213,6 @@ export class FileCache implements CacheProvider {
     return existed;
   }
 
-  /**
-   * Clear all cache entries
-   */
   async clear(): Promise<void> {
     this.memoryCache.clear();
     this.lruMap.clear();
@@ -266,9 +232,6 @@ export class FileCache implements CacheProvider {
     }
   }
 
-  /**
-   * Get cache statistics
-   */
   async stats(): Promise<CacheStats> {
     let totalEntries = 0;
     let totalSize = 0;

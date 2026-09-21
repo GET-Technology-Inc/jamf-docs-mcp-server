@@ -12,6 +12,8 @@ import { toValidLocale } from '../constants/locales.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 import type { MapsRegistry } from './maps-registry.js';
 import { fetchMapTopics } from './ft-client.js';
+import { createHttpClient, type HttpClient } from '../http-client.js';
+import { createDefaultConfig } from '../config.js';
 import type { CacheProvider } from './interfaces/index.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { getMetaValue, FT_META } from '../utils/ft-metadata.js';
@@ -112,14 +114,20 @@ export function parseUrl(url: string): ParsedUrl | null {
 
 const DEFAULT_TOPICS_CACHE_TTL = 24 * 60 * 60 * 1000;
 
+interface BuildIndexOptions {
+  mapId: string;
+  cache: CacheProvider;
+  key: CacheKey;
+  fetchTopicsFn: typeof fetchMapTopics;
+  cacheTtl: number;
+  http: HttpClient;
+}
+
 async function fetchAndBuildIndex(
-  mapId: string,
-  cache: CacheProvider,
-  key: CacheKey,
-  fetchTopicsFn: typeof fetchMapTopics,
-  cacheTtl: number,
+  options: BuildIndexOptions,
 ): Promise<Map<string, string>> {
-  const topics = await fetchTopicsFn(mapId);
+  const { mapId, cache, key, fetchTopicsFn, cacheTtl, http } = options;
+  const topics = await fetchTopicsFn(http, mapId);
   const index = new Map<string, string>();
 
   for (const topic of topics) {
@@ -161,12 +169,16 @@ export class TopicResolver {
   private readonly fetchMapTopicsFn: typeof fetchMapTopics;
   private readonly cacheTtl: number;
 
+  private readonly http: HttpClient;
+
   constructor(
     private readonly registry: MapsRegistry,
     private readonly cache: CacheProvider,
     fetchMapTopicsFn?: typeof fetchMapTopics,
     cacheTtl?: number,
+    http?: HttpClient,
   ) {
+    this.http = http ?? createHttpClient(createDefaultConfig().request);
     this.fetchMapTopicsFn = fetchMapTopicsFn ?? fetchMapTopics;
     this.cacheTtl = cacheTtl ?? DEFAULT_TOPICS_CACHE_TTL;
   }
@@ -184,9 +196,14 @@ export class TopicResolver {
       return await pending;
     }
 
-    const promise = fetchAndBuildIndex(
-      mapId, this.cache, key, this.fetchMapTopicsFn, this.cacheTtl
-    );
+    const promise = fetchAndBuildIndex({
+      mapId,
+      cache: this.cache,
+      key,
+      fetchTopicsFn: this.fetchMapTopicsFn,
+      cacheTtl: this.cacheTtl,
+      http: this.http,
+    });
     this.inflight.set(mapId, promise);
 
     // Clean up the in-flight entry once the promise settles.

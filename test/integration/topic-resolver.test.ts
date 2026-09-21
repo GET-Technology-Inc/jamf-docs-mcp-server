@@ -8,6 +8,9 @@ import { MapsRegistry } from '../../src/core/services/maps-registry.js';
 import { fetchMaps, fetchMapToc } from '../../src/core/services/ft-client.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../../src/core/types.js';
 import { createMockCache } from '../helpers/mock-context.js';
+import { createTestHttpClient } from '../helpers/mock-context.js';
+
+const http = createTestHttpClient();
 
 describe('TopicResolver integration', () => {
   const cache = createMockCache();
@@ -28,7 +31,7 @@ describe('TopicResolver integration', () => {
 
   it('should resolve a FT prettyUrl to mapId + contentId', async () => {
     // Discover a real prettyUrl from the FT API
-    const maps = await fetchMaps();
+    const maps = await fetchMaps(http);
     const proMap = maps.find(m =>
       m.metadata?.some(
         meta => meta.key === 'version_bundle_stem'
@@ -43,7 +46,7 @@ describe('TopicResolver integration', () => {
     );
     expect(proMap).toBeDefined();
 
-    const toc = await fetchMapToc(proMap!.id);
+    const toc = await fetchMapToc(http, proMap!.id);
     // Find a topic with a non-empty prettyUrl (walk children if needed)
     function findPrettyUrl(nodes: typeof toc): string | null {
       for (const node of nodes) {

@@ -26,13 +26,6 @@ vi.mock('../../src/core/services/toc-service.js', () => ({
 // TopicResolver and MapsRegistry are singletons on ServerContext;
 // tests override ctx.topicResolver.resolve where needed.
 
-vi.mock('../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
 vi.mock('../../src/core/services/metadata.js', async () => {
   // Derived from the registry rather than `[]`: `jamf_docs_list_products`
   // reads getProductsMetadata for registry-resolved versions, so an empty

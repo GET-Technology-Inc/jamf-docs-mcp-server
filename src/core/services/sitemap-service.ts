@@ -8,18 +8,13 @@
  * locale and parsing each one's navigation.
  */
 
-import { httpGetText } from '../http-client.js';
 import { cacheKey } from './cache-key.js';
+import { paginateTocEntries } from './toc-helpers.js';
 import { canonicalStaticUrl } from './static-article-service.js';
 import type { StaticDocSource, StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
-import {
-  calculatePagination,
-  truncateListByTokens,
-  buildPaginationNote,
-} from './tokenizer.js';
 
 /** One `<url>` of a sitemap, reduced to what a TOC needs. */
 export interface SitemapEntry {
@@ -69,7 +64,7 @@ export async function loadSitemap(
   const cached = await ctx.cache.get<SitemapEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const xml = await httpGetText(`${source.baseUrl}/sitemap.xml`);
+  const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries = parseSitemap(xml);
   await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
   return entries;
@@ -200,45 +195,11 @@ export async function fetchStaticToc(
 
   const allToc = await buildStaticToc(ctx, source, section, sourceLocale);
 
-  const totalItems = countTocEntries(allToc);
-  const paginationCalc = calculatePagination(allToc.length, page, PAGINATION_CONFIG.DEFAULT_PAGE_SIZE);
-  const paginated = allToc.slice(paginationCalc.startIndex, paginationCalc.endIndex);
-
-  const { items, tokenCount, truncated } =
-    truncateListByTokens(paginated, maxTokens, tocEntryToString);
-
-  const paginationNote = buildPaginationNote(paginationCalc);
-
   return {
-    toc: items,
-    pagination: {
-      page: paginationCalc.page,
-      pageSize: paginationCalc.pageSize,
-      totalPages: paginationCalc.totalPages,
-      totalItems,
-      hasNext: paginationCalc.hasNext,
-      hasPrev: paginationCalc.hasPrev,
-    },
-    tokenInfo: { tokenCount, truncated, maxTokens },
+    ...paginateTocEntries(allToc, page, maxTokens),
     // The locale that answered is the one asked for: unlike Fluid Topics,
     // where a family may exist in en-US only, a static section either
     // publishes the locale or `resolveTocSource` refused before reaching here.
     resolvedLocale: sourceLocale,
-    ...(paginationNote !== undefined ? { paginationNote } : {}),
   };
-}
-
-/** Total entries including nested children. Mirrors toc-service's own count. */
-function countTocEntries(entries: TocEntry[]): number {
-  return entries.reduce(
-    (count, entry) => count + 1 + (entry.children !== undefined ? countTocEntries(entry.children) : 0),
-    0,
-  );
-}
-
-/** Serialise one entry for token estimation. Mirrors toc-service's. */
-function tocEntryToString(entry: TocEntry, depth = 0): string {
-  const indent = '  '.repeat(depth);
-  const childrenStr = entry.children?.map(c => tocEntryToString(c, depth + 1)).join('') ?? '';
-  return `${indent}- ${entry.title}\n${childrenStr}`;
 }

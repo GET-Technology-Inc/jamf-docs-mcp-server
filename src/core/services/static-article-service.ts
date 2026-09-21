@@ -9,7 +9,6 @@
  * {@link buildArticleView}, so the two cannot drift on what a caller sees.
  */
 
-import { httpGetText } from '../http-client.js';
 import { parseArticle } from './content-parser.js';
 import { buildArticleView } from './article-view.js';
 import { extractSections } from './tokenizer.js';
@@ -99,7 +98,7 @@ export async function fetchStaticArticle(
   let cached = await ctx.cache.get<CachedStaticArticle>(key);
 
   if (cached === null) {
-    const html = await httpGetText(displayUrl);
+    const html = await ctx.http.getText(displayUrl);
 
     // An Intercom Help Center's body is a block list in `__NEXT_DATA__`, not
     // markup — no selector set can read it, so the parser is chosen per

@@ -18,6 +18,7 @@ import type {
   Logger,
 } from '../../src/core/services/interfaces/index.js';
 import { createDefaultConfig } from '../../src/core/config.js';
+import { httpGetText, httpGetJson, httpPostJson, type HttpClient } from '../../src/core/http-client.js';
 import type { PublicationInfo } from '../../src/core/services/maps-registry.js';
 import { MapsRegistry } from '../../src/core/services/maps-registry.js';
 import { TopicResolver } from '../../src/core/services/topic-resolver.js';
@@ -154,14 +155,46 @@ function fixtureMaps(): FtMapInfo[] {
   });
 }
 
+/**
+ * An HttpClient that forwards straight to the http-client primitives.
+ *
+ * Deliberately not `createHttpClient(...)`. Nine suites replace that module
+ * with a factory that exports only the three primitives, so the real factory
+ * is not there to call — and where it is, it closes over the unmocked helpers
+ * and would bypass the very mocks the suite asserts on. Forwarding resolves
+ * against whatever the module currently exports, mocked or not.
+ *
+ * The bound-config behaviour (User-Agent, timeout, retries, politeness) is
+ * covered directly in test/unit/core/http-client-factory.test.ts.
+ */
+export function createTestHttpClient(): HttpClient {
+  return {
+    // `options` is omitted rather than forwarded as undefined: the suites that
+    // mock these assert `toHaveBeenCalledWith(url)`, and a trailing undefined
+    // is a different call as far as those assertions are concerned.
+    getText: async (url, options) => options === undefined
+      ? await httpGetText(url)
+      : await httpGetText(url, options),
+    getJson: async (url, options) => options === undefined
+      ? await httpGetJson(url)
+      : await httpGetJson(url, options),
+    postJson: async (url, body, options) => options === undefined
+      ? await httpPostJson(url, body)
+      : await httpPostJson(url, body, options),
+  };
+}
+
 export function createMockContext(overrides?: Partial<ServerContext>): ServerContext {
   const cache = createMockCache();
-  const mapsRegistry = new MapsRegistry(cache);
-  const topicResolver = new TopicResolver(mapsRegistry, cache);
+  const config = createDefaultConfig();
+  const http = createTestHttpClient();
+  const mapsRegistry = new MapsRegistry(cache, undefined, undefined, undefined, http);
+  const topicResolver = new TopicResolver(mapsRegistry, cache, undefined, undefined, http);
   return {
     cache,
     logger: createMockLoggerFactory(),
-    config: createDefaultConfig(),
+    config,
+    http,
     mapsRegistry,
     topicResolver,
     ...overrides,

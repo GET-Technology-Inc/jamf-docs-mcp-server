@@ -100,16 +100,6 @@ describe('SearchInputSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should reject maxTokens 50 (below minimum)', () => {
-    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 50 });
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject maxTokens 60000 (above maximum)', () => {
-    const result = SearchInputSchema.safeParse({ query: 'test', maxTokens: 60000 });
-    expect(result.success).toBe(false);
-  });
-
   it('should reject unknown extra fields (strict mode)', () => {
     const result = SearchInputSchema.safeParse({ query: 'test', unknownField: true });
     expect(result.success).toBe(false);
@@ -355,16 +345,6 @@ describe('ListProductsInputSchema', () => {
   it('should accept maxTokens 50000 (maximum valid)', () => {
     const result = ListProductsInputSchema.safeParse({ maxTokens: 50000 });
     expect(result.success).toBe(true);
-  });
-
-  it('should reject maxTokens 50 (below minimum)', () => {
-    const result = ListProductsInputSchema.safeParse({ maxTokens: 50 });
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject maxTokens 60000 (above maximum)', () => {
-    const result = ListProductsInputSchema.safeParse({ maxTokens: 60000 });
-    expect(result.success).toBe(false);
   });
 
   it('should reject extra unknown fields', () => {

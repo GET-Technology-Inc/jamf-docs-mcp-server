@@ -8,11 +8,6 @@
 import { fetchMapToc } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import {
-  calculatePagination,
-  truncateListByTokens,
-  buildPaginationNote,
-} from './tokenizer.js';
-import {
   JAMF_PRODUCTS,
   DEFAULT_LOCALE,
   PAGINATION_CONFIG,
@@ -21,7 +16,8 @@ import {
 import type { ProductId, LocaleId } from '../constants.js';
 import type { ServerContext } from '../types/context.js';
 import { cacheKey } from './cache-key.js';
-import type { FtTocNode, TocEntry, PaginationInfo, FetchTocOptions, FetchTocResult } from '../types.js';
+import { paginateTocEntries } from './toc-helpers.js';
+import type { FtTocNode, TocEntry, FetchTocOptions, FetchTocResult } from '../types.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 
 // ─── Transform helpers ─────────────────────────────────────────
@@ -56,26 +52,6 @@ export function transformFtTocToTocEntries(nodes: FtTocNode[]): TocEntry[] {
 }
 
 // ─── Counting / serialisation helpers ──────────────────────────
-
-/**
- * Count total TOC entries including nested children
- */
-function countTocEntries(entries: TocEntry[]): number {
-  return entries.reduce(
-    (count, entry) =>
-      count + 1 + (entry.children !== undefined ? countTocEntries(entry.children) : 0),
-    0,
-  );
-}
-
-/**
- * Serialise a single TOC entry for token estimation
- */
-function tocEntryToString(entry: TocEntry, depth = 0): string {
-  const indent = '  '.repeat(depth);
-  const childrenStr = entry.children?.map(c => tocEntryToString(c, depth + 1)).join('') ?? '';
-  return `${indent}- ${entry.title}\n${childrenStr}`;
-}
 
 // ─── Map id resolution ─────────────────────────────────────────
 
@@ -190,7 +166,7 @@ export async function fetchTableOfContents(
     mapId = resolved.mapId;
     resolvedLocale = resolved.resolvedLocale;
 
-    const ftNodes = await fetchMapToc(mapId);
+    const ftNodes = await fetchMapToc(ctx.http, mapId);
 
     allToc = transformFtTocToTocEntries(ftNodes);
 
@@ -208,35 +184,9 @@ export async function fetchTableOfContents(
 
   // ─── Pagination & token truncation ───────────────────────────
 
-  const totalItems = countTocEntries(allToc);
-  const topLevelCount = allToc.length;
-  const pageSize = PAGINATION_CONFIG.DEFAULT_PAGE_SIZE;
-  const paginationCalc = calculatePagination(topLevelCount, page, pageSize);
-
-  const paginatedToc = allToc.slice(paginationCalc.startIndex, paginationCalc.endIndex);
-
-  const { items: finalToc, tokenCount, truncated } =
-    truncateListByTokens(paginatedToc, maxTokens, tocEntryToString);
-
-  const tokenInfo = { tokenCount, truncated, maxTokens };
-
-  const pagination: PaginationInfo = {
-    page: paginationCalc.page,
-    pageSize: paginationCalc.pageSize,
-    totalPages: paginationCalc.totalPages,
-    totalItems,
-    hasNext: paginationCalc.hasNext,
-    hasPrev: paginationCalc.hasPrev,
-  };
-
-  const paginationNote = buildPaginationNote(paginationCalc);
-
   return {
-    toc: finalToc,
-    pagination,
-    tokenInfo,
+    ...paginateTocEntries(allToc, page, maxTokens),
     ...(mapId !== null ? { mapId } : {}),
     ...(resolvedLocale !== null ? { resolvedLocale } : {}),
-    ...(paginationNote !== undefined ? { paginationNote } : {}),
   };
 }

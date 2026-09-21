@@ -15,10 +15,7 @@ import { LoggingService } from '../../core/services/logging.js';
 export class NodeLoggerFactory implements LoggerFactory {
   private readonly service: LoggingService;
 
-  /**
-   * @param writeStderr - Optional writer function. Defaults to `console.error`
-   *   (Node.js stderr). Override for testing or alternative output targets.
-   */
+  /** @param writeStderr - Override for testing or alternative output targets. */
   constructor(writeStderr?: WriteStderrFn) {
     this.service = new LoggingService(writeStderr);
   }

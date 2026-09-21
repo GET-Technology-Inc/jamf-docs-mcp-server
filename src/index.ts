@@ -13,6 +13,7 @@ import type { ServerContext } from './core/types/context.js';
 import { createNodeConfig } from './platforms/node/config.js';
 import { FileCache } from './platforms/node/cache.js';
 import { NodeLoggerFactory } from './platforms/node/logger.js';
+import { createHttpClient } from './core/http-client.js';
 import { MapsRegistry } from './core/services/maps-registry.js';
 import { TopicResolver } from './core/services/topic-resolver.js';
 import { createStderrLogger } from './core/services/logging.js';
@@ -29,12 +30,17 @@ const cache = new FileCache({
   log: logger.createLogger('cache'),
 });
 
+// One client for the process, bound to the request settings. Everything that
+// reaches a documentation host goes through it, so the User-Agent and the
+// timeout/retry/politeness settings apply everywhere rather than per call site.
+const http = createHttpClient(config.request);
+
 // Build singleton services
 const mapsRegistry = new MapsRegistry(
-  cache, undefined, undefined, config.cacheTtl.products
+  cache, undefined, undefined, config.cacheTtl.products, http
 );
 const topicResolver = new TopicResolver(
-  mapsRegistry, cache, undefined, config.cacheTtl.article
+  mapsRegistry, cache, undefined, config.cacheTtl.article, http
 );
 
 // Build the complete ServerContext
@@ -42,6 +48,7 @@ const ctx: ServerContext = {
   config,
   logger,
   cache,
+  http,
   mapsRegistry,
   topicResolver,
 };
