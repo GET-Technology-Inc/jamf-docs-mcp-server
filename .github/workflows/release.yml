@@ -3,6 +3,17 @@ name: Release
 on:
   push:
     branches: [main]
+  # Re-run a release that failed for a reason outside the repository — an npm
+  # outage, an expired token, a registry timeout — without having to land
+  # another commit just to trigger one.
+  #
+  # This does NOT force a version. semantic-release derives the release from
+  # the commit messages since the last tag, so a manual run over commits that
+  # earned nothing reports "no release" and exits successfully, exactly as an
+  # automatic run would. To release work whose commits were flattened into a
+  # non-releasable message, land a correctly typed commit — pr-title.yml exists
+  # to stop that happening in the first place.
+  workflow_dispatch: {}
 
 concurrency:
   group: release
