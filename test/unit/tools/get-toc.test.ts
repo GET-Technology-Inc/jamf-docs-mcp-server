@@ -25,13 +25,6 @@ vi.mock('../../../src/core/services/toc-service.js', () => ({
   fetchTableOfContents: vi.fn(),
 }));
 
-vi.mock('../../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
-
 vi.mock('../../../src/core/services/metadata.js', () => ({
   getAvailableVersions: vi.fn().mockResolvedValue([]),
   getBundleIdForVersion: vi.fn().mockResolvedValue('jamf-pro-documentation'),

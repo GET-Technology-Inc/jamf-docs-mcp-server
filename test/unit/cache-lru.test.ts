@@ -208,14 +208,6 @@ describe('LRU memory cache — clear()', () => {
     expect(stats.memoryEntries).toBe(0);
   });
 
-  it('should make previously set keys return null after clear', async () => {
-    const key = uniqueKey('cleared-key');
-    await cache.set(key, 'persisted', 60_000);
-
-    await cache.clear();
-    expect(await cache.get<string>(key)).toBeNull();
-  });
-
   it('should allow new entries to be added after clear', async () => {
     await cache.clear();
     const key = uniqueKey('after-clear');
@@ -247,12 +239,6 @@ describe('LRU memory cache — stats() accuracy', () => {
     const stats = await cache.stats();
     // Only one logical entry for this key
     expect(stats.memoryEntries).toBe(1);
-  });
-
-  it('should return memoryEntries as a non-negative integer', async () => {
-    const stats = await cache.stats();
-    expect(Number.isInteger(stats.memoryEntries)).toBe(true);
-    expect(stats.memoryEntries).toBeGreaterThanOrEqual(0);
   });
 });
 

@@ -17,13 +17,6 @@ import type { FetchArticleResult, FetchArticleOptions } from '../../../src/core/
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
-
 // Import AFTER mocks are set up
 import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-articles.js';
 import { createMockContext, type MockArticleProvider } from '../../helpers/mock-context.js';

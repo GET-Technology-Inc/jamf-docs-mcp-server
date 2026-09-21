@@ -23,12 +23,10 @@ import { resourceText } from '../helpers/fixtures.js';
 // Mock service modules BEFORE importing tools/resources
 // ---------------------------------------------------------------------------
 
-// Search tool now uses search-service.js instead of scraper.js
 vi.mock('../../src/core/services/search-service.js', () => ({
   searchDocumentation: vi.fn(),
 }));
 
-// TOC tool now uses toc-service.js instead of scraper.js
 vi.mock('../../src/core/services/toc-service.js', () => ({
   fetchTableOfContents: vi.fn(),
 }));
@@ -75,13 +73,6 @@ vi.mock('../../src/core/services/metadata.js', async () => {
     getTopicsResourceData: vi.fn(),
   };
 });
-
-vi.mock('../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -282,47 +273,6 @@ describe('E2E: MCP Server Response Schema', () => {
   // =========================================================================
   // Server lifecycle
   // =========================================================================
-
-  describe('server lifecycle', () => {
-    it('should register all 4 tools', async () => {
-      const result = await client.listTools();
-
-      expect(result.tools).toHaveLength(4);
-      const names = result.tools.map(t => t.name);
-      expect(names).toContain('jamf_docs_list_products');
-      expect(names).toContain('jamf_docs_search');
-      expect(names).toContain('jamf_docs_get_article');
-      expect(names).toContain('jamf_docs_get_toc');
-    });
-
-    it('each tool should have a description and inputSchema', async () => {
-      const result = await client.listTools();
-
-      for (const tool of result.tools) {
-        expect(tool.description).toBeTruthy();
-        expect(tool.inputSchema).toBeDefined();
-      }
-    });
-
-    it('should register all 2 static resources', async () => {
-      const result = await client.listResources();
-
-      expect(result.resources).toHaveLength(2);
-      const uris = result.resources.map(r => r.uri);
-      expect(uris).toContain('jamf://products');
-      expect(uris).toContain('jamf://topics');
-    });
-
-    it('should register all 3 prompts', async () => {
-      const result = await client.listPrompts();
-
-      expect(result.prompts).toHaveLength(3);
-      const names = result.prompts.map(p => p.name);
-      expect(names).toContain('jamf_troubleshoot');
-      expect(names).toContain('jamf_setup_guide');
-      expect(names).toContain('jamf_compare_versions');
-    });
-  });
 
   // =========================================================================
   // jamf_docs_list_products

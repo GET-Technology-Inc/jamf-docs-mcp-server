@@ -38,13 +38,6 @@ vi.mock('../../../src/core/services/search-service.js', () => ({
   searchDocumentation: vi.fn(),
 }));
 
-vi.mock('../../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
-
 // Import AFTER mocks are set up
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../../src/core/tools/search.js';

@@ -20,13 +20,6 @@ vi.mock('../../../src/core/services/glossary.js', () => ({
   searchGlossaryEntries: vi.fn(),
 }));
 
-vi.mock('../../../src/core/services/cache.js', () => ({
-  cache: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn(),
-  },
-}));
-
 // Import AFTER mocks are set up
 import { lookupGlossaryTerm } from '../../../src/core/services/glossary.js';
 import { registerGlossaryLookupTool } from '../../../src/core/tools/glossary-lookup.js';
