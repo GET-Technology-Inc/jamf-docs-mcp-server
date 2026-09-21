@@ -9,18 +9,17 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-import { z } from 'zod';
 import type { CacheProvider, CacheStats, Logger } from '../../core/services/interfaces/index.js';
 import type { CacheEntry } from '../../core/types.js';
 
-/**
- * Zod schema for validating cache entries read from disk
- */
-export const CacheEntrySchema = z.object({
-  data: z.unknown(),
-  timestamp: z.number(),
-  ttl: z.number()
-});
+// Imported, not re-declared. This file used to carry its own byte-identical
+// copy while core/services/cache.ts carried the one the tests asserted against,
+// so the guard protecting the disk read and the guard under test were two
+// different objects that only happened to agree. Re-exported because it was
+// exported from here before, and `./platforms/node` is a published path.
+import { CacheEntrySchema } from '../../core/services/cache.js';
+
+export { CacheEntrySchema };
 
 /**
  * Doubly-linked list node for LRU tracking
