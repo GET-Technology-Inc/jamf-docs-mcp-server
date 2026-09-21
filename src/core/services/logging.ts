@@ -46,22 +46,21 @@ function formatLogLine(
  *
  * Each server instance should create its own LoggingService, so that
  * multiple servers running in the same isolate don't share state.
- *
- * @param writeStderr - Optional writer function for stderr-style output.
- *   Defaults to `console.error`. Pass `console.log` or a no-op for
- *   platforms without stderr (e.g. Cloudflare Workers).
  */
 export class LoggingService {
   private readonly writeStderr: WriteStderrFn;
 
+  /**
+   * @param writeStderr - Optional writer function for stderr-style output.
+   *   Defaults to `console.error`. Pass `console.log` or a no-op for
+   *   platforms without stderr (e.g. Cloudflare Workers).
+   */
   constructor(writeStderr?: WriteStderrFn) {
     this.writeStderr = writeStderr ?? defaultWriteStderr;
   }
 
   /**
    * Create a named logger instance.
-   *
-   * @param name - Logger name identifying the source module
    */
   createLogger(name: string): Logger {
     return {
@@ -87,7 +86,6 @@ export class LoggingService {
  * Use this for bootstrap / transport code that runs before
  * a ServerContext is available, or outside of a request scope.
  *
- * @param name - Logger name identifying the source module
  * @param writeStderr - Optional writer function (defaults to console.error)
  */
 export function createStderrLogger(

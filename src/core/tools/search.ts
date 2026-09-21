@@ -220,9 +220,7 @@ interface SearchExample {
   label: string;
   /** Search keywords passed as `query` */
   query: string;
-  /** Optional product filter */
   product?: ProductId;
-  /** Optional topic filter */
   topic?: TopicId;
   /** Optional page (used for the pagination demo) */
   page?: number;

@@ -25,7 +25,6 @@ export function sanitizeMarkdownUrl(url: string): string {
     if (parsed.protocol !== 'https:') {
       return '#';
     }
-    // Percent-encode parentheses in the URL to prevent breaking Markdown link syntax
     return url.replace(/\(/g, '%28').replace(/\)/g, '%29');
   } catch {
     return '#';

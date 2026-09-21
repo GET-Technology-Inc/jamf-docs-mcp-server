@@ -62,9 +62,6 @@ export interface ServerConfig {
 
 /**
  * Create a ServerConfig with sensible defaults, allowing partial overrides.
- *
- * @param overrides - Partial config to merge over defaults
- * @returns Complete ServerConfig
  */
 export function createDefaultConfig(overrides?: Partial<ServerConfig>): ServerConfig {
   const defaults: ServerConfig = {
