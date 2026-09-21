@@ -9,8 +9,6 @@ export {
   SERVER_ICON,
   DOCS_BASE_URL,
   FT_API_BASE,
-  buildDocUrl,
-  buildUrlPattern,
   JAMF_PRODUCTS,
   PRODUCT_IDS,
   classificationValuesFor,

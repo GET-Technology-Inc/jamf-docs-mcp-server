@@ -10,20 +10,6 @@ export const DOCS_BASE_URL = 'https://learn.jamf.com';
 // Fluid Topics API (learn.jamf.com hosts FT 5.x)
 export const FT_API_BASE = DOCS_BASE_URL;
 
-/**
- * Build a full documentation URL with locale
- */
-export function buildDocUrl(locale: string, bundleId: string, page: string): string {
-  return `${DOCS_BASE_URL}/${locale}/bundle/${bundleId}/page/${page}`;
-}
-
-/**
- * Build a URL pattern path (without base URL) for a given locale and bundleId
- */
-export function buildUrlPattern(locale: string, bundleId: string): string {
-  return `${locale}/bundle/${bundleId}/page`;
-}
-
 // Supported products - updated URL patterns for learn.jamf.com
 export const JAMF_PRODUCTS = {
   'jamf-pro': {

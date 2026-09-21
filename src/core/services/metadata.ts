@@ -31,21 +31,13 @@ export interface DegradationStatus {
   degraded: boolean;
 }
 
-export interface ProductMetadata {
-  id: string;
-  name: string;
-  description: string;
-  bundleId: string;
-  latestVersion: string;
-  availableVersions: string[];  // All discovered versions
-}
+// Declared once, in the interfaces layer, and re-exported here because this
+// module's own consumers name it. The dependency runs implementation ->
+// interface, not the other way round; core/index.ts publishes the interfaces
+// copy, which is the one that was always canonical.
+import type { ProductMetadata, TopicMetadata } from './interfaces/metadata.js';
 
-export interface TopicMetadata {
-  id: string;
-  name: string;
-  source: 'toc' | 'manual';  // Where this topic came from
-  articleCount?: number;
-}
+export type { ProductMetadata, TopicMetadata };
 
 // ============================================================================
 // Internal helpers
