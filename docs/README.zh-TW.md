@@ -374,11 +374,13 @@ npm run dev
 
 ```bash
 npm run build          # 編譯 TypeScript
-npm test               # 執行所有測試
-npm run test:unit      # 單元測試
-npm run test:integration  # 整合測試
-npm run test:e2e       # E2E 測試
-npm run test:coverage  # 測試覆蓋率報告
+npm test               # 送 PR 前的完整檢查：unit + integration + e2e
+npm run test:unit      # 單元測試（封閉環境，不連外）
+npm run test:integration  # 整合測試（連線真實 Jamf API）
+npm run test:contract  # 上游契約套件，由 upstream-contract.yml 排程執行，不納入合併閘門
+npm run test:e2e       # E2E 測試（連線真實 Jamf API）
+npm run test:all       # 全部，含契約套件
+npm run test:coverage  # 單元測試覆蓋率，與 CI 回報的一致
 npm run lint           # ESLint 檢查
 npm run typecheck      # TypeScript 型別檢查
 npm run start:http     # 以 HTTP 模式啟動

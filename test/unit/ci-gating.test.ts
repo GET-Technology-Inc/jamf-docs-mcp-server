@@ -101,6 +101,35 @@ describe('the contract naming convention is what the exclude relies on', () => {
   });
 });
 
+describe('the no-network guard is not disabled for the unit tier', () => {
+  // test/helpers/no-network.setup.ts turns a missed module mock into a failure
+  // instead of a slow pass — it says it exists because that happened three
+  // times and "each time the only symptom was a slow test". ALLOW_LIVE_REQUESTS=1
+  // switches it off wholesale, and `npm test` used to set it over a bare
+  // `vitest run`, which sweeps test/unit too. So the documented pre-PR command
+  // ran the whole unit tier with its safety net removed.
+  const LIVE_TIERS = ['test/integration', 'test/e2e'];
+
+  it.each(
+    Object.entries(scripts).filter(([, cmd]) => cmd.includes('ALLOW_LIVE_REQUESTS=1')),
+  )('%s only points ALLOW_LIVE_REQUESTS at a live tier', (name, cmd) => {
+    const targets = [...cmd.matchAll(/(?:^|\s)(test\/[\w./-]+)/g)].map(m => m[1]);
+
+    expect(
+      targets.length,
+      `${name} sets ALLOW_LIVE_REQUESTS=1 but names no path, so it runs every ` +
+      'tier — including test/unit — with the no-network guard switched off.',
+    ).toBeGreaterThan(0);
+
+    const strays = targets.filter(t => !LIVE_TIERS.some(tier => t.startsWith(tier)));
+    expect(
+      strays,
+      `${name} sets ALLOW_LIVE_REQUESTS=1 over ${JSON.stringify(strays)}, which is ` +
+      'outside the tiers that reach live Jamf endpoints on purpose.',
+    ).toEqual([]);
+  });
+});
+
 describe('the guards above actually run on a PR that could break them', () => {
   // Every substantive job in ci.yml is gated on `needs.changes.outputs.code`,
   // so a path the filter does not list skips the whole test tier — including

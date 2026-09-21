@@ -539,11 +539,13 @@ npm run start:http # HTTP transport mode
 | `npm run dev:app-ui` | Live preview of the MCP Apps viewer at http://127.0.0.1:5173 |
 | `npm run fixtures:app-ui` | Re-capture the viewer's fixtures from the live tools |
 | `npm run start:http` | Start HTTP/SSE transport mode |
-| `npm test` | Run all tests |
-| `npm run test:unit` | Unit tests only |
-| `npm run test:integration` | Integration tests only |
-| `npm run test:e2e` | End-to-end tests only |
-| `npm run test:coverage` | Test coverage report |
+| `npm test` | Pre-PR run: unit, integration and e2e |
+| `npm run test:unit` | Unit tests only — hermetic, no network |
+| `npm run test:integration` | Integration tests only (live Jamf APIs) |
+| `npm run test:contract` | Upstream contract suites. Run out of band by `upstream-contract.yml`, not part of the merge gate |
+| `npm run test:e2e` | End-to-end tests only (live Jamf APIs) |
+| `npm run test:all` | Everything, contract suites included |
+| `npm run test:coverage` | Coverage over the unit tier, as CI reports it |
 | `npm run test:inspector` | Launch MCP Inspector against local build |
 | `npm run lint` | Lint source files |
 | `npm run typecheck` | TypeScript type check without emitting |
