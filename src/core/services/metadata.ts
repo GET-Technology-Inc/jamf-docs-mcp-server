@@ -47,13 +47,6 @@ export interface TopicMetadata {
   articleCount?: number;
 }
 
-export interface TocCategory {
-  navId: string;
-  title: string;
-  articleCount: number;
-  children: string[];  // Child article titles for keyword generation
-}
-
 // ============================================================================
 // Internal helpers
 // ============================================================================

@@ -37,7 +37,11 @@ export interface HttpHandlerConfig {
 export type ClientIpExtractor = (request: Request) => string;
 
 export const DEFAULT_HTTP_CONFIG: HttpHandlerConfig = {
-  serverVersion: '3.0.6',
+  // Placeholder only. Every real caller overrides it —
+  // platforms/node/http-server.ts reads the package version — and a frozen
+  // release number here would answer /health with a version this server
+  // stopped being long ago. It said 3.0.6 while the package was at 5.10.9.
+  serverVersion: '0.0.0-dev',
   corsAllowedOrigins: [],
   trustProxy: false,
   rateLimitRpm: 60,
