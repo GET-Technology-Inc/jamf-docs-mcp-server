@@ -101,6 +101,26 @@ describe('the contract naming convention is what the exclude relies on', () => {
   });
 });
 
+describe('the guards above actually run on a PR that could break them', () => {
+  // Every substantive job in ci.yml is gated on `needs.changes.outputs.code`,
+  // so a path the filter does not list skips the whole test tier — including
+  // this file. A PR that re-added `npm run test:contract` to ci.yml would then
+  // take the test-gate no-op path and the assertion at :60 would never run.
+  it('the paths filter lists the workflow files these tests read', () => {
+    const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const filter = ci.slice(ci.indexOf('filters: |'), ci.indexOf('\n  test:'));
+
+    for (const workflow of ['ci.yml', 'upstream-contract.yml']) {
+      expect(
+        filter,
+        `.github/workflows/${workflow} is read by this test file but is not in ` +
+        "ci.yml's paths filter, so a PR touching only that workflow skips the " +
+        'test job and these guards never run.'
+      ).toContain(`.github/workflows/${workflow}`);
+    }
+  });
+});
+
 describe('test:all still means all', () => {
   it('runs the contract tier explicitly, now that test:integration does not', () => {
     expect(

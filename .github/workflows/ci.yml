@@ -34,6 +34,16 @@ jobs:
               - 'tsconfig*.json'
               - 'vitest*.ts'
               - 'eslint.config.*'
+              # test/unit/ci-gating.test.ts reads these two files off disk and
+              # asserts on their text — above all that ci.yml does NOT run the
+              # contract suites. Without them here, a PR that edits only a
+              # workflow takes the test-gate no-op path below and that guard
+              # never runs: the same silent-failure shape it was written for.
+              # Deliberately narrow — '.github/workflows/**' would drag the full
+              # matrix plus integration, audit and coverage into a stale.yml
+              # typo fix for no added protection.
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/upstream-contract.yml'
 
   test:
     name: Test (Node ${{ matrix.node-version }})
@@ -178,9 +188,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
-
+      # No Build step: the coverage job runs only `test:unit`, and nothing in
+      # test/unit reads dist/. `requireFreshBuild` is called by exactly two
+      # suites (test/integration/mcp-server, test/e2e/http-transport), neither
+      # of which runs here, and the one generated file the unit tier touches —
+      # src/core/apps/generated/app-html.ts — is committed.
       - name: Run unit tests with coverage
         run: npm run test:unit -- --coverage
 
