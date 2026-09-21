@@ -32,9 +32,6 @@ interface LruNode {
 }
 
 /**
- * File-based cache implementation with LRU-bounded memory cache
- */
-/**
  * How long an abandoned `.tmp` write must sit before `prune()` reclaims it.
  *
  * `set()` writes `<hash>.json.tmp.<pid>` and renames it into place; the gap

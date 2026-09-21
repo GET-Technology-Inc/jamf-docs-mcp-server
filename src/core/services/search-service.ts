@@ -178,29 +178,6 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
 // ─── Filter Construction ───────────────────────────────────────
 
 /**
- * Build Fluid Topics search filters from search params.
- *
- * - product → resolved separately by {@link resolveProductFilter} and passed
- *   in, because it needs the registry to know which axis the product lives on
- * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
- * - version → `version` filter (only when a specific version is requested)
- *
- * Both filters are pushed as *separate* entries. Fluid Topics intersects
- * filter objects and unions the values inside one — verified against the live
- * API when this was written, and again on 2026-09-18 for the classification
- * keys — so merging them into a single entry would widen a product+docType
- * search instead of narrowing it. The counts that first demonstrated it are
- * not repeated here: the union/intersection behaviour is the durable part, and
- * the numbers moved within days.
- *
- * NOTE: we intentionally do NOT add `latestVersion=yes` when no version is given.
- * Jamf migrated all non-Pro products (School, Connect, Protect, Now, …) to an
- * unversioned documentation model with no `latestVersion` metadata, so that filter
- * silently dropped every non-Pro product from results (and returned zero results
- * for product-filtered non-Pro searches). Jamf Pro's many version snapshots are
- * instead collapsed client-side via {@link dedupeToLatestVersions}.
- */
-/**
  * The upstream filter for a `product`, in Jamf's own vocabulary.
  *
  * Replaces the hand-written `searchLabel` translation into `zoominmetadata`'s
@@ -241,6 +218,29 @@ export async function resolveProductFilter(
   return { key: axis, values: [...values] };
 }
 
+/**
+ * Build Fluid Topics search filters from search params.
+ *
+ * - product → resolved separately by {@link resolveProductFilter} and passed
+ *   in, because it needs the registry to know which axis the product lives on
+ * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
+ * - version → `version` filter (only when a specific version is requested)
+ *
+ * Both filters are pushed as *separate* entries. Fluid Topics intersects
+ * filter objects and unions the values inside one — verified against the live
+ * API when this was written, and again on 2026-09-18 for the classification
+ * keys — so merging them into a single entry would widen a product+docType
+ * search instead of narrowing it. The counts that first demonstrated it are
+ * not repeated here: the union/intersection behaviour is the durable part, and
+ * the numbers moved within days.
+ *
+ * NOTE: we intentionally do NOT add `latestVersion=yes` when no version is given.
+ * Jamf migrated all non-Pro products (School, Connect, Protect, Now, …) to an
+ * unversioned documentation model with no `latestVersion` metadata, so that filter
+ * silently dropped every non-Pro product from results (and returned zero results
+ * for product-filtered non-Pro searches). Jamf Pro's many version snapshots are
+ * instead collapsed client-side via {@link dedupeToLatestVersions}.
+ */
 export function buildSearchFilters(
   params: Pick<SearchParams, 'docType' | 'version'>,
   productFilter?: FtSearchFilter | null,

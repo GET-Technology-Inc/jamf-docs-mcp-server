@@ -102,8 +102,7 @@ export function collectInternalLinkMapIds(html: string): string[] {
  * to a URL, and also the only place that says where a topic sits in the
  * hierarchy — the topic's own HTML and metadata carry neither. Indexing both
  * in one pass keeps that to one fetch per map rather than two.
- */
-/**
+ *
  * Cached under the `ft-tocindex-v3` namespace. The version is load-bearing:
  * entries written under an older shape hold only the fields that shape had, so
  * they answer a newer lookup with nothing — a v1 entry makes every topic look

@@ -313,9 +313,6 @@ when a result comes from a source that does not resolve one — fall back to the
 URL in that case.`;
 
 /**
- * Build structured content for a search result set
- */
-/**
  * The filters a result set was produced under.
  *
  * Echoed back in `structuredContent` so a client can request the next page of

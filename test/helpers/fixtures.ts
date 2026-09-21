@@ -195,18 +195,6 @@ export function createRealisticTocResponse(
 // ============================================================================
 
 /**
- * Build a minimal FT clustered search response containing TOPIC entries.
- *
- * Shared across filter-fallback, filter-combination, and similar tests.
- *
- * `contentLabels` are the `content-*` values FT publishes under
- * `zoominmetadata` alongside the product label — the vocabulary the docType
- * post-filter reads. `contentType` is the separate `jamf:contentType` metadata,
- * which only ever narrows the upstream FT query; an entry that needs a docType
- * has to declare `contentLabels`, because the two are not interchangeable
- * ('Technical Documentation' covers four docTypes).
- */
-/**
  * The axis each classification value sits on, for {@link createClassifyingMapsRegistry}.
  *
  * Written down HERE and derived in production. A fixture is allowed to assert
@@ -251,6 +239,18 @@ function classificationForMap(mapId: string): { key: string; value: string } | n
   return null;
 }
 
+/**
+ * Build a minimal FT clustered search response containing TOPIC entries.
+ *
+ * Shared across filter-fallback, filter-combination, and similar tests.
+ *
+ * `contentLabels` are the `content-*` values FT publishes under
+ * `zoominmetadata` alongside the product label — the vocabulary the docType
+ * post-filter reads. `contentType` is the separate `jamf:contentType` metadata,
+ * which only ever narrows the upstream FT query; an entry that needs a docType
+ * has to declare `contentLabels`, because the two are not interchangeable
+ * ('Technical Documentation' covers four docTypes).
+ */
 export function makeFtSearchResponse(
   entries: {
     title: string;

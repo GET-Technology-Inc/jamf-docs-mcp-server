@@ -32,17 +32,6 @@ import { extractSections } from './tokenizer.js';
 // ─── Shared article fetch ──────────────────────────────────────
 
 /**
- * Fetch, parse, and tokenize a single article from the FT API.
- *
- * This function handles the full pipeline:
- *   1. Parallel fetch of topic metadata + content (on cache miss)
- *   2. HTML parsing via content-parser
- *   3. Section extraction, summaryOnly, section filter, token truncation
- *
- * Both `get-article` and `batch-get-articles` delegate to this function
- * after resolving mapId/contentId and exhausting provider shortcuts.
- */
-/**
  * Cached article data.
  *
  * Metadata-sourced fields (title, displayUrl, product, version) live at the
@@ -75,6 +64,17 @@ export interface FetchArticleFromFtOptions extends FetchArticleOptions {
   logger?: Logger | undefined;
 }
 
+/**
+ * Fetch, parse, and tokenize a single article from the FT API.
+ *
+ * This function handles the full pipeline:
+ *   1. Parallel fetch of topic metadata + content (on cache miss)
+ *   2. HTML parsing via content-parser
+ *   3. Section extraction, summaryOnly, section filter, token truncation
+ *
+ * Both `get-article` and `batch-get-articles` delegate to this function
+ * after resolving mapId/contentId and exhausting provider shortcuts.
+ */
 export async function fetchArticleFromFt(
   cache: CacheProvider,
   mapId: string,
