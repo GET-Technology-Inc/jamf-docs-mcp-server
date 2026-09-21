@@ -42,7 +42,6 @@ export function getSafeErrorMessage(error: unknown): string {
 
 /**
  * Sanitize error messages before returning to clients.
- * - Replaces backend hostnames with frontend equivalents
  * - Removes absolute file paths
  * - Removes stack traces
  */
