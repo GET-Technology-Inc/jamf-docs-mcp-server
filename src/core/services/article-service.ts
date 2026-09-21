@@ -270,7 +270,11 @@ export async function resolveAndFetchArticle(
   );
 
   if (resolvedLocale !== undefined && articleUrl !== '') {
-    const urlLocale = extractLocaleFromUrl(articleUrl);
+    // `?? null` is load-bearing, and the reason this is not the identically
+    // named export from utils/url.ts: that one falls back to DEFAULT_LOCALE,
+    // which would make the guard below always true and attach a
+    // language-mismatch note to every en-US article.
+    const urlLocale = parseUrl(articleUrl)?.locale ?? null;
     if (urlLocale !== null && urlLocale !== resolvedLocale) {
       const note = `\n\n---\n*Note: Language "${resolvedLocale}" was requested`
         + ` but this article was resolved from a "${urlLocale}" URL.`
@@ -284,10 +288,6 @@ export async function resolveAndFetchArticle(
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
-
-function extractLocaleFromUrl(url: string): string | null {
-  return parseUrl(url)?.locale ?? null;
-}
 
 function deriveDisplayUrl(
   readerUrl: string | undefined,

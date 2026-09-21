@@ -50,6 +50,10 @@ const MaxTokensSchema = z.number()
   .max(TOKEN_CONFIG.MAX_TOKENS_LIMIT)
   .default(TOKEN_CONFIG.DEFAULT_MAX_TOKENS)
   .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`);
+// This description survives `.optional()` — verified against this repo's zod:
+// z.toJSONSchema emits the same `description` with and without a repeat call.
+// So users of MaxTokensSchema do not re-describe; only a genuinely different
+// wording needs its own .describe() (see batch_get_articles' token budget).
 
 // Common language/locale parameter (completable() mutates in place, so each call needs a fresh schema)
 const LANGUAGE_DESCRIPTION = `Documentation language/locale (default: ${DEFAULT_LOCALE}). Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
@@ -149,9 +153,7 @@ export const SearchInputSchema = z.object({
     .optional()
     .describe(`Page number for pagination (1-${PAGINATION_CONFIG.MAX_PAGE}, default: 1)`),
 
-  maxTokens: MaxTokensSchema
-    .optional()
-    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+  maxTokens: MaxTokensSchema.optional(),
 
   outputMode: OutputModeSchema
     .default(OutputMode.FULL)
@@ -206,9 +208,7 @@ export const GetArticleInputSchema = z.object({
     .default(false)
     .describe('Include related article links in the response'),
 
-  maxTokens: MaxTokensSchema
-    .optional()
-    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+  maxTokens: MaxTokensSchema.optional(),
 
   outputMode: OutputModeSchema
     .default(OutputMode.FULL)
@@ -265,9 +265,7 @@ export const GetTocInputSchema = z.object({
     .optional()
     .describe(`Page number for pagination (1-${PAGINATION_CONFIG.MAX_PAGE}, default: 1)`),
 
-  maxTokens: MaxTokensSchema
-    .optional()
-    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+  maxTokens: MaxTokensSchema.optional(),
 
   outputMode: OutputModeSchema
     .default(OutputMode.FULL)
@@ -301,9 +299,7 @@ export const GlossaryLookupInputSchema = z.object({
     completeLanguage
   ),
 
-  maxTokens: MaxTokensSchema
-    .optional()
-    .describe(`Maximum tokens in response (${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT}, default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})`),
+  maxTokens: MaxTokensSchema.optional(),
 
   outputMode: OutputModeSchema
     .default(OutputMode.FULL)
