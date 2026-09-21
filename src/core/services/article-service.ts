@@ -28,6 +28,7 @@ import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
 import { extractSections } from './tokenizer.js';
+import type { HttpClient } from '../http-client.js';
 
 // ─── Shared article fetch ──────────────────────────────────────
 
@@ -58,6 +59,8 @@ interface CachedArticle {
  * options plus the cache TTL used when storing a freshly fetched article.
  */
 export interface FetchArticleFromFtOptions extends FetchArticleOptions {
+  /** Bound to ServerConfig.request; carried here because this takes a cache, not a ctx. */
+  http: HttpClient;
   /** TTL (seconds) for the cached article entry; undefined uses the cache default. */
   cacheTtl?: number;
   /** Used to report a TOC index that would not load; links degrade either way. */
@@ -89,8 +92,8 @@ export async function fetchArticleFromFt(
 
   if (cached === null) {
     const [topicMeta, html] = await Promise.all([
-      fetchTopicMetadata(mapId, contentId),
-      fetchTopicContent(mapId, contentId),
+      fetchTopicMetadata(options.http, mapId, contentId),
+      fetchTopicContent(options.http, mapId, contentId),
     ]);
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
@@ -103,6 +106,7 @@ export async function fetchArticleFromFt(
     // links collects nothing and the resolver does no I/O. The index is cached
     // per map, so the fetch is shared by every article in it.
     const resolveInternalLink = await buildInternalLinkResolver({
+      http: options.http,
       cache,
       mapIds: collectInternalLinkMapIds(html),
       ttl: options.cacheTtl,
@@ -124,6 +128,7 @@ export async function fetchArticleFromFt(
     const breadcrumb = parsed.breadcrumb.length > 0
       ? parsed.breadcrumb
       : await fetchTopicAncestors({
+          http: options.http,
           cache,
           mapId,
           contentId,
@@ -165,6 +170,7 @@ export async function fetchArticleFromFt(
   // and a client showing "Computer Configuration Profiles" has no route to the
   // nine procedures that page consists of on the site.
   const navigation = await fetchTopicNavigation({
+    http: options.http,
     cache,
     mapId,
     contentId,
@@ -264,6 +270,7 @@ export async function resolveAndFetchArticle(
     cache, mapId, contentId, articleUrl,
     {
       ...options,
+      http: ctx.http,
       cacheTtl: ctx.config.cacheTtl.article,
       logger: ctx.logger.createLogger('article-service'),
     }

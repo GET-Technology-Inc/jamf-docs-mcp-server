@@ -923,7 +923,7 @@ async function resolveSearchResults(
       `locale=${locale}, filters=${JSON.stringify(filters)}`
     );
 
-    const ftResponse: FtClusteredSearchResponse = await ftSearch(request);
+    const ftResponse: FtClusteredSearchResponse = await ftSearch(ctx.http, request);
 
     // Collapse version snapshots to the latest per topic, then transform.
     // Deduping before transform avoids running cleanSnippet etc. over every

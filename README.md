@@ -505,13 +505,15 @@ All settings are optional. Set them as environment variables before launching th
 
 ### Request Settings
 
+Applied to every outbound request to a documentation host.
+
 | Variable | Default | Range | Description |
 |----------|---------|-------|-------------|
-| `REQUEST_TIMEOUT` | `15000` | 1000–60000 ms | HTTP request timeout |
-| `MAX_RETRIES` | `3` | 0–10 | Number of retry attempts on failure |
-| `RETRY_DELAY` | `1000` | 100–30000 ms | Delay between retries |
-| `RATE_LIMIT_DELAY` | `500` | 0–10000 ms | Delay between outbound requests (politeness) |
-| `USER_AGENT` | `JamfDocsMCP/1.0 ...` | — | User-Agent header sent to learn.jamf.com |
+| `REQUEST_TIMEOUT` | `15000` | 1000–60000 ms | Per-attempt HTTP timeout |
+| `MAX_RETRIES` | `0` | 0–10 | Retry attempts after the first. Only 429, 5xx, network errors and timeouts are retried, with exponential backoff and `Retry-After` honoured. `0` disables retrying |
+| `RETRY_DELAY` | `1000` | 100–30000 ms | Base for the backoff between retries. No effect while `MAX_RETRIES` is `0` |
+| `RATE_LIMIT_DELAY` | `0` | 0–10000 ms | Minimum gap between outbound requests. `0` lets parallel fetches stay parallel |
+| `USER_AGENT` | `jamf-docs-mcp-server/<version> (+<repo url>)` | — | Sent on every request so this client is identifiable to Jamf |
 
 ### HTTP Transport Settings
 

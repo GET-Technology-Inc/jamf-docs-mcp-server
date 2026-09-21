@@ -8,7 +8,6 @@
  * locale and parsing each one's navigation.
  */
 
-import { httpGetText } from '../http-client.js';
 import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { canonicalStaticUrl } from './static-article-service.js';
@@ -65,7 +64,7 @@ export async function loadSitemap(
   const cached = await ctx.cache.get<SitemapEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const xml = await httpGetText(`${source.baseUrl}/sitemap.xml`);
+  const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries = parseSitemap(xml);
   await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
   return entries;

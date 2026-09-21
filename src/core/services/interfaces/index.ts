@@ -10,8 +10,6 @@ export type { CacheKey, CacheNamespace, CacheKeySpaces, CacheKeyValue, Canonical
 export type {
   ProductMetadata,
   TopicMetadata,
-  TocEntry,
-  TocData,
 } from './metadata.js';
 export type { Logger, LoggerFactory, WriteStderrFn } from './logger.js';
 export type {

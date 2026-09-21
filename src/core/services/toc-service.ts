@@ -166,7 +166,7 @@ export async function fetchTableOfContents(
     mapId = resolved.mapId;
     resolvedLocale = resolved.resolvedLocale;
 
-    const ftNodes = await fetchMapToc(mapId);
+    const ftNodes = await fetchMapToc(ctx.http, mapId);
 
     allToc = transformFtTocToTocEntries(ftNodes);
 

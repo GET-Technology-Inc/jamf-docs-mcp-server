@@ -12,6 +12,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../../src/core/http-client.js', async () => {
   const actual = await import('../../../src/core/http-client.js');
   return {
+    // Spread first: the module also exports createHttpClient, which
+    // MapsRegistry and TopicResolver fall back to when none is injected.
+    ...actual,
     httpGetJson: vi.fn(),
     httpGetText: vi.fn(),
     httpPostJson: vi.fn(),
@@ -21,7 +24,21 @@ vi.mock('../../../src/core/http-client.js', async () => {
 
 // ── Imports after mock ──────────────────────────────────────────────────────
 
-import { httpGetJson, httpGetText, HttpError } from '../../../src/core/http-client.js';
+import { httpGetJson, httpGetText, httpPostJson, HttpError, type HttpClient } from '../../../src/core/http-client.js';
+
+// The suite mocks the http-client primitives and asserts on them, so the
+// client handed to the code under test is a thin pass-through to those mocks
+// rather than a real one: `createHttpClient` from the unmocked module would
+// close over the real fetch helpers and bypass every assertion below.
+const http: HttpClient = {
+  getText: async (url, options) => options === undefined
+    ? await httpGetText(url) : await httpGetText(url, options),
+  getJson: async (url, options) => options === undefined
+    ? await httpGetJson(url) : await httpGetJson(url, options),
+  postJson: async (url, body, options) => options === undefined
+    ? await httpPostJson(url, body) : await httpPostJson(url, body, options),
+};
+
 import {
   fetchArticleFromFt,
   resolveAndFetchArticle,
@@ -168,7 +185,7 @@ describe('fetchArticleFromFt()', () => {
       };
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http },
       );
 
       expect(result.lastUpdated).toBe('2023-08-10');
@@ -181,7 +198,7 @@ describe('fetchArticleFromFt()', () => {
       currentTopicMetadata = { ...defaultMetadata, metadata: [] };
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http },
       );
 
       expect(result.lastUpdated).toBeUndefined();
@@ -196,7 +213,7 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http },
       );
 
       expect(result.title).toBe('Computer Configuration Profiles');
@@ -213,7 +230,7 @@ describe('fetchArticleFromFt()', () => {
     it('should fetch metadata and content in parallel on cache miss', async () => {
       const cache = createMockCache();
 
-      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       // httpGetJson called once for metadata, httpGetText once for content
       // Two JSON gets now: the topic metadata, and the map TOC the breadcrumb
@@ -232,7 +249,7 @@ describe('fetchArticleFromFt()', () => {
     it('should extract product and version from metadata', async () => {
       const cache = createMockCache();
       // Default fixture has version_bundle_stem=jamf-pro-documentation, version=11.25.0
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.product).toBe('Jamf Pro');
       expect(result.version).toBe('11.25.0');
@@ -245,7 +262,7 @@ describe('fetchArticleFromFt()', () => {
         metadata: [],
       };
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.version).toBe('current');
     });
@@ -262,7 +279,7 @@ describe('fetchArticleFromFt()', () => {
         ],
       };
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.product).toBe('Jamf School');
       expect(result.version).toBe('current');
@@ -279,7 +296,7 @@ describe('fetchArticleFromFt()', () => {
         '</body></html>',
       ].join('');
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.breadcrumb).toEqual(['Jamf Pro', 'Device Management', 'MDM']);
     });
@@ -288,7 +305,7 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
       // DEFAULT_HTML has no breadcrumb elements
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.breadcrumb).toBeUndefined();
     });
@@ -306,7 +323,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true },
       );
 
       expect(result.relatedArticles).toBeDefined();
@@ -327,7 +344,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: false },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: false },
       );
 
       // Related articles filtered out at the result layer even though parser extracts them
@@ -338,7 +355,7 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
       // DEFAULT_HTML has no related-links elements
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.relatedArticles).toBeUndefined();
     });
@@ -358,13 +375,13 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       // First fetch with includeRelated: false
-      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: false });
+      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: false });
 
       vi.clearAllMocks();
 
       // Second fetch with includeRelated: true should get cache hit with related articles
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true },
       );
 
       // Cache hit — no HTTP calls made
@@ -410,7 +427,7 @@ describe('fetchArticleFromFt()', () => {
       currentArticleHtml = SMART_GROUPS_HTML;
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true },
       );
 
       expect(result.relatedArticles).toEqual([
@@ -434,7 +451,7 @@ describe('fetchArticleFromFt()', () => {
       currentArticleHtml = SMART_GROUPS_HTML;
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true },
       );
 
       expect(result.content).toContain(
@@ -452,8 +469,8 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
       // DEFAULT_HTML carries no ft-internal-link spans.
 
-      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true });
-      await fetchArticleFromFt(cache, MAP_ID, OTHER_CONTENT_ID, ARTICLE_URL, {
+      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true });
+      await fetchArticleFromFt(cache, MAP_ID, OTHER_CONTENT_ID, ARTICLE_URL, { http,
         includeRelated: true,
       });
 
@@ -473,7 +490,7 @@ describe('fetchArticleFromFt()', () => {
       });
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { includeRelated: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  includeRelated: true },
       );
 
       // Only the external link survives — a tocId cannot be turned into a URL
@@ -494,11 +511,11 @@ describe('fetchArticleFromFt()', () => {
     it('should return cached article without calling FT API', async () => {
       const cache = createMockCache();
       // First call populates cache
-      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
       vi.clearAllMocks();
 
       // Second call should be a cache hit
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(mockedGetJson).not.toHaveBeenCalled();
       expect(mockedGetText).not.toHaveBeenCalled();
@@ -509,8 +526,8 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
 
       // Call with two different content IDs
-      await fetchArticleFromFt(cache, MAP_ID, 'article-A', ARTICLE_URL, {});
-      await fetchArticleFromFt(cache, MAP_ID, 'article-B', ARTICLE_URL, {});
+      await fetchArticleFromFt(cache, MAP_ID, 'article-A', ARTICLE_URL, { http });
+      await fetchArticleFromFt(cache, MAP_ID, 'article-B', ARTICLE_URL, { http });
 
       // API should be called twice (different cache keys)
       expect(mockedGetText).toHaveBeenCalledTimes(2);
@@ -533,7 +550,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { summaryOnly: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  summaryOnly: true },
       );
 
       expect(result.content).toContain('## Summary');
@@ -555,7 +572,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { summaryOnly: true },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  summaryOnly: true },
       );
 
       expect(result.content).toMatch(/~\d+ tokens/);
@@ -578,7 +595,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { section: 'Prerequisites' },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  section: 'Prerequisites' },
       );
 
       expect(result.content).toContain('Prerequisites');
@@ -598,7 +615,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { section: 'NonExistentSection' },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  section: 'NonExistentSection' },
       );
 
       expect(result.content).toContain('Section "NonExistentSection" not found');
@@ -618,7 +635,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { section: 'Missing' },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  section: 'Missing' },
       );
 
       expect(result.content).toContain('- Overview');
@@ -637,7 +654,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { section: '' },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  section: '' },
       );
 
       // Full content returned (not a section-not-found message)
@@ -660,7 +677,7 @@ describe('fetchArticleFromFt()', () => {
 
       // Very small token limit to force truncation
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { maxTokens: 50 },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  maxTokens: 50 },
       );
 
       expect(result.tokenInfo.truncated).toBe(true);
@@ -676,7 +693,7 @@ describe('fetchArticleFromFt()', () => {
       ].join('');
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { maxTokens: 5000 },
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http,  maxTokens: 5000 },
       );
 
       expect(result.tokenInfo.truncated).toBe(false);
@@ -686,7 +703,7 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
 
       const result = await fetchArticleFromFt(
-        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {},
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http },
       );
 
       expect(result.tokenInfo.maxTokens).toBe(5000);
@@ -703,7 +720,7 @@ describe('fetchArticleFromFt()', () => {
       );
 
       await expect(
-        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {}),
+        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http }),
       ).rejects.toThrow('HTTP 404');
     });
 
@@ -714,7 +731,7 @@ describe('fetchArticleFromFt()', () => {
       );
 
       await expect(
-        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {}),
+        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http }),
       ).rejects.toThrow('HTTP 429');
     });
 
@@ -725,14 +742,14 @@ describe('fetchArticleFromFt()', () => {
       mockedGetText.mockRejectedValueOnce(new Error('Network error'));
 
       await expect(
-        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {}),
+        fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http }),
       ).rejects.toThrow('Network error');
 
       // Restore normal routing for subsequent calls
       setupHttpRouting();
 
       // Second call should retry (cache should NOT have a stale entry)
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
       expect(result.title).toBeDefined();
       // httpGetText should have been called twice total (once for failure, once for success)
       expect(mockedGetText).toHaveBeenCalledTimes(2);
@@ -747,7 +764,7 @@ describe('fetchArticleFromFt()', () => {
       const cache = createMockCache();
       currentTopicMetadata = omitKey(currentTopicMetadata, 'title');
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       // The parsed `<h1>`, not `undefined`.
       expect(result.title).toBe('MDM Profile Settings');
@@ -762,7 +779,7 @@ describe('fetchArticleFromFt()', () => {
       // Default fixture has readerUrl as a full URL pointing to learn.jamf.com
       // buildDisplayUrl (running for real) returns absolute allowed URLs as-is
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       // The fixture readerUrl is an absolute URL, so buildDisplayUrl returns it as-is
       expect(result.url).toBe(defaultMetadata.readerUrl);
@@ -775,7 +792,7 @@ describe('fetchArticleFromFt()', () => {
         readerUrl: '',
       };
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       expect(result.url).toBe(ARTICLE_URL);
     });
@@ -788,7 +805,7 @@ describe('fetchArticleFromFt()', () => {
         readerUrl: relativePath,
       };
 
-      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, {});
+      const result = await fetchArticleFromFt(cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http });
 
       // buildDisplayUrl adds the base URL for relative paths
       expect(result.url).toBe(`https://learn.jamf.com${relativePath}`);

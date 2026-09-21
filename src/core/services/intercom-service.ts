@@ -11,7 +11,6 @@
  */
 
 import * as cheerio from 'cheerio';
-import { httpGetText } from '../http-client.js';
 import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import type { StaticDocSource } from '../constants/sources.js';
@@ -486,7 +485,7 @@ export async function listIntercomCollections(
   const cached = await ctx.cache.get<IntercomCollection[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await httpGetText(`${source.baseUrl}/${locale}/`);
+  const html = await ctx.http.getText(`${source.baseUrl}/${locale}/`);
   const props = pageProps(html);
   const home = props?.home as { collections?: RawCollection[] } | undefined;
   const collections = (home?.collections ?? []).map((collection): IntercomCollection => {
@@ -523,7 +522,7 @@ export async function fetchIntercomCollectionToc(
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await httpGetText(collection.url);
+  const html = await ctx.http.getText(collection.url);
   const props = pageProps(html);
   const raw = props?.collection as RawCollection | undefined;
 

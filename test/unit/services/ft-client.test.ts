@@ -5,11 +5,14 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('../../../src/core/http-client.js', async () => {
+  const actual = await import('../../../src/core/http-client.js');
   return {
+    // Spread first: the module also exports createHttpClient, which
+    // MapsRegistry and TopicResolver fall back to when none is injected.
+    ...actual,
     httpGetText: vi.fn(),
     httpGetJson: vi.fn(),
     httpPostJson: vi.fn(),
-    HttpError: (await import('../../../src/core/http-client.js')).HttpError,
   };
 });
 
@@ -23,6 +26,9 @@ import {
   fetchTopicMetadata,
 } from '../../../src/core/services/ft-client.js';
 import { FT_API_BASE } from '../../../src/core/constants.js';
+import { createTestHttpClient } from '../../helpers/mock-context.js';
+
+const http = createTestHttpClient();
 
 const mockedGetJson = vi.mocked(httpGetJson);
 const mockedGetText = vi.mocked(httpGetText);
@@ -75,7 +81,7 @@ describe('search()', () => {
       paging: { perPage: 10, page: 1 },
     };
 
-    const result = await search(request);
+    const result = await search(http, request);
 
     expect(mockedPostJson).toHaveBeenCalledWith(
       `${FT_API_BASE}/api/khub/clustered-search`,
@@ -94,7 +100,7 @@ describe('search()', () => {
       sortId: 'last_update',
     };
 
-    await search(request);
+    await search(http, request);
 
     expect(mockedPostJson).toHaveBeenCalledWith(
       expect.any(String),
@@ -118,7 +124,7 @@ describe('fetchMaps()', () => {
     ];
     mockedGetJson.mockResolvedValue(mockMaps);
 
-    const result = await fetchMaps();
+    const result = await fetchMaps(http);
 
     expect(mockedGetJson).toHaveBeenCalledWith(`${FT_API_BASE}/api/khub/maps`);
     expect(result).toHaveLength(2);
@@ -143,7 +149,7 @@ describe('fetchMapToc()', () => {
     };
     mockedGetJson.mockResolvedValue(mockToc);
 
-    const result = await fetchMapToc('map1');
+    const result = await fetchMapToc(http, 'map1');
 
     expect(mockedGetJson).toHaveBeenCalledWith(`${FT_API_BASE}/api/khub/maps/map1/toc`);
     expect(result).toHaveLength(1);
@@ -157,7 +163,7 @@ describe('fetchMapToc()', () => {
     ];
     mockedGetJson.mockResolvedValue(mockToc);
 
-    const result = await fetchMapToc('map1');
+    const result = await fetchMapToc(http, 'map1');
 
     expect(result).toHaveLength(2);
   });
@@ -174,7 +180,7 @@ describe('fetchMapTopics()', () => {
     ];
     mockedGetJson.mockResolvedValue(mockTopics);
 
-    const result = await fetchMapTopics('map1');
+    const result = await fetchMapTopics(http, 'map1');
 
     expect(mockedGetJson).toHaveBeenCalledWith(`${FT_API_BASE}/api/khub/maps/map1/topics`);
     expect(result).toHaveLength(1);
@@ -189,7 +195,7 @@ describe('fetchTopicContent()', () => {
   it('should GET topic content as HTML text', async () => {
     mockedGetText.mockResolvedValue('<div class="glossdef"><p>Definition</p></div>');
 
-    const result = await fetchTopicContent('map1', 'content1');
+    const result = await fetchTopicContent(http, 'map1', 'content1');
 
     expect(mockedGetText).toHaveBeenCalledWith(
       `${FT_API_BASE}/api/khub/maps/map1/topics/content1/content`
@@ -212,7 +218,7 @@ describe('fetchTopicMetadata()', () => {
     };
     mockedGetJson.mockResolvedValue(mockMeta);
 
-    const result = await fetchTopicMetadata('map1', 'content1');
+    const result = await fetchTopicMetadata(http, 'map1', 'content1');
 
     expect(mockedGetJson).toHaveBeenCalledWith(
       `${FT_API_BASE}/api/khub/maps/map1/topics/content1`
@@ -231,7 +237,7 @@ describe('network error propagation', () => {
     mockedPostJson.mockRejectedValue(networkError);
 
     await expect(
-      search({ query: 'MDM', contentLocale: 'en-US', paging: { perPage: 10, page: 1 } })
+      search(http, { query: 'MDM', contentLocale: 'en-US', paging: { perPage: 10, page: 1 } })
     ).rejects.toThrow('Network timeout');
   });
 
@@ -239,28 +245,28 @@ describe('network error propagation', () => {
     const networkError = new Error('Connection refused');
     mockedGetJson.mockRejectedValue(networkError);
 
-    await expect(fetchMaps()).rejects.toThrow('Connection refused');
+    await expect(fetchMaps(http)).rejects.toThrow('Connection refused');
   });
 
   it('should propagate network error from fetchMapToc()', async () => {
     const networkError = new Error('DNS lookup failed');
     mockedGetJson.mockRejectedValue(networkError);
 
-    await expect(fetchMapToc('map1')).rejects.toThrow('DNS lookup failed');
+    await expect(fetchMapToc(http, 'map1')).rejects.toThrow('DNS lookup failed');
   });
 
   it('should propagate network error from fetchTopicContent()', async () => {
     const networkError = new Error('HTTP 429 Too Many Requests');
     mockedGetText.mockRejectedValue(networkError);
 
-    await expect(fetchTopicContent('map1', 'content1')).rejects.toThrow('HTTP 429 Too Many Requests');
+    await expect(fetchTopicContent(http, 'map1', 'content1')).rejects.toThrow('HTTP 429 Too Many Requests');
   });
 
   it('should propagate network error from fetchMapTopics()', async () => {
     const networkError = new Error('HTTP 404 Not Found');
     mockedGetJson.mockRejectedValue(networkError);
 
-    await expect(fetchMapTopics('map1')).rejects.toThrow('HTTP 404 Not Found');
+    await expect(fetchMapTopics(http, 'map1')).rejects.toThrow('HTTP 404 Not Found');
   });
 
   it('should not swallow errors — search() rejection reaches caller', async () => {
@@ -268,7 +274,7 @@ describe('network error propagation', () => {
 
     let caught = false;
     try {
-      await search({ query: 'x' });
+      await search(http, { query: 'x' });
     } catch {
       caught = true;
     }
@@ -280,7 +286,7 @@ describe('network error propagation', () => {
 
     let caught = false;
     try {
-      await fetchMaps();
+      await fetchMaps(http);
     } catch {
       caught = true;
     }
@@ -292,7 +298,7 @@ describe('network error propagation', () => {
 
     let caught = false;
     try {
-      await fetchMapToc('map1');
+      await fetchMapToc(http, 'map1');
     } catch {
       caught = true;
     }
@@ -304,7 +310,7 @@ describe('network error propagation', () => {
 
     let caught = false;
     try {
-      await fetchTopicContent('map1', 'content1');
+      await fetchTopicContent(http, 'map1', 'content1');
     } catch {
       caught = true;
     }

@@ -23,21 +23,3 @@ export interface TopicMetadata {
   source: 'toc' | 'manual';
   articleCount?: number;
 }
-
-/**
- * Table of contents entry (recursive tree structure)
- */
-export interface TocEntry {
-  title: string;
-  url: string;
-  children?: TocEntry[];
-}
-
-/**
- * Structured table of contents data for a product
- */
-export interface TocData {
-  entries: TocEntry[];
-  product: string;
-  version: string;
-}

@@ -346,13 +346,15 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 ### 請求設定
 
+套用於每一個對文件來源的對外請求。
+
 | 變數 | 說明 | 預設值 | 有效範圍 |
 |------|------|--------|----------|
-| `REQUEST_TIMEOUT` | HTTP 請求逾時 (ms) | `15000` (15 秒) | 1 秒 - 60 秒 |
-| `MAX_RETRIES` | 請求失敗最大重試次數 | `3` | 0 - 10 |
-| `RETRY_DELAY` | 重試延遲時間 (ms) | `1000` (1 秒) | 100ms - 30 秒 |
-| `RATE_LIMIT_DELAY` | 速率限制延遲 (ms) | `500` | 0 - 10 秒 |
-| `USER_AGENT` | HTTP 請求的 User-Agent 字串 | `JamfDocsMCP/1.0 (...)` | 任意字串 |
+| `REQUEST_TIMEOUT` | 單次嘗試的 HTTP 逾時 (ms) | `15000` | 1 秒 - 60 秒 |
+| `MAX_RETRIES` | 首次之後的重試次數。僅重試 429、 5xx、網路錯誤與逾時，採指數退避並尊重 `Retry-After`。`0` 表示不重試 | `0` | 0 - 10 |
+| `RETRY_DELAY` | 重試退避的基準時間 (ms)。`MAX_RETRIES` 為 `0` 時無作用 | `1000` | 100ms - 30 秒 |
+| `RATE_LIMIT_DELAY` | 對外請求的最小間隔 (ms)。`0` 讓平行抓取維持平行 | `0` | 0 - 10 秒 |
+| `USER_AGENT` | 每個請求都會送出，讓 Jamf 能辨識這個 client | `jamf-docs-mcp-server/<version> (+<repo url>)` | 任意字串 |
 
 ### HTTP 傳輸設定
 

@@ -177,7 +177,7 @@ describe('resolve — versioned prettyUrl', () => {
   ];
 
   beforeEach(() => {
-    mockedFetchMapTopics.mockImplementation(async (mapId: string) =>
+    mockedFetchMapTopics.mockImplementation(async (_http, mapId: string) =>
       await Promise.resolve(mapId === VERSIONED_MAP_ID ? MOCK_TOPICS_11_15 : MOCK_TOPICS)
     );
   });

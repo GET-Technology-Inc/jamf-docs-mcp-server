@@ -11,10 +11,13 @@ import {
   fetchTopicContent,
   fetchTopicMetadata,
 } from '../../src/core/services/ft-client.js';
+import { createTestHttpClient } from '../helpers/mock-context.js';
+
+const http = createTestHttpClient();
 
 describe('ft-client integration', () => {
   it('search() should return results for a common term', async () => {
-    const result = await search({
+    const result = await search(http, {
       query: 'MDM',
       contentLocale: 'en-US',
       paging: { perPage: 2, page: 1 },
@@ -32,7 +35,7 @@ describe('ft-client integration', () => {
   }, 15000);
 
   it('fetchMaps() should return publications', async () => {
-    const maps = await fetchMaps();
+    const maps = await fetchMaps(http);
 
     expect(maps.length).toBeGreaterThan(100);
 
@@ -44,7 +47,7 @@ describe('ft-client integration', () => {
   let knownMapId: string;
 
   it('fetchMaps() should contain a glossary map', async () => {
-    const maps = await fetchMaps();
+    const maps = await fetchMaps(http);
     const glossary = maps.find(m =>
       m.metadata?.some(
         md => (md.key === 'bundle' || md.key === 'version_bundle_stem') &&
@@ -59,7 +62,7 @@ describe('ft-client integration', () => {
   it('fetchMapToc() should return a TOC tree', async () => {
     if (knownMapId === '') {return;}
 
-    const toc = await fetchMapToc(knownMapId);
+    const toc = await fetchMapToc(http, knownMapId);
 
     expect(toc.length).toBeGreaterThan(0);
     expect(toc[0].title).toBeTruthy();
@@ -69,7 +72,7 @@ describe('ft-client integration', () => {
   it('fetchMapTopics() should return flat topic list', async () => {
     if (knownMapId === '') {return;}
 
-    const topics = await fetchMapTopics(knownMapId);
+    const topics = await fetchMapTopics(http, knownMapId);
 
     expect(topics.length).toBeGreaterThan(0);
     expect(topics[0].title).toBeTruthy();
@@ -79,12 +82,12 @@ describe('ft-client integration', () => {
   it('fetchTopicContent() should return HTML', async () => {
     if (knownMapId === '') {return;}
 
-    const toc = await fetchMapToc(knownMapId);
+    const toc = await fetchMapToc(http, knownMapId);
     // Find a leaf topic (not the root)
     const leaf = toc[0].children?.at(0);
     if (leaf === undefined) {return;}
 
-    const html = await fetchTopicContent(knownMapId, leaf.contentId);
+    const html = await fetchTopicContent(http, knownMapId, leaf.contentId);
 
     expect(html).toBeTruthy();
     expect(html).toContain('<');
@@ -93,11 +96,11 @@ describe('ft-client integration', () => {
   it('fetchTopicMetadata() should return metadata', async () => {
     if (knownMapId === '') {return;}
 
-    const toc = await fetchMapToc(knownMapId);
+    const toc = await fetchMapToc(http, knownMapId);
     const leaf = toc[0].children?.at(0);
     if (leaf === undefined) {return;}
 
-    const meta = await fetchTopicMetadata(knownMapId, leaf.contentId);
+    const meta = await fetchTopicMetadata(http, knownMapId, leaf.contentId);
 
     expect(meta.title).toBeTruthy();
     expect((meta.metadata ?? []).length).toBeGreaterThan(0);

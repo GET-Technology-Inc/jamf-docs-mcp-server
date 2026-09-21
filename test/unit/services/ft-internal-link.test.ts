@@ -10,6 +10,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../../src/core/http-client.js', async () => {
   const actual = await import('../../../src/core/http-client.js');
   return {
+    // Spread first: the module also exports createHttpClient, which
+    // MapsRegistry and TopicResolver fall back to when none is injected.
+    ...actual,
     httpGetJson: vi.fn(),
     httpGetText: vi.fn(),
     httpPostJson: vi.fn(),
@@ -17,7 +20,21 @@ vi.mock('../../../src/core/http-client.js', async () => {
   };
 });
 
-import { httpGetJson } from '../../../src/core/http-client.js';
+import { httpGetJson, httpGetText, httpPostJson, type HttpClient } from '../../../src/core/http-client.js';
+
+// The suite mocks the http-client primitives and asserts on them, so the
+// client handed to the code under test is a thin pass-through to those mocks
+// rather than a real one: `createHttpClient` from the unmocked module would
+// close over the real fetch helpers and bypass every assertion below.
+const http: HttpClient = {
+  getText: async (url, options) => options === undefined
+    ? await httpGetText(url) : await httpGetText(url, options),
+  getJson: async (url, options) => options === undefined
+    ? await httpGetJson(url) : await httpGetJson(url, options),
+  postJson: async (url, body, options) => options === undefined
+    ? await httpPostJson(url, body) : await httpPostJson(url, body, options),
+};
+
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
@@ -90,7 +107,7 @@ describe('buildInternalLinkResolver()', () => {
   it('should resolve a tocId to the TOC node display URL', async () => {
     const cache = createMockCache();
 
-    const resolve = await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
+    const resolve = await buildInternalLinkResolver({ http, cache, mapIds: [MAP_ID] });
 
     expect(resolve(MAP_ID, '8Tflt44ylUo_Jo99tcQj5w')).toBe(
       'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Reports',
@@ -103,7 +120,7 @@ describe('buildInternalLinkResolver()', () => {
   it('should not resolve a contentId — the ids are not interchangeable', async () => {
     const cache = createMockCache();
 
-    const resolve = await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
+    const resolve = await buildInternalLinkResolver({ http, cache, mapIds: [MAP_ID] });
 
     expect(resolve(MAP_ID, 'vccKyPVSh7VrXvknBiPQgQ')).toBeUndefined();
     expect(resolve(OTHER_MAP_ID, '8Tflt44ylUo_Jo99tcQj5w')).toBeUndefined();
@@ -112,8 +129,8 @@ describe('buildInternalLinkResolver()', () => {
   it('should fetch a map TOC once and reuse the cached index', async () => {
     const cache = createMockCache();
 
-    await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
-    await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
+    await buildInternalLinkResolver({ http, cache, mapIds: [MAP_ID] });
+    await buildInternalLinkResolver({ http, cache, mapIds: [MAP_ID] });
 
     expect(mockedGetJson).toHaveBeenCalledTimes(1);
   });
@@ -121,7 +138,7 @@ describe('buildInternalLinkResolver()', () => {
   it('should perform no I/O when no map is referenced', async () => {
     const cache = createMockCache();
 
-    const resolve = await buildInternalLinkResolver({ cache, mapIds: [] });
+    const resolve = await buildInternalLinkResolver({ http, cache, mapIds: [] });
 
     expect(mockedGetJson).not.toHaveBeenCalled();
     expect(resolve(MAP_ID, '8Tflt44ylUo_Jo99tcQj5w')).toBeUndefined();
@@ -131,8 +148,7 @@ describe('buildInternalLinkResolver()', () => {
     const cache = createMockCache();
     const logger = createMockLogger();
 
-    const resolve = await buildInternalLinkResolver({
-      cache,
+    const resolve = await buildInternalLinkResolver({ http, cache,
       mapIds: [MAP_ID, OTHER_MAP_ID],
       logger,
     });
@@ -155,8 +171,7 @@ describe('fetchTopicAncestors', () => {
   it('reports where a topic sits, nearest root first', async () => {
     const cache = createMockCache();
 
-    const ancestors = await fetchTopicAncestors({
-      cache,
+    const ancestors = await fetchTopicAncestors({ http, cache,
       mapId: MAP_ID,
       contentId: 'vccKyPVSh7VrXvknBiPQgQ',
     });
@@ -169,8 +184,7 @@ describe('fetchTopicAncestors', () => {
     const cache = createMockCache();
 
     expect(
-      await fetchTopicAncestors({
-        cache,
+      await fetchTopicAncestors({ http, cache,
         mapId: MAP_ID,
         contentId: 'C149PhXe7uzceHuULOnLfA',
       }),
@@ -182,8 +196,8 @@ describe('fetchTopicAncestors', () => {
     // every article in a map, since both run on the same fetch path.
     const cache = createMockCache();
 
-    await buildInternalLinkResolver({ cache, mapIds: [MAP_ID] });
-    await fetchTopicAncestors({ cache, mapId: MAP_ID, contentId: 'vccKyPVSh7VrXvknBiPQgQ' });
+    await buildInternalLinkResolver({ http, cache, mapIds: [MAP_ID] });
+    await fetchTopicAncestors({ http, cache, mapId: MAP_ID, contentId: 'vccKyPVSh7VrXvknBiPQgQ' });
 
     const tocFetches = mockedGetJson.mock.calls.filter(([url]) => url.endsWith('/toc'));
     expect(tocFetches).toHaveLength(1);
@@ -195,8 +209,7 @@ describe('fetchTopicAncestors', () => {
     mockedGetJson.mockRejectedValue(new Error('upstream down'));
     const logger = createMockLogger();
 
-    const ancestors = await fetchTopicAncestors({
-      cache: createMockCache(),
+    const ancestors = await fetchTopicAncestors({ http, cache: createMockCache(),
       mapId: MAP_ID,
       contentId: 'vccKyPVSh7VrXvknBiPQgQ',
       logger,
@@ -208,8 +221,7 @@ describe('fetchTopicAncestors', () => {
 
   it('is silent about a topic the TOC does not list', async () => {
     expect(
-      await fetchTopicAncestors({
-        cache: createMockCache(),
+      await fetchTopicAncestors({ http, cache: createMockCache(),
         mapId: MAP_ID,
         contentId: 'not-in-this-map',
       }),
@@ -310,8 +322,7 @@ describe('fetchTopicNavigation', () => {
   });
 
   it('reports the children a page consists of on the website', async () => {
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'content-parent',
     });
@@ -330,8 +341,7 @@ describe('fetchTopicNavigation', () => {
   });
 
   it('gives a leaf its siblings, excluding itself', async () => {
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'content-child-1',
     });
@@ -350,8 +360,7 @@ describe('fetchTopicNavigation', () => {
   // obvious implementation gives it none — so every top-level page in a product
   // reports itself as having no neighbours, which is the opposite of true.
   it('gives a root topic the other roots as siblings', async () => {
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'content-a',
     });
@@ -371,8 +380,7 @@ describe('fetchTopicNavigation', () => {
     // Measured against the live Jamf Pro map: 0 of 792 nodes are grouping
     // headings, so nothing in the current corpus takes this path. It is tested
     // because `FtTocNode` is a bare cast over `response.json()`.
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'content-child-3',
     });
@@ -404,8 +412,7 @@ describe('fetchTopicNavigation', () => {
       throw new Error(`Unexpected GET JSON: ${url}`);
     });
 
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'cw0',
     });
@@ -418,8 +425,7 @@ describe('fetchTopicNavigation', () => {
     // Absent means "this map does not place it", which is a different claim
     // from "it has no neighbours" — and the difference is what stops a client
     // rendering an empty navigation block for an unlisted page.
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'not-in-this-map',
     });
@@ -431,8 +437,7 @@ describe('fetchTopicNavigation', () => {
     mockedGetJson.mockRejectedValue(new Error('boom'));
     const logger = createMockLogger();
 
-    const nav = await fetchTopicNavigation({
-      cache: createMockCache(),
+    const nav = await fetchTopicNavigation({ http, cache: createMockCache(),
       mapId: NAV_MAP_ID,
       contentId: 'content-parent',
       logger,
@@ -454,7 +459,7 @@ describe('fetchTopicNavigation', () => {
   // the link field by field guards an extra one.
   it('publishes only title and url, whatever the cached index holds', async () => {
     const cache = createMockCache();
-    await fetchTopicNavigation({ cache, mapId: NAV_MAP_ID, contentId: 'content-parent' });
+    await fetchTopicNavigation({ http, cache, mapId: NAV_MAP_ID, contentId: 'content-parent' });
 
     // Re-write the cached index with an older, wider node shape. The key is
     // taken from the write the lookup above performed rather than rebuilt, so
@@ -476,7 +481,7 @@ describe('fetchTopicNavigation', () => {
     }
     await cache.set(key, stored, undefined);
 
-    const nav = await fetchTopicNavigation({ cache, mapId: NAV_MAP_ID, contentId: 'content-parent' });
+    const nav = await fetchTopicNavigation({ http, cache, mapId: NAV_MAP_ID, contentId: 'content-parent' });
 
     for (const link of [nav?.self, nav?.parent, ...(nav?.children ?? []), ...(nav?.siblings ?? [])]) {
       if (link !== undefined) {
@@ -489,10 +494,10 @@ describe('fetchTopicNavigation', () => {
     // Both read the same cached index. An article that already resolved a
     // breadcrumb must not pay a second fetch for its navigation.
     const cache = createMockCache();
-    await fetchTopicAncestors({ cache, mapId: NAV_MAP_ID, contentId: 'content-child-1' });
+    await fetchTopicAncestors({ http, cache, mapId: NAV_MAP_ID, contentId: 'content-child-1' });
     mockedGetJson.mockClear();
 
-    const nav = await fetchTopicNavigation({ cache, mapId: NAV_MAP_ID, contentId: 'content-child-1' });
+    const nav = await fetchTopicNavigation({ http, cache, mapId: NAV_MAP_ID, contentId: 'content-child-1' });
 
     expect(nav?.parent?.title).toBe('Configuration Profiles');
     expect(mockedGetJson).not.toHaveBeenCalled();

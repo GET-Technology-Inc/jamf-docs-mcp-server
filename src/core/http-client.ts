@@ -3,6 +3,8 @@
  * No Node.js built-in imports — works in any environment with global fetch.
  */
 
+import type { RequestConfig } from './config.js';
+
 export class HttpError extends Error {
   public readonly status: number;
   public readonly statusText: string;
@@ -272,4 +274,78 @@ export async function httpPostJson<T>(
     maxRetries: options?.maxRetries,
     retryDelay: options?.retryDelay,
   });
+}
+
+// ============================================================================
+// Client factory
+// ============================================================================
+
+/**
+ * An HTTP client bound to one {@link RequestConfig}.
+ *
+ * The three functions above take their settings per call, which meant nothing
+ * ever passed them: `ServerConfig.request` was parsed from the environment and
+ * read by no one, so five documented variables did nothing for as long as they
+ * existed. Binding the config to a client and putting that client on
+ * `ServerContext` is what makes them real, and follows the injection the rest
+ * of the context already uses for cache, logger and the providers.
+ *
+ * Per-call options still win over the bound config, and a per-call `User-Agent`
+ * wins over the configured one.
+ */
+export interface HttpClient {
+  getText: (url: string, options?: HttpGetOptions) => Promise<string>;
+  getJson: <T>(url: string, options?: HttpGetOptions) => Promise<T>;
+  postJson: <T>(url: string, body: unknown, options?: HttpPostJsonOptions) => Promise<T>;
+}
+
+export function createHttpClient(config: RequestConfig): HttpClient {
+  // Serialised through a promise chain rather than a bare timestamp: several
+  // requests can be in flight at once (batch_get_articles fans out), and two
+  // that read the same `lastStartedAt` before either wrote it would both go
+  // immediately. The chain staggers starts without serialising the requests.
+  let lastStartedAt = 0;
+  let gate: Promise<void> = Promise.resolve();
+
+  async function waitForTurn(): Promise<void> {
+    if (config.rateLimitDelay <= 0) { return; }
+    const turn = gate.then(async () => {
+      const wait = lastStartedAt + config.rateLimitDelay - Date.now();
+      if (wait > 0) { await sleep(wait); }
+      lastStartedAt = Date.now();
+    });
+    gate = turn.catch(() => undefined);
+    await turn;
+  }
+
+  /** Config as the default for anything the caller did not specify. */
+  function bound(options?: HttpGetOptions | HttpPostJsonOptions): {
+    timeout: number;
+    maxRetries: number;
+    retryDelay: number;
+    headers: Record<string, string>;
+  } {
+    return {
+      timeout: options?.timeout ?? config.timeout,
+      maxRetries: options?.maxRetries ?? config.maxRetries,
+      retryDelay: options?.retryDelay ?? config.retryDelay,
+      // Spread second so an explicit per-call User-Agent still wins.
+      headers: { 'User-Agent': config.userAgent, ...options?.headers },
+    };
+  }
+
+  return {
+    async getText(url: string, options?: HttpGetOptions): Promise<string> {
+      await waitForTurn();
+      return await httpGetText(url, { ...options, ...bound(options) });
+    },
+    async getJson<T>(url: string, options?: HttpGetOptions): Promise<T> {
+      await waitForTurn();
+      return await httpGetJson<T>(url, { ...options, ...bound(options) });
+    },
+    async postJson<T>(url: string, body: unknown, options?: HttpPostJsonOptions): Promise<T> {
+      await waitForTurn();
+      return await httpPostJson<T>(url, body, { ...options, ...bound(options) });
+    },
+  };
 }

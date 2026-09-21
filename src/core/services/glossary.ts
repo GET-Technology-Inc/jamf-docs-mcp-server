@@ -67,7 +67,7 @@ async function fetchGlossaryToc(
     return cached;
   }
 
-  const nodes = await fetchMapToc(mapId);
+  const nodes = await fetchMapToc(ctx.http, mapId);
 
   // Flatten: collect all leaf terms (children of the root)
   const terms: FtTocNode[] = [];
@@ -107,7 +107,7 @@ async function fetchGlossaryContent(
     return cached;
   }
 
-  const html = await fetchTopicContent(mapId, contentId);
+  const html = await fetchTopicContent(ctx.http, mapId, contentId);
 
   await ctx.cache.set(key, html, ctx.config.cacheTtl.article);
   return html;
