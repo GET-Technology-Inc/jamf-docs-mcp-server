@@ -50,13 +50,30 @@ npm run test:inspector
 
 ### PR Title Convention
 
-Use conventional commit format:
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation changes
-- `refactor:` Code refactoring
-- `test:` Test changes
-- `chore:` Maintenance tasks
+**The PR title is the release.** This repository squash-merges, so the title
+becomes the only commit message on `main` — every typed message inside your PR
+is discarded. semantic-release then reads that one line to decide the version.
+
+Use conventional commit format, and make the title at least as strong as the
+strongest change in the branch:
+
+| Prefix | Meaning | Release |
+|--------|---------|---------|
+| `feat:` | New feature | minor |
+| `fix:` | Bug fix | patch |
+| `perf:` / `refactor:` / `style:` / `build:` / `deps:` / `revert:` | As named | patch |
+| `docs:` / `test:` / `ci:` / `chore:` | No user-visible change | **none** |
+| any prefix with `!` (e.g. `feat!:`) | Breaking change | major |
+
+A PR that fixes a bug but is titled `chore:` publishes nothing, and because the
+non-releasing types are hidden from the changelog, the fix never appears in any
+release notes either. This happened in #296 — sixteen commits including a
+`feat`, squashed under a `chore:` title, released nothing while every check
+stayed green.
+
+`.github/workflows/pr-title.yml` now fails a PR whose title would throw away a
+release its commits earned. It does not require every PR to release: a genuinely
+documentation-only PR titled `docs:` is correct and passes.
 
 ## Adding New MCP Tools
 
