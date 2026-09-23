@@ -1,3 +1,9 @@
+## [5.11.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.1...v5.11.2) (2026-09-23)
+
+### Dependencies
+
+* bump @types/node from 26.5.1 to 26.6.2 ([#302](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/302)) ([abd57ff](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/abd57ff4604963c115013d4d2f1520c67b3225b1))
+
 ## [5.11.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.0...v5.11.1) (2026-09-23)
 
 ### Dependencies
