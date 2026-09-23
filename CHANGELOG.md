@@ -1,3 +1,9 @@
+## [5.11.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.0...v5.11.1) (2026-09-23)
+
+### Dependencies
+
+* bump eslint from 10.10.0 to 10.11.0 ([#299](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/299)) ([97c9bed](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/97c9bed05ee71ff78e0c9a332c68b6214932f318))
+
 ## [5.11.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.10.9...v5.11.0) (2026-09-21)
 
 ### Features
