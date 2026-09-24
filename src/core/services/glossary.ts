@@ -387,8 +387,7 @@ const SHORT_QUERY_LENGTH = 4;
  *   0.4               18/18    yes    yes    8 of 9            163
  *   with it
  *   0.0 - 0.2         18/18    no     no     0 of 9            28
- *   0.3               18/18    yes    yes    0 of 9            31
- *   0.4 - 0.5         18/18    yes    yes    0 of 9            34
+ *   0.3 - 0.5         18/18    yes    yes    0 of 9            31
  *
  * The filter, not the threshold, now decides precision. What the threshold
  * still sets is typo tolerance: 0.3 is the lowest value that keeps `LDPA` and
@@ -419,45 +418,57 @@ function thresholdFor(term: string): number {
  * four-letter pattern turned `APNs` into `Apps` and `APFS` — other words, not
  * misspellings of this one.
  *
- * So a fuzzy hit counts only if a word of the title is the query, or one
- * slip away from it (see `isOneSlipApart`): `MDMs`, `LDPA` — the typo #209
- * set the threshold to keep — and `clam` for `claim` all still land, and a
- * changed letter never does. A slip is allowed only where the threshold
- * allows an error at all, which at 0.3 is four letters: below that one letter
- * is a third of the query, and `OS` one slip from `DoS` is not a typo. The
- * downstream `D1GlossaryProvider` applies the same idea: a query of four
- * characters or fewer does not qualify for its prefix tier (#208).
+ * So a fuzzy hit counts only if a word of the title is the query, or the
+ * query is one slip from it (see `isOneSlipFrom`): `MDMs`, `LDPA` — the typo
+ * #209 set the threshold to keep — and `clam` for `claim` all still land. A
+ * changed letter never does, nor an extra one other than a plural `s`: `prof`
+ * is the start of `profile`, not `Pro` mistyped. A slip is allowed only where
+ * the threshold allows an error at all, which at 0.3 is four letters: below
+ * that one letter is a third of the query, and `OS` one slip from `DoS` is not
+ * a typo. The downstream `D1GlossaryProvider` applies the same idea: a query
+ * of four characters or fewer does not qualify for its prefix tier (#208).
  */
 function titleNamesShortQuery(title: string, term: string): boolean {
   if (hasWordBoundaryMatch(title, term)) { return true; }
   const query = term.toLowerCase();
   return Math.floor(query.length * SHORT_QUERY_THRESHOLD) >= 1 &&
-    wordsOf(title).some(word => isOneSlipApart(word, query));
+    wordsOf(title).some(word => isOneSlipFrom(word, query));
 }
 
 /**
- * Whether two words differ by at most one slip of the keyboard: a missed
- * letter, an extra one, or two neighbours swapped.
+ * Whether `typed` is `word` with at most one slip of the keyboard: a missed
+ * letter, or two neighbours swapped. A plural `s` counts too.
  *
  * Not a changed letter. Fuse counts it as one edit like the others, but it is
  * the edit that turns one abbreviation into another: `APNs` into `APFS`, or
  * `SDN` into `SDP`, which are two separate entries in the live glossary.
+ *
+ * Nor an extra letter, other than that `s`. One letter more than a title word
+ * is usually the start of a longer word, not a typo of the shorter one.
+ * Accepting it answered `prof`, `prop`, `prov` and `prot` with
+ * `policy (Jamf Pro)` alone, and `defi` and `exfi` with
+ * `Extensible Firmware Interface (EFI)` alone: the letters that start
+ * profile, property, provider, protection, definition and exfiltration (123
+ * live topics, 2026-09-24). What it costs is a letter added to an
+ * abbreviation: `UEFI`, `DDoS` and `sshd` no longer find `EFI`, `DoS` and
+ * `SSH`. No definition in the glossary mentions any of the three, so, like
+ * `zero-touch deployment` for `DEP`, those were related entries rather than
+ * the term's own.
  */
-function isOneSlipApart(a: string, b: string): boolean {
-  if (a === b) { return true; }
-  if (Math.abs(a.length - b.length) === 1) {
-    const [longer, shorter] = a.length > b.length ? [a, b] : [b, a];
-    for (let i = 0; i < longer.length; i++) {
-      if (longer.slice(0, i) + longer.slice(i + 1) === shorter) { return true; }
+function isOneSlipFrom(word: string, typed: string): boolean {
+  if (typed === word || typed === `${word}s`) { return true; }
+  if (typed.length === word.length - 1) {
+    for (let i = 0; i < word.length; i++) {
+      if (word.slice(0, i) + word.slice(i + 1) === typed) { return true; }
     }
     return false;
   }
-  if (a.length !== b.length) { return false; }
+  if (typed.length !== word.length) { return false; }
   let i = 0;
-  while (a.charAt(i) === b.charAt(i)) { i++; }
-  return a.charAt(i) === b.charAt(i + 1) &&
-    a.charAt(i + 1) === b.charAt(i) &&
-    a.slice(i + 2) === b.slice(i + 2);
+  while (word.charAt(i) === typed.charAt(i)) { i++; }
+  return word.charAt(i) === typed.charAt(i + 1) &&
+    word.charAt(i + 1) === typed.charAt(i) &&
+    word.slice(i + 2) === typed.slice(i + 2);
 }
 
 function wordsOf(text: string): string[] {
@@ -478,7 +489,7 @@ function hasWordBoundaryMatch(title: string, term: string): boolean {
 
 /**
  * Whether a word of three letters or more from `query` starts a word of
- * `entryTerm`, or is one slip away from one.
+ * `entryTerm`, or is one slip from one (see `isOneSlipFrom`).
  *
  * The fallback for when the ranker's own fuzzy pass rejects every candidate.
  * It used to return all of them, so `group` reported `property list (PLIST)`
@@ -499,7 +510,7 @@ function sharesWordWithQuery(entryTerm: string, query: string): boolean {
   return wordsOf(query)
     .filter(word => word.length >= 3)
     .some(word => termWords.some(
-      termWord => termWord.startsWith(word) || isOneSlipApart(termWord, word),
+      termWord => termWord.startsWith(word) || isOneSlipFrom(termWord, word),
     ));
 }
 

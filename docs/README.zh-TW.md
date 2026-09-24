@@ -238,7 +238,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 ### jamf_docs_glossary_lookup
 
-查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
+查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|

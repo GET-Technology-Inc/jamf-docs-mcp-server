@@ -166,15 +166,28 @@ describe('short-abbreviation glossary lookup', () => {
   });
 
   it('still resolves the plural of an abbreviation', async () => {
-    // An extra letter, like the swap above, keeps an abbreviation the same
-    // one. `MDMs` is not a word of either title, so a whole-word rule without
-    // it would drop both.
+    // A plural `s`, like the swap above, keeps an abbreviation the same one.
+    // `MDMs` is not a word of either title, so a whole-word rule without it
+    // would drop both.
     const result = await lookupGlossaryTerm(makeCtx(), { term: 'MDMs' });
 
     expect(result.entries.map((e) => e.term).sort()).toEqual([
       'User Approved MDM',
       'mobile device management (MDM)',
     ]);
+  });
+
+  it('does not read any other extra letter as a typo of a shorter word', async () => {
+    // Accepting every extra letter, live on 2026-09-24, answered `prof` and
+    // `prop` with `policy (Jamf Pro)` alone, and `defi` and `exfi` with
+    // `Extensible Firmware Interface (EFI)` alone. Each is the start of a
+    // longer word (profile, property, definition, exfiltration), not `Pro` or
+    // `EFI` mistyped, and no title has that start as a whole word.
+    for (const term of ['prof', 'prop', 'defi', 'exfi']) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries.map((e) => e.term), term).toEqual([]);
+    }
   });
 
   it('resolves a short word with a missed letter to that word alone', async () => {

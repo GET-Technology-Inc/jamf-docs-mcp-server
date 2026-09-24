@@ -213,7 +213,7 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 
 ### jamf_docs_glossary_lookup
 
-Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. A term of 4 characters or fewer is treated as an abbreviation and must be a whole word of the entry's name, so `DEP` does not match `zero-touch deployment`. Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
+Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. A term of 4 characters or fewer is treated as an abbreviation and must be a whole word of the entry's name, so `DEP` does not match `zero-touch deployment`. A 4-character term may be a plural, or miss a letter or swap two (`MDMs`, `LDPA`). Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
