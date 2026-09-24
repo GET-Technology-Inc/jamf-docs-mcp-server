@@ -304,7 +304,11 @@ jobs:
       # it a minute later, and 3 days leaves room to re-run that job on its
       # own after a Codecov outage. `overwrite` because a name is unique
       # within a run (upload-artifact v4 made artifacts immutable), and a
-      # re-run of this job uploads under the same one.
+      # re-run of this job uploads under the same one. A re-run that fails
+      # before its tests uploads nothing and replaces nothing, so the Codecov
+      # Upload job after it gets the earlier attempt's reports: the same
+      # commit's, and after a failed Coverage job it sends only their test
+      # results.
       - name: Hand the reports to the Codecov Upload job
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -321,9 +325,10 @@ jobs:
 
   # Sends the Coverage job's reports to Codecov. This is the only job with
   # `id-token: write`, and it runs none of the project's code: no npm ci, no
-  # tests, no build. It checks out the tree, downloads the artifact, and runs
-  # codecov-action and the bundle analyzer, which is installed on its own at
-  # a pinned version. test/unit/ci-oidc.test.ts holds it to that.
+  # tests, no build. It checks out the tree, downloads the artifact under
+  # RUNNER_TEMP rather than into the checkout, and runs codecov-action and
+  # the bundle analyzer, which is installed on its own at a pinned version.
+  # test/unit/ci-oidc.test.ts holds it to that.
   #
   # Codecov authenticates these uploads with a GitHub OIDC token, and
   # `id-token: write` is what lets a job request one. A job-level block
@@ -365,15 +370,32 @@ jobs:
         with:
           persist-credentials: false
 
-      # Into the workspace, so every file lands where the Coverage job wrote
-      # it. With no artifact (the Coverage job failed before its tests ran),
-      # this step fails and the uploads below are skipped.
+      # Into RUNNER_TEMP, never the checkout. Anything that runs in the
+      # Coverage job can decide what this artifact holds: npm ci's install
+      # scripts and the tests run there as the same user as the upload-artifact
+      # step after them. download-artifact writes each zip entry at its own
+      # path under the target and rewrites only `..` segments (unzip-stream in
+      # download-artifact v8.0.1). Unpacked into the checkout, an entry named
+      # .git/config would replace the checkout's own, and every git command
+      # this job runs there would run whatever that file's core.fsmonitor
+      # names, with the OIDC request variables in its environment: Codecov's
+      # CLI runs `git ls-files`, the bundle analyzer `git show`, and
+      # checkout's post step `git submodule foreach` (core.fsmonitor checked
+      # with `git ls-files` on git 2.55.0, the runner's version, on
+      # 2026-09-25). The CLI also reads settings of its own from a codecov.yml
+      # at the checkout's root. Under RUNNER_TEMP the entries stay inside
+      # codecov-inputs/, which holds nothing else, and the steps below only
+      # read the three reports from it, by full path.
+      #
+      # With no artifact (the Coverage job failed before its tests ran), this
+      # step fails and the uploads below are skipped.
       - name: Download the Coverage job's reports
         id: reports
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
           name: codecov-inputs
+          path: ${{ runner.temp }}/codecov-inputs
 
       # A run gets an OIDC token only if the runner can issue one, and on a
       # fork PR it cannot. Dependabot's PRs run "as if they were opened from a
@@ -429,7 +451,7 @@ jobs:
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
-          files: ./coverage/coverage-final.json
+          files: ${{ runner.temp }}/codecov-inputs/coverage/coverage-final.json
           disable_search: true
           plugins: noop
           use_oidc: ${{ steps.codecov-auth.outputs.oidc }}
@@ -456,7 +478,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           report_type: test_results
-          files: ./test-results/junit.xml
+          files: ${{ runner.temp }}/codecov-inputs/test-results/junit.xml
           disable_search: true
           use_oidc: true
           fail_ci_if_error: true
@@ -513,5 +535,5 @@ jobs:
             --before=2026-09-24T00:00:00Z @codecov/bundle-analyzer@2.0.1
           echo '{"oidc":{"useGitHubOIDC":true}}' > "$RUNNER_TEMP/bundle-analyzer.json"
           "$RUNNER_TEMP/codecov-bundle-analyzer/node_modules/.bin/bundle-analyzer" \
-            bundle-stats/app-ui --bundle-name=app-ui \
+            "$RUNNER_TEMP/codecov-inputs/bundle-stats/app-ui" --bundle-name=app-ui \
             --config-file="$RUNNER_TEMP/bundle-analyzer.json"

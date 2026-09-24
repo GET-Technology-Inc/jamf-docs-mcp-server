@@ -12,7 +12,8 @@
  * Nothing else holds that split in place, and each way of undoing it looks
  * harmless and stays green: the permission added back to a job that "needs to
  * upload", an `npm ci` added to the upload job to get a tool, an action added
- * there that runs one. A Codecov upload that fails is continue-on-error by
+ * there that runs one, the artifact unpacked into the checkout, where git
+ * reads its config. A Codecov upload that fails is continue-on-error by
  * design, so CI would not say anything either.
  */
 
@@ -185,6 +186,31 @@ describe('the hand-off from Coverage to the upload job', () => {
     // Out of step, the download fails, and continue-on-error keeps that quiet.
     expect(download?.with?.name).toBe(publish?.with?.name);
     expect([upload?.needs].flat()).toContain('coverage');
+  });
+
+  it(`${UPLOAD_JOB} unpacks the artifact outside the checkout, and reads the reports only from there`, () => {
+    // Whatever runs in the Coverage job decides what the artifact holds, and
+    // download-artifact writes each zip entry at its own path under the
+    // target. Unpacked into the checkout, an entry named .git/config replaces
+    // the checkout's own, and the git commands this job runs there (Codecov's
+    // CLI, the bundle analyzer, checkout's post step) run what its
+    // core.fsmonitor names, with the OIDC token in reach.
+    const target = String(download?.with?.path);
+    expect(target, 'with no path, download-artifact unpacks into the checkout')
+      .toMatch(/^\$\{\{ runner\.temp \}\}\/[\w.-]+$/);
+
+    // Every reader points into that directory. A path left relative to the
+    // checkout finds no file there, and the upload fails on a green run.
+    const files = steps(upload)
+      .filter(s => action(s) === 'codecov/codecov-action')
+      .map(s => String(s.with?.files));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      expect(file.startsWith(`${target}/`), `${file} is not under ${target}`).toBe(true);
+    }
+    const analyzer = steps(upload).flatMap(commands).filter(command => command.includes('.bin/bundle-analyzer'));
+    expect(analyzer.length).toBe(1);
+    expect(analyzer[0]).toContain(` "${target.replace('${{ runner.temp }}', '$RUNNER_TEMP')}/`);
   });
 
   it('both sides still run after a failed test', () => {
