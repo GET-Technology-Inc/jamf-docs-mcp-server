@@ -87,6 +87,22 @@ const CCP_CHILDREN: FtTocNode[] = [
   prettyUrl: `/r/en-US/jamf-pro-documentation-current/${slug}`,
 }));
 
+/**
+ * The four children of Policies, in TOC order. Unlike CCP's, these are not
+ * part of their parent's page on the site: the map's `/pages` listing gives
+ * Policies an empty `pageToc` and these four as sub-pages. 52 of the 247 Jamf
+ * Pro topics with children are built this way (2026-09-24).
+ */
+const POLICIES_CHILDREN: FtTocNode[] = [
+  ['hr0vbSRVrOqLV1RxhsC0Iw', 'sMX6~O1sgr8I2lopUhnZ0Q', 'Execution Frequency for Policies', 'Execution_Frequency_for_Policies'],
+  ['FQ6MqL_2snRXkLOF~Os7qw', 'KGltaN4o3nLWOd_zhvw~fA', 'Policy Management', 'Policy_Management'],
+  ['9ofnWI3RPaBzMt5h73VT0w', 'td3bR3BReqbILEFegdYk1w', 'Policy Payload Reference', 'Policy_Payload_Reference'],
+  ['u8f6UbvG8l02Qe2w2YFlqQ', 'Eynb~9d86NgqSpbKOddwnQ', 'User Interaction with Policies', 'User_Interaction_with_Policies'],
+].map(([tocId, contentId, title, slug]) => ({
+  tocId, contentId, title,
+  prettyUrl: `/r/en-US/jamf-pro-documentation-current/${slug}`,
+}));
+
 const TOCS: Record<string, FtTocNode[]> = {
   [PRO_MAP]: [{
     tocId: 'managing-computers', contentId: 'managing-computers-topic', title: 'Managing Computers',
@@ -95,6 +111,7 @@ const TOCS: Record<string, FtTocNode[]> = {
       {
         tocId: '29eZhNisNhAykqfEi9dP_w', contentId: POLICIES, title: 'Policies',
         prettyUrl: '/r/en-US/jamf-pro-documentation-current/Policies',
+        children: POLICIES_CHILDREN,
       },
       {
         tocId: 'ccHIl700Hz_GM3SLvzTKzA', contentId: CCP, title: 'Computer Configuration Profiles',
@@ -434,6 +451,25 @@ describe('get_article with a section the article does not have', () => {
     expect(text).toContain('## Article Outline (0 sections)');
     expect(text).toContain('**Sub-topics (9):**');
     expect(text).toContain(`(${CHILD_URL})`);
+  });
+
+  it('does not say the sub-topics are on this page, since for some parents they are pages of their own', async () => {
+    // Live: Policies is heading-free and its four children are separate pages
+    // on learn.jamf.com, not sections of it. The TOC this list comes from
+    // cannot tell such a parent from CCP, so the header must hold for both.
+    const POLICY_MANAGEMENT_URL = 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Policy_Management';
+    const miss = await call({ url: POLICIES_URL, section: 'Policy Management' });
+    const outline = await call({ url: POLICIES_URL, summaryOnly: true });
+
+    for (const { text } of [miss, outline]) {
+      expect(text).toContain('**Sub-topics (4):**');
+      expect(text).not.toContain('appear as sections of this page');
+      expect(text).toContain('as sections of this page or as pages of their own');
+    }
+    const items = miss.text.split('\n').filter(line => line.startsWith('- ['));
+    expect(items).toHaveLength(4);
+    expect(items[0]).toContain(`(${POLICY_MANAGEMENT_URL})`);
+    expect(items[0]).toContain('matches');
   });
 
   it('and the description agrees: a missed section is not filed under Errors', async () => {

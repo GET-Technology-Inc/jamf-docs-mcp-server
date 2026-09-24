@@ -52,9 +52,11 @@ export function buildArticleView(
       summaryContent += `${indent}- ${section.title} (~${section.tokenCount} tokens)\n`;
     }
     // An outline of the topic's own headings is not an outline of the page:
-    // on learn.jamf.com the page also shows the topic's children, and those
-    // are separate topics here. Computer Configuration Profiles answered
-    // "Article Outline (0 sections)" and nothing else, for a page of nine.
+    // on learn.jamf.com the page usually also shows the topic's children,
+    // and those are separate topics here. Computer Configuration Profiles
+    // answered "Article Outline (0 sections)" and nothing else, for a page of
+    // nine. Children the site publishes as pages of their own are worth
+    // listing too: they are the way down from here.
     const subTopics = formatSubTopics(base.navigation);
     summaryContent += subTopics;
     summaryContent += `\n*Estimated read time: ${summaryResult.estimatedReadTime} min`
@@ -94,10 +96,12 @@ export function buildArticleView(
  *
  * It used to be the requested name, an "**Available sections:**" header and
  * the headings under it — and on learn.jamf.com there usually are none. The
- * Fluid Topics API serves one topic per call while the site folds a topic's
- * children into its page, so what a reader sees there as sections are child
- * topics. Sampled 2026-09-24, 337 of 360 topics across five English maps (94%)
- * have no `<h1>`–`<h6>` at all, and Computer Configuration Profiles answered
+ * Fluid Topics API serves one topic per call while the site usually folds a
+ * topic's children into its page (195 of 247 Jamf Pro parents on 2026-09-24;
+ * the other 52 publish them as pages of their own), so what a reader sees
+ * there as sections are child topics. Sampled 2026-09-24, 337 of 360 topics
+ * across five English maps (94%) have no `<h1>`–`<h6>` at all, and Computer
+ * Configuration Profiles answered
  * `section: "Creating a Computer Configuration Profile in Jamf Pro"` — the
  * exact title of one of its nine children — with a header and an empty list.
  *
@@ -141,8 +145,16 @@ function formatSubTopics(
   const matching = navigation.children.filter(matches);
   const ordered = [...matching, ...navigation.children.filter(child => !matches(child))];
 
-  let list = `\n**Sub-topics (${String(navigation.childCount)}):** on learn.jamf.com these`
-    + ' appear as sections of this page, but each is its own article.'
+  // Worded to hold for either kind of parent, because the TOC does not say
+  // which one this is. On 2026-09-24, of the 247 Jamf Pro topics with
+  // children, 195 have every child inside their page on the site and 52 have
+  // every child as a separate page (Policies, System Settings, Global
+  // Management Settings); none mix the two. Only the map's `/pages` listing
+  // tells them apart, and that would mean one more fetch per map. "These
+  // appear as sections of this page" was untrue for Policies' four.
+  let list = `\n**Sub-topics (${String(navigation.childCount)}):** this topic's children in`
+    + ' the table of contents, each its own article. learn.jamf.com may show them as'
+    + ' sections of this page or as pages of their own.'
     + ' Fetch one with `jamf_docs_get_article` and its url.\n\n';
   for (const child of ordered) {
     const marker = matching.includes(child) ? ` — matches "${sanitizeMarkdownText(requested ?? '')}"` : '';

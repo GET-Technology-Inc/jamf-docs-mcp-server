@@ -194,9 +194,9 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 `mapId` + `contentId`；至少須提供其中一種，都沒提供會回傳錯誤。
 
 搜尋結果會同時帶有這三個欄位，一起傳入也沒問題。在 learn.jamf.com 上由
-`mapId` + `contentId` 決定取得哪篇文章，回傳的 `url` 就是該文章本身的網址，因此
-Source 一定指向實際回傳的頁面；若傳入的 `url` 與它不符，回應會附註說明。
-concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註說明
+`mapId` + `contentId` 決定取得哪篇文章，回傳的 `url` 就是該文章本身的網址，取自
+文章的中繼資料，取不到時改用目錄；若傳入的 `url` 與它不符，回應會附註說明。只有兩者都
+沒有這個網址時，才會沿用傳入的 `url`。concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註說明
 `mapId` + `contentId` 已被忽略。
 
 | 參數 | 類型 | 必填 | 說明 |

@@ -166,9 +166,10 @@ call with neither is an error.
 
 Passing both, as a search result allows, is fine. On learn.jamf.com the pair
 decides which article is fetched, and the result's `url` is that article's own
-address, so the Source line always names the page returned; a note says so when
-the `url` you passed does not match it. A concepts.jamf.com or support.jamf.com
-`url` is fetched by URL, and a note says the pair was ignored.
+address, read from its metadata or else the table of contents; a note says so
+when the `url` you passed does not match it. Only if neither has the address
+does the result keep the `url` you passed. A concepts.jamf.com or
+support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
