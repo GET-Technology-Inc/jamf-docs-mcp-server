@@ -47,7 +47,7 @@ jobs:
               - '.github/workflows/upstream-contract.yml'
               # Codecov reads codecov.yml from the commit an upload is for, so
               # a PR changing only this file shows its effect only if the
-              # Coverage job uploads for it.
+              # Coverage and Codecov Upload jobs run for it.
               - 'codecov.yml'
 
   test:
@@ -203,21 +203,24 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    # Codecov authenticates this job's uploads with a GitHub OIDC token, and
-    # `id-token: write` is what lets a job request one. It is granted here and
-    # nowhere else, because no other job talks to Codecov. A job-level block
-    # replaces the workflow-level one rather than adding to it, hence
-    # `contents: read` again for actions/checkout.
+    # Measures, and sends nothing to Codecov: the reports it writes go to the
+    # Codecov Upload job below as an artifact, and that job sends them.
     #
-    # On 2026-09-25 the organization switched Codecov to require upload
-    # authentication. The upload here had been tokenless all along — there is
-    # no CODECOV_TOKEN secret, so `token: ${{ secrets.CODECOV_TOKEN }}` sent an
-    # empty string — and from then on Codecov refused it for main with
-    # {"message":"Token required because branch is protected"}. OIDC needs no
-    # long-lived secret to store, rotate or leak.
+    # The split keeps `id-token: write` out of this job, which runs npm ci
+    # (and with it the install scripts of every dependency), the whole unit
+    # tier and esbuild. That permission lets any step of a job request a
+    # GitHub OIDC token for any audience: the runner gives every step
+    # ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN. #326
+    # granted it here, and codecov-action then wrote the Codecov token it had
+    # requested into $GITHUB_ENV as CC_TOKEN, so the app-ui build after it ran
+    # with the token in its environment (`CC_TOKEN: "***"` in that step of
+    # main's run 36037983198, 2026-09-25).
+    #
+    # This block restates the workflow's `contents: read` so that the missing
+    # `id-token` is visible here. test/unit/ci-oidc.test.ts fails if any job
+    # but codecov-upload is granted it.
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v7
 
@@ -245,6 +248,155 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # No Build step: the only test tier here is `test:unit`, and nothing in
+      # test/unit reads dist/. `requireFreshBuild` is called by exactly two
+      # suites (test/integration/mcp-server, test/e2e/http-transport), neither
+      # of which runs here, and the one generated file the unit tier touches —
+      # src/core/apps/generated/app-html.ts — is committed.
+      #
+      # The JUnit report is for Codecov Test Analytics (the Codecov Upload
+      # job sends it). Naming any reporter on the command line replaces
+      # vitest's defaults rather than adding to them, and under GitHub Actions
+      # those defaults are `default` plus `github-actions` (the failure
+      # annotations), so both are named again to keep what this step printed
+      # before.
+      - name: Run unit tests with coverage
+        run: >-
+          npm run test:unit -- --coverage
+          --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=test-results/junit.xml
+
+      # The MCP App UI script, for Codecov's bundle analysis as bundle `app-ui`.
+      #
+      # Built here rather than on the Test job's 24.x leg, which already
+      # builds app-ui for its freshness check, so that one artifact from one
+      # job carries everything the Codecov Upload job sends, and that job
+      # waits on this one alone. The price is a second esbuild run, about a
+      # second. It comes after the tests because the build also rewrites
+      # src/core/apps/generated/app-html.ts, and the unit tier should measure
+      # the committed file. A broken build still fails the Test job; here it
+      # only costs the upload.
+      #
+      # Built on every run, including the ones whose Codecov Upload job will
+      # not send it (no OIDC token: fork PRs, and possibly Dependabot's). This
+      # job has no token in either case, so it cannot tell them apart.
+      - name: Build the app-ui bundle for analysis
+        continue-on-error: true
+        env:
+          APP_UI_BUNDLE_DIR: bundle-stats/app-ui
+        run: npm run build:app-ui
+
+      # The hand-off to the Codecov Upload job.
+      #
+      # `!cancelled()` because a run whose tests failed is the one Test
+      # Analytics exists to report, and the default `success()` would skip
+      # this step exactly then. Such a run hands over the JUnit report alone:
+      # vitest deletes coverage/ instead of writing it when a test fails
+      # (`coverage.reportOnFailure` is off by default; checked on vitest 5.0.1
+      # on 2026-09-25), and the bundle build above does not run.
+      #
+      # `if-no-files-found: error` under `continue-on-error`, the way the
+      # uploads use `fail_ci_if_error`: an empty hand-off shows as a failed
+      # step, and never fails the job. It happens only when the job failed
+      # before its tests ran.
+      #
+      # Kept 3 days rather than the default 90. The Codecov Upload job reads
+      # it a minute later, and 3 days leaves room to re-run that job on its
+      # own after a Codecov outage. `overwrite` because a name is unique
+      # within a run (upload-artifact v4 made artifacts immutable), and a
+      # re-run of this job uploads under the same one. A re-run that fails
+      # before its tests uploads nothing and replaces nothing, so the Codecov
+      # Upload job after it gets the earlier attempt's reports: the same
+      # commit's, and after a failed Coverage job it sends only their test
+      # results.
+      - name: Hand the reports to the Codecov Upload job
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: codecov-inputs
+          path: |
+            coverage/coverage-final.json
+            test-results/junit.xml
+            bundle-stats/
+          if-no-files-found: error
+          retention-days: 3
+          overwrite: true
+
+  # Sends the Coverage job's reports to Codecov. This is the only job with
+  # `id-token: write`, and it runs none of the project's code: no npm ci, no
+  # tests, no build. It checks out the tree, downloads the artifact under
+  # RUNNER_TEMP rather than into the checkout, and runs codecov-action and
+  # the bundle analyzer, which is installed on its own at a pinned version.
+  # test/unit/ci-oidc.test.ts holds it to that.
+  #
+  # Codecov authenticates these uploads with a GitHub OIDC token, and
+  # `id-token: write` is what lets a job request one. A job-level block
+  # replaces the workflow-level one rather than adding to it, hence
+  # `contents: read` again for actions/checkout.
+  #
+  # On 2026-09-25 the organization switched Codecov to require upload
+  # authentication. The upload had been tokenless all along — there is no
+  # CODECOV_TOKEN secret, so `token: ${{ secrets.CODECOV_TOKEN }}` sent an
+  # empty string — and from then on Codecov refused it for main with
+  # {"message":"Token required because branch is protected"}. OIDC needs no
+  # long-lived secret to store, rotate or leak.
+  #
+  # Not a required check, and it cannot fail the run. Every step that talks
+  # to Codecov is continue-on-error, and so is the job, for the few steps
+  # that are not.
+  codecov-upload:
+    name: Codecov Upload
+    needs: coverage
+    # After a Coverage job that ran, whether its tests passed or failed. Not
+    # after one that was skipped (no code change) or cancelled: there is
+    # nothing to send. Without a status function the implicit `success()`
+    # would skip this job exactly when a test failed.
+    if: ${{ !cancelled() && (needs.coverage.result == 'success' || needs.coverage.result == 'failure') }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Codecov's CLI sends the repository's file list (`git ls-files`) with
+      # a coverage upload, for path fixing, so the tree has to be here.
+      # Nothing in this job builds or runs it. The default depth-1 clone is
+      # enough: codecov-action takes the PR head commit from the event
+      # payload, not from history, and the Coverage job had always uploaded
+      # from such a clone. `persist-credentials: false` keeps GITHUB_TOKEN out
+      # of .git/config, where every later step could read it.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Into RUNNER_TEMP, never the checkout. Anything that runs in the
+      # Coverage job can decide what this artifact holds: npm ci's install
+      # scripts and the tests run there as the same user as the upload-artifact
+      # step after them. download-artifact writes each zip entry at its own
+      # path under the target and rewrites only `..` segments (unzip-stream in
+      # download-artifact v8.0.1). Unpacked into the checkout, an entry named
+      # .git/config would replace the checkout's own, and every git command
+      # this job runs there would run whatever that file's core.fsmonitor
+      # names, with the OIDC request variables in its environment: Codecov's
+      # CLI runs `git ls-files`, the bundle analyzer `git show`, and
+      # checkout's post step `git submodule foreach` (core.fsmonitor checked
+      # with `git ls-files` on git 2.55.0, the runner's version, on
+      # 2026-09-25). The CLI also reads settings of its own from a codecov.yml
+      # at the checkout's root. Under RUNNER_TEMP the entries stay inside
+      # codecov-inputs/, which holds nothing else, and the steps below only
+      # read the three reports from it, by full path.
+      #
+      # With no artifact (the Coverage job failed before its tests ran), this
+      # step fails and the uploads below are skipped.
+      - name: Download the Coverage job's reports
+        id: reports
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: codecov-inputs
+          path: ${{ runner.temp }}/codecov-inputs
+
       # A run gets an OIDC token only if the runner can issue one, and on a
       # fork PR it cannot. Dependabot's PRs run "as if they were opened from a
       # repository fork" (GitHub's Dependabot docs), so they may not either.
@@ -262,9 +414,6 @@ jobs:
       # upload was refused with {"message":"Token required because branch is
       # protected"}; under `GET-Technology-Inc:ci/codecov-features` it was
       # accepted and processed.
-      #
-      # This runs before the tests so that the uploads after them can read it
-      # even when a test fails.
       - name: Pick Codecov upload auth
         id: codecov-auth
         env:
@@ -278,23 +427,6 @@ jobs:
             echo "::notice title=Codecov::No OIDC token in this run: coverage uploads tokenless as '${HEAD_LABEL}'."
           fi
 
-      # No Build step: the only test tier here is `test:unit`, and nothing in
-      # test/unit reads dist/. `requireFreshBuild` is called by exactly two
-      # suites (test/integration/mcp-server, test/e2e/http-transport), neither
-      # of which runs here, and the one generated file the unit tier touches —
-      # src/core/apps/generated/app-html.ts — is committed.
-      #
-      # The JUnit report is for Codecov Test Analytics (uploaded below).
-      # Naming any reporter on the command line replaces vitest's defaults
-      # rather than adding to them, and under GitHub Actions those defaults
-      # are `default` plus `github-actions` (the failure annotations), so both
-      # are named again to keep what this step printed before.
-      - name: Run unit tests with coverage
-        run: >-
-          npm run test:unit -- --coverage
-          --reporter=default --reporter=github-actions
-          --reporter=junit --outputFile.junit=test-results/junit.xml
-
       # Never fails the job, and never fails quietly either.
       #
       # `fail_ci_if_error: false` alone hid every refusal: on 2026-09-24 the
@@ -306,19 +438,30 @@ jobs:
       # So the action fails its step on any error, and `continue-on-error`
       # keeps that from failing the job: a refused upload shows as a failed
       # step and an annotation on a green run.
+      #
+      # Only after the tests passed: vitest writes no coverage report
+      # otherwise. The file is named and the search is off, so Codecov gets
+      # exactly the report the Coverage job wrote (the search used to find
+      # that one file anyway). `plugins: noop` turns off the CLI's default
+      # xcode, gcov and pycoverage plugins, which look for report files of
+      # their own and run tools on them. This project has none, and this job
+      # should run nothing on files the Coverage job could have put there.
       - name: Upload coverage to Codecov
+        if: steps.reports.outcome == 'success' && needs.coverage.result == 'success'
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
+          files: ${{ runner.temp }}/codecov-inputs/coverage/coverage-final.json
+          disable_search: true
+          plugins: noop
           use_oidc: ${{ steps.codecov-auth.outputs.oidc }}
           override_branch: ${{ steps.codecov-auth.outputs.branch }}
           fail_ci_if_error: true
 
       # Test Analytics: failed tests on the PR comment, flaky tests on main.
       # codecov-action@v7 uploads it itself with `report_type: test_results`
-      # (codecov/test-results-action is archived). `!cancelled()` because a
-      # run whose tests failed is the one worth reporting, and the default
-      # `success()` would skip this step exactly then.
+      # (codecov/test-results-action is archived). It runs after failed tests
+      # too, which is the point: the job's `!cancelled()` lets it start then.
       #
       # OIDC only. Tokenless, Codecov takes the upload and keeps nothing: on
       # #326 with the token withheld (run 36033319084) the upload under the
@@ -330,26 +473,52 @@ jobs:
       # (TestAnalyticsTokenlessAuthentication and
       # update_commit_from_provider_info in codecov/umbrella).
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() && steps.codecov-auth.outputs.oidc == 'true' }}
+        if: steps.reports.outcome == 'success' && steps.codecov-auth.outputs.oidc == 'true'
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
           report_type: test_results
-          files: ./test-results/junit.xml
+          files: ${{ runner.temp }}/codecov-inputs/test-results/junit.xml
           disable_search: true
           use_oidc: true
           fail_ci_if_error: true
 
-      # Bundle analysis of the MCP App UI script, as bundle `app-ui`.
+      # For the bundle analyzer below, and nothing else. No `cache: 'npm'`,
+      # unlike every other job here: that cache is saved by the jobs that run
+      # npm ci, and this job must not take in what they leave behind.
+      # `package-manager-cache: false` keeps setup-node from turning it on by
+      # itself should package.json ever name a packageManager.
+      - name: Setup Node.js
+        if: steps.reports.outcome == 'success' && needs.coverage.result == 'success' && steps.codecov-auth.outputs.oidc == 'true'
+        continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          package-manager-cache: false
+
+      # Bundle analysis of the app-ui script the Coverage job built.
       #
-      # Here rather than on the Test job's 24.x leg, which already builds
-      # app-ui for its freshness check: this keeps `id-token: write` in one
-      # job, one that is not a required check, and gives each commit exactly
-      # one upload. The price is a second esbuild run, about a second. It comes
-      # after the tests because the build also rewrites
-      # src/core/apps/generated/app-html.ts, and the unit tier should measure
-      # the committed file. A broken build still fails the Test job; here it
-      # only costs the upload.
+      # Codecov has no esbuild plugin (@codecov/esbuild-plugin is a 404 on
+      # npm), so @codecov/bundle-analyzer measures the file on disk. Its OIDC
+      # switch is a config-file key (`oidc.useGitHubOIDC`), not a flag.
+      #
+      # It is installed here on its own, not from package.json, where it is
+      # no longer listed: npm ci would install the project's whole dependency
+      # tree, install scripts and all, into the one job that can mint a token.
+      # `--prefix` puts it under RUNNER_TEMP, and npm then reads its project
+      # config there, so the checkout's package.json, lockfile and any .npmrc
+      # play no part. (Checked on 2026-09-25 with an .npmrc in the working
+      # directory pointing the registry at a closed port: the install still
+      # went to registry.npmjs.org.) `--ignore-scripts` although none of its
+      # 58 packages has an install script today.
+      #
+      # The exact version pins the analyzer but not its dependencies, which
+      # are ranges (yargs ^17.7.2, micromatch ^4.0.8, and @actions/core and
+      # the @octokit packages through @codecov/bundler-plugin-core): a fresh
+      # resolve takes whatever matches on the day. `--before` fixes them at
+      # the versions published by that date, so nothing published later can
+      # reach this job. To upgrade, move both together. A version newer than
+      # the date fails the install with ETARGET; it cannot float.
       #
       # OIDC only, like the test results and for the same reason: on #326 with
       # the token withheld (run 36033319084), the analyzer got its upload URL
@@ -357,21 +526,14 @@ jobs:
       # head label, and Codecov never showed a bundle report for that commit.
       # Its bundle endpoint makes the same branch check
       # (BundleAnalysisTokenlessAuthentication in codecov/umbrella).
-      - name: Build the app-ui bundle for analysis
-        if: steps.codecov-auth.outputs.oidc == 'true'
-        continue-on-error: true
-        env:
-          APP_UI_BUNDLE_DIR: bundle-stats/app-ui
-        run: npm run build:app-ui
-
-      # Codecov has no esbuild plugin (@codecov/esbuild-plugin is a 404 on
-      # npm), so @codecov/bundle-analyzer measures the file the build above
-      # wrote. Its OIDC switch is a config-file key (`oidc.useGitHubOIDC`),
-      # not a flag.
       - name: Upload app-ui bundle stats to Codecov
-        if: steps.codecov-auth.outputs.oidc == 'true'
+        if: steps.reports.outcome == 'success' && needs.coverage.result == 'success' && steps.codecov-auth.outputs.oidc == 'true'
         continue-on-error: true
         run: |
+          npm install --prefix "$RUNNER_TEMP/codecov-bundle-analyzer" \
+            --no-save --ignore-scripts --no-audit --no-fund \
+            --before=2026-09-24T00:00:00Z @codecov/bundle-analyzer@2.0.1
           echo '{"oidc":{"useGitHubOIDC":true}}' > "$RUNNER_TEMP/bundle-analyzer.json"
-          npx --no bundle-analyzer bundle-stats/app-ui --bundle-name=app-ui \
+          "$RUNNER_TEMP/codecov-bundle-analyzer/node_modules/.bin/bundle-analyzer" \
+            "$RUNNER_TEMP/codecov-inputs/bundle-stats/app-ui" --bundle-name=app-ui \
             --config-file="$RUNNER_TEMP/bundle-analyzer.json"
