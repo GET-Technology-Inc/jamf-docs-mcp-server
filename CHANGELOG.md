@@ -1,3 +1,9 @@
+## [6.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.5...v6.0.6) (2026-09-24)
+
+### Bug Fixes
+
+* **sources:** take concepts.jamf.com titles from the article, not the first <h1> on the page ([#318](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/318)) ([77b8af5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/77b8af55bcb3fda93532a1a459644736117a820e))
+
 ## [6.0.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.4...v6.0.5) (2026-09-24)
 
 ### Bug Fixes
