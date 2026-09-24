@@ -37,10 +37,10 @@ const outFile = path.join(repo, 'src', 'core', 'apps', 'generated', 'app-html.ts
  * into the `ui://` resource every MCP Apps host has to download through
  * `resources/read` before it can render a single result. (Not into
  * `tools/list`: that carries only the resource's URI.) Without this plugin
- * that is 242 kB of Hebrew, Tamil and Ukrainian validation strings — the
- * script is 611 kB with them and 369 kB without, measured 2026-09-24 on
- * ext-apps 2.0.0 — to serve an app whose only zod consumers are ext-apps' and
- * the MCP SDK's own schema parsing.
+ * that is 252 kB of Hebrew, Tamil and Ukrainian validation strings — the
+ * script is 632 kB with them and 380 kB without, measured 2026-09-24 on
+ * ext-apps 2.0.0, MCP SDK 2.1.0 and zod 4.6.5 — to serve an app whose only
+ * zod consumers are ext-apps' and the MCP SDK's own schema parsing.
  *
  * `en.js` is left alone: `zod/v4/classic/schemas.js` imports it directly and
  * registers it as the default on first `ZodType` construction, so it is the
