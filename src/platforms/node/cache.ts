@@ -91,6 +91,7 @@ export class FileCache implements CacheProvider {
   private readonly lruHead: LruNode = { key: '__head__', prev: null, next: null };
   private readonly lruTail: LruNode = { key: '__tail__', prev: null, next: null };
   private dirCreated = false;
+  private dirFailureLogged = false;
 
   constructor(options: {
     cacheDir?: string;
@@ -114,10 +115,37 @@ export class FileCache implements CacheProvider {
     return path.join(this.cacheDir, `${FileCache.getCacheKey(key)}.json`);
   }
 
+  /**
+   * Create the cache directory before the first write, and say so if it can't be.
+   *
+   * With `recursive: true` an existing directory never throws, so every error
+   * here is real. Until 2026-09-24 they were all swallowed as "ignore if
+   * exists" and the directory was marked created anyway. Measured on macOS
+   * 27.0 with cwd `/`: `mkdir('.cache')`, which is `/.cache`, fails with
+   * ENOENT, and the only trace was one `ENOENT … open
+   * '.cache/<hash>.json.tmp.<pid>'` per write, which names a temp file, not
+   * the directory or the mkdir that failed.
+   *
+   * Logged once, not per write. Not marked created, so the next `set()`
+   * tries again: `mkdir` is cheap, and a directory that appears later (a
+   * volume mounted after start, or one someone creates) is picked up without
+   * a restart. The write still goes ahead either way, as it always has: a
+   * failed `mkdir` does not prove the write will fail (`CACHE_DIR=""` fails
+   * `mkdir` with ENOENT but writes into the working directory).
+   */
   private async ensureCacheDir(): Promise<void> {
     if (this.dirCreated) { return; }
-    await fs.mkdir(this.cacheDir, { recursive: true }).catch(() => { /* ignore if exists */ });
-    this.dirCreated = true;
+    try {
+      await fs.mkdir(this.cacheDir, { recursive: true });
+      this.dirCreated = true;
+    } catch (error) {
+      if (this.dirFailureLogged) { return; }
+      this.dirFailureLogged = true;
+      this.log.error(
+        `Cannot create cache directory "${this.cacheDir}": ${String(error)}. ` +
+        'Cached entries stay in memory until it can be created.',
+      );
+    }
   }
 
   private lruMoveToFront(node: LruNode): void {

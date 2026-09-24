@@ -539,6 +539,58 @@ describe('prune()', () => {
 });
 
 // ============================================================================
+// Cache directory creation
+// ============================================================================
+
+describe('cache directory creation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fs.mkdir.mockResolvedValue(undefined);
+    fs.writeFile.mockResolvedValue(undefined);
+    fs.rename.mockResolvedValue(undefined);
+  });
+
+  it('should say once why the directory cannot be created, and keep trying', async () => {
+    // What cwd `/` on macOS gives the default `.cache` (measured 2026-09-24).
+    // mkdir's error used to be swallowed as "ignore if exists" and the
+    // directory marked created, so it was never tried again.
+    const log = createMockLogger();
+    const isolated = new FileCache({ cacheDir: '/.cache', log });
+    const enoent = Object.assign(new Error("ENOENT: no such file or directory, mkdir '/.cache'"), { code: 'ENOENT' });
+    fs.mkdir.mockRejectedValue(enoent);
+
+    await isolated.set('dir:one', 1, 60000);
+    await isolated.set('dir:two', 2, 60000);
+
+    const dirErrors = vi.mocked(log.error).mock.calls.map(([m]) => String(m))
+      .filter(m => m.includes('Cannot create cache directory'));
+    expect(dirErrors).toHaveLength(1);
+    expect(dirErrors[0]).toContain('"/.cache"');
+    expect(dirErrors[0]).toContain('ENOENT');
+
+    // Tried again on the next write, and once it succeeds, not again.
+    fs.mkdir.mockResolvedValue(undefined);
+    await isolated.set('dir:three', 3, 60000);
+    await isolated.set('dir:four', 4, 60000);
+    expect(fs.mkdir).toHaveBeenCalledTimes(3);
+    // Memory still serves every value.
+    expect(await isolated.get<number>('dir:one')).toBe(1);
+  });
+
+  it('should stay quiet when the directory already exists', async () => {
+    // recursive: true resolves for an existing directory; nothing to report.
+    const log = createMockLogger();
+    const isolated = new FileCache({ log });
+
+    await isolated.set('dir:existing:a', 'a', 60000);
+    await isolated.set('dir:existing:b', 'b', 60000);
+
+    expect(log.error).not.toHaveBeenCalled();
+    expect(fs.mkdir).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ============================================================================
 // Atomic-write round trip
 // ============================================================================
 
