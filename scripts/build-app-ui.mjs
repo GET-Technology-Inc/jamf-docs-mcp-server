@@ -14,6 +14,14 @@
  * The generated file is committed, so consumers never need esbuild.
  *
  *   npm run build:app-ui
+ *
+ * With APP_UI_BUNDLE_DIR set, the script also writes the script it inlines to
+ * `$APP_UI_BUNDLE_DIR/app.js` (a relative path resolves against the repo
+ * root). ci.yml's Coverage job does that and hands the directory to Codecov's
+ * bundle analyzer, which measures files on disk and cannot see a bundle held
+ * as a JSON-escaped string inside a .ts module. Same esbuild run, same bytes
+ * as the <script> element carries; the generated module is identical either
+ * way.
  */
 
 import { build } from 'esbuild';
@@ -87,8 +95,8 @@ const shell = await readFile(path.join(uiDir, 'app.html'), 'utf-8');
 
 // `</script>` inside the bundle would close the tag early. Escaping the slash
 // is inert to the JS parser and keeps the HTML well-formed.
-const scriptTag =
-  `  <script type="module">${script.replace(/<\/script>/gi, '<\\/script>')}</script>\n  </body>`;
+const inlineScript = script.replace(/<\/script>/gi, '<\\/script>');
+const scriptTag = `  <script type="module">${inlineScript}</script>\n  </body>`;
 
 // A *function* replacer, not a string one. A replacement string expands `$`
 // patterns, and a minified bundle is full of them — `$\`` alone (emitted by
@@ -125,3 +133,14 @@ await writeFile(outFile, module, 'utf-8');
 
 const kb = (n) => `${(n / 1024).toFixed(1)} kB`;
 console.log(`app-ui → ${path.relative(repo, outFile)} (${kb(inlined.length)} inlined, hash ${hash})`);
+
+// See the header. Only the one file is written, and nothing is deleted: the
+// directory comes from the environment, and clearing it first would make a
+// mistyped value destructive.
+const bundleDir = process.env.APP_UI_BUNDLE_DIR;
+if (bundleDir) {
+  const bundleFile = path.join(path.resolve(repo, bundleDir), 'app.js');
+  await mkdir(path.dirname(bundleFile), { recursive: true });
+  await writeFile(bundleFile, inlineScript, 'utf-8');
+  console.log(`app-ui → ${path.relative(repo, bundleFile)} (${kb(Buffer.byteLength(inlineScript))} script, for bundle analysis)`);
+}

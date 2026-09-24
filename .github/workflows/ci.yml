@@ -274,7 +274,7 @@ jobs:
             echo "::notice title=Codecov::No OIDC token in this run: coverage uploads tokenless as '${HEAD_LABEL}'."
           fi
 
-      # No Build step: the coverage job runs only `test:unit`, and nothing in
+      # No Build step: the only test tier here is `test:unit`, and nothing in
       # test/unit reads dist/. `requireFreshBuild` is called by exactly two
       # suites (test/integration/mcp-server, test/e2e/http-transport), neither
       # of which runs here, and the one generated file the unit tier touches —
@@ -335,3 +335,39 @@ jobs:
           disable_search: true
           use_oidc: true
           fail_ci_if_error: true
+
+      # Bundle analysis of the MCP App UI script, as bundle `app-ui`.
+      #
+      # Here rather than on the Test job's 24.x leg, which already builds
+      # app-ui for its freshness check: this keeps `id-token: write` in one
+      # job, one that is not a required check, and gives each commit exactly
+      # one upload. The price is a second esbuild run, about a second. It comes
+      # after the tests because the build also rewrites
+      # src/core/apps/generated/app-html.ts, and the unit tier should measure
+      # the committed file. A broken build still fails the Test job; here it
+      # only costs the upload.
+      #
+      # OIDC only, like the test results and for the same reason: on #326 with
+      # the token withheld (run 36033319084), the analyzer got its upload URL
+      # and reported "Successfully uploaded stats for bundle: app-ui" under the
+      # head label, and Codecov never showed a bundle report for that commit.
+      # Its bundle endpoint makes the same branch check
+      # (BundleAnalysisTokenlessAuthentication in codecov/umbrella).
+      - name: Build the app-ui bundle for analysis
+        if: steps.codecov-auth.outputs.oidc == 'true'
+        continue-on-error: true
+        env:
+          APP_UI_BUNDLE_DIR: bundle-stats/app-ui
+        run: npm run build:app-ui
+
+      # Codecov has no esbuild plugin (@codecov/esbuild-plugin is a 404 on
+      # npm), so @codecov/bundle-analyzer measures the file the build above
+      # wrote. Its OIDC switch is a config-file key (`oidc.useGitHubOIDC`),
+      # not a flag.
+      - name: Upload app-ui bundle stats to Codecov
+        if: steps.codecov-auth.outputs.oidc == 'true'
+        continue-on-error: true
+        run: |
+          echo '{"oidc":{"useGitHubOIDC":true}}' > "$RUNNER_TEMP/bundle-analyzer.json"
+          npx --no bundle-analyzer bundle-stats/app-ui --bundle-name=app-ui \
+            --config-file="$RUNNER_TEMP/bundle-analyzer.json"
