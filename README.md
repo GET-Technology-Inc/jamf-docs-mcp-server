@@ -218,7 +218,7 @@ Looks up a term in the Jamf official glossary and returns matching definitions u
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `term` | string (2–100 chars) | required | Glossary term to look up |
-| `product` | string | — | Filter by product ID |
+| `product` | string | — | Accepted, but does not filter: Jamf publishes one platform-wide glossary with no product classification |
 | `language` | string | `en-US` | Documentation language/locale (glossary is English-only) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level |

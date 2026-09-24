@@ -13,6 +13,9 @@
  * The numbers behind the chosen threshold, measured against the live glossary
  * (125 terms, ground truth taken from the 18 entries that publish their own
  * abbreviation in parentheses), are recorded on `SHORT_QUERY_THRESHOLD`.
+ *
+ * The same whole-glossary fixture also carries the `product` input the lookup
+ * ignores.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -63,15 +66,16 @@ function node(title: string): FtTocNode {
   };
 }
 
+/**
+ * A topic body in the shape `/content` serves: the definition alone, with no
+ * heading and no term name (all 123 live topics, 2026-09-24). The lookup names
+ * the entry from its TOC title. A `h1.glossterm` page, which this used to
+ * serve, sends every entry down a parser branch no live term reaches.
+ */
 function glossaryHtml(term: string): string {
-  return `
-    <html><body><main role="main">
-      <article class="dita" role="article">
-        <h1 class="title glossterm topictitle1"><span class="ph">${term}</span></h1>
-        <div class="abstract glossdef"><p class="p">Definition of ${term}.</p></div>
-      </article>
-    </main></body></html>
-  `;
+  return '<div class="content-locale-en-US content-locale-en"><div id="glossentry-1">' +
+    `<div class="abstract glossdef"><p class="p">Definition of ${term}.</p></div>` +
+    '</div></div>';
 }
 
 function makeCtx(): ServerContext {
@@ -166,4 +170,21 @@ describe('short-abbreviation glossary lookup', () => {
 
     expect(result.entries.map((e) => e.term)).toContain('configuration profile');
   });
+});
+
+describe('glossary lookup product input', () => {
+  it.each(['MDM', 'Configuration Profile', 'enrollment'])(
+    'returns the same entries for %s with or without a product',
+    async (term) => {
+      // Jamf's glossary has no product classification — the map and every
+      // topic have empty jamf:portal, jamf:app and jamf:utility — so there is
+      // nothing for `product` to select on, and the tool says so.
+      const unfiltered = await lookupGlossaryTerm(makeCtx(), { term });
+      const withProduct = await lookupGlossaryTerm(makeCtx(), { term, product: 'jamf-protect' });
+
+      expect(unfiltered.entries.length).toBeGreaterThan(0);
+      expect(withProduct).toEqual(unfiltered);
+      expect(withProduct.entries.every((e) => e.product === undefined)).toBe(true);
+    },
+  );
 });

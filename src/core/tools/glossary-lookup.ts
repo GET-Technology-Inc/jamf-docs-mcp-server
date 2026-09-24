@@ -66,18 +66,25 @@ const TOOL_NAME = 'jamf_docs_glossary_lookup';
  * name, is an exact entry. The no-match text is "No glossary entries found",
  * and an unknown `product` is rejected by the schema's enum before the
  * handler's own "Invalid product ID" check can run.
+ *
+ * `product` filters nothing, and the description says so. Jamf publishes one
+ * platform-wide glossary with no product classification, so until 2026-09-24
+ * this promised a filter that was never applied, a `product` field on each
+ * entry that was never set, and a no-result hint to "try removing the product
+ * filter" that could not change the answer. It stays in the schema because
+ * the schema is strict: removing it would reject callers that send it.
  */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
-This tool searches glossary pages across Jamf product documentation and returns
-matching term definitions using fuzzy matching.
+This tool searches the Jamf Platform Technical Glossary, one glossary shared by
+every Jamf product, and returns matching term definitions using fuzzy matching.
 
 Note: Glossary content is currently only available in English (en-US).
 Non-English language parameters are accepted but results will be in English.
 
 Args:
   - term (string, required): Glossary term to look up (2-100 characters). Supports fuzzy matching.
-  - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
+  - product (string, optional): Accepted, but does not filter: Jamf publishes one platform-wide glossary with no product classification
   - language (string, optional): Documentation language/locale (default: en-US). Note: glossary is English-only.
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full')
@@ -88,7 +95,7 @@ Returns:
   {
     "term": string,
     "totalMatches": number,
-    "entries": [{ "term": string, "definition": string, "product": string, "url": string }],
+    "entries": [{ "term": string, "definition": string, "url": string }],
     "tokenInfo": { "tokenCount": number, "truncated": boolean, "maxTokens": number }
   }
 
@@ -97,7 +104,7 @@ Returns:
 
 Examples:
   - "What is MDM?" → term="MDM"
-  - "Configuration Profile in Jamf Pro" → term="Configuration Profile", product="jamf-pro"
+  - "What is a configuration profile?" → term="Configuration Profile"
   - "What is Automated Device Enrollment (formerly DEP)?" → term="Automated Device Enrollment"
 
 Errors:
@@ -174,10 +181,7 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
 
         // No results
         if (result.entries.length === 0) {
-          const productHint = params.product !== undefined
-            ? ' Try removing the product filter or use a different term.'
-            : '';
-          const noResultText = `No glossary entries found for "${params.term}".${productHint}\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
+          const noResultText = `No glossary entries found for "${params.term}".\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
 
           await reportProgress(extra, { progress: 3, total: 3 });
           return {

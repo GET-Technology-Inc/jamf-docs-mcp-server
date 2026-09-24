@@ -13,7 +13,7 @@ describe('parseGlossaryEntries', () => {
   const sourceUrl = 'https://learn.jamf.com/en-US/bundle/jamf-technical-glossary/page/Glossary.html';
   const product = 'jamf-pro';
 
-  describe('DITA glossentry format (Jamf actual format)', () => {
+  describe('DITA glossentry format', () => {
     it('should parse h1.glossterm + .glossdef', () => {
       const html = `
         <html><body>
@@ -55,6 +55,20 @@ describe('parseGlossaryEntries', () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].term).toBe('Smart Group');
       expect(entries[0].definition).toContain('dynamic group');
+    });
+  });
+
+  describe('the shape Jamf\'s /content serves', () => {
+    it('returns nothing, leaving the lookup to name the entry from its TOC title', () => {
+      // All 123 live topics, 2026-09-24: the definition alone, with no
+      // glossterm heading, no h1 and no article. None of the formats above
+      // applies, and a parser that did answer here would have to invent the
+      // term's name.
+      const html = '<div class="content-locale-en-US content-locale-en"><div id="glossentry-6081">' +
+        '<div class="abstract glossdef"><p class="p">A security framework that dynamically creates ' +
+        'secure, isolated connections.</p></div></div></div>';
+
+      expect(parseGlossaryEntries(html, sourceUrl)).toEqual([]);
     });
   });
 

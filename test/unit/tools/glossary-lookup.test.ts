@@ -92,8 +92,52 @@ describe('jamf_docs_glossary_lookup', () => {
     });
   });
 
+  describe('product input', () => {
+    it('does not suggest removing a product filter that filters nothing', async () => {
+      // Live on 2026-09-24, `Smart Group` with product=jamf-pro answered "Try
+      // removing the product filter". The glossary has no product
+      // classification and the lookup never reads `product`, so removing it
+      // returns the same nothing.
+      vi.mocked(lookupGlossaryTerm).mockResolvedValue({
+        entries: [],
+        totalMatches: 0,
+        tokenInfo: createTokenInfo({ tokenCount: 0, truncated: false }),
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'Smart Group', product: 'jamf-pro' },
+      });
+
+      const text = getTextContent(result);
+      expect(result.isError).not.toBe(true);
+      expect(text).toContain('No glossary entries found for "Smart Group".');
+      expect(text).not.toMatch(/product/i);
+    });
+
+    it('is described as accepted but not filtering, with no product field returned', async () => {
+      // The description promised "Filter by product ID", a `"product": string`
+      // on every entry, and an example passing product="jamf-pro". The live
+      // glossary has nothing to filter by and no entry ever carried the field.
+      const { tools } = await client.listTools();
+      const tool = tools.find((t) => t.name === 'jamf_docs_glossary_lookup');
+      const description = tool?.description ?? '';
+      const returns = description.slice(description.indexOf('Returns:'), description.indexOf('Examples:'));
+      const productArg = description.split('\n').find((line) => /^\s*-\s*product\s*\(/.test(line));
+      const productSchema = tool?.inputSchema.properties?.product as { description?: string } | undefined;
+
+      expect(returns).toContain('"entries"');
+      expect(returns).not.toContain('"product"');
+      expect(description).not.toContain('product="');
+      expect(productArg).toContain('does not filter');
+      expect(productSchema?.description).toContain('does not filter');
+    });
+  });
+
   describe('markdown format', () => {
     it('should format single entry as markdown', async () => {
+      // Only a custom GlossaryProvider sets `product`; Jamf's own glossary has
+      // no product classification to set it from.
       vi.mocked(lookupGlossaryTerm).mockResolvedValue({
         entries: [{
           term: 'MDM',

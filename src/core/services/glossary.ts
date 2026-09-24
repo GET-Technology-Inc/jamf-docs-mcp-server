@@ -5,12 +5,13 @@
  * - GET /api/khub/maps/{mapId}/toc — list all glossary terms
  * - GET /api/khub/maps/{mapId}/topics/{contentId}/content — term HTML
  *
- * Jamf's glossary uses DITA glossentry format where each term is a separate topic:
- *   <div class="glossdef"><p>Definition text</p></div>
- *
- * Also supports fallback formats:
- * - Definition list (<dl>/<dt>/<dd>)
- * - Heading + paragraph (h2/h3 followed by <p>)
+ * Each glossary term is a separate topic, and its `/content` is the
+ * definition alone — no heading, no term name (all 123 live topics,
+ * 2026-09-24):
+ *   <div id="glossentry-6081"><div class="abstract glossdef"><p class="p">…</p></div></div>
+ * The term's name comes from its TOC title. `parseGlossaryEntries` also reads
+ * a glossterm heading, a definition list, or heading + paragraph markup, but
+ * the live glossary serves none of them.
  *
  * Uses fuse.js for fuzzy ranking of collected entries.
  */
@@ -119,10 +120,15 @@ async function fetchGlossaryContent(
  * Parse glossary entries from HTML content.
  *
  * Priority order:
- * 1. DITA glossentry format (h1.glossterm + .glossdef) — Jamf's actual format
+ * 1. DITA glossentry format (h1.glossterm + .glossdef)
  * 2. Definition list (<dl>/<dt>/<dd>)
  * 3. Heading + paragraph (h2/h3 followed by <p>)
  * 4. Fallback: h1 title + article body content
+ *
+ * None of these matches what Jamf's glossary serves today. `/content` has no
+ * heading and no `article` (0 of 123 live topics, 2026-09-24), so this
+ * returns `[]` for every live term and `lookupGlossaryTerm` builds the entry
+ * from the TOC title instead.
  */
 export function parseGlossaryEntries(
   html: string,
@@ -160,7 +166,8 @@ export function parseGlossaryEntries(
  *   <h1 class="glossterm">Term</h1>
  *   <div class="glossdef"><p>Definition</p></div>
  *
- * Each Jamf glossary page contains exactly one term.
+ * The shape of a rendered DITA glossentry page. Jamf's `/content` endpoint
+ * serves the `.glossdef` without the `.glossterm`, so this finds no term there.
  */
 function parseDitaGlossentry(
   $: cheerio.CheerioAPI,
@@ -512,13 +519,15 @@ export async function lookupGlossaryTerm(
     if (provided !== null) {return provided;}
   }
   const log = ctx.logger.createLogger('glossary');
+  // `params.product` is deliberately not read past this point. Jamf publishes
+  // one platform-wide glossary: the map and all 125 of its topics have empty
+  // `jamf:portal`, `jamf:app` and `jamf:utility` (2026-09-24), so there is
+  // nothing to filter by. It stays in the signature because a
+  // `GlossaryProvider` receives it.
   const { term, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
   const locale = params.language ?? DEFAULT_LOCALE;
 
-  log.info(
-    `Looking up glossary term: "${term}"` +
-    ` (product=${params.product ?? 'all'}, locale=${locale})`
-  );
+  log.info(`Looking up glossary term: "${term}" (locale=${locale})`);
 
   // Resolve glossary mapId dynamically via MapsRegistry
   let mapId: string | null;
