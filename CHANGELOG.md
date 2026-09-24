@@ -1,3 +1,21 @@
+## [6.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.7...v6.0.0) (2026-09-24)
+
+### ⚠ BREAKING CHANGES
+
+* Node.js 24 or later is required; Node.js 20 and 22 are
+no longer supported or tested. Upgrade to Node.js 24 or later. The 5.x
+releases stay on npm for older runtimes: on Node 20 or 22, an unpinned
+`npx -y @get-technology-inc/jamf-docs-mcp-server` keeps resolving to the
+newest 5.x, because npm prefers the newest release whose `engines` field
+accepts the running Node, and `@get-technology-inc/jamf-docs-mcp-server@5`
+pins it explicitly.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+
+### Build
+
+* require Node.js 24 or later ([#311](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/311)) ([9dadbb3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9dadbb3f5fda6893da1cd50fcebf291e70523813))
+
 ## [5.11.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.6...v5.11.7) (2026-09-24)
 
 ### Dependencies
