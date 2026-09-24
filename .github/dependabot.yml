@@ -11,7 +11,9 @@ updates:
     labels:
       - "dependencies"
     # Packages that cannot land one at a time. Ungrouped, Dependabot opens one
-    # PR per package, and for each set below those PRs fail CI on their own.
+    # PR per package. For the sets below, those PRs keep going red and can
+    # only land by hand: every weekly run from 2026-09-02 to 2026-09-23 opened
+    # at least one (the PRs are listed under each group).
     #
     # `update-types` is unset on purpose. The default takes every SemVer level,
     # and majors are exactly where a split breaks. A group PR carrying a major
@@ -42,8 +44,8 @@ updates:
       #    without the other nests a second copy of core. On a copy with
       #    ext-apps 2.0.0, a client-only bump inlined core 2.0.0 and 2.1.0 both;
       #    client and server together deduped to one 2.1.0. server is not in the
-      #    bundle, but split from client it leaves the shipped server and the
-      #    client the tests drive on different cores.
+      #    bundle, but split from client it leaves the server under test and
+      #    the client the tests drive on different cores.
       #
       # Grouped, that is one regeneration a week instead of one per package.
       #
