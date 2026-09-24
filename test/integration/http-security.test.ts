@@ -33,7 +33,11 @@ function getNodeClientIp(req: IncomingMessage, trustProxy: boolean): string {
     if (typeof forwarded === 'string') {
       const ips = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
       // Take rightmost IP (last hop that we trust as the real client)
-      return ips[ips.length - 1] ?? 'unknown';
+      const rightmost = ips.at(-1);
+      if (rightmost !== undefined) {
+        return rightmost;
+      }
+      // A header naming no address ('', ',') falls back to the peer below.
     }
   }
   const socket = req.socket as { remoteAddress?: string } | undefined;

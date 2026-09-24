@@ -122,7 +122,17 @@ function getNodeClientIp(req: IncomingMessage, trustProxy: boolean): string {
     const forwarded = req.headers['x-forwarded-for'];
     if (typeof forwarded === 'string') {
       const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-      return ips[ips.length - 1] ?? 'unknown';
+      const rightmost = ips.at(-1);
+      if (rightmost !== undefined) {
+        return rightmost;
+      }
+      // A header that is present but names no address counts as absent, so
+      // the peer address below keys the bucket. Node passes such a header
+      // through as a string (measured 2026-09-24 on 24.21.0 and 26.9.0):
+      // `X-Forwarded-For:` arrives as '', `X-Forwarded-For: ,` as ',', and two
+      // empty header lines are joined into ', '. This used to return the
+      // constant 'unknown' instead, which put every such request, from any
+      // client, into one shared rate-limit bucket.
     }
   }
   // socket may be undefined in test environments
