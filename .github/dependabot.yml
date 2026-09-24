@@ -10,6 +10,59 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
+    # Packages that cannot land one at a time. Ungrouped, Dependabot opens one
+    # PR per package. For the sets below, those PRs keep going red and can
+    # only land by hand: every weekly run from 2026-09-02 to 2026-09-23 opened
+    # at least one (the PRs are listed under each group).
+    #
+    # `update-types` is unset on purpose. The default takes every SemVer level,
+    # and majors are exactly where a split breaks. A group PR carrying a major
+    # still gets `major-update` and no auto-approval: dependabot/fetch-metadata
+    # reports the highest update type in the PR.
+    groups:
+      # @vitest/coverage-v8 pins vitest as an exact peer (4.1.11 wants vitest
+      # "4.1.11", 5.0.1 wants "5.0.1"), so a PR moving one without the other
+      # fails `npm ci` with ERESOLVE before a single test runs. The 5.x major
+      # has arrived split that way twice, #272/#274 and then #298/#300, and all
+      # four failed.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      # Two reasons, measured on 2026-09-24.
+      #
+      # 1. Bundle drift. esbuild inlines zod and @modelcontextprotocol/ext-apps
+      #    into the committed src/core/apps/generated/app-html.ts, so any bump
+      #    to either fails CI's "App UI bundle is up to date" step until the
+      #    file is regenerated. #236 (zod 4.5.4) merged only after a hand-pushed
+      #    regeneration, and #301 (zod) and #291 (ext-apps 2.0.0) fail there
+      #    now. From ext-apps 2.0.0 on, @modelcontextprotocol/client and
+      #    @modelcontextprotocol/core are inlined too.
+      #
+      # 2. An exact pin. client 2.1.0 and server 2.1.0 each depend on
+      #    @modelcontextprotocol/core "2.1.0", not "^2.1.0", so moving one
+      #    without the other nests a second copy of core. On a copy with
+      #    ext-apps 2.0.0, a client-only bump inlined core 2.0.0 and 2.1.0 both;
+      #    client and server together deduped to one 2.1.0. server is not in the
+      #    bundle, but split from client it leaves the server under test and
+      #    the client the tests drive on different cores.
+      #
+      # Grouped, that is one regeneration a week instead of one per package.
+      #
+      # The regeneration is still manual. Treat every PR from this group as
+      # needing it:
+      #
+      #   npm run build:app-ui
+      #   git add src/core/apps/generated/app-html.ts && git commit
+      #
+      # Pushing that commit dismisses the bot's approval (the main ruleset sets
+      # dismiss_stale_reviews_on_push), and dependabot-auto-merge.yml will not
+      # approve again because it only runs when the actor is dependabot[bot].
+      # A maintainer has to approve or merge these PRs.
+      app-ui-bundle:
+        patterns:
+          - "@modelcontextprotocol/*"
+          - "zod"
     ignore:
       # Held at 9.x deliberately. The 10.x line switched to
       # @conventional-changelog/template and requires
