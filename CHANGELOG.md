@@ -1,3 +1,9 @@
+## [6.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.2...v6.0.3) (2026-09-24)
+
+### Bug Fixes
+
+* **tools:** make tool and prompt descriptions match their schemas ([#317](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/317)) ([c0b60ae](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c0b60ae780aa75e1b71101c70ef28fe8b3aa089c)), closes [#78](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/78)
+
 ## [6.0.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.1...v6.0.2) (2026-09-24)
 
 ### Bug Fixes
