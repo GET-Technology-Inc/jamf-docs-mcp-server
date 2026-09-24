@@ -155,8 +155,9 @@ describe('fetchStaticArticle', () => {
     // with the source's own selectors, rather than calling `parseArticle`
     // directly: both halves have to hold for the trail to come back.
     //
-    // This is the merge gate's only check on it. concepts-contracts asserts
-    // the same trail against the live site, but on the Monday cron, and with
+    // This is the merge gate's only check on it. concepts-contracts only
+    // asserts a multi-crumb trail on sampled live guides, on the Monday cron
+    // (test/integration/concepts-contracts.test.ts:208-240), and with
     // all of #295's src changes reverted every other unit test still passes
     // (1748 of 1748 on 3f0ccfa, measured 2026-09-24).
     mockHttpGetText.mockResolvedValue(CONCEPTS_GUIDE_HTML);
