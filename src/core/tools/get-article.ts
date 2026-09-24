@@ -239,7 +239,11 @@ Errors:
   - "${ALLOWED_HOSTNAME_MESSAGE}" (an input validation error) if url is not https:// on one of those hosts
   - "Topic not found", "Cannot resolve bundleId" or "HTTP 404" if there is no article at that address
 
-Note: Large articles are intelligently truncated with remaining sections listed.
+Note: \`maxTokens\` bounds every reply: the article or one section, a
+\`summaryOnly\` outline, a missed section's reply, and any note about how the
+call was resolved, all counted in \`tokenInfo.tokenCount\`. Large articles are
+intelligently truncated with remaining sections listed, as many as fit; a list
+cut to fit says how many it left out, and \`truncated\` is true.
 Use the \`section\` parameter to retrieve specific sections for long articles.
 A \`section\` that matches no heading is not an error: the reply says
 'Section "<section>" not found' and lists the article's sections, or says it has
@@ -350,7 +354,10 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
               breadcrumb: article.breadcrumb,
               lastUpdated: article.lastUpdated,
               section: params.section,
-              sections,
+              // An outline is already the list of sections. Cut to fit
+              // `maxTokens`, it is marked truncated, and the formatter would
+              // then print the whole list again under it.
+              sections: params.summaryOnly ? undefined : sections,
               relatedArticles: params.includeRelated
                 ? article.relatedArticles
                 : undefined,

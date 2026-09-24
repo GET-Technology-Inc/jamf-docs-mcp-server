@@ -94,7 +94,17 @@ export interface FetchArticleFromFtOptions extends FetchArticleOptions {
    * Defaults to `articleUrl !== ''`.
    */
   articleUrlNamesTopic?: boolean;
+  /**
+   * A note to end the reply with, given the address the article is labelled
+   * with and its place in the TOC; `undefined` for none. A function because
+   * both are only known here, and the note has to be known before the view is
+   * built: it is charged to `maxTokens` along with the body.
+   */
+  noteFor?: (labelled: LabelledArticle) => string | undefined;
 }
+
+/** What a note about an article's resolution reads off the article. */
+type LabelledArticle = Pick<FetchArticleResult, 'url' | 'navigation'>;
 
 /**
  * Fetch, parse, and tokenize a single article from the FT API.
@@ -235,7 +245,9 @@ export async function fetchArticleFromFt(
     sections: allSections,
   };
 
-  return buildArticleView(base, parsed.content, options, maxTokens, allSections);
+  return buildArticleView(
+    base, parsed.content, { ...options, note: options.noteFor?.(base) }, maxTokens, allSections,
+  );
 }
 
 // ─── Resolve + fetch (shared by get-article & batch-get-articles) ──
@@ -275,7 +287,6 @@ export async function resolveAndFetchArticle(
   // flow below is unchanged.
   const staticSource = staticSourceForUrl(articleUrl);
   if (staticSource !== undefined) {
-    const article = await fetchStaticArticle(ctx, staticSource, articleUrl, options);
     // The pair used to vanish here without a word (measured 2026-09-24: the
     // AI Governance guide url with a Jamf Pro pair returned AI Governance, and
     // no mapId or contentId). The article is right; the silence was not.
@@ -283,11 +294,12 @@ export async function resolveAndFetchArticle(
       ...(input.mapId !== undefined ? ['mapId'] : []),
       ...(input.contentId !== undefined ? ['contentId'] : []),
     ];
-    return ignored.length > 0
-      ? appendNote(article, `${ignored.join(' and ')} ${ignored.length > 1 ? 'were' : 'was'} ignored:`
+    const note = ignored.length > 0
+      ? `${ignored.join(' and ')} ${ignored.length > 1 ? 'were' : 'was'} ignored:`
         + ' they address learn.jamf.com (Fluid Topics) topics, and a'
-        + ` ${staticSource.hostname} url is fetched by url alone.`)
-      : article;
+        + ` ${staticSource.hostname} url is fetched by url alone.`
+      : undefined;
+    return await fetchStaticArticle(ctx, staticSource, articleUrl, { ...options, note });
   }
 
   // Step 1: Resolve mapId + contentId
@@ -325,7 +337,7 @@ export async function resolveAndFetchArticle(
   }
 
   // Step 3: Default — fetch from FT API + parse
-  const result = await fetchArticleFromFt(
+  return await fetchArticleFromFt(
     cache, mapId, contentId, articleUrl,
     {
       ...options,
@@ -333,11 +345,9 @@ export async function resolveAndFetchArticle(
       cacheTtl: ctx.config.cacheTtl.article,
       logger: ctx.logger.createLogger('article-service'),
       articleUrlNamesTopic,
+      noteFor: labelled => resolutionNote(labelled, articleUrl, pairGiven, options.locale),
     }
   );
-
-  const note = resolutionNote(result, articleUrl, pairGiven, options.locale);
-  return note !== undefined ? appendNote(result, note) : result;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -394,11 +404,6 @@ function labelUrl(
   return articleUrlNamesTopic ? displayUrl : ownUrl ?? displayUrl;
 }
 
-/** A trailing note, set off from the article the way the other notes are. */
-function appendNote(result: FetchArticleResult, note: string): FetchArticleResult {
-  return { ...result, content: `${result.content}\n\n---\n*Note: ${note}*\n` };
-}
-
 /**
  * What to tell the caller about how a Fluid Topics article was resolved, or
  * `undefined` when the result speaks for itself.
@@ -410,7 +415,7 @@ function appendNote(result: FetchArticleResult, note: string): FetchArticleResul
  * that resolved nothing (measured 2026-09-24).
  */
 function resolutionNote(
-  result: FetchArticleResult,
+  result: LabelledArticle,
   articleUrl: string,
   pairGiven: boolean,
   requested: string | undefined,

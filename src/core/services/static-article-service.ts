@@ -10,7 +10,7 @@
  */
 
 import { parseArticle } from './content-parser.js';
-import { buildArticleView } from './article-view.js';
+import { buildArticleView, type ArticleViewOptions } from './article-view.js';
 import { extractSections } from './tokenizer.js';
 import { cacheKey } from './cache-key.js';
 import { TOKEN_CONFIG } from '../constants.js';
@@ -84,12 +84,13 @@ function decodeEntities(text: string): string {
  * Fetch and parse one article from a static documentation source.
  *
  * @param source the registry row for the hostname in `url`
+ * @param options `note` is one line to end the reply with, within `maxTokens`
  */
 export async function fetchStaticArticle(
   ctx: ServerContext,
   source: StaticDocSource,
   url: string,
-  options: FetchArticleOptions = {},
+  options: FetchArticleOptions & Pick<ArticleViewOptions, 'note'> = {},
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const displayUrl = canonicalStaticUrl(url);
@@ -158,7 +159,7 @@ export async function fetchStaticArticle(
 function renderStaticArticle(
   cached: CachedStaticArticle,
   source: StaticDocSource,
-  options: FetchArticleOptions,
+  options: FetchArticleOptions & Pick<ArticleViewOptions, 'note'>,
   maxTokens: number,
 ): FetchArticleResult {
   const { title, parsed } = cached;
