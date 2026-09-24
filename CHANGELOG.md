@@ -1,3 +1,9 @@
+## [6.0.10](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.9...v6.0.10) (2026-09-24)
+
+### Bug Fixes
+
+* **glossary:** report a failed fetch as an error, not as "No glossary entries found" ([#324](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/324)) ([f13a47b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/f13a47b9b448941b7011bfba5d59ba3d2e7b7c4e))
+
 ## [6.0.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.8...v6.0.9) (2026-09-24)
 
 ### Bug Fixes
