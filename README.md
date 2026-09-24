@@ -175,8 +175,8 @@ the `url` you passed does not match it. A concepts.jamf.com or support.jamf.com
 | `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com` |
 | `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId`, instead of `url` or alongside it |
 | `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId`, instead of `url` or alongside it |
-| `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`) |
-| `summaryOnly` | boolean | `false` | Return only article outline — token-efficient way to preview before fetching full content |
+| `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
+| `summaryOnly` | boolean | `false` | Return only article outline, and the article's sub-topics when it has any — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
 | `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`; no effect on concepts.jamf.com or support.jamf.com URLs, or on a `mapId` + `contentId` pair (each map is already one language) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |

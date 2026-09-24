@@ -204,8 +204,8 @@ concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註�
 | `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`) |
 | `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供，可取代 `url` 或與其並用 |
 | `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供，可取代 `url` 或與其並用 |
-| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
-| `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
+| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
+| `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱 (文章有子主題時一併列出)，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
 | `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系；對 concepts.jamf.com、support.jamf.com 的網址，以及 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |

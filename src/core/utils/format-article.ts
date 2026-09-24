@@ -372,7 +372,7 @@ export function formatArticleFull(
     tokenInfo
   );
 
-  if (options.section !== undefined && options.section !== '') {
+  if (options.section !== undefined && options.section !== '' && article.sectionNotFound !== true) {
     markdown += `*Showing section: "${options.section}"*\n\n`;
   }
 

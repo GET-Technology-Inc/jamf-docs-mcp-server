@@ -394,3 +394,55 @@ describe('get_article with a url alone', () => {
     expect(text).toContain(`(${POLICIES_JA_OWN})*`);
   });
 });
+
+// ── section not found ───────────────────────────────────────────────────────
+
+describe('get_article with a section the article does not have', () => {
+  const CHILD = 'Creating a Computer Configuration Profile in Jamf Pro';
+  const CHILD_URL = 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Manually_Creating_a_Configuration_Profile_macOS';
+
+  it('offers a heading-free topic\'s sub-topics, the matching one first, instead of an empty list', async () => {
+    const { text, sc, isError } = await call({ url: CCP_URL, section: CHILD });
+
+    expect(isError).toBeFalsy();
+    expect(text).toContain(`*Section "${CHILD}" not found.*`);
+    expect(text).not.toContain('**Available sections:**');
+    expect(text).toContain('has no headings');
+    expect(text).toContain('**Sub-topics (9):**');
+
+    const items = text.split('\n').filter(line => line.startsWith('- ['));
+    expect(items).toHaveLength(8);
+    expect(items[0]).toContain(`(${CHILD_URL})`);
+    expect(items[0]).toContain('matches');
+    // Nine children, eight listed: the ninth is counted, not dropped silently.
+    expect(text).toContain('...and 1 more');
+
+    expect(sc.sections).toEqual([]);
+  });
+
+  it('does not announce the section it could not find', async () => {
+    const { text } = await call({ url: CCP_URL, section: 'Nonexistent Zzz' });
+
+    expect(text).not.toContain('Showing section');
+    expect(text).not.toContain('**Available sections:**');
+    expect(text).not.toContain('matches');
+  });
+
+  it('outlines a heading-free topic by its sub-topics in summaryOnly mode', async () => {
+    const { text } = await call({ url: CCP_URL, summaryOnly: true });
+
+    expect(text).toContain('## Article Outline (0 sections)');
+    expect(text).toContain('**Sub-topics (9):**');
+    expect(text).toContain(`(${CHILD_URL})`);
+  });
+
+  it('and the description agrees: a missed section is not filed under Errors', async () => {
+    const { tools } = await client.listTools();
+    const description = tools.find(t => t.name === 'jamf_docs_get_article')?.description ?? '';
+    const errors = /\nErrors:\n([\s\S]*?)\n\n/.exec(description)?.[1] ?? '';
+
+    expect(errors).not.toBe('');
+    expect(errors).not.toContain('Section');
+    expect(description).toContain('matches no heading is not an error');
+  });
+});

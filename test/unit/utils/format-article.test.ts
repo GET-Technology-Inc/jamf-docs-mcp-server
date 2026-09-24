@@ -263,6 +263,19 @@ describe('formatArticleFull()', () => {
       expect(output).not.toContain('Showing section');
     });
 
+    it('should not show section note above a reply that the section was not found', () => {
+      // It used to print `*Showing section: "X"*` directly above
+      // `*Section "X" not found.*`, because it only ever saw the requested name.
+      const article = makeArticle({
+        content: '*Section "Nonexistent" not found.*\n\nThis article has no headings, so it has no sections to select.\n',
+        sectionNotFound: true,
+      });
+
+      const output = formatArticleFull(article, { section: 'Nonexistent' });
+
+      expect(output).not.toContain('Showing section');
+      expect(output).toContain('*Section "Nonexistent" not found.*');
+    });
   });
 
   // ── Related articles ────────────────────────────────────────────────────────
