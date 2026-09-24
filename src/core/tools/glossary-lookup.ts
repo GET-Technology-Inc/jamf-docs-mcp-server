@@ -10,8 +10,8 @@ import { GlossaryLookupOutputSchema } from '../schemas/output.js';
 import { appToolMeta } from '../apps/index.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
-import type { ToolResult, GlossaryEntry, TokenInfo } from '../types.js';
-import { lookupGlossaryTerm } from '../services/glossary.js';
+import type { ToolResult, GlossaryEntry, GlossaryLookupResult, TokenInfo } from '../types.js';
+import { lookupGlossaryTerm, GlossaryUnavailableError } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
@@ -47,6 +47,18 @@ function formatEntryCompact(entry: GlossaryEntry, index: number): string {
   return `${index}. **${sanitizeMarkdownText(entry.term)}** - ${singleLine}\n`;
 }
 
+/**
+ * The note a partly fetched answer carries in markdown: the service's
+ * sentence, then the entries it is missing as links a caller can fetch.
+ */
+function formatIncompleteMarkdown(incomplete: NonNullable<GlossaryLookupResult['incomplete']>): string {
+  const links = incomplete.unfetched
+    .map(e => `[${sanitizeMarkdownText(e.term)}](${sanitizeMarkdownUrl(e.url)})`)
+    .join(', ');
+  return `> **Results may be incomplete.** ${sanitizeMarkdownText(incomplete.message)}\n>\n` +
+    `> Not fetched: ${links}\n\n`;
+}
+
 function formatTokenFooter(tokenInfo: TokenInfo, totalMatches: number, returnedCount: number): string {
   let footer = `\n*${returnedCount} of ${totalMatches} match(es) | ${tokenInfo.tokenCount.toLocaleString()} tokens*`;
   if (tokenInfo.truncated) {
@@ -73,6 +85,12 @@ const TOOL_NAME = 'jamf_docs_glossary_lookup';
  * entry that was never set, and a no-result hint to "try removing the product
  * filter" that could not change the answer. It stays in the schema because
  * the schema is strict: removing it would reject callers that send it.
+ *
+ * "No glossary entries found" is listed as a note, not an error, because it
+ * never was one: `isError` was always unset. Until 2026-09-24 it was also what
+ * a lookup answered when learn.jamf.com could not be reached, so a client
+ * concluded that a term it could not check did not exist. A failed read is
+ * now the error listed above it.
  */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
@@ -99,7 +117,8 @@ Returns:
     "term": string,
     "totalMatches": number,
     "entries": [{ "term": string, "definition": string, "url": string }],
-    "tokenInfo": { "tokenCount": number, "truncated": boolean, "maxTokens": number }
+    "tokenInfo": { "tokenCount": number, "truncated": boolean, "maxTokens": number },
+    "incomplete"?: { "unfetched": [{ "term": string, "url": string }], "message": string }
   }
 
   For Markdown format:
@@ -111,8 +130,15 @@ Examples:
   - "What is Automated Device Enrollment (formerly DEP)?" → term="Automated Device Enrollment"
 
 Errors:
-  - "No glossary entries found" if no glossary entries match
-  - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID`;
+  - "Glossary lookup for "<term>" failed: ..." (isError) if learn.jamf.com could not be read (a
+    network error, a timeout, or a server error), so the lookup cannot say whether the glossary
+    has the term. This is not a "no match". It may be temporary: try again.
+  - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID
+
+Note: "No glossary entries found" is not an error. It means the glossary was read and no entry
+matches. If some matching entries could not be fetched, the reply answers from the rest and
+says so: "incomplete" names the entries it may be missing. If the entry that would lead the
+answer is one of them, that is the error above instead.`;
 
 export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
@@ -178,6 +204,7 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
             url: e.url,
           })),
           truncated: result.tokenInfo.truncated,
+          ...(result.incomplete !== undefined ? { incomplete: result.incomplete } : {}),
         };
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
@@ -203,6 +230,9 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
             entries: result.entries,
             tokenInfo: result.tokenInfo,
           };
+          if (result.incomplete !== undefined) {
+            jsonPayload.incomplete = result.incomplete;
+          }
           if (nonEnglish) {
             jsonPayload.warning = ENGLISH_ONLY_WARNING;
           }
@@ -218,10 +248,14 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
 
         // Markdown format
         const langWarning = nonEnglish ? `> ${ENGLISH_ONLY_WARNING}\n\n` : '';
+        const incompleteNote = result.incomplete !== undefined
+          ? formatIncompleteMarkdown(result.incomplete)
+          : '';
         let markdown: string;
         if (params.outputMode === OutputMode.COMPACT) {
           markdown = `## Glossary: "${params.term}" (${result.totalMatches} match${result.totalMatches !== 1 ? 'es' : ''})\n\n`;
           markdown += langWarning;
+          markdown += incompleteNote;
           result.entries.forEach((entry, idx) => {
             markdown += formatEntryCompact(entry, idx + 1);
           });
@@ -229,7 +263,9 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
         } else {
           markdown = `# Glossary Lookup: "${params.term}"\n\n`;
           markdown += langWarning;
-          markdown += `Found ${result.totalMatches} match${result.totalMatches !== 1 ? 'es' : ''}\n\n---\n\n`;
+          markdown += `Found ${result.totalMatches} match${result.totalMatches !== 1 ? 'es' : ''}\n\n`;
+          markdown += incompleteNote;
+          markdown += '---\n\n';
           for (const entry of result.entries) {
             markdown += formatEntryMarkdown(entry);
           }
@@ -242,6 +278,15 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           structuredContent,
         };
       } catch (error) {
+        // The glossary could not be read. Its message is written for the
+        // caller and ends with what to do, so it goes out as is: the generic
+        // advice below, "use different search terms", is wrong for an outage.
+        if (error instanceof GlossaryUnavailableError) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: getSafeErrorMessage(error) }],
+          };
+        }
         return {
           isError: true,
           content: [{

@@ -14,14 +14,18 @@ import { createMockContext } from '../../helpers/mock-context.js';
 
 // --- Mock service modules before importing the tool --------------------------
 
-vi.mock('../../../src/core/services/glossary.js', () => ({
+// The error class stays real: the tool tells an unreadable glossary from any
+// other failure by it.
+vi.mock('../../../src/core/services/glossary.js', async (importOriginal) => ({
+  GlossaryUnavailableError: (await importOriginal<typeof GlossaryModule>()).GlossaryUnavailableError,
   lookupGlossaryTerm: vi.fn(),
   parseGlossaryEntries: vi.fn(),
   searchGlossaryEntries: vi.fn(),
 }));
 
 // Import AFTER mocks are set up
-import { lookupGlossaryTerm } from '../../../src/core/services/glossary.js';
+import type * as GlossaryModule from '../../../src/core/services/glossary.js';
+import { lookupGlossaryTerm, GlossaryUnavailableError } from '../../../src/core/services/glossary.js';
 import { registerGlossaryLookupTool } from '../../../src/core/tools/glossary-lookup.js';
 
 // ---------------------------------------------------------------------------
@@ -326,7 +330,24 @@ describe('jamf_docs_glossary_lookup', () => {
       });
 
       const text = getTextContent(result);
+      expect(result.isError).toBe(true);
       expect(text).toContain('Glossary lookup error');
+    });
+
+    it('returns an unreadable glossary\'s own message, without the generic advice', async () => {
+      // The generic advice, "use different search terms", is wrong for an
+      // outage, and the service's message already says what to do.
+      const message = 'Glossary lookup for "MDM" failed: the glossary\'s table of contents could not ' +
+        'be fetched from learn.jamf.com (HTTP 503 Service Unavailable).';
+      vi.mocked(lookupGlossaryTerm).mockRejectedValue(new GlossaryUnavailableError(message));
+
+      const result = await client.callTool({
+        name: 'jamf_docs_glossary_lookup',
+        arguments: { term: 'MDM' },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(getTextContent(result)).toBe(message);
     });
   });
 });

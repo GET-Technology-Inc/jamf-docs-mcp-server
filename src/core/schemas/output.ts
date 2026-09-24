@@ -222,6 +222,21 @@ export const GlossaryLookupOutputSchema = z.object({
     url: z.string(),
   })),
   truncated: z.boolean(),
+  /**
+   * Present when some of the entries whose title is close to the term could
+   * not be fetched, and the rest answered it. `entries` is then an answer
+   * from part of the glossary, and `unfetched` is what it may be missing.
+   * Without this, a failed fetch left the reply looking complete: live on
+   * 2026-09-24, `Automated Device Enrollment` came back as `device
+   * enrollment` alone when its own definition failed.
+   */
+  incomplete: z.object({
+    unfetched: z.array(z.object({
+      term: z.string(),
+      url: z.string(),
+    })),
+    message: z.string(),
+  }).optional(),
 });
 
 export const BatchArticlesOutputSchema = z.object({

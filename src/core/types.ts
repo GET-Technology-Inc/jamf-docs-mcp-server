@@ -315,6 +315,18 @@ export interface GlossaryLookupResult {
   entries: GlossaryEntry[];
   totalMatches: number;
   tokenInfo: TokenInfo;
+  /**
+   * Set when some candidate entries could not be fetched but the others
+   * answered the term. `entries` is then an answer from part of the glossary:
+   * `unfetched` names the rest, and `message` says so in a sentence. Absent
+   * when every candidate was read. (When none could be, or what was read does
+   * not answer the term, the lookup throws instead: see
+   * `GlossaryUnavailableError`.)
+   */
+  incomplete?: {
+    unfetched: { term: string; url: string }[];
+    message: string;
+  } | undefined;
 }
 
 // Fluid Topics API types

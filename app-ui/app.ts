@@ -128,6 +128,8 @@ interface GlossaryView {
   totalMatches: number;
   entries: { term: string; definition: string; product?: string; url: string }[];
   truncated: boolean;
+  /** Set when some matching entries could not be fetched; `message` names them. */
+  incomplete?: { message?: string };
 }
 
 type View =
@@ -1206,6 +1208,11 @@ function renderGlossary(view: GlossaryView): string {
   // under it, and then "PreStage enrollment" as the first and only row — the
   // same word three times in four lines, with a list header counting to one.
   // A single match reads as the thing it is: the term, and what it means.
+  //
+  // An answer from part of the glossary says so in either layout, above the
+  // definitions: without it, an entry whose own definition failed to fetch
+  // left a neighbour looking like the whole answer.
+  const incomplete = notice(view.incomplete?.message, 'warning');
   const only = view.entries.length === 1 ? view.entries[0] : undefined;
   if (only !== undefined) {
     return `
@@ -1216,6 +1223,7 @@ function renderGlossary(view: GlossaryView): string {
           `<a href="${esc(only.url)}" data-external>learn.jamf.com ↗</a>`,
         ])}
       </header>
+      ${incomplete}
       <div class="prose">${markdown(only.definition)}</div>`;
   }
 
@@ -1226,6 +1234,7 @@ function renderGlossary(view: GlossaryView): string {
         `${String(view.totalMatches)} definition${view.totalMatches === 1 ? '' : 's'}`,
       ])}
     </header>
+    ${incomplete}
     <ol class="list list-hits">${view.entries
       .map(
         (e) => `

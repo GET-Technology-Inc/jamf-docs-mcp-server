@@ -222,6 +222,8 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 
 Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. A term of 4 characters or fewer is treated as an abbreviation and must be a whole word of the entry's name, so `DEP` does not match `zero-touch deployment`. A 4-character term may be a plural, or miss a letter or swap two (`MDMs`, `LDPA`). Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
 
+"No glossary entries found" means the glossary was read and no entry matches. If the glossary cannot be read (learn.jamf.com is unreachable, times out, or answers with a server error), the tool returns an error (`isError: true`) that says what failed and that it may be temporary. If some matching entries cannot be fetched, the reply answers from the others and says so: `incomplete` names the entries it may be missing. If one of those would have led the answer, because its title names the term more closely than any entry that was fetched, the reply is an error instead, so a lesser entry is never given in its place.
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `term` | string (2–100 chars) | required | Glossary term to look up |
