@@ -12,7 +12,7 @@ permissions:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
@@ -50,7 +50,7 @@ jobs:
     name: Test (Node ${{ matrix.node-version }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         node-version: [24.x, 26.x]
@@ -122,7 +122,7 @@ jobs:
     name: Integration Test
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Integration tests hit real APIs — flaky due to rate limits.
     # Not a required status check; failures don't block merge.
     continue-on-error: true
@@ -167,7 +167,7 @@ jobs:
     name: Test (Node ${{ matrix.node-version }})
     needs: changes
     if: needs.changes.outputs.code != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         node-version: [24.x, 26.x]
@@ -178,7 +178,7 @@ jobs:
     name: Security Audit
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -198,7 +198,7 @@ jobs:
     name: Coverage
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
