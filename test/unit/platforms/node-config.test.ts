@@ -15,7 +15,55 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MockInstance } from 'vitest';
 import * as fs from 'fs';
+import type * as OsModule from 'os';
 import * as path from 'path';
+
+/**
+ * The disk, as far as config.ts looks at it.
+ *
+ * Since 2026-09-24 the CACHE_DIR guard asks where a path really is
+ * (`fs.realpathSync`) and where the temp directory is (`os.tmpdir()`). Asking
+ * the machine running the suite would make the answers depend on it: on macOS
+ * `/etc` is `/private/etc` and `os.tmpdir()` is under `/var/folders`, on the
+ * Linux CI runners neither is true. So each case describes the layout it needs.
+ * By default every path exists, none is a symlink and the temp directory is
+ * `/tmp`, which is what config.ts assumed before it resolved anything.
+ *
+ * POSIX paths only, like the rest of this file (CI runs on Linux).
+ */
+const disk = vi.hoisted(() => ({
+  /** Symlink -> target, both absolute. One hop: targets are real paths. */
+  links: new Map<string, string>(),
+  /** Real paths that exist. `undefined` means every path does. */
+  existing: undefined as Set<string> | undefined,
+  tmpdir: '/tmp',
+}));
+
+vi.mock('fs', async importOriginal => {
+  const real = await importOriginal<typeof fs>();
+  const { posix } = await import('path');
+  return {
+    ...real,
+    realpathSync: (p: string): string => {
+      let resolved = posix.resolve(p);
+      for (const [link, target] of disk.links) {
+        if (resolved === link || resolved.startsWith(`${link}/`)) {
+          resolved = target + resolved.slice(link.length);
+        }
+      }
+      if (disk.existing !== undefined && !disk.existing.has(resolved)) {
+        throw Object.assign(new Error(`ENOENT: no such file or directory, realpath '${p}'`), { code: 'ENOENT' });
+      }
+      return resolved;
+    },
+  };
+});
+
+vi.mock('os', async importOriginal => ({
+  ...await importOriginal<typeof OsModule>(),
+  tmpdir: (): string => disk.tmpdir,
+}));
+
 import { createNodeConfig, getEnvNumber } from '../../../src/platforms/node/config.js';
 import { createDefaultConfig, defaultUserAgent } from '../../../src/core/config.js';
 import type { ServerConfig } from '../../../src/core/config.js';
@@ -32,7 +80,7 @@ const ENV_KEYS = [
   'CACHE_MAX_ENTRIES', 'CACHE_DIR',
 ] as const;
 
-/** Stands in for process.cwd(); never touched on disk, config.ts only does path arithmetic. */
+/** Stands in for process.cwd(). Never touched on disk: `disk` above answers config.ts's lookups. */
 const PROJECT = '/work/proj';
 
 let stderr: MockInstance<typeof console.error>;
@@ -43,6 +91,9 @@ beforeEach(() => {
   for (const key of ENV_KEYS) {
     vi.stubEnv(key, undefined);
   }
+  disk.links = new Map();
+  disk.existing = undefined;
+  disk.tmpdir = '/tmp';
   stderr = vi.spyOn(console, 'error').mockImplementation(() => {
     // Swallow the [WARNING] lines; the spy records them.
   });
@@ -236,6 +287,10 @@ describe('CACHE_DIR', () => {
     return createNodeConfig().cache.dir;
   };
 
+  /** The warning for a value that lies in a system directory, naming where it really is. */
+  const sensitive = (raw: string, location: string): string =>
+    `[WARNING] [config] CACHE_DIR "${raw}" points to a sensitive system directory (${location}). Using default ".cache".`;
+
   it('defaults to .cache', () => {
     expect(cacheDir(undefined)).toBe('.cache');
   });
@@ -296,9 +351,7 @@ describe('CACHE_DIR', () => {
       '//etc//cache',
     ])('rejects %j', raw => {
       expect(cacheDir(raw)).toBe('.cache');
-      expect(warnings()).toEqual([
-        `[WARNING] [config] CACHE_DIR "${raw}" points to a sensitive system directory. Using default ".cache".`,
-      ]);
+      expect(warnings()).toEqual([sensitive(raw, path.resolve(raw))]);
     });
 
     it.each([
@@ -316,6 +369,139 @@ describe('CACHE_DIR', () => {
     ])('accepts %j', raw => {
       expect(cacheDir(raw)).toBe(raw);
       expect(warnings()).toEqual([]);
+    });
+  });
+
+  describe('a relative path is checked against the system directories too', () => {
+    // Until 2026-09-24 the relative branch checked containment only, and with
+    // cwd `/` everything is contained. A container with no WORKDIR runs there.
+    it.each([
+      ['/', 'etc/jamf', '/etc/jamf'],
+      ['/', 'usr/local/jamf', '/usr/local/jamf'],
+      ['/', 'var/cache/jamf', '/var/cache/jamf'],
+      ['/etc', '.', '/etc'],
+      ['/etc', 'jamf', '/etc/jamf'],
+    ])('from cwd %j, rejects %j (%s)', (cwd, raw, location) => {
+      vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+      expect(cacheDir(raw)).toBe('.cache');
+      expect(warnings()).toEqual([sensitive(raw, location)]);
+    });
+
+    it.each(['home/user/cache', 'tmp/jamf', 'etc-like/cache'])('from cwd "/", accepts %j', raw => {
+      vi.spyOn(process, 'cwd').mockReturnValue('/');
+      expect(cacheDir(raw)).toBe(raw);
+      expect(warnings()).toEqual([]);
+    });
+
+    it('leaves the default alone even when the working directory is a system directory', () => {
+      // `.cache` is also what a rejected value falls back to, so rejecting it
+      // could only warn and hand back the same thing.
+      vi.spyOn(process, 'cwd').mockReturnValue('/etc');
+      expect(cacheDir(undefined)).toBe('.cache');
+      expect(warnings()).toEqual([]);
+    });
+  });
+
+  describe('a path is judged by where it is, not how it is spelled', () => {
+    it.each([
+      // Inside the project by spelling, so the #313 containment check passes it.
+      'etc-link/cache',
+      `${PROJECT}/etc-link/cache`,
+    ])('rejects %j, which reaches /etc through a symlink in the project', raw => {
+      disk.links = new Map([[`${PROJECT}/etc-link`, '/etc']]);
+      expect(cacheDir(raw)).toBe('.cache');
+      expect(warnings()).toEqual([sensitive(raw, '/etc/cache')]);
+    });
+
+    it('rejects an innocent-looking absolute path that is a symlink into /var', () => {
+      disk.links = new Map([['/opt/cache', '/var/lib/cache']]);
+      expect(cacheDir('/opt/cache/jamf')).toBe('.cache');
+      expect(warnings()).toEqual([sensitive('/opt/cache/jamf', '/var/lib/cache/jamf')]);
+    });
+
+    it('still checks the relative containment by spelling', () => {
+      // A link out of the project to somewhere harmless is the operator's
+      // own doing; `../` is what #313 keeps out.
+      disk.links = new Map([[`${PROJECT}/elsewhere`, '/srv/cache']]);
+      expect(cacheDir('elsewhere/jamf')).toBe('elsewhere/jamf');
+      expect(cacheDir('../elsewhere/jamf')).toBe('.cache');
+    });
+  });
+
+  describe('on macOS, where /etc, /var and /tmp are symlinks into /private', () => {
+    // As measured on macOS 27.0 (2026-09-24): `ls -l /` shows
+    // `etc -> private/etc`, `tmp -> private/tmp`, `var -> private/var`, and
+    // os.tmpdir() is a per-user directory under /var/folders.
+    const TMPDIR = '/var/folders/b8/gdh0sv_91mqb8xwhy0q3wrw80000gn/T';
+    const REAL_TMPDIR = `/private${TMPDIR}`;
+
+    beforeEach(() => {
+      disk.links = new Map([['/etc', '/private/etc'], ['/tmp', '/private/tmp'], ['/var', '/private/var']]);
+      disk.existing = new Set([
+        '/', '/private', '/private/etc', '/private/tmp', '/private/var', '/private/var/root',
+        '/private/var/folders', REAL_TMPDIR, '/usr', '/Users', '/Users/me', '/Users/me/Library/Caches',
+      ]);
+      disk.tmpdir = TMPDIR;
+    });
+
+    it.each([
+      ['/etc/jamf', '/private/etc/jamf'],
+      // The same directory. v6.0.4 rejected the line above and accepted this one.
+      ['/private/etc/jamf', '/private/etc/jamf'],
+      ['/PRIVATE/ETC/jamf', '/PRIVATE/ETC/jamf'],
+      // root's home, which v6.0.4 accepted.
+      ['/private/var/root/jamf', '/private/var/root/jamf'],
+      ['/var/db/jamf', '/private/var/db/jamf'],
+      // The temp directory's parent is not exempt, only the directory itself.
+      [path.dirname(TMPDIR), path.dirname(REAL_TMPDIR)],
+    ])('rejects %j (really %s)', (raw, location) => {
+      expect(cacheDir(raw)).toBe('.cache');
+      expect(warnings()).toEqual([sensitive(raw, location)]);
+    });
+
+    it.each([
+      // $TMPDIR, which v6.0.4 rejected. From cwd `/` its fallback, `/.cache`,
+      // cannot be created, so the disk cache was off for the whole session.
+      `${TMPDIR}/jamf-docs`,
+      `${REAL_TMPDIR}/jamf-docs`,
+      TMPDIR,
+      // /tmp was allowed before and still is, by either name.
+      '/tmp/jamf-docs',
+      '/private/tmp/jamf-docs',
+      '/Users/me/Library/Caches/jamf-docs',
+      '/usrlocal/cache',
+    ])('accepts %j', raw => {
+      expect(cacheDir(raw)).toBe(raw);
+      expect(warnings()).toEqual([]);
+    });
+
+    it('accepts a relative path from a working directory inside the temp directory', () => {
+      // process.cwd() reports the real path.
+      vi.spyOn(process, 'cwd').mockReturnValue(REAL_TMPDIR);
+      expect(cacheDir('cache')).toBe('cache');
+      expect(warnings()).toEqual([]);
+    });
+
+    it('rejects "." from cwd /private/etc, which is where `cd /etc` leaves you', () => {
+      vi.spyOn(process, 'cwd').mockReturnValue('/private/etc');
+      expect(cacheDir('.')).toBe('.cache');
+      expect(warnings()).toEqual([sensitive('.', '/private/etc')]);
+    });
+  });
+
+  describe('the temp-directory exemption', () => {
+    it('lets a TMPDIR inside /var through, and nothing else in /var', () => {
+      disk.tmpdir = '/var/tmp';
+      expect(cacheDir('/var/tmp/jamf-docs')).toBe('/var/tmp/jamf-docs');
+      expect(cacheDir('/var/cache/jamf-docs')).toBe('.cache');
+      expect(cacheDir('/var/TMP/jamf-docs')).toBe('.cache');
+    });
+
+    it.each(['/', '/var', '/private'])('does not apply when TMPDIR=%j contains a system directory', tmpdir => {
+      disk.tmpdir = tmpdir;
+      disk.links = new Map([['/etc', '/private/etc'], ['/var', '/private/var']]);
+      expect(cacheDir('/etc/jamf')).toBe('.cache');
+      expect(cacheDir('/var/cache/jamf')).toBe('.cache');
     });
   });
 });
