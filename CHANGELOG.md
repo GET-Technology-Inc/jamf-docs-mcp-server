@@ -1,3 +1,9 @@
+## [5.11.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.4...v5.11.5) (2026-09-24)
+
+### Dependencies
+
+* bump tsx from 4.23.13 to 4.23.15 ([#309](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/309)) ([b8866b5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/b8866b5157a4155de0bfba05168d4dcb20d573bd))
+
 ## [5.11.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.3...v5.11.4) (2026-09-24)
 
 ### Dependencies
