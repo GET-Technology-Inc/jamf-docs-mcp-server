@@ -78,6 +78,8 @@ const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get i
 
 This tool searches the Jamf Platform Technical Glossary, one glossary shared by
 every Jamf product, and returns matching term definitions using fuzzy matching.
+A term of 4 characters or fewer is treated as an abbreviation and must be a
+whole word of the entry's name, so "DEP" does not match "zero-touch deployment".
 
 Note: Glossary content is currently only available in English (en-US).
 Non-English language parameters are accepted but results will be in English.

@@ -255,11 +255,30 @@ describe('searchGlossaryEntries', () => {
     expect(terms).toContain('Static Group');
   });
 
-  it('should return all entries when fuse finds no match (search API already filtered)', () => {
+  it('should return nothing when fuse finds no match and no entry shares a word', () => {
+    // Until 2026-09-24 this returned every entry, which the lookup reported as
+    // matches: `group` answered with `property list (PLIST)` and `resource
+    // owner password credentials (ROPC)`, which its own fuzzy pass rejected.
     const results = searchGlossaryEntries(entries, 'xyznonexistent');
 
-    // Falls back to returning all entries since search API already filtered
-    expect(results).toHaveLength(entries.length);
+    expect(results).toEqual([]);
+  });
+
+  it('should keep only entries sharing a word with the query when fuse finds no match', () => {
+    // A whole word (`device`, `enrollment`), the start of one (`config`,
+    // `prof`), or one swapped letter away (`deamon`). Fuse at 0.3 finds
+    // nothing for any of these three queries, so each reaches the fallback.
+    const candidates = [
+      ...entries,
+      { term: 'daemon', definition: 'A background process.', url: 'https://example.com/daemon' },
+    ];
+
+    expect(searchGlossaryEntries(candidates, 'automated device enrollment').map(r => r.term))
+      .toEqual(['Mobile Device Management', 'Device Enrollment Program']);
+    expect(searchGlossaryEntries(candidates, 'config prof').map(r => r.term))
+      .toEqual(['Configuration Profile']);
+    expect(searchGlossaryEntries(candidates, 'deamon').map(r => r.term))
+      .toEqual(['daemon']);
   });
 
   it('should return empty array for empty entries', () => {

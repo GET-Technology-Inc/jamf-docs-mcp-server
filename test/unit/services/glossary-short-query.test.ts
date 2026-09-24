@@ -14,8 +14,8 @@
  * (125 terms, ground truth taken from the 18 entries that publish their own
  * abbreviation in parentheses), are recorded on `SHORT_QUERY_THRESHOLD`.
  *
- * The same whole-glossary fixture also carries the `product` input the lookup
- * ignores.
+ * The same whole-glossary fixture also carries the longer queries that the
+ * ranker's own fuzzy pass rejects, and the `product` input the lookup ignores.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -116,6 +116,29 @@ describe('short-abbreviation glossary lookup', () => {
     expect(terms).not.toContain('patch management');
   });
 
+  it('does not answer DEP with the "dep" inside "deployment"', async () => {
+    // Live on 2026-09-24 this was the whole answer: `zero-touch deployment`,
+    // an exact substring hit, so it survived every threshold #209 measured.
+    // No glossary entry is named DEP, in its title or its definition.
+    for (const term of ['DEP', 'dep']) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries, term).toEqual([]);
+      expect(result.totalMatches, term).toBe(0);
+    }
+  });
+
+  it('does not answer APNs with abbreviations one letter away', async () => {
+    // `Apps` and `APFS` are each one substitution from `APNs` — the same
+    // distance as the `LDPA` typo below, so no threshold separates them. What
+    // does is the kind of edit: a changed letter spells another word.
+    for (const term of ['APNs', 'APNS']) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries.map((e) => e.term), term).toEqual([]);
+    }
+  });
+
   it('prefers the term that contains the abbreviation as a word', async () => {
     // Both titles contain MDM. Fuzzy distance put the shorter one first, which
     // ranks by string similarity rather than by which entry defines the term.
@@ -142,16 +165,49 @@ describe('short-abbreviation glossary lookup', () => {
     );
   });
 
+  it('still resolves the plural of an abbreviation', async () => {
+    // An extra letter, like the swap above, keeps an abbreviation the same
+    // one. `MDMs` is not a word of either title, so a whole-word rule without
+    // it would drop both.
+    const result = await lookupGlossaryTerm(makeCtx(), { term: 'MDMs' });
+
+    expect(result.entries.map((e) => e.term).sort()).toEqual([
+      'User Approved MDM',
+      'mobile device management (MDM)',
+    ]);
+  });
+
+  it('resolves a short word with a missed letter to that word alone', async () => {
+    // Every four-letter query is read as an abbreviation, including the typos
+    // of five-letter titles. Before the word rule these found their title
+    // among fuzzy noise; they should still find it, without the noise.
+    for (const [term, title] of [['scpe', 'scope'], ['clam', 'claim']]) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries.map((e) => e.term), term).toEqual([title]);
+    }
+  });
+
+  it('gives a two-letter query no slip', async () => {
+    // One letter is half of `OS`. It used to answer with every title holding
+    // the substring — `Composer`, `macOS Security portal` — and a slip would
+    // still make it `DoS`. No entry is named OS.
+    const result = await lookupGlossaryTerm(makeCtx(), { term: 'OS' });
+
+    expect(result.entries.map((e) => e.term)).toEqual([]);
+  });
+
   it('does not fetch a page for every term that scores near a 3-letter query', async () => {
     // The cost the threshold controls. Candidate selection happens at the TOC,
     // before any page is read, and each surviving candidate is an upstream
     // fetch (capped at 10). At the old flat 0.4 a query like DEP admitted
     // roughly a fifth of the glossary and spent the whole cap; measured over
     // the live 125 terms, the two unanswerable queries returned 52 results
-    // between them and now return 1.
+    // between them, and 1 at 0.3. Since titles must name a short query as a
+    // word, `DEP` has no candidate left to fetch.
     await lookupGlossaryTerm(makeCtx(), { term: 'DEP' });
 
-    expect(mockedFetchTopicContent.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(mockedFetchTopicContent).not.toHaveBeenCalled();
   });
 
   it('still reads the pages a long query legitimately matches', async () => {
@@ -169,6 +225,54 @@ describe('short-abbreviation glossary lookup', () => {
     const result = await lookupGlossaryTerm(makeCtx(), { term: 'configuration profile' });
 
     expect(result.entries.map((e) => e.term)).toContain('configuration profile');
+  });
+});
+
+describe('glossary lookup when the ranker finds nothing', () => {
+  it('does not report candidates the ranker rejected as matches', async () => {
+    // Live on 2026-09-24, `group` answered "2 matches": `property list
+    // (PLIST)` and `resource owner password credentials (ROPC)`, admitted at
+    // the TOC on `prop` and `ROP`, then rejected by the ranker's own fuzzy
+    // pass — which returned every candidate when it found none.
+    for (const term of ['group', 'groups']) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries.map((e) => e.term), term).toEqual([]);
+      expect(result.totalMatches, term).toBe(0);
+    }
+  });
+
+  it('keeps a candidate the ranker rejects only if it shares a word', async () => {
+    // Fuse at 0.3 rejects every candidate for these: a truncated word, or a
+    // swap that it counts as two edits in six letters. Returning everything
+    // used to answer them by accident, along with the noise beside them.
+    for (const [term, title] of [['ext attr', 'extension attribute'], ['deamon', 'daemon']]) {
+      const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+      expect(result.entries.map((e) => e.term), term).toEqual([title]);
+    }
+  });
+
+  it('still answers a retired name through the words it shares', async () => {
+    // The control that rules out returning nothing instead. The ranker finds
+    // nothing for this query either — the extra word puts it past 0.3 — and
+    // the two entries it shares whole words with are the right answer.
+    const result = await lookupGlossaryTerm(makeCtx(), { term: 'Device Enrollment Program' });
+
+    expect(result.entries.map((e) => e.term)).toEqual([
+      'device enrollment',
+      'Automated Device Enrollment',
+    ]);
+  });
+
+  it.each([
+    ['MDM', 'mobile device management (MDM)'],
+    ['Automated Device Enrollment', 'Automated Device Enrollment'],
+    ['Configuration Profile', 'configuration profile'],
+  ])('still answers %s with its own entry first', async (term, expected) => {
+    const result = await lookupGlossaryTerm(makeCtx(), { term });
+
+    expect(result.entries[0]?.term).toBe(expected);
   });
 });
 
