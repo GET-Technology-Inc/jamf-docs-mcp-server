@@ -1,3 +1,9 @@
+## [6.0.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.1...v6.0.2) (2026-09-24)
+
+### Bug Fixes
+
+* **http:** key empty X-Forwarded-For on the peer and remove signal listeners on close ([#316](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/316)) ([6341b4e](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6341b4e8949f6718bd5c549ba1aea05acf66a0f3))
+
 ## [6.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.0...v6.0.1) (2026-09-24)
 
 ### Bug Fixes
