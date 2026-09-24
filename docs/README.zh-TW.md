@@ -191,15 +191,21 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 ### jamf_docs_get_article
 
 取得特定 Jamf 文件文章的完整內容。可用 `url` 指定文章，或改用搜尋結果與目錄提供的
-`mapId` + `contentId`；兩種方式須擇一，都沒提供會回傳錯誤。
+`mapId` + `contentId`；至少須提供其中一種，都沒提供會回傳錯誤。
+
+搜尋結果會同時帶有這三個欄位，一起傳入也沒問題。在 learn.jamf.com 上由
+`mapId` + `contentId` 決定取得哪篇文章，回傳的 `url` 就是該文章本身的網址，取自
+文章的中繼資料，取不到時改用目錄；若傳入的 `url` 與它不符，回應會附註說明。只有兩者都
+沒有這個網址時，才會沿用傳入的 `url`。concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註說明
+`mapId` + `contentId` 已被忽略。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`) |
-| `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供以取代 `url` |
-| `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供以取代 `url` |
-| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
-| `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
+| `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供，可取代 `url` 或與其並用 |
+| `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供，可取代 `url` 或與其並用 |
+| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
+| `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱 (文章有子主題時一併列出)，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
 | `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系；對 concepts.jamf.com、support.jamf.com 的網址，以及 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |

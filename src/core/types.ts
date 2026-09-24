@@ -150,6 +150,15 @@ export interface FetchArticleOptions {
 export interface FetchArticleResult extends ParsedArticle {
   tokenInfo: TokenInfo;
   sections: ArticleSection[];
+  /**
+   * True when `section` was requested and matched no heading, so `content` is
+   * the not-found reply rather than that section.
+   *
+   * Carried so the formatter does not announce `*Showing section: "…"*` above
+   * a reply saying there is no such section — which it did, because it only
+   * ever saw the requested name.
+   */
+  sectionNotFound?: boolean;
 }
 
 /**

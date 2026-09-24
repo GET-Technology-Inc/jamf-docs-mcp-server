@@ -155,11 +155,21 @@ const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be 
  * `description-accuracy.test.ts` now checks every Args list against its
  * schema's properties and `required` array.
  *
- * "Pass one, not both" is advice, not a rule the schema enforces. With both,
- * a Fluid Topics fetch follows the pair while the markdown's Source line still
- * shows the url (measured 2026-09-24: a Policies.html url plus the pair for
- * Computer Configuration Profiles returned the latter under the former's
- * link).
+ * Both addressing forms at once is allowed and described, not rejected. A
+ * search result carries url, mapId and contentId together, so a client passes
+ * all three; 46 of 48 sampled results' urls resolve to their own pair, and the
+ * other two (the LAPS technical paper, where two topics share each of the
+ * slugs `Using_LAPS` and `Implementing_LAPS`) are only right because the pair
+ * decides. What was wrong was the label: until 2026-09-24 a Policies.html url
+ * with the Computer Configuration Profiles pair returned the latter under the
+ * former's link, and a concepts.jamf.com url dropped the pair without a word.
+ * The article is now labelled with its own address, a note names an argument
+ * that went unused, and the description says which one wins.
+ *
+ * A missed `section` is likewise not an error, and the description no longer
+ * files it under Errors: it never returned `isError`, and the reply is still
+ * the article's metadata and navigation. What it lists changed — see
+ * `formatSectionNotFound` in services/article-view.ts.
  *
  * The example URL changed at the same time: `.../page/Configuration_Profiles.html`
  * answered "Topic not found" (live, 2026-09-24); the page Jamf publishes is
@@ -171,16 +181,20 @@ This tool fetches and parses a Jamf documentation article, converting it to
 a clean, readable format. Works with any article from ${ALLOWED_HOSTNAME_LIST}.
 
 Address the article either by \`url\`, or by the \`mapId\` + \`contentId\` pair
-that search results and TOC entries carry. One of the two is required; pass
-one, not both.
+that search results and TOC entries carry. One of the two is required. Passing
+both, as a search result allows, is fine: on learn.jamf.com the pair decides
+which article is fetched, and the result's url is that article's own address
+(a note says so if the url you passed does not match it). A
+${STATIC_SOURCE_HOSTNAMES.join(' or ')} url is fetched by url, and a note says
+the pair was ignored.
 
 Args:
   - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}. Required unless mapId and contentId are given
-  - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId instead of url
-  - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId instead of url
+  - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId, instead of url or alongside it
+  - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId, instead of url or alongside it
   - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. No effect on a mapId + contentId pair (a map is in one language) or on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
-  - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article
+  - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article and its sub-topics
   - includeRelated (boolean, optional): Include links to related articles (default: false)
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output
@@ -224,10 +238,14 @@ Errors:
   - "${MISSING_ADDRESS_MESSAGE}" if neither url nor the full pair is given
   - "${ALLOWED_HOSTNAME_MESSAGE}" (an input validation error) if url is not https:// on one of those hosts
   - "Topic not found", "Cannot resolve bundleId" or "HTTP 404" if there is no article at that address
-  - 'Section "<section>" not found', followed by the available sections, if that section doesn't exist
 
 Note: Large articles are intelligently truncated with remaining sections listed.
-Use the \`section\` parameter to retrieve specific sections for long articles.`;
+Use the \`section\` parameter to retrieve specific sections for long articles.
+A \`section\` that matches no heading is not an error: the reply says
+'Section "<section>" not found' and lists the article's sections, or says it has
+none. Most learn.jamf.com topics have no headings; what the website shows as
+their sections are sub-topics, which the reply lists with their urls, a matching
+one first.`;
 
 export function registerGetArticleTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(

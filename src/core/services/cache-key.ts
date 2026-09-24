@@ -87,8 +87,10 @@ export interface CacheKeySpaces {
   // `articleUrl` is a determinant, not decoration. Fluid Topics' topic
   // metadata carries no `readerUrl` — the payload is `{contentApiEndpoint, id,
   // metadata, title}` — so `deriveDisplayUrl` always falls through to the
-  // caller's URL, and that value is both stored as the article's `url` and
-  // used as the base `parseArticle` resolves internal links against. Fetching
+  // caller's URL, and that value is both stored as the article's `url` when
+  // the url chose the topic (a pair's fetch is labelled with the topic's own
+  // `ft:prettyUrl` instead; see `topicOwnUrl`) and used as the base
+  // `parseArticle` resolves internal links against. Fetching
   // by `mapId`+`contentId` passes `''` for it, so without this part the first
   // such call would cache an article whose `url` is empty and serve it to
   // every later caller that asked by URL.

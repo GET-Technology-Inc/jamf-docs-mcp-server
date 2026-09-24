@@ -368,3 +368,17 @@ export function buildDisplayUrl(prettyUrl: string): string {
   }
   return `${DOCS_BASE_URL}${prettyUrl.startsWith('/') ? '' : '/'}${prettyUrl}`;
 }
+
+/**
+ * Build a display URL from a topic's `ft:prettyUrl` metadata value.
+ *
+ * Fluid Topics writes that value without the reader route —
+ * `en-US/jamf-pro-documentation-current/Policies` — while the map TOC's
+ * `prettyUrl` for the same topic is `/r/en-US/jamf-pro-documentation-current/Policies`.
+ * Shared by search results and articles, so an article fetched by the
+ * `mapId` + `contentId` a search result carries is labelled with that
+ * result's url.
+ */
+export function buildDisplayUrlFromPrettyUrlMeta(value: string): string {
+  return buildDisplayUrl(value.startsWith('/') ? value : `/r/${value}`);
+}

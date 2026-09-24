@@ -155,6 +155,22 @@ export function slugify(title: string): string {
 }
 
 /**
+ * Whether `identifier` is a substantial part of `title`: the loose half of how
+ * `section` picks a heading, the other half being an exact id match.
+ *
+ * Shared with the not-found reply, which ranks a Fluid Topics topic's child
+ * topics by it — so a child offered as "matching" is one this same rule would
+ * have selected had it been a heading.
+ */
+export function titleMatchesSection(title: string, identifier: string): boolean {
+  const lowerTitle = title.toLowerCase();
+  const lowerIdent = identifier.toLowerCase();
+  return lowerIdent.length >= 3
+    && lowerTitle.includes(lowerIdent)
+    && lowerIdent.length >= lowerTitle.length * 0.3;
+}
+
+/**
  * Extract a specific section from Markdown content
  */
 export function extractSection(
@@ -186,12 +202,7 @@ export function extractSection(
       if (foundSection !== null && level <= targetLevel) { break; }
 
       // Check if this is the target section (ID match, or substantial title substring match)
-      const lowerTitle = title.toLowerCase();
-      const lowerIdent = sectionIdentifier.toLowerCase();
-      const isTitleMatch = lowerIdent.length >= 3
-        && lowerTitle.includes(lowerIdent)
-        && lowerIdent.length >= lowerTitle.length * 0.3;
-      if (foundSection === null && (id === normalizedId || isTitleMatch)) {
+      if (foundSection === null && (id === normalizedId || titleMatchesSection(title, sectionIdentifier))) {
         targetLevel = level;
         foundSection = { id, title, level, tokenCount: 0 };
       }

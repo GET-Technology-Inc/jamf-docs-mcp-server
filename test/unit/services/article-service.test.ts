@@ -642,6 +642,24 @@ describe('fetchArticleFromFt()', () => {
       expect(result.content).toContain('- Configuration');
     });
 
+    it('says a heading-free topic has no sections instead of printing an empty list', async () => {
+      // 94% of sampled learn.jamf.com topics have no heading at all. This one
+      // is not in MAP_TOC either, so there are no sub-topics to offer — the
+      // reply must still not be a header over nothing.
+      const cache = createMockCache();
+      currentArticleHtml = '<div class="body conbody"><p class="p">Only a paragraph.</p></div>';
+
+      const result = await fetchArticleFromFt(
+        cache, MAP_ID, CONTENT_ID, ARTICLE_URL, { http, section: 'Missing' },
+      );
+
+      expect(result.content).toContain('Section "Missing" not found');
+      expect(result.content).toContain('has no headings');
+      expect(result.content).not.toContain('Available sections');
+      expect(result.content).not.toContain('Sub-topics');
+      expect(result.sectionNotFound).toBe(true);
+    });
+
     it('should treat empty string section as full content mode', async () => {
       const cache = createMockCache();
       currentArticleHtml = [
@@ -821,6 +839,12 @@ describe('resolveAndFetchArticle()', () => {
   // ── Direct IDs: skip URL resolution ───────────────────────────────────────
 
   describe('with direct mapId + contentId', () => {
+    // Deliberate, not an optimisation: with both a url and the pair, the pair
+    // decides and the url is not resolved against it. Two topics can share a
+    // slug (the LAPS paper's `Using_LAPS`), so a url cannot overrule the pair
+    // a search result came with. What the caller is told about the article —
+    // its own address, and a note when the url did not match — is asserted on
+    // every channel in test/unit/tools/get-article-addressing.test.ts.
     it('should skip topicResolver.resolve when both IDs are provided', async () => {
       const ctx = createMockContext({
         articleProvider: createMockArticleProvider(() => createFetchArticleResult()),

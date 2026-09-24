@@ -262,6 +262,20 @@ describe('formatArticleFull()', () => {
       // Assert
       expect(output).not.toContain('Showing section');
     });
+
+    it('should not show section note above a reply that the section was not found', () => {
+      // It used to print `*Showing section: "X"*` directly above
+      // `*Section "X" not found.*`, because it only ever saw the requested name.
+      const article = makeArticle({
+        content: '*Section "Nonexistent" not found.*\n\nThis article has no headings, so it has no sections to select.\n',
+        sectionNotFound: true,
+      });
+
+      const output = formatArticleFull(article, { section: 'Nonexistent' });
+
+      expect(output).not.toContain('Showing section');
+      expect(output).toContain('*Section "Nonexistent" not found.*');
+    });
   });
 
   // ── Related articles ────────────────────────────────────────────────────────
@@ -659,6 +673,41 @@ describe('formatArticleFull()', () => {
 
       // Assert — the href in the footer should be sanitized to '#'
       expect(output).toContain('](#)');
+    });
+  });
+
+  // ── No address ──────────────────────────────────────────────────────────────
+
+  describe('an article with no url', () => {
+    // A mapId + contentId fetch has none when neither the topic metadata nor
+    // the map TOC gives one. Every pair-only fetch printed `*Source: [](#)*`
+    // before the topic's own address was used as its label.
+    it('omits the Source line from the full footer but keeps the token count', () => {
+      const article = makeArticle({ url: '', tokenInfo: createTokenInfo({ tokenCount: 600 }) });
+
+      const output = formatArticleFull(article);
+
+      expect(output).not.toContain('Source');
+      expect(output).not.toContain('(#)');
+      expect(output).toContain('*600 tokens*');
+    });
+
+    it('omits the brief footer altogether', () => {
+      const article = makeArticle({ url: '' });
+
+      const output = formatArticleFull(article, { briefFooter: true });
+
+      expect(output).not.toContain('Source');
+      expect(output).not.toContain('(#)');
+    });
+
+    it('omits the Source link from the compact footer but keeps the token count', () => {
+      const article = makeArticle({ url: '', tokenInfo: createTokenInfo({ tokenCount: 42 }) });
+
+      const output = formatArticleCompact(article);
+
+      expect(output).not.toContain('Source');
+      expect(output).toMatch(/\*42 tokens\*\n$/);
     });
   });
 });
