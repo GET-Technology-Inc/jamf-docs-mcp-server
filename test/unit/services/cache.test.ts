@@ -567,6 +567,7 @@ describe('cache directory creation', () => {
     expect(dirErrors).toHaveLength(1);
     expect(dirErrors[0]).toContain('"/.cache"');
     expect(dirErrors[0]).toContain('ENOENT');
+    expect(dirErrors[0]).toContain('Will try again on the next write.');
 
     // Tried again on the next write, and once it succeeds, not again.
     fs.mkdir.mockResolvedValue(undefined);

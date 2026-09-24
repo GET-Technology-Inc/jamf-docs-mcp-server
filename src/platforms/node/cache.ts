@@ -143,7 +143,9 @@ export class FileCache implements CacheProvider {
       this.dirFailureLogged = true;
       this.log.error(
         `Cannot create cache directory "${this.cacheDir}": ${String(error)}. ` +
-        'Cached entries stay in memory until it can be created.',
+        // Not "entries stay in memory": with CACHE_DIR="" mkdir fails but the
+        // writes still land in the working directory, and memory is an LRU.
+        'Will try again on the next write.',
       );
     }
   }
