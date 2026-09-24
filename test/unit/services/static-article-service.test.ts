@@ -91,6 +91,14 @@ describe('extractDocumentTitle', () => {
       .toBe('Jamf & You');
   });
 
+  it('decodes each entity once, so an escaped entity stays literal text', () => {
+    // `&amp;lt;` is the page saying the four characters "&lt;", not "<".
+    expect(extractDocumentTitle('<meta property="og:title" content="Escaping &amp;lt;tags&amp;gt; &amp;amp; more">'))
+      .toBe('Escaping &lt;tags&gt; &amp; more');
+    expect(extractDocumentTitle('<title>A &lt;b&gt; &quot;c&quot; &#39;d&#x27; | Jamf Concepts</title>'))
+      .toBe('A <b> "c" \'d\'');
+  });
+
   it('returns undefined when the page has neither', () => {
     expect(extractDocumentTitle('<html><body>no title</body></html>')).toBeUndefined();
   });
