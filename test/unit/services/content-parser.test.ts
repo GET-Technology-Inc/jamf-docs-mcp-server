@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseArticle, cleanSnippet, htmlToMarkdown } from '../../../src/core/services/content-parser.js';
 import { extractSections } from '../../../src/core/services/tokenizer.js';
+import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 
 describe('parseArticle', () => {
   it('should extract title and convert content to markdown', () => {
@@ -166,6 +167,23 @@ describe('parseArticle', () => {
     expect(result.title).toBe('Article Title');
     expect(result.content).toContain('Full article content');
     expect(result.content).not.toContain('Narrow body only');
+  });
+
+  it('matches an ARIA breadcrumb label whatever its casing, with the default selectors', () => {
+    // CSS attribute values are case-sensitive unless the selector says `i`.
+    // The default set's ARIA clause was lowercase until #295, so on a real
+    // concepts.jamf.com page — `aria-label="Breadcrumb"`, no breadcrumb class
+    // anywhere — it matched nothing. `parseArticle` is a published deep import
+    // (`./core/*`), so these defaults are what an embedder gets. They do not
+    // strip `<nav>`, which makes casing the only thing under test here; the
+    // concepts source's own selectors and the extraction order are covered
+    // through `fetchStaticArticle` in static-article-service.test.ts.
+    const result = parseArticle(CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL);
+    expect(result.breadcrumb).toEqual([
+      'Guides',
+      'Device Trust Identity and Deployment',
+      'Platform SSO for macOS',
+    ]);
   });
 });
 
