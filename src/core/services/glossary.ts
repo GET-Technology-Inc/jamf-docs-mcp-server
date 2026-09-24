@@ -37,9 +37,91 @@ import { buildDisplayUrl } from './topic-resolver.js';
 import { cleanHtml, htmlToMarkdown } from './content-parser.js';
 import type { ServerContext } from '../types/context.js';
 import type { CacheProvider } from './interfaces/cache.js';
+import type { Logger } from './interfaces/index.js';
 import { cacheKey } from './cache-key.js';
 import { truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
+import { HttpError } from '../http-client.js';
+import { sanitizeErrorMessage } from '../utils/sanitize.js';
+
+/**
+ * The glossary could not be read, so the lookup has no answer to give. That
+ * includes "no match": a term can only be said to be missing from a glossary
+ * that was checked.
+ *
+ * Until 2026-09-24 every failure on the way to a definition returned the same
+ * empty result as a term the glossary lacks, and the tool answered both with
+ * "No glossary entries found" and no `isError`. Reproduced over stdio with
+ * learn.jamf.com answering 503 (or unreachable) for the map list, for the
+ * glossary TOC, and for the definitions: `MDM` and `Automated Device
+ * Enrollment`, both exact entries, came back as terms the glossary does not
+ * have. The failure reached nothing but a server log line.
+ *
+ * The message is written for the caller, whole: it says what could not be
+ * fetched, that the term was therefore not checked, and whether trying again
+ * may help. The tool returns it as is, with `isError: true`.
+ */
+export class GlossaryUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'GlossaryUnavailableError';
+  }
+}
+
+/** Why one request failed, in words a caller can act on. */
+function describeFetchFailure(error: unknown): string {
+  // Not `error.message`: an HttpError's ends in the request URL, which is
+  // noise in a message for the caller, and fetch reports every network
+  // failure as the bare "fetch failed", with the reason on `cause`.
+  if (error instanceof HttpError) {
+    return `HTTP ${String(error.status)}${error.statusText !== '' ? ` ${error.statusText}` : ''}`;
+  }
+  if (!(error instanceof Error)) { return 'an unknown error'; }
+  if (error.name === 'TimeoutError') { return 'the request timed out'; }
+  if (error instanceof SyntaxError) { return 'a response that was not valid JSON'; }
+  const code = (error.cause as { code?: unknown } | undefined)?.code;
+  if (typeof code === 'string') { return `a network error: ${code}`; }
+  if (error instanceof TypeError) { return 'a network error'; }
+  return sanitizeErrorMessage(error.message);
+}
+
+/** The distinct reasons behind several failures, in the order first seen. */
+function describeFetchFailures(errors: unknown[]): string {
+  return [...new Set(errors.map(describeFetchFailure))].join('; ');
+}
+
+const MAY_BE_TEMPORARY = 'This may be temporary: try again in a moment.';
+
+/**
+ * A {@link GlossaryUnavailableError} for `term`.
+ *
+ * `failed` completes "Glossary lookup for "<term>" failed: …". `notChecked`
+ * says why the reply is not a "no match". `temporary` is false only where
+ * nothing was fetched that could fail: trying again will not help there.
+ */
+function glossaryUnavailable(
+  term: string,
+  failed: string,
+  notChecked: string,
+  options: { temporary?: boolean; cause?: unknown } = {},
+): GlossaryUnavailableError {
+  const paragraphs = [
+    `Glossary lookup for "${term}" failed: ${failed}.`,
+    `This is not a "no match": ${notChecked}.`,
+  ];
+  if (options.temporary !== false) { paragraphs.push(MAY_BE_TEMPORARY); }
+  return new GlossaryUnavailableError(
+    paragraphs.join('\n\n'),
+    options.cause !== undefined ? { cause: options.cause } : undefined,
+  );
+}
+
+const GLOSSARY_NOT_READ = 'the glossary was not read, so the term was not checked against it';
+
+/** A TOC node's name for a caller: its title, which every candidate has. */
+function titleOf(node: FtTocNode): string {
+  return node.title ?? node.contentId;
+}
 
 /** Return a zero-entry result when there is nothing to report. */
 function emptyGlossaryResult(maxTokens: number): GlossaryLookupResult {
@@ -56,6 +138,14 @@ function emptyGlossaryResult(maxTokens: number): GlossaryLookupResult {
  * Fetch the glossary TOC from Fluid Topics via ft-client.
  * The TOC is a tree: root node has children, each child is a glossary term.
  * Cached with article TTL to avoid repeated requests.
+ *
+ * A TOC that yields no terms is returned but not cached. The live glossary
+ * has 123, so none means the response was not the glossary's TOC — a root
+ * with no children, `[]`, or an object that is not a TOC node. Cached, it
+ * answered every lookup with "No glossary entries found" for the article TTL
+ * (24 hours by default) after learn.jamf.com had recovered: reproduced
+ * 2026-09-24 by serving a childless root for `/toc` once, then looking up
+ * `MDM` and `Automated Device Enrollment` directly.
  */
 async function fetchGlossaryToc(
   ctx: ServerContext,
@@ -89,7 +179,9 @@ async function fetchGlossaryToc(
     }
   }
 
-  await ctx.cache.set(key, terms, ctx.config.cacheTtl.article);
+  if (terms.length > 0) {
+    await ctx.cache.set(key, terms, ctx.config.cacheTtl.article);
+  }
   return terms;
 }
 
@@ -539,6 +631,15 @@ function boundaryMatchRank(title: string, term: string): number {
 }
 
 /**
+ * The order `searchGlossaryEntries` puts two word-boundary matches in: the
+ * more definitional title first (see `boundaryMatchRank`), then the shorter.
+ */
+function compareBoundaryMatches(a: string, b: string, term: string): number {
+  const byRank = boundaryMatchRank(a, term) - boundaryMatchRank(b, term);
+  return byRank !== 0 ? byRank : a.length - b.length;
+}
+
+/**
  * Get or create a Fuse index for the given TOC entries.
  * Rebuilds the index when the entries array reference changes
  * (i.e., the cache was refreshed).
@@ -582,10 +683,7 @@ export function searchGlossaryEntries(
   // definition happens to contain "dependencies".
   const boundaryMatches = entries
     .filter(e => hasWordBoundaryMatch(e.term, term))
-    .sort((a, b) => {
-      const byRank = boundaryMatchRank(a.term, term) - boundaryMatchRank(b.term, term);
-      return byRank !== 0 ? byRank : a.term.length - b.term.length;
-    });
+    .sort((a, b) => compareBoundaryMatches(a.term, b.term, term));
   if (boundaryMatches.length > 0) {
     return boundaryMatches;
   }
@@ -613,6 +711,166 @@ export function searchGlossaryEntries(
   return results.map(r => r.item);
 }
 
+/** One candidate after its definition was fetched, or failed to be. */
+type FetchOutcome =
+  | { node: FtTocNode; entries: GlossaryEntry[] }
+  | FetchFailure;
+
+interface FetchFailure { node: FtTocNode; error: unknown }
+
+/**
+ * Fetch and parse one candidate's definition.
+ *
+ * A failed fetch is returned, not thrown, and no longer reads as an entry
+ * with no definition: it used to come back as `[]`, the same as a page with
+ * nothing on it, so a lookup whose every fetch failed answered "No glossary
+ * entries found". What a failure means depends on the other candidates, so
+ * the caller decides (see `throwIfUnanswerable`).
+ */
+async function fetchCandidate(
+  ctx: ServerContext,
+  mapId: string,
+  tocNode: FtTocNode,
+  log: Logger,
+): Promise<FetchOutcome> {
+  let html: string;
+  try {
+    html = await fetchGlossaryContent(ctx, mapId, tocNode.contentId);
+  } catch (error) {
+    log.warning(
+      `Failed to fetch glossary entry "${titleOf(tocNode)}": ${String(error)}`
+    );
+    return { node: tocNode, error };
+  }
+
+  // Parsing keeps the catch it always had: a page that throws in here is
+  // dropped, as before. That would be this server's bug, not a failure of
+  // learn.jamf.com, and a "could not be fetched" message would misname it.
+  try {
+    return { node: tocNode, entries: parseCandidate(html, tocNode) };
+  } catch (error) {
+    log.warning(
+      `Failed to parse glossary entry "${titleOf(tocNode)}": ${String(error)}`
+    );
+    return { node: tocNode, entries: [] };
+  }
+}
+
+/** The entries in one candidate's `/content`. */
+function parseCandidate(html: string, tocNode: FtTocNode): GlossaryEntry[] {
+  const displayUrl = buildDisplayUrl(tocNode.prettyUrl);
+
+  // Try parsing with the existing format parsers
+  const parsed = parseGlossaryEntries(html, displayUrl);
+
+  // If parsing returned nothing, use TOC title + raw HTML as fallback
+  // The TOC title is the only name this fallback has for the term, so
+  // an entry without one cannot be emitted here.
+  if (parsed.length === 0 && html.trim() !== '' && tocNode.title !== undefined) {
+    const definition = htmlToMarkdown(html).trim();
+    if (definition !== '') {
+      return [{
+        term: tocNode.title,
+        definition,
+        url: displayUrl,
+      }];
+    }
+  }
+
+  return parsed;
+}
+
+/**
+ * The candidate that could not be fetched but would have led the answer, if
+ * its title alone shows that.
+ *
+ * Only a title that names the term as a word can show it: the ranker puts
+ * those first, in `compareBoundaryMatches` order, whatever the definitions
+ * say. Where no failed title names the term, its place in the answer turned
+ * on a definition that was never read, so nothing is claimed.
+ */
+function unfetchedLead(
+  term: string,
+  matched: GlossaryEntry[],
+  failures: FetchFailure[],
+): string | undefined {
+  const lead = [
+    ...matched.map(e => ({ title: e.term, fetched: true })),
+    ...failures.map(f => ({ title: titleOf(f.node), fetched: false })),
+  ]
+    .filter(c => hasWordBoundaryMatch(c.title, term))
+    .sort((a, b) => compareBoundaryMatches(a.title, b.title, term))[0];
+  return lead?.fetched === false ? lead.title : undefined;
+}
+
+/**
+ * Throw when failed fetches leave the lookup without an answer it can stand
+ * behind.
+ *
+ * - None of the candidates was fetched: there is nothing to answer from.
+ * - Some were, and none of them answers the term: that is not a "no match"
+ *   either, because the answer may be a candidate that failed.
+ * - The entry whose title names the term failed, and a lesser one would take
+ *   its place. Live on 2026-09-24, with only its own definition failing,
+ *   `Automated Device Enrollment` came back as `device enrollment`, "1 match".
+ *
+ * Otherwise what was fetched leads the answer a whole read would give, and
+ * the result carries `incomplete` (see `incompleteNote`) for the rest: an
+ * answer that may be missing its later entries is still an answer, and the
+ * caller can fetch them.
+ */
+function throwIfUnanswerable(
+  term: string,
+  candidates: number,
+  failures: FetchFailure[],
+  matched: GlossaryEntry[],
+): void {
+  if (failures.length === 0) { return; }
+
+  const reason = describeFetchFailures(failures.map(f => f.error));
+  const titles = failures.map(f => titleOf(f.node)).join(', ');
+  const cause = failures[0]?.error;
+
+  if (failures.length === candidates) {
+    const one = candidates === 1;
+    throw glossaryUnavailable(
+      term,
+      `the glossary has ${countOf(candidates, 'entry', 'entries')} whose ` +
+        `${one ? 'title is' : 'titles are'} close to it, ` +
+        `and ${one ? 'its definition' : 'none of their definitions'} could be fetched from ` +
+        `learn.jamf.com (${reason}): ${titles}`,
+      `the ${one ? 'entry' : 'entries'} that might define it could not be read`,
+      { cause },
+    );
+  }
+
+  if (matched.length === 0) {
+    const fetched = candidates - failures.length;
+    const others = fetched === 1
+      ? 'The other one was fetched and does not match it'
+      : `The other ${String(fetched)} were fetched and do not match it`;
+    throw glossaryUnavailable(
+      term,
+      `${String(failures.length)} of the ${String(candidates)} glossary entries whose titles are ` +
+        `close to it could not be fetched from learn.jamf.com (${reason}): ${titles}. ${others}`,
+      'it was checked against only part of the glossary, and its entry may be one that could not be fetched',
+      { cause },
+    );
+  }
+
+  const lead = unfetchedLead(term, matched, failures);
+  if (lead !== undefined) {
+    const more = failures.length - 1;
+    throw glossaryUnavailable(
+      term,
+      `the entry whose title names it, ${lead}, could not be fetched from learn.jamf.com ` +
+        `(${reason})${more > 0 ? `, nor could ${countOf(more, 'other candidate', 'other candidates')}` : ''}`,
+      'answering from the entries that were fetched would put another entry in its place',
+      { cause },
+    );
+  }
+}
+
 // ─── Main lookup ────────────────────────────────────────────────
 
 /**
@@ -623,6 +881,14 @@ export function searchGlossaryEntries(
  * 2. Fuzzy-match term against TOC titles
  * 3. Fetch and parse matching glossary topics
  * 4. Rank results with fuse.js and apply token limit
+ *
+ * An empty result means the glossary was read and nothing in it matches.
+ * Anything that stops that from being known throws a
+ * {@link GlossaryUnavailableError}: the map list or the TOC failing to fetch,
+ * every candidate's definition failing, some failing while the rest do not
+ * answer the term, or the one that would lead the answer failing (see
+ * `throwIfUnanswerable`). When others fail, the result says so in
+ * `incomplete`.
  */
 export async function lookupGlossaryTerm(
   ctx: ServerContext,
@@ -648,18 +914,35 @@ export async function lookupGlossaryTerm(
 
   log.info(`Looking up glossary term: "${term}" (locale=${locale})`);
 
+  // Every way this can fail before a definition is in hand throws a
+  // GlossaryUnavailableError; only a glossary that was read can answer "no
+  // match". See that class for why.
+
   // Resolve glossary mapId dynamically via MapsRegistry
   let mapId: string | null;
   try {
     mapId = await ctx.mapsRegistry.resolveGlossaryMapId(locale);
   } catch (error) {
     log.error(`Failed to resolve glossary mapId: ${String(error)}`);
-    return emptyGlossaryResult(maxTokens);
+    throw glossaryUnavailable(
+      term,
+      'the list of documentation maps, which says where the glossary is, could not be ' +
+        `fetched from learn.jamf.com (${describeFetchFailure(error)})`,
+      GLOSSARY_NOT_READ,
+      { cause: error },
+    );
   }
 
   if (mapId === null) {
-    log.info(`No glossary map found for locale="${locale}"`);
-    return emptyGlossaryResult(maxTokens);
+    // `resolveGlossaryMapId` already falls back to en-US, so this is a map
+    // list with no glossary in it at all, not a locale without one.
+    log.error(`No glossary map found for locale="${locale}"`);
+    throw glossaryUnavailable(
+      term,
+      "learn.jamf.com's list of documentation maps has no glossary in it",
+      'there was no glossary to check the term against',
+      { temporary: false },
+    );
   }
 
   log.info(`Resolved glossary mapId: ${mapId} (locale=${locale})`);
@@ -670,12 +953,22 @@ export async function lookupGlossaryTerm(
     tocEntries = await fetchGlossaryToc(ctx, mapId);
   } catch (error) {
     log.error(`Failed to fetch glossary TOC: ${String(error)}`);
-    return emptyGlossaryResult(maxTokens);
+    throw glossaryUnavailable(
+      term,
+      "the glossary's table of contents could not be fetched from learn.jamf.com " +
+        `(${describeFetchFailure(error)})`,
+      GLOSSARY_NOT_READ,
+      { cause: error },
+    );
   }
 
   if (tocEntries.length === 0) {
-    log.info('Glossary TOC is empty');
-    return emptyGlossaryResult(maxTokens);
+    log.error('Glossary TOC lists no terms');
+    throw glossaryUnavailable(
+      term,
+      "the glossary's table of contents came back from learn.jamf.com with no terms in it",
+      GLOSSARY_NOT_READ,
+    );
   }
 
   // Step 2: narrow the TOC to candidate pages.
@@ -727,48 +1020,22 @@ export async function lookupGlossaryTerm(
   // Step 3: Fetch and parse content for top matches (limit to 10)
   const toFetch = matchedTocEntries.slice(0, 10);
 
-  const tasks = toFetch.map(tocNode => async (): Promise<GlossaryEntry[]> => {
-    try {
-      const html = await fetchGlossaryContent(ctx, mapId, tocNode.contentId);
+  const outcomes = await limitConcurrency(
+    toFetch.map(tocNode => async (): Promise<FetchOutcome> =>
+      await fetchCandidate(ctx, mapId, tocNode, log)),
+    3,
+  );
+  const failures = outcomes.flatMap(o => ('error' in o ? [o] : []));
+  const allEntries = outcomes.flatMap(o => ('entries' in o ? o.entries : []));
 
-      const displayUrl = buildDisplayUrl(tocNode.prettyUrl);
+  // Step 4: Rank with fuse.js and apply token limit
+  const matchedEntries = searchGlossaryEntries(allEntries, term);
 
-      // Try parsing with the existing format parsers
-      const parsed = parseGlossaryEntries(html, displayUrl);
-
-      // If parsing returned nothing, use TOC title + raw HTML as fallback
-      // The TOC title is the only name this fallback has for the term, so
-      // an entry without one cannot be emitted here.
-      if (parsed.length === 0 && html.trim() !== '' && tocNode.title !== undefined) {
-        const definition = htmlToMarkdown(html).trim();
-        if (definition !== '') {
-          return [{
-            term: tocNode.title,
-            definition,
-            url: displayUrl,
-          }];
-        }
-      }
-
-      return parsed;
-    } catch (error) {
-      log.warning(
-        `Failed to fetch glossary entry "${tocNode.title ?? tocNode.contentId}": ${
-        String(error)}`
-      );
-      return [];
-    }
-  });
-
-  const fetchedEntries = await limitConcurrency(tasks, 3);
-  const allEntries = fetchedEntries.flat();
+  throwIfUnanswerable(term, toFetch.length, failures, matchedEntries);
 
   if (allEntries.length === 0) {
     return emptyGlossaryResult(maxTokens);
   }
-
-  // Step 4: Rank with fuse.js and apply token limit
-  const matchedEntries = searchGlossaryEntries(allEntries, term);
 
   const glossaryEntryToString = (e: GlossaryEntry): string =>
     `${e.term}: ${e.definition}`;
@@ -791,5 +1058,41 @@ export async function lookupGlossaryTerm(
     entries: includedEntries,
     totalMatches: matchedEntries.length,
     tokenInfo,
+    ...(failures.length > 0
+      ? { incomplete: incompleteNote(term, toFetch.length, failures) }
+      : {}),
+  };
+}
+
+/** "1 entry", "2 entries". */
+function countOf(n: number, one: string, many: string): string {
+  return `${String(n)} ${n === 1 ? one : many}`;
+}
+
+/**
+ * What a partly fetched answer is missing, and what to do about it.
+ *
+ * Every candidate that failed is named, including ones the ranker might have
+ * turned down had it seen them: without a definition there is no telling, and
+ * a reply that says less than it knows is how this defect hid.
+ */
+function incompleteNote(
+  term: string,
+  candidates: number,
+  failures: FetchFailure[],
+): NonNullable<GlossaryLookupResult['incomplete']> {
+  const one = failures.length === 1;
+  return {
+    unfetched: failures.map(f => ({
+      term: titleOf(f.node),
+      url: buildDisplayUrl(f.node.prettyUrl),
+    })),
+    message:
+      `Could not fetch ${String(failures.length)} of the ${String(candidates)} glossary entries ` +
+      `whose titles are close to "${term}" from learn.jamf.com ` +
+      `(${describeFetchFailures(failures.map(f => f.error))}): ` +
+      `${failures.map(f => titleOf(f.node)).join(', ')}. ` +
+      `These results may be missing ${one ? 'its definition' : 'their definitions'}. ` +
+      `This may be temporary: repeat the lookup, or fetch ${one ? 'it' : 'them'} with jamf_docs_get_article.`,
   };
 }

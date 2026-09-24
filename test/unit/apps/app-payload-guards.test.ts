@@ -111,3 +111,17 @@ describe('section ids are stamped on a rendered-output match', () => {
     expect(/<[^>]*>/.test(hostile)).toBe(false);
   });
 });
+
+describe('a partly fetched glossary answer', () => {
+  it('shows its note as a warning in the built bundle', () => {
+    // When some matching definitions could not be fetched, the server sends
+    // `incomplete.message` beside the entries. A viewer that dropped it would
+    // present an answer from part of the glossary as the whole one: live on
+    // 2026-09-24, with User Approved MDM's definition failing, `MDM` read as
+    // one definition and nothing missing. Asserted on
+    // the compiled shape, as above: the renderer is not importable, and a
+    // property name survives minification where the function name does not.
+    // `?.` reads a malformed payload (a string, null) as no note.
+    expect(APP_HTML).toMatch(/[\w$]+\([\w$]+\.incomplete\?\.message,"warning"\)/);
+  });
+});

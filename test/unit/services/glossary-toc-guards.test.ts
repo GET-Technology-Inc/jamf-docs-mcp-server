@@ -7,10 +7,12 @@
  * validation behind it — Fluid Topics omits `children` entirely on a leaf node
  * rather than sending `[]` — so the guard was live, not dead.
  *
- * The failure is quiet rather than loud: `lookupGlossaryTerm` wraps
- * `fetchGlossaryToc` in a try/catch, so the TypeError surfaces as *every*
+ * The failure was quiet rather than loud: `lookupGlossaryTerm` wraps
+ * `fetchGlossaryToc` in a try/catch, so the TypeError surfaced as *every*
  * glossary lookup returning zero entries, with one log line, rather than as a
- * crash. One malformed node takes the entire glossary down with it.
+ * crash. One malformed node takes the entire glossary down with it. (Since
+ * 2026-09-24 that catch reports an unreadable glossary as an error instead of
+ * zero entries; the guards still decide whether the glossary is readable.)
  *
  * These tests drive the private `fetchGlossaryToc` through the public
  * `lookupGlossaryTerm` with `ft-client` mocked.
@@ -28,7 +30,7 @@ vi.mock('../../../src/core/services/ft-client.js', async (importOriginal) => ({
 
 import type * as FtClientModule from '../../../src/core/services/ft-client.js';
 import { fetchMapToc, fetchTopicContent } from '../../../src/core/services/ft-client.js';
-import { lookupGlossaryTerm } from '../../../src/core/services/glossary.js';
+import { lookupGlossaryTerm, GlossaryUnavailableError } from '../../../src/core/services/glossary.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 import type { FtTocNode } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
@@ -124,7 +126,7 @@ describe('fetchGlossaryToc — nodes missing fields the type declared required',
     expect(result.entries[0].term).toBe('Access Token');
   });
 
-  it('should return a result rather than throwing when every node is malformed', async () => {
+  it('should report a TOC whose every node is malformed as unreadable, not crash', async () => {
     mockedFetchMapToc.mockResolvedValue([
       {
         tocId: 'toc-orphan',
@@ -134,11 +136,12 @@ describe('fetchGlossaryToc — nodes missing fields the type declared required',
       },
     ] as FtTocNode[]);
 
-    const result = await lookupGlossaryTerm(makeCtx(), { term: 'Access Token' });
-
-    // Nothing to match, but the lookup completes normally.
-    expect(result.entries).toHaveLength(0);
-    expect(result.totalMatches).toBe(0);
+    // No TypeError. Until 2026-09-24 this completed with zero entries, which
+    // the tool reported as "No glossary entries found": a TOC with no terms
+    // in it is not the glossary, so no term was checked against anything.
+    // It is now the lookup's own error (see glossary-fetch-failure.test.ts).
+    await expect(lookupGlossaryTerm(makeCtx(), { term: 'Access Token' }))
+      .rejects.toThrow(GlossaryUnavailableError);
   });
 
   it('should still match a term through the substring fallback when a sibling has no title', async () => {

@@ -48,17 +48,16 @@ describe('jamf_docs_glossary_lookup integration', () => {
     });
 
     const text = getTextContent(result);
-    // May return results or not depending on API availability
-    // At minimum, should not throw an error
-    expect(result.isError).not.toBe(true);
+    // MDM is in the glossary, so this always has entries. It used to allow
+    // "No glossary entries found" here "depending on API availability", which
+    // is how an outage reading as a missing term went unnoticed: learn.jamf.com
+    // failing is now `isError`, and fails this test as it should.
+    expect(result.isError, text).not.toBe(true);
 
-    // If results were found, validate structure
-    if (!text.includes('No glossary entries found')) {
-      const json = JSON.parse(text);
-      expect(json.term).toBe('MDM');
-      expect(json.entries).toBeDefined();
-      expect(json.tokenInfo).toBeDefined();
-    }
+    const json = JSON.parse(text);
+    expect(json.term).toBe('MDM');
+    expect(json.entries.length).toBeGreaterThan(0);
+    expect(json.tokenInfo).toBeDefined();
   }, 30000);
 
   it('should handle product-filtered lookup', async () => {
