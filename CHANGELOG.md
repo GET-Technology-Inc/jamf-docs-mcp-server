@@ -1,3 +1,9 @@
+## [6.0.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.0...v6.0.1) (2026-09-24)
+
+### Bug Fixes
+
+* **config:** keep a relative CACHE_DIR inside the project by path segment, and unit-test config.ts ([#313](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/313)) ([797cf05](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/797cf057dd497f17de386506052be017adc62e00)), closes [#296](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/296) [#78](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/78)
+
 ## [6.0.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.7...v6.0.0) (2026-09-24)
 
 ### ⚠ BREAKING CHANGES
