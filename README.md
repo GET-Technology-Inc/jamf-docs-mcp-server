@@ -1,6 +1,7 @@
 # Jamf Docs MCP Server
 
 [![CI](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/GET-Technology-Inc/jamf-docs-mcp-server/graph/badge.svg)](https://app.codecov.io/gh/GET-Technology-Inc/jamf-docs-mcp-server)
 [![npm version](https://img.shields.io/npm/v/@get-technology-inc/jamf-docs-mcp-server.svg)](https://www.npmjs.com/package/@get-technology-inc/jamf-docs-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
