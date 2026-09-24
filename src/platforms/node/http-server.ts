@@ -241,8 +241,28 @@ export async function startHttpServer(
     );
   }
 
-  process.on('SIGINT', () => { shutdown('SIGINT'); });
-  process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+  // The signal listeners are process-wide but belong to this one server, so
+  // they go when it does: on 'close', or when the bind fails, since a failed
+  // listen() emits 'error' and never 'close'. startHttpServer is public API
+  // (`./platforms/node`), so one process can call it more than once. A stale
+  // pair left by a failed bind broke the drain of the server that did start:
+  // SIGTERM ran the dead server's shutdown as well, its close() completed at
+  // once, and its callback exited the process with 0, dropping an in-flight
+  // call instead of draining it (measured 2026-09-24).
+  //
+  // They are kept through the drain on purpose. With no listener left, a
+  // second SIGINT/SIGTERM would get Node's default action and end the process
+  // mid-drain (SIGTERM exits 143 on 24.21.0 and 26.9.0); with them, shutdown()
+  // ignores it.
+  const onSigint = (): void => { shutdown('SIGINT'); };
+  const onSigterm = (): void => { shutdown('SIGTERM'); };
+  function removeSignalListeners(): void {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+  }
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+  httpServer.on('close', removeSignalListeners);
 
   // Start listening
   await new Promise<void>((resolve, reject) => {
@@ -250,6 +270,11 @@ export async function startHttpServer(
       if (error.code === 'EADDRINUSE') {
         log.error(`Port ${port} is already in use`);
         process.exit(1);
+      }
+      // After a successful bind an 'error' (such as a failed accept) leaves the
+      // server running, and reject() below is then a no-op; the listeners stay.
+      if (!httpServer.listening) {
+        removeSignalListeners();
       }
       reject(error);
     });

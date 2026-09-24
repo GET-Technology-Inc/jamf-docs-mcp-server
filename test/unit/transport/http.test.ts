@@ -26,6 +26,9 @@ const shared = vi.hoisted(() => ({
     // release keep-alive sockets once the drain finishes. Mocked so this
     // double cannot silently drift from the interface it stands in for.
     closeIdleConnections: vi.fn(),
+    // Read when 'error' fires, to tell a failed bind from a later error. The
+    // double never binds, so it stays false.
+    listening: false,
   },
   mcpHandlerInstance: {
     fetch: vi.fn(),
@@ -171,6 +174,24 @@ async function makeRequest(options: {
   shared.capturedHandler(req, res);
   return await done;
 }
+
+/** The listeners `startHttpServer` registered on the mocked server for `event`. */
+function serverListeners(event: string): ((...args: unknown[]) => void)[] {
+  return shared.httpServer.on.mock.calls
+    .filter(([name]) => name === event)
+    .map(([, listener]) => listener as (...args: unknown[]) => void);
+}
+
+// Every test starts a server, and each one adds a SIGINT and a SIGTERM
+// listener to the process, which the server's 'close' removes. The double never
+// closes by itself, so close it here: with one server per test, the file
+// would otherwise pile up far past Node's default limit of 10 and print
+// MaxListenersExceededWarning.
+afterEach(() => {
+  for (const onClose of serverListeners('close')) {
+    onClose();
+  }
+});
 
 // ============================================================================
 // startHttpServer tests
@@ -753,5 +774,55 @@ describe('client IP with TRUST_PROXY enabled', () => {
     { name: 'a multi-hop list', forwardedFor: '203.0.113.7, 10.0.0.2', expected: '10.0.0.2' },
   ])('keys on $expected when X-Forwarded-For is $name', async ({ forwardedFor, expected }) => {
     expect(await rateLimitKey(forwardedFor)).toBe(expected);
+  });
+});
+
+// ============================================================================
+// Process signal listeners
+// ============================================================================
+
+describe('process signal listeners', () => {
+  const counts = (): { SIGINT: number; SIGTERM: number } => ({
+    SIGINT: process.listenerCount('SIGINT'),
+    SIGTERM: process.listenerCount('SIGTERM'),
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    shared.httpServer.listen.mockImplementation(
+      (_port: number, _host: string, cb: () => void) => { cb(); }
+    );
+    shared.httpServer.on.mockImplementation(() => {
+      // Recorded by the mock; serverListeners() fires them.
+    });
+  });
+
+  it('adds one SIGINT and one SIGTERM listener and removes both when the server closes', async () => {
+    const baseline = counts();
+
+    await startHttpServer((() => ({})) as any, 3000, '127.0.0.1');
+    expect(counts()).toEqual({ SIGINT: baseline.SIGINT + 1, SIGTERM: baseline.SIGTERM + 1 });
+
+    for (const onClose of serverListeners('close')) {
+      onClose();
+    }
+    expect(counts()).toEqual(baseline);
+  });
+
+  it('leaves none behind when the bind fails', async () => {
+    // A failed listen() emits 'error' and never 'close', so nothing else would
+    // ever remove them. EADDRINUSE exits the process instead, so use another.
+    shared.httpServer.listen.mockImplementation(() => {
+      const error = Object.assign(new Error('listen EADDRNOTAVAIL'), { code: 'EADDRNOTAVAIL' });
+      for (const onError of serverListeners('error')) {
+        onError(error);
+      }
+    });
+    const baseline = counts();
+
+    await expect(
+      startHttpServer((() => ({})) as any, 3000, '192.0.2.1')
+    ).rejects.toThrow('EADDRNOTAVAIL');
+    expect(counts()).toEqual(baseline);
   });
 });
