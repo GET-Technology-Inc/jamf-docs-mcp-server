@@ -13,8 +13,8 @@ Releases are automated, so the supported line is whatever `npm view
 vulnerability that the current release was unsupported and a long-retired one
 was not.
 
-5.x, the last line that runs on Node.js 20 and 22, is unsupported too: a fix
-there would need a release from a maintenance branch, and `.releaserc.json`
+5.x, the last line to support Node.js 20 and 22, no longer receives fixes: a
+fix there would need a release from a maintenance branch, and `.releaserc.json`
 releases from `main` only.
 
 ## Reporting a Vulnerability
