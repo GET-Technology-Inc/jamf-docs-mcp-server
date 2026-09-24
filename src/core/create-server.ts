@@ -108,7 +108,13 @@ const CACHE_HINTS = {
   'server/discover': { ttlMs: ONE_HOUR_MS, cacheScope: 'public' },
 } as const;
 
-const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, and Jamf Protect.
+/**
+ * The first line used to end "for Jamf Pro, Jamf School, Jamf Connect, and
+ * Jamf Protect." That is the four-product claim #200 (issue #199) replaced in
+ * Product Filtering below with the whole of `PRODUCT_ID_LIST`, left standing
+ * one paragraph above it.
+ */
+const SERVER_INSTRUCTIONS = `This server provides access to Jamf official documentation (learn.jamf.com) for Jamf Pro, Jamf School, Jamf Connect, Jamf Protect and every other product listed under Product Filtering below.
 
 ## Tool Usage Order
 1. Use jamf_docs_list_products to discover available products and versions.

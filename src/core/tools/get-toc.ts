@@ -176,6 +176,13 @@ function flattenTocEntries(entries: TocEntry[], depth = 0): FlatTocEntry[] {
 
 const TOOL_NAME = 'jamf_docs_get_toc';
 
+/**
+ * The JSON block used to list `productId` and `publicationId` as present "when
+ * addressed by" each parameter. Only `structuredContent` has them — the JSON
+ * text is `TocResponse`, which never did (checked through tools/call on
+ * 2026-09-24: product, version, mapId, toc, tokenInfo, pagination). The Note
+ * now says where they are instead.
+ */
 const TOOL_DESCRIPTION = `Get the table of contents for Jamf documentation.
 
 Browse the navigation structure of either a Jamf product or any single Jamf
@@ -188,7 +195,8 @@ Args:
   - publication (string): Bundle family id of any single publication, e.g.
     "technical-paper-laps" or "jamf-pro-release-notes". Call
     jamf_docs_list_products for the available ids
-  - version (string, optional): Specific version (defaults to latest)
+  - version (string, optional): Specific version (e.g., "11.13.0") or "current" (defaults to latest)
+  - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE})
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for flat list without nested children
@@ -198,8 +206,6 @@ Returns:
   For JSON format:
   {
     "product": string,
-    "productId": string,      // present when addressed by product
-    "publicationId": string,  // present when addressed by publication
     "version": string,
     "mapId": string,   // omitted when the map could not be resolved
     "toc": [...],      // each entry carries title, url and contentId
@@ -227,8 +233,8 @@ Examples:
   - Limit response size: product="jamf-pro", maxTokens=2000
 
 Errors:
-  - "Invalid product ID" if the product is not recognized
-  - "Version not found" if the specified version doesn't exist
+  - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID
+  - 'Version "<version>" not found', followed by the available versions, if that version is not published
 
 Note: Use this to discover what topics are available before searching
 or retrieving specific articles. Large TOCs are paginated.
@@ -236,6 +242,8 @@ The response-level mapId and an entry's contentId together form the pair
 jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
 mapId only; use responseFormat="json" (or read structuredContent) for the
 per-entry contentIds.
+structuredContent also carries productId (or publicationId): the argument to
+send back for the next page. The JSON text does not.
 structuredContent.entries is the TOC flattened in document order and always
 carries every descendant; each entry's depth (0 for top level) is what
 restores the nesting. The markdown is not the same view: outputMode="full"

@@ -13,6 +13,7 @@ import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } f
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
+import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
 import {
   buildArticleContentView,
   formatArticleCompact,
@@ -87,14 +88,22 @@ function formatBatchAsMarkdown(results: FetchResult[], compact: boolean): string
 
 const TOOL_NAME = 'jamf_docs_batch_get_articles';
 
+/**
+ * `language` was missing from Args until 2026-09-24, although the schema has
+ * accepted it since the tool was added in #58. The schema checks only that each
+ * url is a URL; the host check runs per article, so a URL on another host, or
+ * an http:// one, comes back as that article's error ("URL must be from …")
+ * and the rest of the batch still runs.
+ */
 const TOOL_DESCRIPTION = `Retrieve multiple Jamf documentation articles in a single request.
 
 Fetches up to 10 articles in parallel with concurrency control. Useful for
 comparing articles, gathering information from multiple pages, or bulk research.
 
 Args:
-  - urls (string[], required): Array of 1-10 article URLs (must be from ${ALLOWED_HOSTNAME_LIST})
+  - urls (string[], required): Array of 1-10 https:// article URLs on ${ALLOWED_HOSTNAME_LIST}. Any other URL fails as its own per-article error
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
+  - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. No effect on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
   - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')

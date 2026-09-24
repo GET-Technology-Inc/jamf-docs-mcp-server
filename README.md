@@ -266,8 +266,8 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 | Argument | Type | Description |
 |----------|------|-------------|
 | `product` | string (required) | Jamf product ID |
-| `version_a` | string (required) | First version to compare (e.g., `"11.5.0"`) |
-| `version_b` | string (required) | Second version to compare (e.g., `"11.12.0"`) |
+| `version_a` | string (required) | First version to compare (e.g., `"11.13.0"`) |
+| `version_b` | string (required) | Second version to compare (e.g., `"11.32.0"`) |
 
 ## Supported Products
 

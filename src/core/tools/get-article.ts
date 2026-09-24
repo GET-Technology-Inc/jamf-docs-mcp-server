@@ -19,7 +19,8 @@ import type {
   ParsedArticle,
 } from '../types.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
-import { ALLOWED_HOSTNAME_LIST } from '../utils/url.js';
+import { ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
+import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import {
   buildArticleContentView,
@@ -140,13 +141,44 @@ function buildArticleStructuredContent(
   };
 }
 
+/** Returned when neither addressing form is complete. Quoted in the description. */
+const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be provided.';
+
+/**
+ * What `tools/list` tells a client about this tool.
+ *
+ * Until 2026-09-24 this said `url (string, required)` and left `mapId`,
+ * `contentId` and `language` out of Args altogether, while the schema has had
+ * `url` optional since the mapId + contentId pair was added in #78. So a
+ * client holding the pair a search result hands it was told it could not use
+ * it. The READMEs had the same drift and were corrected in #303;
+ * `description-accuracy.test.ts` now checks every Args list against its
+ * schema's properties and `required` array.
+ *
+ * "Pass one, not both" is advice, not a rule the schema enforces. With both,
+ * a Fluid Topics fetch follows the pair while the markdown's Source line still
+ * shows the url (measured 2026-09-24: a Policies.html url plus the pair for
+ * Computer Configuration Profiles returned the latter under the former's
+ * link).
+ *
+ * The example URL changed at the same time: `.../page/Configuration_Profiles.html`
+ * answered "Topic not found" (live, 2026-09-24); the page Jamf publishes is
+ * `Computer_Configuration_Profiles`.
+ */
 const TOOL_DESCRIPTION = `Retrieve the full content of a specific Jamf documentation article.
 
 This tool fetches and parses a Jamf documentation article, converting it to
 a clean, readable format. Works with any article from ${ALLOWED_HOSTNAME_LIST}.
 
+Address the article either by \`url\`, or by the \`mapId\` + \`contentId\` pair
+that search results and TOC entries carry. One of the two is required; pass
+one, not both.
+
 Args:
-  - url (string, required): Full URL of the article (must be from ${ALLOWED_HOSTNAME_LIST})
+  - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}. Required unless mapId and contentId are given
+  - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId instead of url
+  - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId instead of url
+  - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. No effect on a mapId + contentId pair (a map is in one language) or on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article
   - includeRelated (boolean, optional): Include links to related articles (default: false)
@@ -183,14 +215,16 @@ Returns:
   The article content with token info and available sections.
 
 Examples:
-  - Get full article: url="https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Configuration_Profiles.html"
+  - Get full article: url="https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Computer_Configuration_Profiles.html"
+  - Fetch a search result directly: mapId="...", contentId="..." (both from the result)
   - Get specific section: url="...", section="Prerequisites"
   - Limit response size: url="...", maxTokens=2000
 
 Errors:
-  - "Article not found (404)" if the URL returns a 404 error
-  - "Invalid URL" if the URL is not from ${ALLOWED_HOSTNAME_LIST}
-  - "Section not found" if the specified section doesn't exist (will list available sections)
+  - "${MISSING_ADDRESS_MESSAGE}" if neither url nor the full pair is given
+  - "${ALLOWED_HOSTNAME_MESSAGE}" (an input validation error) if url is not https:// on one of those hosts
+  - "Topic not found", "Cannot resolve bundleId" or "HTTP 404" if there is no article at that address
+  - 'Section "<section>" not found', followed by the available sections, if that section doesn't exist
 
 Note: Large articles are intelligently truncated with remaining sections listed.
 Use the \`section\` parameter to retrieve specific sections for long articles.`;
@@ -232,7 +266,7 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
         if (articleUrl === '' && (params.mapId === undefined || params.contentId === undefined)) {
           return {
             isError: true,
-            content: [{ type: 'text', text: 'Either url or both mapId and contentId must be provided.' }]
+            content: [{ type: 'text', text: MISSING_ADDRESS_MESSAGE }]
           };
         }
 

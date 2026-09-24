@@ -308,8 +308,8 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `product` | string | 是 | Jamf 產品 ID (支援自動補全，最多 100 字元) |
-| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.5.0"`) |
-| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.12.0"`) |
+| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.13.0"`) |
+| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.32.0"`) |
 
 執行步驟：取得兩個版本的目錄 → 識別結構差異 → 審閱關鍵變更文章 → 彙整新增功能、移除功能及遷移注意事項。
 
