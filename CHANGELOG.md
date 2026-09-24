@@ -1,3 +1,9 @@
+## [5.11.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.2...v5.11.3) (2026-09-24)
+
+### Bug Fixes
+
+* **deps:** unblock js-yaml updates, and group the Dependabot bumps that must move together ([#305](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/305)) ([986fbde](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/986fbdee8cddb15cd50818261d46666eb7b987ae)), closes [#203](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/203) [#298](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/298) [#302](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/302) [#203](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/203) [#236](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/236) [272/#274](https://github.com/272/jamf-docs-mcp-server/issues/274) [#291](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/291) [300/#301](https://github.com/300/jamf-docs-mcp-server/issues/301) [272/#274](https://github.com/272/jamf-docs-mcp-server/issues/274) [298/#300](https://github.com/298/jamf-docs-mcp-server/issues/300) [#236](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/236) [#301](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/301) [#291](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/291)
+
 ## [5.11.2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.1...v5.11.2) (2026-09-23)
 
 ### Dependencies
