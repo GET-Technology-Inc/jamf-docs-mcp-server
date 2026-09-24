@@ -44,14 +44,38 @@ interface LruNode {
 const TMP_WRITE_GRACE_MS = 60 * 60 * 1000;
 
 /**
- * Whether a directory entry is one of our in-flight writes.
+ * The file names this cache writes, and so the only ones it may count or delete.
  *
- * These are invisible to every `.json` filter in this class, which is why an
- * interrupted write used to leak permanently: `prune()` skipped it, `clear()`
- * skipped it, and the LRU only ever tracks keys it put in memory itself.
+ * `CACHE_DIR` is whatever directory the operator names, and nothing makes it
+ * ours alone. Until 2026-09-24 `prune()`, `clear()` and `stats()` treated every
+ * `*.json` in it as an entry, and `prune()` runs on every start (#253). Started
+ * with `CACHE_DIR=.` in a project root, v6.0.4 deleted package.json and
+ * tsconfig.json before the first tool call: they fail `CacheEntrySchema`, so
+ * they read as corrupt entries, and the log called them "stale entries". A
+ * directory shared with other tools lost their state files the same way.
+ * Matching on our own names means a mis-aimed `CACHE_DIR` can gain hash-named
+ * files but never lose one it already had.
+ *
+ * - Entries are `<sha256 hex>.json` (`getCachePath`) since v1.2.0. v1.0.0 and
+ *   v1.1.0 named them by md5, 32 hex digits. Those still match so the startup
+ *   sweep reclaims them: they are exactly the orphans #253 set out to reclaim.
+ * - In-flight writes are `<sha256 hex>.json.tmp.<pid>`. The write-then-rename
+ *   arrived in v1.2.0 together with sha256, so no md5-named one ever existed.
  */
-function isTmpWrite(file: string): boolean {
-  return /\.json\.tmp\.\d+$/.test(file);
+const ENTRY_FILE = /^(?:[0-9a-f]{32}|[0-9a-f]{64})\.json$/;
+const TMP_WRITE_FILE = /^[0-9a-f]{64}\.json\.tmp\.\d+$/;
+
+/**
+ * What a directory entry is to this cache: an entry, an in-flight write, or
+ * someone else's file (`null`), which nothing in this class may touch.
+ *
+ * The one predicate `prune()`, `clear()` and `stats()` share. Each used to
+ * carry its own filter, and each was wrong the same way.
+ */
+function ownFileKind(file: string): 'entry' | 'tmp-write' | null {
+  if (ENTRY_FILE.test(file)) { return 'entry'; }
+  if (TMP_WRITE_FILE.test(file)) { return 'tmp-write'; }
+  return null;
 }
 
 export class FileCache implements CacheProvider {
@@ -67,6 +91,7 @@ export class FileCache implements CacheProvider {
   private readonly lruHead: LruNode = { key: '__head__', prev: null, next: null };
   private readonly lruTail: LruNode = { key: '__tail__', prev: null, next: null };
   private dirCreated = false;
+  private dirFailureLogged = false;
 
   constructor(options: {
     cacheDir?: string;
@@ -90,10 +115,39 @@ export class FileCache implements CacheProvider {
     return path.join(this.cacheDir, `${FileCache.getCacheKey(key)}.json`);
   }
 
+  /**
+   * Create the cache directory before the first write, and say so if it can't be.
+   *
+   * With `recursive: true` an existing directory never throws, so every error
+   * here is real. Until 2026-09-24 they were all swallowed as "ignore if
+   * exists" and the directory was marked created anyway. Measured on macOS
+   * 27.0 with cwd `/`: `mkdir('.cache')`, which is `/.cache`, fails with
+   * ENOENT, and the only trace was one `ENOENT … open
+   * '.cache/<hash>.json.tmp.<pid>'` per write, which names a temp file, not
+   * the directory or the mkdir that failed.
+   *
+   * Logged once, not per write. Not marked created, so the next `set()`
+   * tries again: `mkdir` is cheap, and a directory that appears later (a
+   * volume mounted after start, or one someone creates) is picked up without
+   * a restart. The write still goes ahead either way, as it always has: a
+   * failed `mkdir` does not prove the write will fail (`CACHE_DIR=""` fails
+   * `mkdir` with ENOENT but writes into the working directory).
+   */
   private async ensureCacheDir(): Promise<void> {
     if (this.dirCreated) { return; }
-    await fs.mkdir(this.cacheDir, { recursive: true }).catch(() => { /* ignore if exists */ });
-    this.dirCreated = true;
+    try {
+      await fs.mkdir(this.cacheDir, { recursive: true });
+      this.dirCreated = true;
+    } catch (error) {
+      if (this.dirFailureLogged) { return; }
+      this.dirFailureLogged = true;
+      this.log.error(
+        `Cannot create cache directory "${this.cacheDir}": ${String(error)}. ` +
+        // Not "entries stay in memory": with CACHE_DIR="" mkdir fails but the
+        // writes still land in the working directory, and memory is an LRU.
+        'Will try again on the next write.',
+      );
+    }
   }
 
   private lruMoveToFront(node: LruNode): void {
@@ -222,8 +276,9 @@ export class FileCache implements CacheProvider {
       const files = await fs.readdir(this.cacheDir);
       // Includes in-flight `.tmp` writes: `clear()` is an explicit "drop
       // everything", and leaving them behind is how the directory grows a
-      // residue that nothing else looks at.
-      const ours = files.filter(f => f.endsWith('.json') || isTmpWrite(f));
+      // residue that nothing else looks at. "Everything" is everything we
+      // wrote, not everything in the directory.
+      const ours = files.filter(f => ownFileKind(f) !== null);
       await Promise.all(
         ours.map(async f => { await fs.unlink(path.join(this.cacheDir, f)).catch(() => { /* raced */ }); })
       );
@@ -238,10 +293,10 @@ export class FileCache implements CacheProvider {
 
     try {
       const files = await fs.readdir(this.cacheDir);
-      const jsonFiles = files.filter(f => f.endsWith('.json'));
-      totalEntries = jsonFiles.length;
+      const entryFiles = files.filter(f => ownFileKind(f) === 'entry');
+      totalEntries = entryFiles.length;
 
-      for (const file of jsonFiles) {
+      for (const file of entryFiles) {
         const stat = await fs.stat(path.join(this.cacheDir, file));
         totalSize += stat.size;
       }
@@ -282,8 +337,11 @@ export class FileCache implements CacheProvider {
    *    every namespace changed shape in 5.0.0 — is reclaimed on its TTL like
    *    any other. It is orphaned, not immortal;
    *  - corrupt or schema-invalid entries, deleted on sight;
-   *  - abandoned `.tmp` writes, which no `.json` filter has ever matched and
+   *  - abandoned `.tmp` writes, which the old `.json` filter never matched and
    *    which nothing bounded before this.
+   *
+   * All three are recognised by name first (`ownFileKind`); a file with any
+   * other name is never read, whatever it contains.
    *
    * Callers get the count so a startup sweep can say what it reclaimed.
    */
@@ -304,8 +362,12 @@ export class FileCache implements CacheProvider {
       const files = await fs.readdir(this.cacheDir);
 
       for (const file of files) {
-        if (!file.endsWith('.json')) {
-          if (isTmpWrite(file) && await this.isStaleTmp(file)) {
+        const kind = ownFileKind(file);
+        // Not ours, whatever it contains. A file that fails the schema below
+        // is only "corrupt" if we wrote it.
+        if (kind === null) { continue; }
+        if (kind === 'tmp-write') {
+          if (await this.isStaleTmp(file)) {
             await fs.unlink(path.join(this.cacheDir, file)).catch(() => { /* raced */ });
             pruned++;
           }
