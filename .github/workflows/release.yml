@@ -34,21 +34,22 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          # The Client ID of the jamf-docs-release-bot App, written in place.
-          # v3 deprecates `app-id` ("Use 'client-id' instead"), and the runner
-          # warns on every run that sets it; both workflows did, as of
-          # 2026-09-24. A Client ID names the App and authenticates nothing on
-          # its own: GitHub's docs keep it in a configuration variable, which
-          # they define as non-sensitive. The private key is the credential,
-          # and it stays a secret. Same value in dependabot-auto-merge.yml; the
-          # RELEASE_APP_ID secret is no longer read.
+          # The Client ID of the jamf-docs-release-bot App. v3 deprecates
+          # `app-id` ("Use 'client-id' instead"), and the runner warned on
+          # every run that set it; both workflows did, as of 2026-09-24. A
+          # Client ID authenticates nothing on its own (the private key is the
+          # credential), but the App is private, so the ID is kept in a secret
+          # like the App ID was rather than published in this file. Same secret
+          # in dependabot-auto-merge.yml, which runs on pull_request_target and
+          # so reads Actions secrets even for Dependabot's PRs. RELEASE_APP_ID
+          # is no longer read.
           #
           # `client-id` arrived in v3.1.0; `@v3` resolved to v3.2.0 on
           # 2026-09-24. actionlint 1.7.12 still reports it as undefined and
           # `app-id` as required, because its bundled copy of this action's
           # inputs predates v3.1.0. The runner reads the action's own
           # action.yml, where `app-id` is optional.
-          client-id: Iv23lie8sTKkhNw3AbLZ
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v7
