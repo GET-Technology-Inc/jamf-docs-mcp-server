@@ -97,6 +97,26 @@ updates:
       - dependency-name: "conventional-changelog-conventionalcommits"
         versions: [">=10"]
 
+      # Held on the line package.json `engines` names as its floor (>=24).
+      # @types/node describes one Node release line, and checking src/
+      # against a newer line than the oldest one this package supports lets
+      # code call an API that line does not have. tsc passes, and CI's 24.x
+      # leg catches it only if a unit test happens to reach the call; a
+      # consumer on 24 gets a TypeError.
+      #
+      # Measured 2026-09-24: `process.addUncaughtExceptionCaptureCallback`
+      # (added in Node 25.9.0) type-checks under @types/node 26.6.2, fails
+      # under 24.13.6 with TS2551, and on Node 24.21.0 throws
+      # `TypeError: process.addUncaughtExceptionCaptureCallback is not a
+      # function`. Until 6.0.0 the types were ahead of `engines` the whole
+      # time: ^25 against >=20 from the initial release (0b6e637), then ^26
+      # from #145.
+      #
+      # Raise this together with `engines`, never on its own. Minor and patch
+      # updates inside 24.x still arrive as usual.
+      - dependency-name: "@types/node"
+        versions: [">=25"]
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

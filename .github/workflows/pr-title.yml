@@ -34,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
 
       # No paths filter and no `needs`. The check is seconds long, and gating it
       # would reintroduce exactly the shape it guards against — a rule that

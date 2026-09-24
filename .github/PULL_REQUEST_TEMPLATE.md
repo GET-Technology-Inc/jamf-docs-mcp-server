@@ -17,7 +17,7 @@ Brief description of the changes.
 - [ ] Type checking passes (`npm run typecheck`)
 - [ ] Linting passes (`npm run lint`)
 - [ ] Security audit passes (`npm audit --omit=dev --audit-level=high`)
-- [ ] Tested on Node 20.x and 22.x (matching CI matrix)
+- [ ] Tested on Node 24.x and 26.x (matching CI matrix)
 - [ ] Documentation updated (if applicable)
 - [ ] No breaking changes (or documented if there are)
 
