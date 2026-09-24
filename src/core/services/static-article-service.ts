@@ -70,14 +70,18 @@ export function extractDocumentTitle(html: string): string | undefined {
   return trimmed !== '' ? decodeEntities(trimmed) : undefined;
 }
 
-/** The handful of entities that survive into a title attribute. */
+const TITLE_ENTITIES: Readonly<Record<string, string>> = {
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'",
+};
+
+/**
+ * The handful of entities that survive into a title attribute, decoded in one
+ * pass. Chained replaces decoded `&amp;` first and then read its output again,
+ * so a page writing the literal text "&lt;" (`&amp;lt;`) got "<" (CodeQL
+ * js/double-escaping, alert #13, open since 2026-09-02).
+ */
 function decodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#(?:39|x27);/g, "'");
+  return text.replace(/&(?:amp|lt|gt|quot|#39|#x27);/g, entity => TITLE_ENTITIES[entity] ?? entity);
 }
 
 /**
