@@ -364,11 +364,13 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
   之內。如果 host 從 `/` 啟動伺服器，請設定絕對路徑的 `CACHE_DIR`：在 macOS 上
   無法建立 `/.cache`，快取完全寫不進磁碟。
 - 位於 `/etc`、`/usr`、`/var`、`/sys`、`/proc`、`/dev`、`/sbin` 或 `/bin` 之下的
-  路徑會被拒絕。判斷前會先解析符號連結，所以在 macOS 上 `/private/etc/…` 和
-  `/etc/…` 一樣會被拒絕。
-- 作業系統的暫存目錄即使位於上述目錄之下也允許使用（macOS 的 `$TMPDIR` 位於
-  `/private/var` 之下）。
-- 被拒絕的值會改用 `.cache`，並在 stderr 輸出一行警告。
+  路徑會被拒絕，相對路徑和絕對路徑都一樣。判斷前會先解析符號連結，所以在 macOS 上
+  `/private/etc/…` 和 `/etc/…` 一樣會被拒絕。未設定 `CACHE_DIR` 時不做這項檢查。
+- 使用者的家目錄和作業系統的暫存目錄即使位於上述目錄之下也允許使用。macOS 的
+  `$TMPDIR` 位於 `/private/var` 之下；在 Fedora Silverblue 等 ostree 系統上，
+  `/home` 是指向 `/var/home` 的連結。
+- 被拒絕的值會改用 `.cache`，並在 stderr 輸出一行警告。`.cache` 同樣以工作目錄為
+  基準解析，所以工作目錄本身位於系統目錄之下時，改用的 `.cache` 也會在那裡。
 
 ### 請求設定
 

@@ -552,11 +552,15 @@ point it at a project root or a directory other tools use.
   host starts the server from `/`, set an absolute `CACHE_DIR`: on macOS
   `/.cache` can't be created, so nothing reaches the disk.
 - A path inside `/etc`, `/usr`, `/var`, `/sys`, `/proc`, `/dev`, `/sbin` or
-  `/bin` is rejected. Symlinks are resolved first, so on macOS
-  `/private/etc/…` is rejected just like `/etc/…`.
-- The OS temp directory is allowed even when it's under one of those
-  (`$TMPDIR` on macOS is under `/private/var`).
-- A rejected value falls back to `.cache`, with a warning on stderr.
+  `/bin` is rejected, relative or absolute. Symlinks are resolved first, so
+  on macOS `/private/etc/…` is rejected just like `/etc/…`. An unset
+  `CACHE_DIR` isn't checked.
+- Your home directory and the OS temp directory are allowed even when they're
+  under one of those. `$TMPDIR` on macOS is under `/private/var`, and on
+  ostree systems such as Fedora Silverblue `/home` is a link to `/var/home`.
+- A rejected value falls back to `.cache`, with a warning on stderr. That is
+  relative to the working directory too, so if the working directory is
+  inside a system directory, the fallback is as well.
 
 ### Request Settings
 
