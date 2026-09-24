@@ -360,7 +360,7 @@ describe('clear()', () => {
     expect(result).toBeNull();
   });
 
-  it('should delete JSON files found in the cache directory', async () => {
+  it('should delete the cache entries found in the cache directory', async () => {
     const fileName1 = entryFile('a');
     const fileName2 = entryFile('b');
     fs.readdir.mockResolvedValue([fileName1, fileName2]);
@@ -414,7 +414,7 @@ describe('stats()', () => {
     expect(stats.totalSize).toBe(0);
   });
 
-  it('should count only JSON files in the directory', async () => {
+  it('should count only cache entries in the directory', async () => {
     fs.readdir.mockResolvedValue([entryFile('a'), entryFile('b'), 'c.txt']);
     fs.stat.mockResolvedValue({ size: 512, mtimeMs: Date.now() });
 
@@ -422,7 +422,7 @@ describe('stats()', () => {
     expect(stats.totalEntries).toBe(2);
   });
 
-  it('should sum file sizes for all JSON files', async () => {
+  it('should sum file sizes for all cache entries', async () => {
     fs.readdir.mockResolvedValue([entryFile('a'), entryFile('b')]);
     fs.stat.mockResolvedValue({ size: 1024, mtimeMs: Date.now() });
 
