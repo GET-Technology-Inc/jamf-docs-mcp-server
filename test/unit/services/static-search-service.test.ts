@@ -99,7 +99,7 @@ describe('searchStaticSources', () => {
 
   it('ranks title matches across every source that publishes the locale', async () => {
     mockHttpGetText.mockImplementation(async (url: string) =>
-      await Promise.resolve(url.startsWith('https://support.jamf.com')
+      await Promise.resolve(new URL(url).hostname === 'support.jamf.com'
         ? sitemap(['/en/articles/1-zero-trust-network-access-reports'], 'https://support.jamf.com')
         : sitemap(['/en/guides/networking/zero-trust-network-access', '/en/guides/other/unrelated-topic'])));
 
@@ -123,7 +123,7 @@ describe('searchStaticSources', () => {
 
   it('lets one unreachable source cost only its own hits', async () => {
     mockHttpGetText.mockImplementation(async (url: string) =>
-      url.startsWith('https://support.jamf.com')
+      new URL(url).hostname === 'support.jamf.com'
         ? await Promise.reject(new Error('sitemap down'))
         : await Promise.resolve(sitemap(['/en/guides/networking/still-here'])));
 
