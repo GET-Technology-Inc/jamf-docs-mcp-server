@@ -1,3 +1,9 @@
+## [6.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.6...v6.0.7) (2026-09-24)
+
+### Bug Fixes
+
+* **glossary:** say product does not filter, and stop answering DEP, APNs and group with unrelated entries ([#321](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/321)) ([9df7a34](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9df7a34108106be3fd8699de25b03e6686255258)), closes [#209](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/209)
+
 ## [6.0.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.5...v6.0.6) (2026-09-24)
 
 ### Bug Fixes
