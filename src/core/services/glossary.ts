@@ -5,12 +5,13 @@
  * - GET /api/khub/maps/{mapId}/toc — list all glossary terms
  * - GET /api/khub/maps/{mapId}/topics/{contentId}/content — term HTML
  *
- * Jamf's glossary uses DITA glossentry format where each term is a separate topic:
- *   <div class="glossdef"><p>Definition text</p></div>
- *
- * Also supports fallback formats:
- * - Definition list (<dl>/<dt>/<dd>)
- * - Heading + paragraph (h2/h3 followed by <p>)
+ * Each glossary term is a separate topic, and its `/content` is the
+ * definition alone — no heading, no term name (all 123 live topics,
+ * 2026-09-24):
+ *   <div id="glossentry-6081"><div class="abstract glossdef"><p class="p">…</p></div></div>
+ * The term's name comes from its TOC title. `parseGlossaryEntries` also reads
+ * a glossterm heading, a definition list, or heading + paragraph markup, but
+ * the live glossary serves none of them.
  *
  * Uses fuse.js for fuzzy ranking of collected entries.
  */
@@ -119,10 +120,15 @@ async function fetchGlossaryContent(
  * Parse glossary entries from HTML content.
  *
  * Priority order:
- * 1. DITA glossentry format (h1.glossterm + .glossdef) — Jamf's actual format
+ * 1. DITA glossentry format (h1.glossterm + .glossdef)
  * 2. Definition list (<dl>/<dt>/<dd>)
  * 3. Heading + paragraph (h2/h3 followed by <p>)
  * 4. Fallback: h1 title + article body content
+ *
+ * None of these matches what Jamf's glossary serves today. `/content` has no
+ * heading and no `article` (0 of 123 live topics, 2026-09-24), so this
+ * returns `[]` for every live term and `lookupGlossaryTerm` builds the entry
+ * from the TOC title instead.
  */
 export function parseGlossaryEntries(
   html: string,
@@ -160,7 +166,8 @@ export function parseGlossaryEntries(
  *   <h1 class="glossterm">Term</h1>
  *   <div class="glossdef"><p>Definition</p></div>
  *
- * Each Jamf glossary page contains exactly one term.
+ * The shape of a rendered DITA glossentry page. Jamf's `/content` endpoint
+ * serves the `.glossdef` without the `.glossterm`, so this finds no term there.
  */
 function parseDitaGlossentry(
   $: cheerio.CheerioAPI,
@@ -366,13 +373,106 @@ const SHORT_QUERY_LENGTH = 4;
  * 0.4 is a cliff, not a slope. Everything at or below 0.3 is identical on
  * precision, so the value is chosen on what separates them — typo tolerance:
  * `LDPA` still finds LDAP at 0.3 and finds nothing at 0.2 or below.
+ *
+ * Re-measured 2026-09-24 over the 123 live topics, once `titleNamesShortQuery`
+ * began filtering the fuzzy hits. Same 18 abbreviations, plus nine short
+ * queries with no entry of their own (`DEP`, `dep`, `ADE`, `APNs`, `APNS`,
+ * `VPP`, `SSO`, `ABM`, `PPPC`); pages fetched is the total over all 29
+ * queries, each on a cold cache:
+ *
+ *                     top-1    LDPA   MDMs   absent answered   pages fetched
+ *   before the filter
+ *   0.0 - 0.2         18/18    no     no     2 of 9            33
+ *   0.3               18/18    yes    yes    4 of 9            44
+ *   0.4               18/18    yes    yes    8 of 9            163
+ *   with it
+ *   0.0 - 0.2         18/18    no     no     0 of 9            28
+ *   0.3 - 0.5         18/18    yes    yes    0 of 9            31
+ *
+ * The filter, not the threshold, now decides precision. What the threshold
+ * still sets is typo tolerance: 0.3 is the lowest value that keeps `LDPA` and
+ * `MDMs`, and 0.4 would extend a slip to three-letter queries as well (`EIF`,
+ * `IDs`) — a looser rule, and not one this value was chosen for.
  */
 const SHORT_QUERY_THRESHOLD = 0.3;
 
+function isShortQuery(term: string): boolean {
+  return term.length <= SHORT_QUERY_LENGTH;
+}
+
 function thresholdFor(term: string): number {
-  return term.length <= SHORT_QUERY_LENGTH
+  return isShortQuery(term)
     ? SHORT_QUERY_THRESHOLD
     : (TOC_FUSE_OPTIONS.threshold ?? 0.4);
+}
+
+/**
+ * Whether `title` names the short query `term`, rather than merely containing
+ * its letters.
+ *
+ * A short query is an abbreviation, and what it names is a whole word — Jamf
+ * publishes one as `mobile device management (MDM)`. Fuse cannot tell that
+ * apart from the same letters inside a longer word: with `ignoreLocation` a
+ * three-letter pattern at 0.3 is an unanchored substring search, so `DEP`
+ * matched the `dep` of `deployment`; and the one edit it allows a
+ * four-letter pattern turned `APNs` into `Apps` and `APFS` — other words, not
+ * misspellings of this one.
+ *
+ * So a fuzzy hit counts only if a word of the title is the query, or the
+ * query is one slip from it (see `isOneSlipFrom`): `MDMs`, `LDPA` — the typo
+ * #209 set the threshold to keep — and `clam` for `claim` all still land. A
+ * changed letter never does, nor an extra one other than a plural `s`: `prof`
+ * is the start of `profile`, not `Pro` mistyped. A slip is allowed only where
+ * the threshold allows an error at all, which at 0.3 is four letters: below
+ * that one letter is a third of the query, and `OS` one slip from `DoS` is not
+ * a typo. The downstream `D1GlossaryProvider` applies the same idea: a query
+ * of four characters or fewer does not qualify for its prefix tier (#208).
+ */
+function titleNamesShortQuery(title: string, term: string): boolean {
+  if (hasWordBoundaryMatch(title, term)) { return true; }
+  const query = term.toLowerCase();
+  return Math.floor(query.length * SHORT_QUERY_THRESHOLD) >= 1 &&
+    wordsOf(title).some(word => isOneSlipFrom(word, query));
+}
+
+/**
+ * Whether `typed` is `word` with at most one slip of the keyboard: a missed
+ * letter, or two neighbours swapped. A plural `s` counts too.
+ *
+ * Not a changed letter. Fuse counts it as one edit like the others, but it is
+ * the edit that turns one abbreviation into another: `APNs` into `APFS`, or
+ * `SDN` into `SDP`, which are two separate entries in the live glossary.
+ *
+ * Nor an extra letter, other than that `s`. One letter more than a title word
+ * is usually the start of a longer word, not a typo of the shorter one.
+ * Accepting it answered `prof`, `prop`, `prov` and `prot` with
+ * `policy (Jamf Pro)` alone, and `defi` and `exfi` with
+ * `Extensible Firmware Interface (EFI)` alone: the letters that start
+ * profile, property, provider, protection, definition and exfiltration (123
+ * live topics, 2026-09-24). What it costs is a letter added to an
+ * abbreviation: `UEFI`, `DDoS` and `sshd` no longer find `EFI`, `DoS` and
+ * `SSH`. No definition in the glossary mentions any of the three, so, like
+ * `zero-touch deployment` for `DEP`, those were related entries rather than
+ * the term's own.
+ */
+function isOneSlipFrom(word: string, typed: string): boolean {
+  if (typed === word || typed === `${word}s`) { return true; }
+  if (typed.length === word.length - 1) {
+    for (let i = 0; i < word.length; i++) {
+      if (word.slice(0, i) + word.slice(i + 1) === typed) { return true; }
+    }
+    return false;
+  }
+  if (typed.length !== word.length) { return false; }
+  let i = 0;
+  while (word.charAt(i) === typed.charAt(i)) { i++; }
+  return word.charAt(i) === typed.charAt(i + 1) &&
+    word.charAt(i + 1) === typed.charAt(i) &&
+    word.slice(i + 2) === typed.slice(i + 2);
+}
+
+function wordsOf(text: string): string[] {
+  return text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 }
 
 /**
@@ -385,6 +485,33 @@ function thresholdFor(term: string): number {
 function hasWordBoundaryMatch(title: string, term: string): boolean {
   const escaped = escapeRegExp(term.toLowerCase());
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(title.toLowerCase());
+}
+
+/**
+ * Whether a word of three letters or more from `query` starts a word of
+ * `entryTerm`, or is one slip from one (see `isOneSlipFrom`).
+ *
+ * The fallback for when the ranker's own fuzzy pass rejects every candidate.
+ * It used to return all of them, so `group` reported `property list (PLIST)`
+ * and `resource owner password credentials (ROPC)` — candidates the 0.4 TOC
+ * pass admitted on `prop` and `ROP` — as two matches the ranker had just
+ * turned down.
+ *
+ * Returning nothing instead loses three kinds of query that land here
+ * because 0.3 rejects them too, and that returning everything used to answer
+ * by accident. Measured over the 123 live titles on 2026-09-24:
+ * - an extra word: `Device Enrollment Program` → `device enrollment`,
+ *   `Automated Device Enrollment`;
+ * - truncated words: `config prof`, `ext attr`;
+ * - a swap in a short word, two edits to Fuse: `deamon`, `cipehr`, `btonet`.
+ */
+function sharesWordWithQuery(entryTerm: string, query: string): boolean {
+  const termWords = wordsOf(entryTerm);
+  return wordsOf(query)
+    .filter(word => word.length >= 3)
+    .some(word => termWords.some(
+      termWord => termWord.startsWith(word) || isOneSlipFrom(termWord, word),
+    ));
 }
 
 function escapeRegExp(value: string): string {
@@ -479,9 +606,8 @@ export function searchGlossaryEntries(
 
   const results = fuse.search(term);
 
-  // If fuse.js returns no results, return all entries as-is
   if (results.length === 0) {
-    return entries;
+    return entries.filter(e => sharesWordWithQuery(e.term, term));
   }
 
   return results.map(r => r.item);
@@ -512,13 +638,15 @@ export async function lookupGlossaryTerm(
     if (provided !== null) {return provided;}
   }
   const log = ctx.logger.createLogger('glossary');
+  // `params.product` is deliberately not read past this point. Jamf publishes
+  // one platform-wide glossary: the map and all 125 of its topics have empty
+  // `jamf:portal`, `jamf:app` and `jamf:utility` (2026-09-24), so there is
+  // nothing to filter by. It stays in the signature because a
+  // `GlossaryProvider` receives it.
   const { term, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
   const locale = params.language ?? DEFAULT_LOCALE;
 
-  log.info(
-    `Looking up glossary term: "${term}"` +
-    ` (product=${params.product ?? 'all'}, locale=${locale})`
-  );
+  log.info(`Looking up glossary term: "${term}" (locale=${locale})`);
 
   // Resolve glossary mapId dynamically via MapsRegistry
   let mapId: string | null;
@@ -564,15 +692,28 @@ export async function lookupGlossaryTerm(
   // three-letter one.
   const fuseCache = getFuseCacheForContext(ctx);
   const tocFuse = getTocFuse(fuseCache, locale, tocEntries, thresholdFor(term));
-  const tocMatches = tocFuse.search(term);
+  const tocMatches = tocFuse.search(term).map(m => m.item);
 
-  const matchedTocEntries = tocMatches.length > 0
-    ? tocMatches.map(m => m.item)
+  let matchedTocEntries: FtTocNode[];
+  if (isShortQuery(term)) {
+    // Filtered here, before anything is fetched: a title that does not name
+    // the abbreviation is neither an answer nor worth a page read.
+    //
+    // No substring fallback: every title containing a short query is already
+    // a fuzzy hit at 0.3 (an exact substring scores 0), so the fallback could
+    // only re-admit what this filter rejects — `deployment`.
+    matchedTocEntries = tocMatches.filter(
+      e => e.title !== undefined && titleNamesShortQuery(e.title, term),
+    );
+  } else if (tocMatches.length > 0) {
+    matchedTocEntries = tocMatches;
+  } else {
     // Last resort: an unanchored substring, which is how a term embedded in a
     // longer word stays reachable when fuzzy found nothing.
-    : tocEntries.filter(
-        e => e.title?.toLowerCase().includes(term.toLowerCase()) === true,
-      );
+    matchedTocEntries = tocEntries.filter(
+      e => e.title?.toLowerCase().includes(term.toLowerCase()) === true,
+    );
+  }
 
   if (matchedTocEntries.length === 0) {
     log.info(`No matching glossary terms found for "${term}"`);

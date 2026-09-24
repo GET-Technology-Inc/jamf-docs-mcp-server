@@ -238,12 +238,12 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 ### jamf_docs_glossary_lookup
 
-查詢 Jamf 官方術語表，支援模糊比對。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
+查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `term` | string | 是 | 要查詢的術語 (2-100 字元) |
-| `product` | string | 否 | 依產品 ID 篩選 |
+| `product` | string | 否 | 可傳入但不會篩選：Jamf 只提供一份全平台共用的術語表，未依產品分類 |
 | `language` | string | 否 | 文件語系 (預設: `en-US`，術語表僅英文) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |

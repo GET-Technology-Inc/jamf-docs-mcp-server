@@ -213,12 +213,12 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 
 ### jamf_docs_glossary_lookup
 
-Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
+Looks up a term in the Jamf official glossary and returns matching definitions using fuzzy matching. A term of 4 characters or fewer is treated as an abbreviation and must be a whole word of the entry's name, so `DEP` does not match `zero-touch deployment`. A 4-character term may be a plural, or miss a letter or swap two (`MDMs`, `LDPA`). Glossary content is currently English-only; non-English `language` values are accepted but results will be in English.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `term` | string (2–100 chars) | required | Glossary term to look up |
-| `product` | string | — | Filter by product ID |
+| `product` | string | — | Accepted, but does not filter: Jamf publishes one platform-wide glossary with no product classification |
 | `language` | string | `en-US` | Documentation language/locale (glossary is English-only) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level |

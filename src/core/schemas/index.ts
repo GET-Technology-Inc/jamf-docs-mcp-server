@@ -317,10 +317,16 @@ export const GlossaryLookupInputSchema = z.object({
     // Jamf glossary has no smart group entry.
     .describe('Glossary term to look up (e.g., "MDM", "Configuration Profile", "Automated Device Enrollment")'),
 
+  // Accepted and ignored. Jamf's glossary carries no product classification
+  // (see lookupGlossaryTerm), and the schema is strict, so removing the field
+  // would reject every caller that already sends it.
   product: completable(
     z.enum(PRODUCT_IDS)
       .optional()
-      .describe(PRODUCT_FILTER_DESCRIPTION),
+      .describe(
+        'Accepted, but does not filter: Jamf publishes one platform-wide glossary ' +
+        'with no product classification'
+      ),
     completeProduct
   ),
 
