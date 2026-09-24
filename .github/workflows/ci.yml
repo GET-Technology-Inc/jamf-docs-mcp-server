@@ -45,6 +45,10 @@ jobs:
               # typo fix for no added protection.
               - '.github/workflows/ci.yml'
               - '.github/workflows/upstream-contract.yml'
+              # Codecov reads codecov.yml from the commit an upload is for, so
+              # a PR changing only this file shows its effect only if the
+              # Coverage job uploads for it.
+              - 'codecov.yml'
 
   test:
     name: Test (Node ${{ matrix.node-version }})
