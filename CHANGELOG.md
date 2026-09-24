@@ -1,3 +1,9 @@
+## [6.0.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.4...v6.0.5) (2026-09-24)
+
+### Bug Fixes
+
+* **cache:** stop the startup sweep deleting files the cache did not write, and check CACHE_DIR by location ([#320](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/320)) ([ddff96b](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/ddff96babcd8d49e07235838b63244c6f1e7f75c)), closes [#253](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/253) [#253](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/253) [#313](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/313) [#313](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/313)
+
 ## [6.0.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.3...v6.0.4) (2026-09-24)
 
 ### Dependencies
