@@ -8,7 +8,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/jamf-docs-mcp-server.git`
 
    (Upstream repository: `https://github.com/GET-Technology-Inc/jamf-docs-mcp-server.git`)
-3. Install dependencies: `npm install`
+3. Install dependencies with Node.js 24 or newer (the `engines` floor, and the oldest version CI tests): `npm install`
 4. Create a branch: `git checkout -b feature/your-feature-name`
 
 ## Development
