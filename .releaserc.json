@@ -42,8 +42,8 @@
       "npmPublish": true
     }],
     ["@semantic-release/github", {
-      "successComment": false,
-      "failTitle": false
+      "successCommentCondition": false,
+      "failCommentCondition": false
     }],
     ["@semantic-release/git", {
       "assets": ["package.json", "package-lock.json", "CHANGELOG.md"],
