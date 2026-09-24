@@ -1,3 +1,9 @@
+## [6.0.9](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.8...v6.0.9) (2026-09-24)
+
+### Bug Fixes
+
+* **get-article:** keep every reply within maxTokens, and count notes in tokenCount ([#323](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/323)) ([d27b48d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/d27b48d82491a3d907b4053aa11d563a22a0144d))
+
 ## [6.0.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.7...v6.0.8) (2026-09-24)
 
 ### Bug Fixes
