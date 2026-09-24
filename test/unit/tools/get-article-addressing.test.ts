@@ -16,6 +16,11 @@
  *      heading; the sub-sections a reader sees are child topics, which the
  *      response had already placed in `navigation` and never offered.
  *
+ * And a third, found the same day on the replies the first two shaped: none of
+ * them kept to `maxTokens`. At 100, the missed-section reply above reported
+ * 415/100 and the `summaryOnly` outline 459/100, both `truncated: false`, and
+ * the notes were in no token count at all.
+ *
  * So every case here drives the registered tool end to end — real
  * article-service, parser and formatter, HTTP mocked underneath — and asserts
  * what a client reads: the markdown, the JSON text and `structuredContent`.
@@ -41,10 +46,12 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { httpGetJson, httpGetText, HttpError } from '../../../src/core/http-client.js';
 import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
+import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-articles.js';
+import { estimateTokens } from '../../../src/core/services/tokenizer.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
-import type { FtMetadataEntry, FtTocNode, FtTopicInfo } from '../../../src/core/types.js';
+import type { FtMetadataEntry, FtTocNode, FtTopicInfo, TokenInfo } from '../../../src/core/types.js';
 
 const mockedGetJson = vi.mocked(httpGetJson);
 const mockedGetText = vi.mocked(httpGetText);
@@ -182,6 +189,8 @@ const OTHER_HTML = '<div class="body conbody"><p class="p">Body.</p></div>';
 // ── Per-test state and routing ──────────────────────────────────────────────
 
 let topics: Record<string, FtTopicInfo>;
+/** Topic bodies by content ID; any other topic's is `OTHER_HTML`. */
+let bodies: Record<string, string>;
 let tocUnavailable: boolean;
 
 function route(): void {
@@ -208,7 +217,7 @@ function route(): void {
     }
     const content = /\/topics\/([^/]+)\/content$/.exec(decodeURIComponent(new URL(url).pathname));
     if (content !== null) {
-      return content[1] === CCP ? CCP_HTML : OTHER_HTML;
+      return Object.hasOwn(bodies, content[1]) ? bodies[content[1]] : OTHER_HTML;
     }
     throw new Error(`Unexpected GET text: ${url}`);
   });
@@ -246,6 +255,7 @@ beforeAll(async () => {
   ctx = createMockContext();
   ctx.topicResolver.resolve = resolve;
   registerGetArticleTool(server, ctx);
+  registerBatchGetArticlesTool(server, ctx);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'test-client', version: '0.0.1' });
   await server.connect(serverTransport);
@@ -259,6 +269,7 @@ afterAll(async () => {
 beforeEach(async () => {
   vi.clearAllMocks();
   topics = { ...TOPICS };
+  bodies = { [CCP]: CCP_HTML };
   tocUnavailable = false;
   // Each case starts cold, so no answer is a cached one from an earlier case.
   await ctx.cache.clear();
@@ -480,5 +491,116 @@ describe('get_article with a section the article does not have', () => {
     expect(errors).not.toBe('');
     expect(errors).not.toContain('Section');
     expect(description).toContain('matches no heading is not an error');
+  });
+});
+
+// ── maxTokens ───────────────────────────────────────────────────────────────
+
+describe('get_article keeps every reply within maxTokens, notes included', () => {
+  const CHILD = 'Creating a Computer Configuration Profile in Jamf Pro';
+
+  beforeEach(() => {
+    // A body that does not fit 100 tokens, for the url + `language` case.
+    bodies[POLICIES_JA] = CCP_HTML;
+  });
+
+  /** The markdown, the JSON text and `structuredContent` of one call. */
+  async function channels(args: Args): Promise<{
+    markdown: string;
+    json: { content: string; tokenInfo: TokenInfo };
+    sc: Record<string, unknown>;
+  }> {
+    const full = await call(args);
+    const json = await call({ ...args, responseFormat: 'json' });
+    return {
+      markdown: full.text,
+      json: JSON.parse(json.text) as { content: string; tokenInfo: TokenInfo },
+      sc: full.sc,
+    };
+  }
+
+  it.each([
+    ['a missed section', { url: CCP_URL, section: 'Nonexistent Zzz' }],
+    ['a missed section that matches a sub-topic', { url: CCP_URL, section: CHILD }],
+    ['summaryOnly', { url: CCP_URL, summaryOnly: true }],
+    ['the whole article', { url: CCP_URL }],
+    ['the pair note', { url: POLICIES_URL, mapId: PRO_MAP, contentId: CCP }],
+    ['the pair and `language` notes', { url: POLICIES_URL, mapId: PRO_MAP, contentId: CCP, language: 'ja-JP' }],
+    ['the static-source note', { url: CONCEPTS_GUIDE_URL, mapId: PRO_MAP, contentId: CCP }],
+    ['the url + `language` note', { url: POLICIES_URL, language: 'ja-JP' }],
+  ])('%s, at the schema minimum of 100', async (_name, args) => {
+    const { markdown, json, sc } = await channels({ ...args, maxTokens: 100 });
+
+    const shown = /\*\*Tokens\*\*: (\d+)\/100/.exec(markdown);
+    expect(Number(shown?.[1])).toBeLessThanOrEqual(100);
+    // The count is of exactly what was sent, note and all.
+    expect(sc.tokenCount).toBe(estimateTokens(sc.content as string));
+    expect(sc.tokenCount).toBeLessThanOrEqual(100);
+    expect(json.tokenInfo.tokenCount).toBe(estimateTokens(json.content));
+    expect(json.tokenInfo.tokenCount).toBeLessThanOrEqual(100);
+    expect(json.tokenInfo.maxTokens).toBe(100);
+  });
+
+  it('marks a missed section\'s reply truncated on every channel, and says what it left out', async () => {
+    // Live on main: 415/100, `truncated: false`.
+    const { markdown, json, sc } = await channels({ url: CCP_URL, section: 'Nonexistent Zzz', maxTokens: 100 });
+
+    expect(markdown).toMatch(/\*\*Tokens\*\*: \d+\/100 \| \*\(truncated\)\*/);
+    expect(sc.truncated).toBe(true);
+    expect(json.tokenInfo.truncated).toBe(true);
+    expect(markdown).toContain('*Section "Nonexistent Zzz" not found.*');
+    // What fits of the nine, and a count of the rest.
+    const links = markdown.split('\n').filter(line => line.startsWith('- ['));
+    const more = /\.\.\.and (\d+) more, not listed here/.exec(markdown);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.length + Number(more?.[1])).toBe(9);
+  });
+
+  it('lists the matching sub-topic first once there is room for one link', async () => {
+    const { markdown, sc } = await channels({ url: CCP_URL, section: CHILD, maxTokens: 150 });
+
+    expect(sc.truncated).toBe(true);
+    const links = markdown.split('\n').filter(line => line.startsWith('- ['));
+    expect(links[0]).toContain('Manually_Creating_a_Configuration_Profile_macOS');
+    expect(links[0]).toContain('matches');
+    expect(markdown).toMatch(new RegExp(`\\.\\.\\.and ${9 - links.length} more, not listed here`));
+  });
+
+  it('marks a summaryOnly outline truncated when it had to cut it', async () => {
+    // Live on main: 459/100, `truncated: false`.
+    const { markdown, sc } = await channels({ url: CCP_URL, summaryOnly: true, maxTokens: 100 });
+
+    expect(sc.truncated).toBe(true);
+    expect(markdown).toContain('## Summary');
+    expect(markdown).toContain('*Estimated read time:');
+    expect(markdown).toContain('*Sub-topics (9): not listed within `maxTokens`');
+  });
+
+  it('keeps the notes whole, and cuts the article to make room for them', async () => {
+    const { markdown, sc } = await channels({
+      url: POLICIES_URL, mapId: PRO_MAP, contentId: CCP, language: 'ja-JP', maxTokens: 100,
+    });
+
+    expect(sc.truncated).toBe(true);
+    expect(markdown).toContain('was not used: with both, a learn.jamf.com fetch follows the pair.');
+    expect(markdown).toContain('which is "en-US".*');
+  });
+
+  it('and batch_get_articles counts the `language` note in each article\'s share', async () => {
+    const result = await client.callTool({
+      name: 'jamf_docs_batch_get_articles',
+      arguments: { urls: [POLICIES_URL], language: 'ja-JP', maxTokens: 100, responseFormat: 'json' },
+    });
+    const json = JSON.parse((result.content[0] as TextContent).text) as {
+      results: { content: string; tokenInfo: TokenInfo }[];
+    };
+    const structured = (result.structuredContent as { results: { content: string; tokenCount: number }[] }).results;
+
+    const [article] = json.results;
+    expect(article.content).toContain('*Note: Language "ja-JP" was requested');
+    expect(article.tokenInfo.tokenCount).toBe(estimateTokens(article.content));
+    expect(article.tokenInfo.tokenCount).toBeLessThanOrEqual(100);
+    expect(article.tokenInfo.truncated).toBe(true);
+    expect(structured[0].tokenCount).toBe(estimateTokens(structured[0].content));
   });
 });

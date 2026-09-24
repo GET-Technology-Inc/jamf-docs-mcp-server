@@ -611,6 +611,30 @@ describe('jamf_docs_get_article tool', () => {
       const sc = result.structuredContent as Record<string, unknown>;
       expect(sc.truncated).toBe(false);
     });
+
+    it('does not print the whole section list again under an outline cut to fit maxTokens', async () => {
+      // An outline cut to budget is marked truncated, and "truncated" is what
+      // makes the formatter append every section, bold, under the reply. That
+      // would undo the cut, and the outline already is that list.
+      mockArticle({
+        content: '## Summary\n\nBrief overview.\n\n## Article Outline (2 sections)\n\n- Overview (~100 tokens)\n\n*...and 1 more sections, not listed within `maxTokens`.*\n',
+        tokenInfo: createTokenInfo({ tokenCount: 40, truncated: true, maxTokens: 100 }),
+        sections: [
+          createArticleSection({ id: 's1', title: 'Overview', level: 2, tokenCount: 100 }),
+          createArticleSection({ id: 's2', title: 'Prerequisites', level: 2, tokenCount: 200 }),
+        ],
+      });
+
+      const result = await client.callTool({
+        name: 'jamf_docs_get_article',
+        arguments: { url: VALID_URL, summaryOnly: true, maxTokens: 100 },
+      });
+
+      const text = getTextContent(result);
+      expect(text).toContain('*(truncated)*');
+      expect(text).not.toContain('## Available Sections');
+      expect(text).not.toContain('**Prerequisites**');
+    });
   });
 
   // --- Error handling -------------------------------------------------------

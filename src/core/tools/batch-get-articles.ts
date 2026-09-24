@@ -117,6 +117,7 @@ Examples:
   - Bulk fetch with compact output: urls=[...], outputMode="compact", maxTokens=10000
 
 Note: Token budget is split evenly across articles. Use higher maxTokens for more articles.
+A note on an article (such as one about \`language\`) counts toward its share.
 Partial failures are reported per-article without failing the entire batch.`;
 
 export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerContext): void {

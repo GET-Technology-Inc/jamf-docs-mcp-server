@@ -212,6 +212,8 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"`；compact 模式顯示約 500 token 預覽加上段落清單 (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
+`maxTokens` 涵蓋每一種回應：整篇文章或單一段落、`summaryOnly` 大綱、找不到段落時的回應，以及說明請求如何解析的附註，全部計入 `tokenInfo.tokenCount`。內容超過 `maxTokens` 時會被截斷，並在放得下的範圍內列出剩餘段落及其 token 數。大綱、段落清單或子主題清單被截短時，會註明還有幾項沒列出，`truncated` 也會是 `true`。之後可以用 `section` 參數取得特定段落。
+
 ### jamf_docs_get_toc
 
 取得 Jamf 產品文件的目錄結構，也可以取得任何單一出版品 (版本說明、技術文件、課程、

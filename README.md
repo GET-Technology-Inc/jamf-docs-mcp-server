@@ -184,7 +184,7 @@ support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
-When content exceeds `maxTokens`, the tool truncates the response and lists all available sections with their token counts. Use the `section` parameter on a follow-up call to retrieve a specific part.
+`maxTokens` bounds every reply: the article or one section, a `summaryOnly` outline, a missed section's reply, and any note about how the call was resolved, all counted in `tokenInfo.tokenCount`. When content exceeds `maxTokens`, the tool truncates the response and lists the remaining sections with their token counts, as many as fit. An outline or a list of sections or sub-topics cut to fit says how many it left out, and `truncated` is `true`. Use the `section` parameter on a follow-up call to retrieve a specific part.
 
 ### jamf_docs_get_toc
 
