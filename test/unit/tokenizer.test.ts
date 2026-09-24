@@ -511,18 +511,72 @@ Advanced content.`;
 
 describe('truncateToTokenLimit - more than 10 remaining sections', () => {
   it('should show "...and N more sections" when more than 10 sections remain after truncation', () => {
-    // Create content with 20 tiny sections; with maxTokens=30 only ~5-6 fit,
-    // leaving ~14 remaining sections — triggering the ">10" branch (line 250-252)
-    const content = Array.from({ length: 20 }, (_, i) => {
+    // 60 sections of ~25 tokens: at 1000 about 36 fit, and the 10% reserve
+    // (100 tokens) holds the notice with ten of the remaining ~24 listed.
+    const content = Array.from({ length: 60 }, (_, i) => {
       const heading = i === 0 ? '#' : '##';
-      return `${heading} S${i + 1}\n\nx.`;
+      return `${heading} S${i + 1}\n\n${'x '.repeat(40)}`;
     }).join('\n\n');
 
-    const result = truncateToTokenLimit(content, 30);
+    const result = truncateToTokenLimit(content, 1000);
 
     expect(result.tokenInfo.truncated).toBe(true);
+    expect(result.content.match(/^ *- S\d+ \(~\d+ tokens\)$/gm)).toHaveLength(10);
     // The notice should mention "...and N more sections" because >10 sections remain
     expect(result.content).toMatch(/\.\.\.and \d+ more sections/);
+    expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe('truncateToTokenLimit - the notice is within maxTokens', () => {
+  // Until 2026-09-24 the notice was appended after the body had taken 90% of
+  // the budget, and its list of remaining sections was charged to nothing:
+  // Components Installed on Managed Computers at `maxTokens: 100` answered
+  // 172/100 live.
+  const twentySections = Array.from({ length: 20 }, (_, i) => {
+    const heading = i === 0 ? '#' : '##';
+    return `${heading} S${i + 1}\n\n${'x '.repeat(10)}`;
+  }).join('\n\n');
+
+  it.each([30, 50, 100])('lists no more remaining sections than fit in %i tokens', (maxTokens) => {
+    const result = truncateToTokenLimit(twentySections, maxTokens);
+
+    expect(result.tokenInfo.truncated).toBe(true);
+    expect(result.content).toContain('Content truncated');
+    expect(result.tokenInfo.tokenCount).toBe(estimateTokens(result.content));
+    expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(maxTokens);
+  });
+
+  it('still counts every remaining section when it can only list some', () => {
+    const result = truncateToTokenLimit(twentySections, 100);
+    const listed = result.content.match(/^ *- S\d+ \(~\d+ tokens\)$/gm) ?? [];
+    const more = /\.\.\.and (\d+) more sections/.exec(result.content);
+
+    expect(listed.length + Number(more?.[1] ?? 0)).toBe(result.remainingSections?.length);
+  });
+
+  it('drops body lines when not even the bare notice fits beside them', () => {
+    // At 100 the reserve is 10 tokens and the bare notice 12, so a body that
+    // takes its whole 90 leaves the notice 2 short.
+    const content = `${'a'.repeat(355)}\n${'b'.repeat(355)}\n${'c'.repeat(355)}`;
+
+    const result = truncateToTokenLimit(content, 100);
+
+    expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(100);
+    expect(result.content).not.toContain('a'.repeat(355));
+    expect(result.content).toContain('Content truncated');
+  });
+
+  it('does not leave a stray fence when the cut falls on an opening fence', () => {
+    // The line that overflows is the fence itself. It used to toggle the
+    // in-block flag before the budget check, so a closing fence was added for
+    // a block that was never opened, and that fence opened one instead.
+    const content = `${'a'.repeat(355)}\n\`\`\`bash\necho hi\n\`\`\`\n${'z '.repeat(200)}`;
+
+    const result = truncateToTokenLimit(content, 100);
+
+    expect(result.tokenInfo.truncated).toBe(true);
+    expect((result.content.match(/```/g) ?? []).length % 2).toBe(0);
   });
 });
 

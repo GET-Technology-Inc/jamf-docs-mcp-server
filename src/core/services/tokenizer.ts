@@ -230,7 +230,16 @@ export function extractSection(
  * Smart truncation that preserves document structure
  * - Preserves paragraph boundaries
  * - Correctly closes code blocks
- * - Lists remaining sections when truncated
+ * - Lists remaining sections when truncated, as many as the budget holds
+ *
+ * The notice is charged to `maxTokens` like the body it follows. It used to be
+ * appended after the body had already taken 90% of the budget, and its list of
+ * up to ten remaining sections was never counted against anything: live on
+ * 2026-09-24, Components Installed on Managed Computers at `maxTokens: 100`
+ * answered with 172 tokens, 87 of them the notice. Now the list is cut to what
+ * is left once the body is in, and when not even the bare notice fits, body
+ * lines are dropped until it does. The result is at most `maxTokens` whenever
+ * `maxTokens` covers the bare notice (~12 tokens).
  */
 export function truncateToTokenLimit(
   content: string,
@@ -256,71 +265,95 @@ export function truncateToTokenLimit(
 
   // Smart truncation
   const lines = content.split('\n');
-  const truncatedLines: string[] = [];
+  const kept: string[] = [];
   let runningTokens = 0;
-  let inCodeBlock = false;
-  let includedSectionCount = 0;
 
   // Reserve tokens for truncation notice and remaining sections list
   const reservedTokens = Math.min(500, Math.floor(maxTokens * 0.1));
   const effectiveMax = maxTokens - reservedTokens;
 
   for (const line of lines) {
-    // Track code blocks
-    if (line.startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-    }
-
     const lineTokens = estimateTokens(`${line}\n`);
-
     if (runningTokens + lineTokens > effectiveMax) {
-      // Close any open code block
-      if (inCodeBlock) {
-        truncatedLines.push('```');
-      }
       break;
     }
-
-    truncatedLines.push(line);
+    kept.push(line);
     runningTokens += lineTokens;
-
-    // Count headings to track which sections were included
-    if (/^#{1,6}\s+/.test(line)) {
-      includedSectionCount++;
-    }
   }
 
-  const truncatedContent = truncatedLines.join('\n');
+  for (;;) {
+    const body = closeCodeFence(kept);
+    // Sections are ordered linearly — headings seen in the kept lines map 1:1
+    const remainingSections = allSections.slice(kept.filter(isHeadingLine).length);
+    const notice = formatTruncationNotice(remainingSections, maxTokens - estimateTokens(body));
+    const finalContent = body + notice;
+    const tokenCount = estimateTokens(finalContent);
 
-  // Sections are ordered linearly — headings seen in truncated content map 1:1
-  const remainingSections = allSections.slice(includedSectionCount);
-
-  // Build truncation notice
-  let notice = '\n\n---\n\n*[Content truncated due to token limit]*\n';
-
-  if (remainingSections.length > 0) {
-    notice += '\n**Remaining sections:**\n';
-    for (const section of remainingSections.slice(0, 10)) {
-      const indent = '  '.repeat(Math.max(0, section.level - 1));
-      notice += `${indent}- ${section.title} (~${section.tokenCount} tokens)\n`;
+    if (tokenCount <= maxTokens || kept.length === 0) {
+      return {
+        content: finalContent,
+        tokenInfo: {
+          tokenCount,
+          truncated: true,
+          maxTokens
+        },
+        remainingSections
+      };
     }
-    if (remainingSections.length > 10) {
-      notice += `\n*...and ${remainingSections.length - 10} more sections*\n`;
+
+    // Over by the notice, or by code lines, which the per-line estimate above
+    // prices as prose. Drop about as much as the overshoot, then re-measure.
+    let overshoot = tokenCount - maxTokens;
+    while (overshoot > 0 && kept.length > 0) {
+      overshoot -= estimateTokens(`${kept.pop() ?? ''}\n`);
     }
-    notice += '\n*Use the `section` parameter to retrieve specific sections.*';
+  }
+}
+
+/** The same heading rule as {@link extractSections}, so counts line up. */
+function isHeadingLine(line: string): boolean {
+  return /^#{1,6}\s+/.test(line);
+}
+
+/**
+ * The kept lines, with a fence added when they stop inside a code block.
+ *
+ * Counted from the lines actually kept. It used to be toggled before the
+ * budget check, so a cut that fell on an opening fence closed a block that was
+ * never opened, and the stray fence opened one instead.
+ */
+function closeCodeFence(kept: string[]): string {
+  const fences = kept.filter(line => line.startsWith('```')).length;
+  return fences % 2 === 1 ? `${kept.join('\n')}\n\`\`\`` : kept.join('\n');
+}
+
+/**
+ * The truncation notice, listing as many remaining sections (up to ten) as
+ * `budget` holds and counting the rest; when none fit, only the count, and
+ * when not even that fits, the bare notice.
+ */
+function formatTruncationNotice(remainingSections: ArticleSection[], budget: number): string {
+  const notice = '\n\n---\n\n*[Content truncated due to token limit]*\n';
+  if (remainingSections.length === 0) {
+    return notice;
   }
 
-  const finalContent = truncatedContent + notice;
-
-  return {
-    content: finalContent,
-    tokenInfo: {
-      tokenCount: estimateTokens(finalContent),
-      truncated: true,
-      maxTokens
-    },
-    remainingSections
-  };
+  const listed = remainingSections.slice(0, 10).map((section) => {
+    const indent = '  '.repeat(Math.max(0, section.level - 1));
+    return `${indent}- ${section.title} (~${section.tokenCount} tokens)\n`;
+  });
+  for (let shown = listed.length; shown > 0; shown--) {
+    const omitted = remainingSections.length - shown;
+    const more = omitted > 0 ? `\n*...and ${omitted} more sections*\n` : '';
+    const candidate = `${notice}\n**Remaining sections:**\n${listed.slice(0, shown).join('')}${more}`
+      + '\n*Use the `section` parameter to retrieve specific sections.*';
+    if (estimateTokens(candidate) <= budget) {
+      return candidate;
+    }
+  }
+  const counted = `${notice}\n*...and ${remainingSections.length} more sections;`
+    + ' use the `section` parameter to retrieve one.*\n';
+  return estimateTokens(counted) <= budget ? counted : notice;
 }
 
 /**
