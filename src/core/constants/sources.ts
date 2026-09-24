@@ -119,7 +119,32 @@ export const STATIC_DOC_SOURCES = {
       // and encloses the 220px sidebar. Including it pulled the whole guide
       // index in ahead of the content.
       CONTENT: 'article, [class*="prose"]',
-      TITLE: 'h1',
+      // The article's own title, and nothing else on the page. The site
+      // renders a guide's title above the article and hides the Markdown copy
+      // inside it (the article is `class="prose … [&>h1:first-child]:hidden"`),
+      // so an <h1> that opens the article is the title and no other <h1> is.
+      // This used to be a bare `'h1'`, which went wrong two ways:
+      //
+      // - Every guide page opens with a hero `<h1>Guides</h1>` (localised) in
+      //   a plain `<section>`, which no chrome rule removes. Only
+      //   `[class*="tracking"]` in SELECTORS.REMOVE did, a clause written for
+      //   tracking scripts that happens to match Tailwind's `tracking-tight`.
+      //   Deleting it titled all 570 guide-section pages "Guides", and no
+      //   test went red.
+      // - A body can hold <h1>s that are not its title. One guide types a bash
+      //   script in single backticks, the site's Markdown turns each `#`
+      //   comment into an <h1>, and the guide was served as "Jamf Pro
+      //   Extension Attribute which checks and validates the following:" in
+      //   all 10 locales.
+      //
+      // Measured on all 990 sitemap pages on 2026-09-24: 190 articles open
+      // with their title <h1>; every other page matches nothing here and gets
+      // `og:title` from `fetchStaticArticle`. Titles that differ from
+      // `og:title` went from 11 to 1, the benign `ja/guides/infrastructure-as-code`
+      // ("Infrastructure as Code" against og "Infrastructure as Code
+      // (コードとしてのインフラストラクチャ)"). Content is unchanged on all
+      // 990, and titles are the same with or without the tracking clause.
+      TITLE: 'article > h1:first-child',
       BREADCRUMB: '[class*="breadcrumb"] a, nav[aria-label="breadcrumb" i] a',
       RELATED: '[class*="related"] a',
       REMOVE: STATIC_PAGE_REMOVE,
