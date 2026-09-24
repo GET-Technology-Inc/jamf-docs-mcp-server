@@ -17,11 +17,11 @@
  *
  * With APP_UI_BUNDLE_DIR set, the script also writes the script it inlines to
  * `$APP_UI_BUNDLE_DIR/app.js` (a relative path resolves against the repo
- * root). ci.yml's Coverage job does that and hands the directory to Codecov's
- * bundle analyzer, which measures files on disk and cannot see a bundle held
- * as a JSON-escaped string inside a .ts module. Same esbuild run, same bytes
- * as the <script> element carries; the generated module is identical either
- * way.
+ * root). ci.yml's Coverage job does that, and its Codecov Upload job hands the
+ * directory to Codecov's bundle analyzer, which measures files on disk and
+ * cannot see a bundle held as a JSON-escaped string inside a .ts module. Same
+ * esbuild run, same bytes as the <script> element carries; the generated
+ * module is identical either way.
  */
 
 import { build } from 'esbuild';

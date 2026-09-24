@@ -1,5 +1,6 @@
 # Codecov settings for coverage, Test Analytics and bundle analysis, all of
-# which ci.yml's Coverage job uploads. Schema: docs.codecov.com/docs/codecov-yaml.
+# which ci.yml's Codecov Upload job sends from the Coverage job's reports.
+# Schema: docs.codecov.com/docs/codecov-yaml.
 #
 # Validate every change before pushing it. Codecov falls back to its defaults
 # for a file it cannot parse, and says so nowhere but the validator:
