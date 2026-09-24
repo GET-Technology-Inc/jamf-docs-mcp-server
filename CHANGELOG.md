@@ -1,3 +1,9 @@
+## [6.0.11](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.10...v6.0.11) (2026-09-24)
+
+### Bug Fixes
+
+* **sources:** decode static page title entities once, and clear the open CodeQL alerts ([#325](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/325)) ([3add6a2](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/3add6a2652fade13683b5faa017dbba1e4fff8f7)), closes [#13](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/13) [#263](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/263) [#14](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/14) [#15](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/15)
+
 ## [6.0.10](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.9...v6.0.10) (2026-09-24)
 
 ### Bug Fixes
