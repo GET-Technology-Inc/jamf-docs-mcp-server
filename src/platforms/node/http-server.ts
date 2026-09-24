@@ -122,7 +122,17 @@ function getNodeClientIp(req: IncomingMessage, trustProxy: boolean): string {
     const forwarded = req.headers['x-forwarded-for'];
     if (typeof forwarded === 'string') {
       const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-      return ips[ips.length - 1] ?? 'unknown';
+      const rightmost = ips.at(-1);
+      if (rightmost !== undefined) {
+        return rightmost;
+      }
+      // A header that is present but names no address counts as absent, so
+      // the peer address below keys the bucket. Node passes such a header
+      // through as a string (measured 2026-09-24 on 24.21.0 and 26.9.0):
+      // `X-Forwarded-For:` arrives as '', `X-Forwarded-For: ,` as ',', and two
+      // empty header lines are joined into ', '. This used to return the
+      // constant 'unknown' instead, which put every such request, from any
+      // client, into one shared rate-limit bucket.
     }
   }
   // socket may be undefined in test environments
@@ -231,8 +241,28 @@ export async function startHttpServer(
     );
   }
 
-  process.on('SIGINT', () => { shutdown('SIGINT'); });
-  process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+  // The signal listeners are process-wide but belong to this one server, so
+  // they go when it does: on 'close', or when the bind fails, since a failed
+  // listen() emits 'error' and never 'close'. startHttpServer is public API
+  // (`./platforms/node`), so one process can call it more than once. A stale
+  // pair left by a failed bind broke the drain of the server that did start:
+  // SIGTERM ran the dead server's shutdown as well, its close() completed at
+  // once, and its callback exited the process with 0, dropping an in-flight
+  // call instead of draining it (measured 2026-09-24).
+  //
+  // They are kept through the drain on purpose. With no listener left, a
+  // second SIGINT/SIGTERM would get Node's default action and end the process
+  // mid-drain (SIGTERM exits 143 on 24.21.0 and 26.9.0); with them, shutdown()
+  // ignores it.
+  const onSigint = (): void => { shutdown('SIGINT'); };
+  const onSigterm = (): void => { shutdown('SIGTERM'); };
+  function removeSignalListeners(): void {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+  }
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+  httpServer.on('close', removeSignalListeners);
 
   // Start listening
   await new Promise<void>((resolve, reject) => {
@@ -240,6 +270,11 @@ export async function startHttpServer(
       if (error.code === 'EADDRINUSE') {
         log.error(`Port ${port} is already in use`);
         process.exit(1);
+      }
+      // After a successful bind an 'error' (such as a failed accept) leaves the
+      // server running, and reject() below is then a no-op; the listeners stay.
+      if (!httpServer.listening) {
+        removeSignalListeners();
       }
       reject(error);
     });

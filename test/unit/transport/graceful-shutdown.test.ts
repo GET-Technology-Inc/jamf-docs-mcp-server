@@ -21,14 +21,16 @@
  *
  * Two levels are covered: `createHttpHandler().shutdown()` in process, and the
  * real SIGTERM path in a child process (the Node adapter calls `process.exit`,
- * so it cannot run inside the test worker).
+ * so it cannot run inside the test worker). The adapter's own signal
+ * listeners are checked in process, with `process.exit` stubbed out.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 
 import { createHttpHandler } from '../../../src/transport/http-handler.js';
+import { startHttpServer } from '../../../src/platforms/node/http-server.js';
 import { DEFAULT_HTTP_CONFIG } from '../../../src/transport/http-types.js';
 import { createSlowServer } from '../../helpers/slow-server.js';
 import { readJsonRpc, parseSseMessages } from '../../helpers/streamable-http.js';
@@ -280,6 +282,81 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
       expect(code).toBe(0);
     } finally {
       child.kill('SIGKILL');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// In process: the adapter's process signal listeners
+// ---------------------------------------------------------------------------
+
+describe('startHttpServer signal listeners', () => {
+  const IN_PROCESS_PORT = 13_582;
+
+  it('stay installed through the drain and are removed once the server has closed', async () => {
+    // Shutdown ends in process.exit, which would take the test worker down.
+    // Recording it instead lets the real adapter run here.
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const counts = (): number[] => [process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')];
+    const baseline = counts();
+    const before = process.listeners('SIGTERM');
+
+    try {
+      // The handler builds a server per request, after it has counted the
+      // request as in flight, so the first factory call means the drain now
+      // has to wait for it. Signalling there instead of sleeping keeps a slow
+      // machine from sending SIGTERM before the call has arrived.
+      let dispatched!: () => void;
+      const reachedServer = new Promise<void>((resolve) => { dispatched = resolve; });
+      await startHttpServer(() => {
+        dispatched();
+        return createSlowServer();
+      }, IN_PROCESS_PORT, '127.0.0.1');
+      expect(counts()).toEqual(baseline.map((n) => n + 1));
+
+      // Call the adapter's listener directly: emitting the signal would also
+      // run whatever listeners the test runner has installed.
+      const added = process.listeners('SIGTERM').filter((l) => !before.includes(l));
+      expect(added).toHaveLength(1);
+      const onSigterm = added[0];
+
+      const call = fetch(`http://127.0.0.1:${String(IN_PROCESS_PORT)}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': '2026-07-28',
+          'Mcp-Method': 'tools/call',
+          'Mcp-Name': 'slow',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'slow', arguments: { ms: 500 }, _meta: MODERN_META },
+        }),
+      });
+      await reachedServer;
+      onSigterm('SIGTERM');
+
+      // Mid-drain the listeners must still be there: without one, a second
+      // SIGTERM would get Node's default action and kill the process (143).
+      // With one, shutdown() ignores the repeat.
+      expect(counts()).toEqual(baseline.map((n) => n + 1));
+      onSigterm('SIGTERM');
+
+      const res = await call;
+      expect(res.status).toBe(200);
+      expect(JSON.stringify((await readJsonRpc(res)).result)).toContain('slept 500ms');
+
+      await vi.waitFor(() => { expect(exit).toHaveBeenCalled(); }, { timeout: 5_000 });
+      expect(exit).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(counts()).toEqual(baseline);
+    } finally {
+      exit.mockRestore();
+      stderr.mockRestore();
     }
   });
 });

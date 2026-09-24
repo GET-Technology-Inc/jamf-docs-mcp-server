@@ -6,7 +6,7 @@
  * objects to verify routing, body collection, and response writing.
  */
 
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -26,6 +26,9 @@ const shared = vi.hoisted(() => ({
     // release keep-alive sockets once the drain finishes. Mocked so this
     // double cannot silently drift from the interface it stands in for.
     closeIdleConnections: vi.fn(),
+    // Read when 'error' fires, to tell a failed bind from a later error. The
+    // double never binds, so it stays false.
+    listening: false,
   },
   mcpHandlerInstance: {
     fetch: vi.fn(),
@@ -76,8 +79,12 @@ function createMockReq(options: {
   headers?: MockHeaders;
   body?: string | Buffer;
   largeBody?: boolean;
+  /** TCP peer address; omitted, the request has no socket at all. */
+  remoteAddress?: string;
 } = {}): IncomingMessage {
-  const { method = 'GET', url = '/', headers = {}, body, largeBody = false } = options;
+  const {
+    method = 'GET', url = '/', headers = {}, body, largeBody = false, remoteAddress,
+  } = options;
 
   const readable = new Readable({
     read() {
@@ -90,6 +97,9 @@ function createMockReq(options: {
     value: { host: 'localhost', ...headers },
     writable: true,
   });
+  if (remoteAddress !== undefined) {
+    Object.defineProperty(readable, 'socket', { value: { remoteAddress } });
+  }
 
   if (largeBody) {
     // Push 2 MB — exceeds the 1 MB limit in collectBody
@@ -154,6 +164,7 @@ async function makeRequest(options: {
   headers?: MockHeaders;
   body?: string | Buffer;
   largeBody?: boolean;
+  remoteAddress?: string;
 }): Promise<CapturedResponse> {
   if (shared.capturedHandler === undefined) {
     throw new Error('No request handler captured — was startHttpServer called?');
@@ -163,6 +174,24 @@ async function makeRequest(options: {
   shared.capturedHandler(req, res);
   return await done;
 }
+
+/** The listeners `startHttpServer` registered on the mocked server for `event`. */
+function serverListeners(event: string): ((...args: unknown[]) => void)[] {
+  return shared.httpServer.on.mock.calls
+    .filter(([name]) => name === event)
+    .map(([, listener]) => listener as (...args: unknown[]) => void);
+}
+
+// Every test starts a server, and each one adds a SIGINT and a SIGTERM
+// listener to the process, which the server's 'close' removes. The double never
+// closes by itself, so close it here: with one server per test, the file
+// would otherwise pile up far past Node's default limit of 10 and print
+// MaxListenersExceededWarning.
+afterEach(() => {
+  for (const onClose of serverListeners('close')) {
+    onClose();
+  }
+});
 
 // ============================================================================
 // startHttpServer tests
@@ -678,5 +707,122 @@ describe('Rate limiting', () => {
       const result = await makeRequest({ method: 'GET', url: '/health' });
       expect(result.statusCode).toBe(200);
     }
+  });
+});
+
+// ============================================================================
+// Client IP behind a trusted proxy (TRUST_PROXY)
+// ============================================================================
+
+describe('client IP with TRUST_PROXY enabled', () => {
+  const PEER = '198.51.100.23';
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.stubEnv('TRUST_PROXY', 'true');
+    shared.httpServer.listen.mockImplementation(
+      (_port: number, _host: string, cb: () => void) => { cb(); }
+    );
+    shared.httpServer.on.mockImplementation(() => {
+      // Intentionally empty: this test never fires a server event.
+    });
+    shared.mcpHandlerInstance.fetch.mockResolvedValue(
+      new Response(null, { status: 200 })
+    );
+    await startHttpServer(
+      (() => ({ connect: vi.fn().mockResolvedValue(undefined) })) as any,
+      3000,
+      '127.0.0.1',
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * The address the per-IP rate limiter keys on. The Node bridge resolves it
+   * and hands it to the platform-agnostic handler as `X-Real-IP`, and the
+   * handler passes the same Request on to the MCP entry.
+   */
+  async function rateLimitKey(forwardedFor: string | undefined): Promise<string | null> {
+    await makeRequest({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        'content-type': 'application/json',
+        ...(forwardedFor !== undefined && { 'x-forwarded-for': forwardedFor }),
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
+      remoteAddress: PEER,
+    });
+    expect(shared.mcpHandlerInstance.fetch).toHaveBeenCalledTimes(1);
+    const [request] = shared.mcpHandlerInstance.fetch.mock.calls[0] as [Request];
+    return request.headers.get('x-real-ip');
+  }
+
+  // '' and ',' are what Node itself delivers for `X-Forwarded-For:` and
+  // `X-Forwarded-For: ,` (its parser trims the value); ' , ' covers whitespace
+  // between the separators. None of them names an address, so all of them
+  // must fall back to the peer like a missing header does, rather than share
+  // one bucket under a constant key.
+  it.each([
+    { name: 'absent', forwardedFor: undefined, expected: PEER },
+    { name: 'empty', forwardedFor: '', expected: PEER },
+    { name: 'a lone comma', forwardedFor: ',', expected: PEER },
+    { name: 'only whitespace and a comma', forwardedFor: ' , ', expected: PEER },
+    { name: 'a multi-hop list', forwardedFor: '203.0.113.7, 10.0.0.2', expected: '10.0.0.2' },
+  ])('keys on $expected when X-Forwarded-For is $name', async ({ forwardedFor, expected }) => {
+    expect(await rateLimitKey(forwardedFor)).toBe(expected);
+  });
+});
+
+// ============================================================================
+// Process signal listeners
+// ============================================================================
+
+describe('process signal listeners', () => {
+  const counts = (): { SIGINT: number; SIGTERM: number } => ({
+    SIGINT: process.listenerCount('SIGINT'),
+    SIGTERM: process.listenerCount('SIGTERM'),
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    shared.httpServer.listen.mockImplementation(
+      (_port: number, _host: string, cb: () => void) => { cb(); }
+    );
+    shared.httpServer.on.mockImplementation(() => {
+      // Recorded by the mock; serverListeners() fires them.
+    });
+  });
+
+  it('adds one SIGINT and one SIGTERM listener and removes both when the server closes', async () => {
+    const baseline = counts();
+
+    await startHttpServer((() => ({})) as any, 3000, '127.0.0.1');
+    expect(counts()).toEqual({ SIGINT: baseline.SIGINT + 1, SIGTERM: baseline.SIGTERM + 1 });
+
+    for (const onClose of serverListeners('close')) {
+      onClose();
+    }
+    expect(counts()).toEqual(baseline);
+  });
+
+  it('leaves none behind when the bind fails', async () => {
+    // A failed listen() emits 'error' and never 'close', so nothing else would
+    // ever remove them. EADDRINUSE exits the process instead, so use another.
+    shared.httpServer.listen.mockImplementation(() => {
+      const error = Object.assign(new Error('listen EADDRNOTAVAIL'), { code: 'EADDRNOTAVAIL' });
+      for (const onError of serverListeners('error')) {
+        onError(error);
+      }
+    });
+    const baseline = counts();
+
+    await expect(
+      startHttpServer((() => ({})) as any, 3000, '192.0.2.1')
+    ).rejects.toThrow('EADDRNOTAVAIL');
+    expect(counts()).toEqual(baseline);
   });
 });
