@@ -1,3 +1,9 @@
+## [6.0.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.3...v6.0.4) (2026-09-24)
+
+### Dependencies
+
+* drop the redundant @types/js-yaml, and clear three CI deprecation warnings ([#315](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/315)) ([053bbcd](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/053bbcdeed08a70b31d78d8020bfd09dede01ac4)), closes [#310](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/310)
+
 ## [6.0.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.2...v6.0.3) (2026-09-24)
 
 ### Bug Fixes
