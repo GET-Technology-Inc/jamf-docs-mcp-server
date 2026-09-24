@@ -25,6 +25,7 @@ import {
   PAGINATION_CONFIG,
   CONTENT_LIMITS,
 } from '../../src/core/constants.js';
+import { SearchInputSchema } from '../../src/core/schemas/index.js';
 
 // ---------------------------------------------------------------------------
 // Corpus: every description string the server publishes
@@ -43,8 +44,19 @@ interface DescribedText {
 const corpus: DescribedText[] = [];
 let instructions = '';
 
+/** A tool as `tools/list` hands it to a client: its prose and its schema. */
+interface ListedTool {
+  name: string;
+  description: string;
+  properties: string[];
+  required: string[];
+}
+
+const listedTools: ListedTool[] = [];
+
 interface JsonSchemaObject {
   properties?: Record<string, { description?: unknown } | undefined>;
+  required?: string[];
 }
 
 beforeAll(async () => {
@@ -63,7 +75,14 @@ beforeAll(async () => {
     if (typeof tool.description === 'string') {
       corpus.push({ where: `tool ${tool.name} description`, tool: tool.name, text: tool.description });
     }
-    const properties = (tool.inputSchema as JsonSchemaObject).properties ?? {};
+    const inputSchema = tool.inputSchema as JsonSchemaObject;
+    const properties = inputSchema.properties ?? {};
+    listedTools.push({
+      name: tool.name,
+      description: tool.description ?? '',
+      properties: Object.keys(properties),
+      required: inputSchema.required ?? [],
+    });
     for (const [param, schema] of Object.entries(properties)) {
       const description = schema?.description;
       if (typeof description === 'string') {
@@ -90,6 +109,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   corpus.length = 0;
+  listedTools.length = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -268,5 +288,114 @@ describe('description accuracy: numeric bounds', () => {
         );
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Argument lists
+// ---------------------------------------------------------------------------
+
+/**
+ * The bullets of a tool description's "Args:" block, which runs to the first
+ * blank line. Wrapped continuation lines carry no dash and are skipped.
+ */
+function argsBullets(description: string): { name: string; declared: string }[] {
+  const lines = description.split('\n');
+  const start = lines.indexOf('Args:');
+  const bullets: { name: string; declared: string }[] = [];
+  if (start === -1) {
+    return bullets;
+  }
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === '') {
+      break;
+    }
+    const bullet = /^\s*-\s*(\w+)\s*\(([^)]*)\)/.exec(line);
+    if (bullet !== null) {
+      bullets.push({ name: bullet[1], declared: bullet[2] });
+    }
+  }
+  return bullets;
+}
+
+/**
+ * Background: until 2026-09-24 `jamf_docs_get_article` declared
+ * `url (string, required)` although its schema has had `url` optional since
+ * the mapId + contentId pair was added (#78), and its Args named neither half
+ * of that pair. `language` was missing from the Args of four tools whose
+ * schemas accept it. A client reading the prose was told the one way to call
+ * get_article that the search results in front of it could not provide.
+ */
+describe('description accuracy: argument lists', () => {
+  it('every tool description has an Args block', () => {
+    expect(listedTools.length, 'tools/list returned no tools').toBeGreaterThan(0);
+    for (const tool of listedTools) {
+      expect(argsBullets(tool.description).length, `${tool.name} has no Args bullets`).toBeGreaterThan(0);
+    }
+  });
+
+  it('every Args block names exactly the arguments the input schema accepts', () => {
+    for (const tool of listedTools) {
+      const documented = argsBullets(tool.description).map(bullet => bullet.name).sort();
+      expect(documented, `${tool.name} Args vs inputSchema.properties`).toEqual([...tool.properties].sort());
+    }
+  });
+
+  it('an argument is called required exactly when the input schema requires it', () => {
+    for (const tool of listedTools) {
+      for (const { name, declared } of argsBullets(tool.description)) {
+        expect(
+          /\brequired\b/.test(declared),
+          `${tool.name} declares "${name} (${declared})"; inputSchema.required is [${tool.required.join(', ')}]`
+        ).toBe(tool.required.includes(name));
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Version examples
+// ---------------------------------------------------------------------------
+
+/** `version` on search and get_toc, `version_a`/`version_b` on the compare prompt. */
+const VERSION_ARGUMENT = /^version(?:_[ab])?$/;
+
+/**
+ * Background: the search description kept offering "10.x" as a version after
+ * VersionSchema began rejecting it in #246 (2026-09-02), because #246 fixed
+ * the schema's `.describe()` and not the Args bullet that repeats it.
+ *
+ * Parsing is the part a unit test can pin. Whether an accepted version is also
+ * one Jamf still serves is not: "11.5.0" parses, and returns 0 results.
+ */
+describe('description accuracy: version examples', () => {
+  it('every version quoted for a version argument parses with VersionSchema', () => {
+    const texts: { where: string; text: string }[] = [];
+    for (const entry of corpus) {
+      if (entry.param !== undefined) {
+        if (VERSION_ARGUMENT.test(entry.param)) {
+          texts.push({ where: entry.where, text: entry.text });
+        }
+        continue;
+      }
+      for (const line of entry.text.split('\n')) {
+        const declared = ARG_BULLET.exec(line);
+        if (declared !== null && VERSION_ARGUMENT.test(declared[1])) {
+          texts.push({ where: `${entry.where} line "${line.trim()}"`, text: line });
+        }
+      }
+    }
+
+    let checked = 0;
+    for (const { where, text } of texts) {
+      for (const [, quoted] of text.matchAll(/"([^"]+)"/g)) {
+        checked += 1;
+        expect(
+          SearchInputSchema.shape.version.safeParse(quoted).success,
+          `${where} offers "${quoted}", which VersionSchema rejects`
+        ).toBe(true);
+      }
+    }
+    expect(checked, 'no version examples were found to check').toBeGreaterThan(0);
   });
 });

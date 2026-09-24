@@ -201,7 +201,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
-| `language` | string | 否 | 文件語系 (預設: `en-US`) |
+| `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系；對 concepts.jamf.com、support.jamf.com 的網址，以及 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"`；compact 模式顯示約 500 token 預覽加上段落清單 (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
@@ -231,7 +231,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 |------|------|------|------|
 | `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆，網域限制同 `jamf_docs_get_article`) |
 | `concurrency` | number | 否 | 最大平行請求數 1-5 (預設: 3) |
-| `language` | string | 否 | 文件語系 (預設: `en-US`) |
+| `language` | string | 否 | 文件語系 (預設: 各網址本身的語系)。會覆寫每個網址中的語系；對 concepts.jamf.com、support.jamf.com 的網址沒有作用 |
 | `maxTokens` | number | 否 | 所有文章的總 token 預算 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 每篇文章的輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
@@ -308,8 +308,8 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `product` | string | 是 | Jamf 產品 ID (支援自動補全，最多 100 字元) |
-| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.5.0"`) |
-| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.12.0"`) |
+| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.13.0"`) |
+| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.32.0"`) |
 
 執行步驟：取得兩個版本的目錄 → 識別結構差異 → 審閱關鍵變更文章 → 彙整新增功能、移除功能及遷移注意事項。
 

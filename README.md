@@ -172,7 +172,7 @@ call with neither is an error.
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`) |
 | `summaryOnly` | boolean | `false` | Return only article outline — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
-| `language` | string | `en-US` | Documentation language/locale |
+| `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`; no effect on concepts.jamf.com or support.jamf.com URLs, or on a `mapId` + `contentId` pair (each map is already one language) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
@@ -206,7 +206,7 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 |-----------|------|---------|-------------|
 | `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`) |
 | `concurrency` | number (1–5) | `3` | Maximum parallel requests |
-| `language` | string | `en-US` | Documentation language/locale |
+| `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL; no effect on concepts.jamf.com or support.jamf.com URLs |
 | `maxTokens` | number (100–50000) | `5000` | Total token budget across all articles |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level per article |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
@@ -266,8 +266,8 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 | Argument | Type | Description |
 |----------|------|-------------|
 | `product` | string (required) | Jamf product ID |
-| `version_a` | string (required) | First version to compare (e.g., `"11.5.0"`) |
-| `version_b` | string (required) | Second version to compare (e.g., `"11.12.0"`) |
+| `version_a` | string (required) | First version to compare (e.g., `"11.13.0"`) |
+| `version_b` | string (required) | Second version to compare (e.g., `"11.32.0"`) |
 
 ## Supported Products
 

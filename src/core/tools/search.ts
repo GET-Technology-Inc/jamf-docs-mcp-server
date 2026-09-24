@@ -255,6 +255,17 @@ function formatSearchExample(ex: SearchExample): string {
 
 const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
 
+/**
+ * The `version` example is one learn.jamf.com serves. The two it replaced, both
+ * from the initial release, did not work: VersionSchema rejects "10.x", and
+ * "11.5.0" passes the schema but finds nothing, because Jamf Pro documentation
+ * is published for 11.13.0 through 11.32.0 only. Live on 2026-09-24,
+ * `query: "policy"` returned 0 results with 11.5.0 and 50 with 11.13.0. The
+ * schema's own `.describe()` was fixed in #246; this copy was missed, and
+ * `language` never had a bullet. The "Invalid product ID" error listed here is
+ * the handler's, which the schema's enum pre-empts: a client sees the SDK's
+ * "Invalid option: expected one of".
+ */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
 This tool searches across all Jamf product documentation including Jamf Pro,
@@ -266,7 +277,8 @@ Args:
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
-  - version (string, optional): Filter by version (e.g., "11.5.0", "10.x")
+  - version (string, optional): Filter by version (e.g., "11.13.0") or "current"
+  - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE})
   - limit (number, optional): Maximum results per page 1-${CONTENT_LIMITS.MAX_SEARCH_RESULTS} (default: ${CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS})
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
@@ -302,7 +314,7 @@ ${EXAMPLES_BLOCK}
 
 Errors:
   - "No results found" if search returns empty
-  - "Invalid product ID" if product parameter is not recognized
+  - "Invalid option: expected one of ..." (an input validation error) if product, topic, docType or language is not one of the values the input schema lists
 
 Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
 Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article

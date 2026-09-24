@@ -19,7 +19,8 @@ import {
   DEFAULT_LOCALE
 } from '../constants.js';
 import { completeProduct, completeTopic, completeVersion, completeLanguage } from '../completions.js';
-import { isAllowedHostname, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
+import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
+import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
 
 // Response format enum
 const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
@@ -57,6 +58,23 @@ const MaxTokensSchema = z.number()
 
 // Common language/locale parameter (completable() mutates in place, so each call needs a fresh schema)
 const LANGUAGE_DESCRIPTION = `Documentation language/locale (default: ${DEFAULT_LOCALE}). Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
+
+/**
+ * `language` on the two tools that fetch articles by URL, where the default is
+ * not {@link DEFAULT_LOCALE}.
+ *
+ * The URL already names a locale, and that is what an omitted `language`
+ * gets: measured on 2026-09-24, a `/ja-JP/bundle/…` URL comes back in
+ * Japanese with no `language` at all, and `language: "ja-JP"` on an `/en-US/`
+ * URL comes back in Japanese too. So "default: en-US" was wrong for every
+ * non-English URL. It also never reaches the static sources: their fetch
+ * path does not read the locale, and a concepts.jamf.com or support.jamf.com
+ * page asked for in ja-JP is still English.
+ */
+const URL_LANGUAGE_DESCRIPTION =
+  'Documentation language/locale. Overrides the locale in the article URL, which is ' +
+  `used when this is omitted. Has no effect on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs`;
+const LANGUAGE_OPTIONS = `Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
 
 // Common page parameter schema
 const PageSchema = z.number()
@@ -177,7 +195,10 @@ export const GetArticleInputSchema = z.object({
       ALLOWED_HOSTNAME_MESSAGE
     )
     .optional()
-    .describe('Full URL of the Jamf documentation article. Alternative: use mapId + contentId for direct fetch.'),
+    .describe(
+      `Full https:// URL of the Jamf documentation article, on ${ALLOWED_HOSTNAME_LIST}. ` +
+      'Alternative: use mapId + contentId for direct fetch. One of the two is required.'
+    ),
 
   mapId: z.string()
     .max(200)
@@ -192,7 +213,13 @@ export const GetArticleInputSchema = z.object({
     .describe('Fluid Topics content ID (from search results or TOC). Use with mapId for direct fetch.'),
 
   language: completable(
-    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(
+      // A mapId is one language's copy of a publication — the ja-JP Jamf Pro
+      // map has its own mapId and its own contentIds — so `language: "ja-JP"`
+      // with an en-US pair still returns English (measured 2026-09-24).
+      `${URL_LANGUAGE_DESCRIPTION}, or on a mapId + contentId pair, whose map is already ` +
+      `in one language. ${LANGUAGE_OPTIONS}`
+    ),
     completeLanguage
   ),
 
@@ -285,7 +312,10 @@ export const GlossaryLookupInputSchema = z.object({
   term: z.string()
     .min(2, 'Term must be at least 2 characters')
     .max(100, 'Term must not exceed 100 characters')
-    .describe('Glossary term to look up (e.g., "MDM", "Configuration Profile", "Smart Group")'),
+    // Each example returns an entry: live on 2026-09-24, "Smart Group" (the
+    // third example until then) returned "No glossary entries found" — the
+    // Jamf glossary has no smart group entry.
+    .describe('Glossary term to look up (e.g., "MDM", "Configuration Profile", "Automated Device Enrollment")'),
 
   product: completable(
     z.enum(PRODUCT_IDS)
@@ -332,7 +362,7 @@ export const GetBatchArticlesInputSchema = z.object({
     .describe('Maximum parallel requests (1-5, default: 3)'),
 
   language: completable(
-    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(LANGUAGE_DESCRIPTION),
+    z.enum(SUPPORTED_LOCALE_IDS).optional().describe(`${URL_LANGUAGE_DESCRIPTION}. ${LANGUAGE_OPTIONS}`),
     completeLanguage
   ),
 

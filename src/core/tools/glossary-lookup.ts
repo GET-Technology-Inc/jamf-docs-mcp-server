@@ -57,6 +57,16 @@ function formatTokenFooter(tokenInfo: TokenInfo, totalMatches: number, returnedC
 
 const TOOL_NAME = 'jamf_docs_glossary_lookup';
 
+/**
+ * Examples and errors checked against the live glossary on 2026-09-24.
+ *
+ * The old example, "What does DEP stand for?" → `term="DEP"`, answered with
+ * the entry for "zero-touch deployment", so it taught a client to expect a
+ * definition it would not get. "Automated Device Enrollment", DEP's current
+ * name, is an exact entry. The no-match text is "No glossary entries found",
+ * and an unknown `product` is rejected by the schema's enum before the
+ * handler's own "Invalid product ID" check can run.
+ */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
 This tool searches glossary pages across Jamf product documentation and returns
@@ -88,11 +98,11 @@ Returns:
 Examples:
   - "What is MDM?" → term="MDM"
   - "Configuration Profile in Jamf Pro" → term="Configuration Profile", product="jamf-pro"
-  - "What does DEP stand for?" → term="DEP"
+  - "What is Automated Device Enrollment (formerly DEP)?" → term="Automated Device Enrollment"
 
 Errors:
-  - "No matching term found" if no glossary entries match
-  - "Invalid product ID" if product parameter is not recognized`;
+  - "No glossary entries found" if no glossary entries match
+  - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID`;
 
 export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
