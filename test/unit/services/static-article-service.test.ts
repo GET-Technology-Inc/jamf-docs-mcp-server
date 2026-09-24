@@ -3,9 +3,10 @@
  *
  * These cover the parts that are specific to reading a whole web page rather
  * than a Fluid Topics fragment: URL canonicalisation, the source's own
- * selectors and link base, the title fallback, and provenance. The view
- * shapes (summary, section, truncation) are shared with the FT path through
- * `buildArticleView` and are covered by article-service.test.ts.
+ * selectors and link base, the title fallback, the breadcrumb trail, and
+ * provenance. The view shapes (summary, section, truncation) are shared with
+ * the FT path through `buildArticleView` and are covered by
+ * article-service.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -22,6 +23,7 @@ import {
 } from '../../../src/core/services/static-article-service.js';
 import { STATIC_DOC_SOURCES, staticSourceForUrl } from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 
 const CONCEPTS = STATIC_DOC_SOURCES['jamf-concepts'];
 
@@ -141,6 +143,34 @@ describe('fetchStaticArticle', () => {
     await fetchStaticArticle(ctx, CONCEPTS, 'https://concepts.jamf.com/en/x');
 
     expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the breadcrumb trail off a live-shaped guide page (#285)', async () => {
+    // Every concepts.jamf.com article returned `breadcrumb: []` until #295,
+    // for two independent reasons, and fixing either alone still yields []:
+    // the source's selector looked for a `breadcrumb` class the site does not
+    // use (it marks the trail `aria-label="Breadcrumb"`), and `parseArticle`
+    // read the trail after `cleanHtml`, whose static-source REMOVE list strips
+    // every `<nav>` — the trail included. So this goes through the service,
+    // with the source's own selectors, rather than calling `parseArticle`
+    // directly: both halves have to hold for the trail to come back.
+    //
+    // This is the merge gate's only check on it. concepts-contracts only
+    // asserts a multi-crumb trail on sampled live guides, on the Monday cron
+    // (test/integration/concepts-contracts.test.ts:208-240), and with
+    // all of #295's src changes reverted every other unit test still passes
+    // (1748 of 1748 on 3f0ccfa, measured 2026-09-24).
+    mockHttpGetText.mockResolvedValue(CONCEPTS_GUIDE_HTML);
+    const result = await fetchStaticArticle(createMockContext(), CONCEPTS, CONCEPTS_GUIDE_URL);
+
+    // Exact, in order: the header and sidebar navs carry the same link text,
+    // so anything looser than the trail's own `nav` shows up here as extra or
+    // reordered entries rather than passing.
+    expect(result.breadcrumb).toEqual([
+      'Guides',
+      'Device Trust Identity and Deployment',
+      'Platform SSO for macOS',
+    ]);
   });
 });
 
