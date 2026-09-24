@@ -279,8 +279,17 @@ jobs:
       # suites (test/integration/mcp-server, test/e2e/http-transport), neither
       # of which runs here, and the one generated file the unit tier touches —
       # src/core/apps/generated/app-html.ts — is committed.
+      #
+      # The JUnit report is for Codecov Test Analytics (uploaded below).
+      # Naming any reporter on the command line replaces vitest's defaults
+      # rather than adding to them, and under GitHub Actions those defaults
+      # are `default` plus `github-actions` (the failure annotations), so both
+      # are named again to keep what this step printed before.
       - name: Run unit tests with coverage
-        run: npm run test:unit -- --coverage
+        run: >-
+          npm run test:unit -- --coverage
+          --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=test-results/junit.xml
 
       # Never fails the job, and never fails quietly either.
       #
@@ -299,4 +308,30 @@ jobs:
         with:
           use_oidc: ${{ steps.codecov-auth.outputs.oidc }}
           override_branch: ${{ steps.codecov-auth.outputs.branch }}
+          fail_ci_if_error: true
+
+      # Test Analytics: failed tests on the PR comment, flaky tests on main.
+      # codecov-action@v7 uploads it itself with `report_type: test_results`
+      # (codecov/test-results-action is archived). `!cancelled()` because a
+      # run whose tests failed is the one worth reporting, and the default
+      # `success()` would skip this step exactly then.
+      #
+      # OIDC only. Tokenless, Codecov takes the upload and keeps nothing: on
+      # #326 with the token withheld (run 36033319084) the upload under the
+      # head label ended "Upload queued for processing complete", and no test
+      # result ever appeared for that commit. Codecov's test-results endpoint
+      # refuses a tokenless upload whose branch differs from the one recorded
+      # for the commit, and once it has processed the coverage upload it
+      # records a same-repo PR's commit under the plain branch name
+      # (TestAnalyticsTokenlessAuthentication and
+      # update_commit_from_provider_info in codecov/umbrella).
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && steps.codecov-auth.outputs.oidc == 'true' }}
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          report_type: test_results
+          files: ./test-results/junit.xml
+          disable_search: true
+          use_oidc: true
           fail_ci_if_error: true
