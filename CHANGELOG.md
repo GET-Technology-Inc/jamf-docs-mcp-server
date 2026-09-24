@@ -1,3 +1,9 @@
+## [6.0.8](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.7...v6.0.8) (2026-09-24)
+
+### Bug Fixes
+
+* **get-article:** label an article with its own address, and offer sub-topics for a missed section ([#322](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/322)) ([9a829db](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9a829dbdb6b5c69a036e2d51ef2b70b59135bdf3))
+
 ## [6.0.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.6...v6.0.7) (2026-09-24)
 
 ### Bug Fixes
