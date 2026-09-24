@@ -45,6 +45,10 @@ jobs:
               # typo fix for no added protection.
               - '.github/workflows/ci.yml'
               - '.github/workflows/upstream-contract.yml'
+              # Codecov reads codecov.yml from the commit an upload is for, so
+              # a PR changing only this file shows its effect only if the
+              # Coverage job uploads for it.
+              - 'codecov.yml'
 
   test:
     name: Test (Node ${{ matrix.node-version }})
@@ -199,6 +203,21 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    # Codecov authenticates this job's uploads with a GitHub OIDC token, and
+    # `id-token: write` is what lets a job request one. It is granted here and
+    # nowhere else, because no other job talks to Codecov. A job-level block
+    # replaces the workflow-level one rather than adding to it, hence
+    # `contents: read` again for actions/checkout.
+    #
+    # On 2026-09-25 the organization switched Codecov to require upload
+    # authentication. The upload here had been tokenless all along — there is
+    # no CODECOV_TOKEN secret, so `token: ${{ secrets.CODECOV_TOKEN }}` sent an
+    # empty string — and from then on Codecov refused it for main with
+    # {"message":"Token required because branch is protected"}. OIDC needs no
+    # long-lived secret to store, rotate or leak.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
 
@@ -226,16 +245,133 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # No Build step: the coverage job runs only `test:unit`, and nothing in
+      # A run gets an OIDC token only if the runner can issue one, and on a
+      # fork PR it cannot. Dependabot's PRs run "as if they were opened from a
+      # repository fork" (GitHub's Dependabot docs), so they may not either.
+      # Asking codecov-action for OIDC without a token fails the step before
+      # anything is uploaded ("Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env
+      # variable", measured on #326). So this step asks the runner instead of
+      # guessing from the actor: OIDC when ACTIONS_ID_TOKEN_REQUEST_URL is set,
+      # and otherwise a tokenless coverage upload under the PR's head label.
+      #
+      # Codecov takes a tokenless upload only for a branch name with a colon
+      # in it, an "unprotected branch" in docs.codecov.com/docs/codecov-tokens,
+      # which is why codecov-action sends `owner:branch` for fork PRs. The
+      # PR's own branch name does not qualify. Measured on #326 with the token
+      # withheld (run 36033319084): under `ci/codecov-features` the coverage
+      # upload was refused with {"message":"Token required because branch is
+      # protected"}; under `GET-Technology-Inc:ci/codecov-features` it was
+      # accepted and processed.
+      #
+      # This runs before the tests so that the uploads after them can read it
+      # even when a test fails.
+      - name: Pick Codecov upload auth
+        id: codecov-auth
+        env:
+          HEAD_LABEL: ${{ github.event.pull_request.head.label }}
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "oidc=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "oidc=false" >> "$GITHUB_OUTPUT"
+            echo "branch=${HEAD_LABEL}" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Codecov::No OIDC token in this run: coverage uploads tokenless as '${HEAD_LABEL}'."
+          fi
+
+      # No Build step: the only test tier here is `test:unit`, and nothing in
       # test/unit reads dist/. `requireFreshBuild` is called by exactly two
       # suites (test/integration/mcp-server, test/e2e/http-transport), neither
       # of which runs here, and the one generated file the unit tier touches —
       # src/core/apps/generated/app-html.ts — is committed.
+      #
+      # The JUnit report is for Codecov Test Analytics (uploaded below).
+      # Naming any reporter on the command line replaces vitest's defaults
+      # rather than adding to them, and under GitHub Actions those defaults
+      # are `default` plus `github-actions` (the failure annotations), so both
+      # are named again to keep what this step printed before.
       - name: Run unit tests with coverage
-        run: npm run test:unit -- --coverage
+        run: >-
+          npm run test:unit -- --coverage
+          --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=test-results/junit.xml
 
+      # Never fails the job, and never fails quietly either.
+      #
+      # `fail_ci_if_error: false` alone hid every refusal: on 2026-09-24 the
+      # upload for main at 053bbcd was refused with {"message":"Token required
+      # - not valid tokenless upload"} and the job still reported success
+      # (run 36003579775, attempt 1). Nor does that input reach the OIDC
+      # request, which codecov-action makes in a github-script step of its
+      # own and which fails the action outright when it cannot get a token.
+      # So the action fails its step on any error, and `continue-on-error`
+      # keeps that from failing the job: a refused upload shows as a failed
+      # step and an annotation on a green run.
       - name: Upload coverage to Codecov
+        continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          use_oidc: ${{ steps.codecov-auth.outputs.oidc }}
+          override_branch: ${{ steps.codecov-auth.outputs.branch }}
+          fail_ci_if_error: true
+
+      # Test Analytics: failed tests on the PR comment, flaky tests on main.
+      # codecov-action@v7 uploads it itself with `report_type: test_results`
+      # (codecov/test-results-action is archived). `!cancelled()` because a
+      # run whose tests failed is the one worth reporting, and the default
+      # `success()` would skip this step exactly then.
+      #
+      # OIDC only. Tokenless, Codecov takes the upload and keeps nothing: on
+      # #326 with the token withheld (run 36033319084) the upload under the
+      # head label ended "Upload queued for processing complete", and no test
+      # result ever appeared for that commit. Codecov's test-results endpoint
+      # refuses a tokenless upload whose branch differs from the one recorded
+      # for the commit, and once it has processed the coverage upload it
+      # records a same-repo PR's commit under the plain branch name
+      # (TestAnalyticsTokenlessAuthentication and
+      # update_commit_from_provider_info in codecov/umbrella).
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && steps.codecov-auth.outputs.oidc == 'true' }}
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          report_type: test_results
+          files: ./test-results/junit.xml
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: true
+
+      # Bundle analysis of the MCP App UI script, as bundle `app-ui`.
+      #
+      # Here rather than on the Test job's 24.x leg, which already builds
+      # app-ui for its freshness check: this keeps `id-token: write` in one
+      # job, one that is not a required check, and gives each commit exactly
+      # one upload. The price is a second esbuild run, about a second. It comes
+      # after the tests because the build also rewrites
+      # src/core/apps/generated/app-html.ts, and the unit tier should measure
+      # the committed file. A broken build still fails the Test job; here it
+      # only costs the upload.
+      #
+      # OIDC only, like the test results and for the same reason: on #326 with
+      # the token withheld (run 36033319084), the analyzer got its upload URL
+      # and reported "Successfully uploaded stats for bundle: app-ui" under the
+      # head label, and Codecov never showed a bundle report for that commit.
+      # Its bundle endpoint makes the same branch check
+      # (BundleAnalysisTokenlessAuthentication in codecov/umbrella).
+      - name: Build the app-ui bundle for analysis
+        if: steps.codecov-auth.outputs.oidc == 'true'
+        continue-on-error: true
+        env:
+          APP_UI_BUNDLE_DIR: bundle-stats/app-ui
+        run: npm run build:app-ui
+
+      # Codecov has no esbuild plugin (@codecov/esbuild-plugin is a 404 on
+      # npm), so @codecov/bundle-analyzer measures the file the build above
+      # wrote. Its OIDC switch is a config-file key (`oidc.useGitHubOIDC`),
+      # not a flag.
+      - name: Upload app-ui bundle stats to Codecov
+        if: steps.codecov-auth.outputs.oidc == 'true'
+        continue-on-error: true
+        run: |
+          echo '{"oidc":{"useGitHubOIDC":true}}' > "$RUNNER_TEMP/bundle-analyzer.json"
+          npx --no bundle-analyzer bundle-stats/app-ui --bundle-name=app-ui \
+            --config-file="$RUNNER_TEMP/bundle-analyzer.json"

@@ -13,7 +13,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/index.ts']
+      // src/core/apps/generated/ is built by scripts/build-app-ui.mjs, not
+      // written. codecov.yml ignores the same path; keep the two in step.
+      exclude: ['src/index.ts', 'src/core/apps/generated/**']
     },
     testTimeout: 30000, // 30s for integration tests that hit network
     hookTimeout: 10000

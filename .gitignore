@@ -30,6 +30,11 @@ npm-debug.log*
 # Test coverage
 coverage/
 
+# What ci.yml's Coverage job uploads to Codecov besides coverage/: the
+# Test Analytics report, and the app-ui script for bundle analysis
+test-results/
+bundle-stats/
+
 # Temporary files
 *.tmp
 *.temp

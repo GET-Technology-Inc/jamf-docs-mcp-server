@@ -1,0 +1,64 @@
+# Codecov settings for coverage, Test Analytics and bundle analysis, all of
+# which ci.yml's Coverage job uploads. Schema: docs.codecov.com/docs/codecov-yaml.
+#
+# Validate every change before pushing it. Codecov falls back to its defaults
+# for a file it cannot parse, and says so nowhere but the validator:
+#
+#   curl --data-binary @codecov.yml https://codecov.io/validate
+#
+# Nothing here can block a merge. The ruleset requires only the
+# "Test (Node <version>)" checks, and every status below is informational or
+# off.
+
+coverage:
+  status:
+    # The Codecov UI lists the project status as Pro-only, and this
+    # organization is on the free plan (2026-09-25). It has not been posting:
+    # the six main commits that uploaded before this file existed (77b8af5 to
+    # 3add6a2) carry codecov/patch alone. Off, so a plan change cannot make it
+    # appear as a new red check.
+    project: off
+    patch:
+      default:
+        # From Codecov's own numbers on 2026-09-25: main (3add6a2) is at
+        # 95.22% line coverage, and every PR it has patch data for (#320 to
+        # #325) landed between 95.76% and 100%. 95% asks a PR to be at least
+        # as well tested as the code it joins. `auto` (base coverage) would
+        # say much the same today, but drifts with the project.
+        target: 95%
+        informational: true
+    # Coverage changes outside the diff. Noise for a suite this size.
+    changes: off
+
+# Generated, not written: the app-ui bundle as one JSON-escaped string, which
+# scripts/build-app-ui.mjs rebuilds. vitest.config.ts excludes the same path,
+# so the local report and Codecov's cover the same files.
+ignore:
+  - "src/core/apps/generated/**"
+
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+  hide_project_coverage: true
+  # Comment only when there is something to say: the PR touches measured
+  # lines or moves coverage elsewhere (new tests do), or it changes the
+  # bundle's size. A PR that does neither, such as most CI or docs changes,
+  # gets no comment.
+  #
+  # Test Analytics ignores both: Codecov comments on a PR whose tests failed
+  # whatever they say. When every test passes it only adds a line saying so
+  # to a coverage comment that is posted anyway.
+  require_changes: true
+  require_bundle_changes: true
+
+bundle_analysis:
+  # The codecov/bundles status never fails; it warns when the bundle moves by
+  # more than 5% (about 19 kB of the 389 kB script today). Codecov's
+  # defaults, written down. It compares against the base's bundle report, so
+  # it has nothing to say until main has uploaded one.
+  warning_threshold: "5%"
+  status: informational
+
+test_analytics:
+  # On by default for a public repository on the free plan; written down so
+  # switching it off is a visible edit. It learns from main's runs only.
+  flake_detection: true
