@@ -17,12 +17,23 @@
  * a `crumb` substring (none on the full page did either), so the only thing
  * marking the trail is `nav[aria-label="Breadcrumb"]`, capitalised.
  *
- * Chosen because the page is three levels deep, so the trail has three
- * crumbs, and because the rest of the page's navigation uses the same words:
- * the header `<nav>` links "Guides", and the sidebar `<nav>` links "Device
- * Trust Identity and Deployment" and, twice, "Platform SSO for macOS". A
- * selector that matched navigation in general rather than the trail would
- * return a different array, not the same one.
+ * Chosen because the trail has three crumbs, and because the rest of the
+ * page's navigation uses the same words: the header `<nav>` links "Guides",
+ * and the sidebar `<nav>` links "Device Trust Identity and Deployment" and,
+ * twice, "Platform SSO for macOS". A selector that matched navigation in
+ * general rather than the trail would return a different array, not the same
+ * one.
+ *
+ * The trail stops at the page's parent, as 390 of the 550 guide trails do
+ * (measured 2026-09-24). Its last crumb, "Platform SSO for macOS", links to
+ * `…/platform-single-sign-on/`, the section this page sits in; it matches
+ * the page's own `og:title` only because the section and the page share a
+ * name.
+ *
+ * Its hero `<h1>Guides</h1>` sits in a plain `<section>` ahead of the
+ * article, where no chrome rule reaches it, and the article does not open
+ * with an `<h1>`. The title tests in static-article-service.test.ts use it
+ * for that.
  */
 
 export const CONCEPTS_GUIDE_URL =

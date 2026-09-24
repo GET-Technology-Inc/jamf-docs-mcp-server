@@ -136,13 +136,16 @@ export async function fetchStaticArticle(
       linkBase: source.baseUrl,
       ...(options.includeRelated !== undefined ? { includeRelated: options.includeRelated } : {}),
     });
-    // `parseArticle` reads the first surviving <h1>. On a static site the
-    // page heading often lives in a hero section outside the content wrapper,
-    // and stripping the chrome takes it with it — concepts.jamf.com's tool
-    // pages put their only <h1> there, so every one of the 37 came back
-    // "Untitled". The document's own title is the reliable answer when the
-    // body has none of its own; Fluid Topics never needs this because its
-    // titles arrive as metadata.
+    // `parseArticle` reads the first match for the source's TITLE selector
+    // that survives cleaning. On a static site the page heading often lives
+    // outside the content wrapper: concepts.jamf.com's tool pages put their
+    // only <h1> in the stripped header, so every one of the 37 came back
+    // "Untitled", and its TITLE is scoped to the article so that a guide's
+    // hero <h1> is never taken as the title (see sources.ts). So most pages
+    // there — 800 of 990, measured 2026-09-24 — reach this line with no title
+    // of their own. The document's own title is the reliable answer when the
+    // body has none; Fluid Topics never needs this because its titles arrive
+    // as metadata.
     const title = parsed.title !== 'Untitled' ? parsed.title : documentTitle ?? parsed.title;
     cached = { title, parsed, displayUrl };
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);

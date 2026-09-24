@@ -10,11 +10,12 @@
  *
  * What it pins is the reading the code depends on: a sitemap whose paths
  * encode the hierarchy, a trailing-slash canonical form, one `article.prose`
- * per page, and a title reachable for every page — that last one only
- * because `fetchStaticArticle` falls back to `og:title`, since stripping the
- * navigation also strips the `<h1>` on most pages. Assert it through the
- * service, never through `parseArticle` alone, or the fallback is skipped and
- * the result looks broken when it is not.
+ * per page, and every page served under its own title. Most pages get that
+ * title from `fetchStaticArticle`'s `og:title` fallback, not from
+ * `parseArticle`: the source reads a title only from an `<h1>` that opens the
+ * article, and 800 of the 990 pages have none (measured 2026-09-24). Assert
+ * it through the service, never through `parseArticle` alone, or the fallback
+ * is skipped and the result looks broken when it is not.
  *
  * Breadcrumbs ARE asserted now (#285). They used to be deliberately skipped
  * because they could not work: the selector looked for a class while the site
@@ -33,6 +34,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import * as cheerio from 'cheerio';
 import { parseSitemap, type SitemapEntry } from '../../src/core/services/sitemap-service.js';
 import {
   fetchStaticArticle,
@@ -56,9 +58,23 @@ const CONCURRENCY = 4;
  */
 const MIN_SITEMAP_ENTRIES = 400;
 
+/**
+ * The one page known to carry `<h1>`s in its body that are not its title: a
+ * bash script typed in single backticks, whose `#` comments the site's
+ * Markdown turned into headings. It was served under the first of them in all
+ * 10 locales until the title selector was scoped to the article, and the
+ * stride below never lands on it. So it joins the sample while the sitemap
+ * lists it, and drops out quietly if it goes — its presence is not the
+ * contract, the title check is.
+ */
+const KNOWN_STRAY_H1_PATH =
+  '/en/guides/threat-and-risk-management/enforcing-compliance-baselines-for-network-access';
+
 interface Fetched {
   url: string;
   title: string;
+  /** Read off the served page here, independently of the code under test. */
+  ogTitle: string | undefined;
   content: string;
   breadcrumb: string[];
 }
@@ -96,13 +112,31 @@ beforeAll(async () => {
   const deep = entries.filter(entry => entry.segments.length >= 3);
   const stride = Math.max(1, Math.floor(deep.length / SAMPLE_SIZE));
   const sample = deep.filter((_, i) => i % stride === 0).slice(0, SAMPLE_SIZE);
+  const known = deep.find(entry =>
+    new URL(entry.url).pathname.replace(/\/$/, '') === KNOWN_STRAY_H1_PATH);
+  if (known !== undefined && !sample.includes(known)) { sample.push(known); }
 
-  const ctx = createMockContext();
+  // Keep what the service fetched, so each page's `og:title` can be read
+  // without a second request.
+  const served = new Map<string, string>();
+  const live = createMockContext().http;
+  const ctx = createMockContext({
+    http: {
+      ...live,
+      getText: async (url, options) => {
+        const html = await live.getText(url, options);
+        served.set(url, html);
+        return html;
+      },
+    },
+  });
   sampled = await mapLimit(sample, async (entry) => {
     const article = await fetchStaticArticle(ctx, SOURCE, entry.url);
+    const html = served.get(canonicalStaticUrl(entry.url)) ?? '';
     return {
       url: entry.url,
       title: article.title,
+      ogTitle: cheerio.load(html)('meta[property="og:title"]').attr('content'),
       content: article.content,
       breadcrumb: article.breadcrumb ?? [],
     };
@@ -190,9 +224,12 @@ describe('concepts.jamf.com contracts', () => {
   /**
    * The end-to-end contract, and the one that must go through the service.
    *
-   * Stripping nav/header/aside — which the source does deliberately, to keep
-   * a 220px sidebar out of the token budget — also removes the only `<h1>` on
-   * most of these pages. `parseArticle` alone therefore returns "Untitled"
+   * The source's TITLE reads only an `<h1>` that opens the article, and 800
+   * of the 990 pages have none (2026-09-24). Tool pages keep their only
+   * `<h1>` in the header, which the source strips to keep the navigation out
+   * of the token budget. Guides mostly have only the hero `<h1>Guides</h1>`
+   * above the article, which is not their title and which the selector
+   * deliberately ignores. `parseArticle` alone therefore returns "Untitled"
    * for around 80% of the site; `fetchStaticArticle` falls back to `og:title`
    * and returns a real one for all of it. Asserting the wrong layer here
    * would report a defect that does not exist.
@@ -205,6 +242,39 @@ describe('concepts.jamf.com contracts', () => {
     expect(empty.map(p => p.url), 'pages that render no content at all').toEqual([]);
   });
 
+  /**
+   * Not just a title: the page's own. Rejecting only "Untitled" let one guide
+   * go out as "Jamf Pro Extension Attribute which checks and validates the
+   * following:", a heading from a script in its body, and would have let
+   * every guide go out as "Guides" had the hero `<h1>` ever reached the
+   * title.
+   *
+   * Containment rather than equality: `ja/guides/infrastructure-as-code`
+   * opens its article with "Infrastructure as Code" while its `og:title` is
+   * "Infrastructure as Code (コードとしてのインフラストラクチャ)". Both are
+   * the page's title, and equality would go red on it with nothing wrong. A
+   * page with no `og:title` is left to the check above; the code does not
+   * need one.
+   */
+  it('serves every sampled page under its own title', () => {
+    const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim();
+    const wrong = sampled
+      .filter(page => page.ogTitle !== undefined)
+      .filter(page => {
+        const title = normalize(page.title);
+        const og = normalize(page.ogTitle ?? '');
+        return !og.includes(title) && !title.includes(og);
+      })
+      .map(page => ({ url: page.url, title: page.title, ogTitle: page.ogTitle }));
+
+    expect(
+      wrong,
+      'These pages were served under a title that is not their og:title. ' +
+      'Something other than the page title is being read as the title: an ' +
+      '<h1> outside the article, or one from further down its body.'
+    ).toEqual([]);
+  });
+
   it('reads the breadcrumb trail off the guides that publish one', () => {
     // #285: this returned [] for every page until two independent bugs were
     // fixed — the selector matched a class the site does not use, and
@@ -214,7 +284,11 @@ describe('concepts.jamf.com contracts', () => {
     //
     // Guides only. `/en/concepts/…` pages carry no breadcrumb nav at all, so
     // asserting across the whole sample would pin an absence as a failure.
-    const guides = sampled.filter(page => page.url.includes('/guides/'));
+    // Nor does `/{locale}/guides/overview`, the one guide-section page deep
+    // enough for the sample that has no trail (the section roots, which also
+    // have none, are too shallow to be sampled).
+    const guides = sampled.filter(page =>
+      page.url.includes('/guides/') && !/\/guides\/overview\/?$/.test(page.url));
     expect(guides.length, 'the sample contains no guide pages to check').toBeGreaterThan(0);
 
     const empty = guides.filter(page => page.breadcrumb.length === 0);
@@ -226,13 +300,16 @@ describe('concepts.jamf.com contracts', () => {
       'produce exactly this.'
     ).toEqual([]);
 
-    // The last crumb is the page itself, which is what makes the trail worth
-    // reading rather than a duplicate of the title.
+    // The trail says where the page sits, and it usually stops above the
+    // page: on 390 of the 550 guide trails (2026-09-24) the last crumb links
+    // to the parent section. Only on the other 160, section index pages and
+    // two childless guides per locale, is it the page itself. Either way, a
+    // one-crumb trail is only the localised "Guides" root and places nothing.
     for (const page of guides) {
       expect(
         page.breadcrumb.length,
-        `${page.url} has a one-element trail; a breadcrumb of just the page ` +
-        'says nothing about where it sits.'
+        `${page.url} has a one-element trail, which says nothing about where ` +
+        'the page sits.'
       ).toBeGreaterThan(1);
     }
   });

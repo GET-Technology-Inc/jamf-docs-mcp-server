@@ -21,13 +21,19 @@ import {
   extractDocumentTitle,
   fetchStaticArticle,
 } from '../../../src/core/services/static-article-service.js';
-import { STATIC_DOC_SOURCES, staticSourceForUrl } from '../../../src/core/constants/sources.js';
+import { STATIC_DOC_SOURCES, staticSourceForUrl, type StaticDocSource } from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
+import { CONCEPTS_STRAY_H1_HTML, CONCEPTS_STRAY_H1_URL } from '../../fixtures/concepts-guide-stray-h1-page.js';
 
 const CONCEPTS = STATIC_DOC_SOURCES['jamf-concepts'];
 
-/** Shaped like the real pages: one `<article class="prose">`, chrome around it. */
+/**
+ * Shaped like a tool page: one `<article class="prose">`, chrome around it,
+ * and the page's only other `<h1>` inside `<header>`. Guide pages put theirs
+ * in a plain `<section>` instead, which no chrome rule removes; the captured
+ * fixtures carry that shape and the title tests below use them.
+ */
 function pageHtml(options?: { h1?: string; ogTitle?: string; body?: string }): string {
   return `<!doctype html><html><head>
     <title>${options?.ogTitle ?? 'Some Page'} | Jamf Concepts</title>
@@ -157,7 +163,7 @@ describe('fetchStaticArticle', () => {
     //
     // This is the merge gate's only check on it. concepts-contracts only
     // asserts a multi-crumb trail on sampled live guides, on the Monday cron
-    // (test/integration/concepts-contracts.test.ts:208-240), and with
+    // (test/integration/concepts-contracts.test.ts:278-315), and with
     // all of #295's src changes reverted every other unit test still passes
     // (1748 of 1748 on 3f0ccfa, measured 2026-09-24).
     mockHttpGetText.mockResolvedValue(CONCEPTS_GUIDE_HTML);
@@ -171,6 +177,64 @@ describe('fetchStaticArticle', () => {
       'Device Trust Identity and Deployment',
       'Platform SSO for macOS',
     ]);
+  });
+});
+
+describe('fetchStaticArticle: concepts.jamf.com titles', () => {
+  beforeEach(() => { mockHttpGetText.mockReset(); });
+
+  /** The source as configured, minus any REMOVE clause that mentions `tracking`. */
+  function withoutTrackingClause(source: StaticDocSource): StaticDocSource {
+    const kept = source.selectors.REMOVE.split(',')
+      .map(clause => clause.trim())
+      .filter(clause => !clause.includes('tracking'));
+    return { ...source, selectors: { ...source.selectors, REMOVE: kept.join(', ') } };
+  }
+
+  const HERO = /<section[^>]*>[\s\S]*?<h1 class="[^"]*\btracking-tight\b[^"]*">Guides<\/h1>/;
+
+  it('titles a guide by its own name, not by an <h1> inside its body', async () => {
+    // The title selector was a bare 'h1'. This guide's body holds a bash
+    // script that the site's Markdown turned into <h1>s, and the first of
+    // them became the title in all 10 locales: "Jamf Pro Extension Attribute
+    // which checks and validates the following:". The article does not open
+    // with a title <h1> of its own, so the answer has to be `og:title`.
+    mockHttpGetText.mockResolvedValue(CONCEPTS_STRAY_H1_HTML);
+    const result = await fetchStaticArticle(createMockContext(), CONCEPTS, CONCEPTS_STRAY_H1_URL);
+
+    expect(result.title).toBe('Enforcing Compliance Baselines for Network Access');
+    // Headings are still content. Only the title stopped reading them.
+    expect(result.content).toContain('# Jamf Pro Extension Attribute which checks and validates the following:');
+  });
+
+  it('titles a guide by its own name, not by the "Guides" hero', async () => {
+    mockHttpGetText.mockResolvedValue(CONCEPTS_GUIDE_HTML);
+    const result = await fetchStaticArticle(createMockContext(), CONCEPTS, CONCEPTS_GUIDE_URL);
+
+    expect(result.title).toBe('Platform SSO for macOS');
+  });
+
+  it('does not need the tracking clause to keep the hero <h1> out of the title', async () => {
+    // Every guide page opens with a hero <h1>Guides</h1> in a plain
+    // <section>, outside every chrome rule. With TITLE a bare 'h1', the only
+    // thing keeping it out of the title was `[class*="tracking"]` in
+    // SELECTORS.REMOVE, a clause written for tracking scripts that matches
+    // the hero's Tailwind `tracking-tight`. Deleting it titled all 570
+    // guide-section pages "Guides" and every other unit test still passed
+    // (1843 of 1843 on 368f9a2, measured 2026-09-24). Scoping TITLE to the
+    // article is what removes that dependency, and this is what pins it.
+    expect(CONCEPTS_GUIDE_HTML, 'the fixture carries the hero').toMatch(HERO);
+    expect(CONCEPTS_STRAY_H1_HTML, 'the fixture carries the hero').toMatch(HERO);
+
+    const source = withoutTrackingClause(CONCEPTS);
+
+    mockHttpGetText.mockResolvedValue(CONCEPTS_GUIDE_HTML);
+    const guide = await fetchStaticArticle(createMockContext(), source, CONCEPTS_GUIDE_URL);
+    expect(guide.title).toBe('Platform SSO for macOS');
+
+    mockHttpGetText.mockResolvedValue(CONCEPTS_STRAY_H1_HTML);
+    const stray = await fetchStaticArticle(createMockContext(), source, CONCEPTS_STRAY_H1_URL);
+    expect(stray.title).toBe('Enforcing Compliance Baselines for Network Access');
   });
 });
 
