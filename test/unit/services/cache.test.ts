@@ -42,6 +42,15 @@ import { createMockLogger } from '../../helpers/mock-context.js';
 
 const cache = new FileCache({ log: createMockLogger() });
 
+/**
+ * A file name the cache itself would write: `<sha256 hex>.json`.
+ *
+ * Since 2026-09-24 FileCache counts and deletes only names of that shape, so a
+ * fixture called `abc123.json` is now someone else's file, which it must leave
+ * alone. The digit just keeps names within one test apart.
+ */
+const entryFile = (digit: string): string => `${digit.repeat(64)}.json`;
+
 // ============================================================================
 // Concurrent access tests
 // ============================================================================
@@ -352,8 +361,8 @@ describe('clear()', () => {
   });
 
   it('should delete JSON files found in the cache directory', async () => {
-    const fileName1 = 'abc123.json';
-    const fileName2 = 'def456.json';
+    const fileName1 = entryFile('a');
+    const fileName2 = entryFile('b');
     fs.readdir.mockResolvedValue([fileName1, fileName2]);
     fs.unlink.mockResolvedValue(undefined);
 
@@ -406,7 +415,7 @@ describe('stats()', () => {
   });
 
   it('should count only JSON files in the directory', async () => {
-    fs.readdir.mockResolvedValue(['a.json', 'b.json', 'c.txt']);
+    fs.readdir.mockResolvedValue([entryFile('a'), entryFile('b'), 'c.txt']);
     fs.stat.mockResolvedValue({ size: 512, mtimeMs: Date.now() });
 
     const stats = await cache.stats();
@@ -414,7 +423,7 @@ describe('stats()', () => {
   });
 
   it('should sum file sizes for all JSON files', async () => {
-    fs.readdir.mockResolvedValue(['x.json', 'y.json']);
+    fs.readdir.mockResolvedValue([entryFile('a'), entryFile('b')]);
     fs.stat.mockResolvedValue({ size: 1024, mtimeMs: Date.now() });
 
     const stats = await cache.stats();
@@ -461,13 +470,13 @@ describe('prune()', () => {
       timestamp: Date.now() - 999999,
       ttl: 1000
     };
-    fs.readdir.mockResolvedValue(['expired.json']);
+    fs.readdir.mockResolvedValue([entryFile('e')]);
     fs.readFile.mockResolvedValue(JSON.stringify(expiredEntry));
 
     const pruned = await cache.prune();
     expect(pruned).toBeGreaterThan(0);
     const unlinkedPaths = fs.unlink.mock.calls.map(c => c[0]);
-    expect(unlinkedPaths.some(p => p.endsWith('expired.json'))).toBe(true);
+    expect(unlinkedPaths.some(p => p.endsWith(entryFile('e')))).toBe(true);
   });
 
   it('should NOT prune fresh file cache entries', async () => {
@@ -476,18 +485,18 @@ describe('prune()', () => {
       timestamp: Date.now(),
       ttl: 999999
     };
-    fs.readdir.mockResolvedValue(['fresh.json']);
+    fs.readdir.mockResolvedValue([entryFile('f')]);
     fs.readFile.mockResolvedValue(JSON.stringify(freshEntry));
     fs.unlink.mockClear();
 
     await cache.prune();
 
     const unlinkedPaths = fs.unlink.mock.calls.map(c => c[0]);
-    expect(unlinkedPaths.some(p => p.endsWith('fresh.json'))).toBe(false);
+    expect(unlinkedPaths.some(p => p.endsWith(entryFile('f')))).toBe(false);
   });
 
   it('should prune corrupt (invalid JSON) file cache entries', async () => {
-    fs.readdir.mockResolvedValue(['corrupt.json']);
+    fs.readdir.mockResolvedValue([entryFile('c')]);
     fs.readFile.mockResolvedValue('{{invalid-json}}');
 
     const pruned = await cache.prune();
@@ -496,7 +505,7 @@ describe('prune()', () => {
 
   it('should prune file entries with invalid schema (missing required fields)', async () => {
     const invalidEntry = { foo: 'bar' }; // no timestamp/ttl/data
-    fs.readdir.mockResolvedValue(['invalid-schema.json']);
+    fs.readdir.mockResolvedValue([entryFile('d')]);
     fs.readFile.mockResolvedValue(JSON.stringify(invalidEntry));
 
     const pruned = await cache.prune();
@@ -643,6 +652,69 @@ describe('prune reclamation', () => {
 
     expect(await isolated.prune()).toBe(0);
     expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should reclaim an expired md5-named entry left by v1.0.0 or v1.1.0', async () => {
+    // Those versions named entries `<md5 hex>.json`, 32 digits. They are the
+    // oldest orphans on disk, so the name filter must keep reaching them.
+    const isolated = new FileCache({ log: createMockLogger() });
+    const md5 = 'b'.repeat(32);
+    fs.readdir.mockResolvedValue([`${md5}.json`]);
+    fs.readFile.mockResolvedValue(
+      JSON.stringify({ data: 'v1.1.0', timestamp: Date.now() - 90_000, ttl: 60_000 })
+    );
+
+    expect(await isolated.prune()).toBe(1);
+    expect(fs.unlink).toHaveBeenCalledWith(expect.stringContaining(`${md5}.json`));
+  });
+
+  // Names the cache has never written. The first three are what the startup
+  // sweep deleted on 2026-09-24 with CACHE_DIR pointed at a project root and
+  // at a directory shared with another tool; the rest are near misses.
+  const FOREIGN = [
+    'package.json',
+    'tsconfig.json',
+    'other-tool.json',
+    `${'a'.repeat(63)}.json`,
+    `${'a'.repeat(65)}.json`,
+    `${'a'.repeat(40)}.json`,
+    `${'A'.repeat(64)}.json`,
+    `x${hash}.json`,
+    `${hash}.json.bak`,
+    // md5 names predate the .tmp write, so no such file was ever ours.
+    `${'b'.repeat(32)}.json.tmp.1234`,
+  ];
+
+  it('should never read or delete a file it did not write, even one shaped like an expired entry', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue(FOREIGN);
+    // Every read would come back as an expired, schema-valid entry, and the
+    // .tmp look-alike is hours old: only the name keeps them.
+    fs.readFile.mockResolvedValue(JSON.stringify({ data: 'theirs', timestamp: 0, ttl: 1 }));
+    fs.stat.mockResolvedValue({ size: 12, mtimeMs: Date.now() - 2 * 60 * 60 * 1000 });
+
+    expect(await isolated.prune()).toBe(0);
+    expect(fs.readFile).not.toHaveBeenCalled();
+    expect(fs.unlink).not.toHaveBeenCalled();
+  });
+
+  it('should leave files it did not write in place on clear()', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([...FOREIGN, `${hash}.json`]);
+
+    await isolated.clear();
+
+    expect(fs.unlink.mock.calls.map(([p]) => p)).toEqual([expect.stringContaining(`${hash}.json`)]);
+  });
+
+  it('should count only its own entries in stats()', async () => {
+    const isolated = new FileCache({ log: createMockLogger() });
+    fs.readdir.mockResolvedValue([...FOREIGN, `${hash}.json`, `${'b'.repeat(32)}.json`]);
+    fs.stat.mockResolvedValue({ size: 100, mtimeMs: Date.now() });
+
+    const stats = await isolated.stats();
+    expect(stats.totalEntries).toBe(2);
+    expect(stats.totalSize).toBe(200);
   });
 
   it('should remove abandoned .tmp writes on clear()', async () => {
