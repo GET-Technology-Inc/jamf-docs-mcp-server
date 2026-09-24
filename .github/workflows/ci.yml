@@ -36,7 +36,8 @@ jobs:
               - 'eslint.config.*'
               # test/unit/ci-gating.test.ts reads these two files off disk and
               # asserts on their text — above all that ci.yml does NOT run the
-              # contract suites. Without them here, a PR that edits only a
+              # contract suites — and test/unit/ci-matrix.test.ts checks
+              # ci.yml's Node matrix. Without them here, a PR that edits only a
               # workflow takes the test-gate no-op path below and that guard
               # never runs: the same silent-failure shape it was written for.
               # Deliberately narrow — '.github/workflows/**' would drag the full
@@ -52,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        node-version: [24.x, 26.x]
 
     steps:
       - uses: actions/checkout@v7
@@ -68,30 +69,35 @@ jobs:
 
       # The five steps below are decided by the tool versions npm ci pins, not by
       # the Node runtime, so running them on both matrix legs produces the same
-      # answer twice. Pinned to 22.x rather than hoisted into a job of their own:
-      # branch protection requires a check named "Test (Node <version>)" — which
-      # is the only reason the test-gate no-op below exists — and a new job would
-      # publish a name it does not know about.
+      # answer twice. Pinned to one leg rather than hoisted into a job of their
+      # own: branch protection requires a check named "Test (Node <version>)" —
+      # which is the only reason the test-gate no-op below exists — and a new job
+      # would publish a name it does not know about.
+      #
+      # The leg is 24.x, the floor package.json `engines` publishes (>=24 since
+      # 6.0.0; it was 22.x under >=20). A pin that names no leg of the matrix
+      # does not fail, it skips: the step never runs and the job stays green.
+      # test/unit/ci-matrix.test.ts fails instead.
       - name: Type check
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run typecheck
 
       # app-ui/ has its own tsconfig (DOM lib, bundler resolution) and is not
       # covered by the root one. esbuild only strips types, so without this
       # step the bundle's sources are never type-checked at all.
       - name: Type check (app-ui)
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run typecheck:app-ui
 
       # test/ is likewise outside the root tsconfig, which only includes src/**.
       # Without this step no test file is ever type-checked, and eslint's
       # type-aware rules have no project to consult for them either.
       - name: Type check (test)
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run typecheck:test
 
       - name: Lint
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run lint
 
       # src/core/apps/generated/app-html.ts is committed but generated. Rebuild
@@ -101,7 +107,7 @@ jobs:
       # This must stay ahead of the Build step below: `npm run build` runs
       # `build:app-ui` too, and would overwrite the evidence before it is read.
       - name: App UI bundle is up to date
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: |
           npm run build:app-ui
           git diff --exit-code -- src/core/apps/generated/app-html.ts
@@ -126,7 +132,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies
@@ -150,7 +156,13 @@ jobs:
           retry_wait_seconds: 30
           command: npm run test:integration
 
-  # Required status check — reports success when test is skipped
+  # Required status check — reports success when test is skipped.
+  #
+  # Its matrix must list exactly the test job's legs. The ruleset requires one
+  # check per leg, by name, and a name only one of the two jobs publishes
+  # never reports on the PRs that take the other path: GitHub shows it as
+  # "Expected — waiting for status" and the PR cannot merge.
+  # test/unit/ci-matrix.test.ts compares the two.
   test-gate:
     name: Test (Node ${{ matrix.node-version }})
     needs: changes
@@ -158,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        node-version: [24.x, 26.x]
     steps:
       - run: echo "Skipped — no code changes"
 
@@ -173,7 +185,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies
@@ -190,26 +202,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # 22.x because vitest 5 does not support Node 20. vitest 5.0.1 declares
-      # engines `^22.12.0 || ^24.0.0 || >=26.0.0`, and the
-      # @vitest/istanbul-lib-* packages that @vitest/coverage-v8 5 reports
-      # through declare `>=22`. This job had run on 20.x since the initial
-      # release (0b6e637) with no recorded reason.
+      # 24.x, the floor package.json `engines` publishes, like every other job
+      # here that pins a single version. History: 20.x from the initial
+      # release (0b6e637) with no recorded reason; 22.x from #304, because
+      # vitest 5 does not support Node 20 (vitest 5.0.1 declares engines
+      # `^22.12.0 || ^24.0.0 || >=26.0.0`, and the @vitest/istanbul-lib-*
+      # packages @vitest/coverage-v8 5 reports through declare `>=22`); 24.x
+      # when 6.0.0 raised the floor.
       #
-      # Moving it changes nothing about the result. Coverage is decided by the
-      # tool versions npm ci pins, not by the runtime: on 2026-09-24 the unit
-      # tier reported 91.41 / 81.69 / 90.17 / 92.78 (stmts / branch / fn /
-      # lines) on Node 20.20, 22.23 and 26.9 alike. It did still run on 20
-      # then, but only because npm treats `engines` as a warning, and nothing
-      # promises the next vitest patch keeps working there.
+      # The runtime does not change the result. Coverage is decided by the
+      # tool versions npm ci pins: on 2026-09-24 the unit tier reported
+      # 91.41 / 81.69 / 90.17 / 92.78 (stmts / branch / fn / lines) on Node
+      # 20.20, 22.23, 24.21 and 26.9 alike.
       #
-      # The Test matrix's 20.x leg is a different question — which Node
-      # versions this package supports at runtime (package.json `engines`) —
-      # and is not decided by this job.
+      # Which Node versions this package supports at runtime is package.json
+      # `engines` and the Test matrix, not this job.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'npm'
 
       - name: Install dependencies

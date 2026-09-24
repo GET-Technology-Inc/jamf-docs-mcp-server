@@ -4,14 +4,18 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 5.x     | :white_check_mark: |
-| < 5.0.0 | :x:                |
+| 6.x     | :white_check_mark: |
+| < 6.0.0 | :x:                |
 
 Releases are automated, so the supported line is whatever `npm view
 @get-technology-inc/jamf-docs-mcp-server version` reports. This table said
 `1.2.x` until 2026-09-18, four majors behind — which told anyone reporting a
 vulnerability that the current release was unsupported and a long-retired one
 was not.
+
+5.x, the last line that runs on Node.js 20 and 22, is unsupported too: a fix
+there would need a release from a maintenance branch, and `.releaserc.json`
+releases from `main` only.
 
 ## Reporting a Vulnerability
 

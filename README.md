@@ -46,7 +46,13 @@ requirement instead of relying on the consumer's tree happening to hoist it;
 listing it under `dependencies` as well would reintroduce exactly the duplicate
 it exists to prevent.
 
-Node.js 20 or newer is required.
+Node.js 24 or newer is required. 5.x is the last release line that runs on
+Node.js 20 and 22. On those versions an unpinned
+`npx -y @get-technology-inc/jamf-docs-mcp-server` resolves to the newest 5.x
+on its own, because npm prefers the newest release whose `engines` field
+accepts the running Node: the server keeps working, but stops receiving
+updates until Node is upgraded. Use
+`@get-technology-inc/jamf-docs-mcp-server@5` to make that explicit.
 
 ## Quick Start
 

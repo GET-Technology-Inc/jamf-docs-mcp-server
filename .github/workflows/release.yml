@@ -42,10 +42,17 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
+      # '24.x', not an exact 24 release: the release plugins need a recent
+      # one. @semantic-release/changelog 7.0.0 and git 11.0.1 declare
+      # `^22.22.2 || >=24.15`, and semantic-release 25.0.9, npm 13.1.5 and
+      # github 12.0.6 `^22.14.0 || >= 24.10.0`. setup-node takes the runner
+      # image's cached 24 when it has one, so this trails the newest 24 by an
+      # image update: on 2026-09-24 jobs of one CI run for PR #311 got
+      # 24.20.0 and 24.21.0.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 

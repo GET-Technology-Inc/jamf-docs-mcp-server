@@ -39,7 +39,11 @@ SDK，實例由某個模組的 `Protocol` 建立、卻被另一個模組檢查�
 可用的診斷資訊。把 SDK 宣告為 peer 是把「只能有一份」這個要求講明白，而不是寄望使用者的
 依賴樹剛好會 hoist；若同時列進 `dependencies`，就會重新製造出它本來要避免的那份重複。
 
-需要 Node.js 20 或更新版本。
+需要 Node.js 24 或更新版本。5.x 是最後一個能在 Node.js 20 與 22 上執行的版本系列。
+在這兩個版本上，未指定版本的 `npx -y @get-technology-inc/jamf-docs-mcp-server`
+會自動解析到最新的 5.x，因為 npm 會優先選用 `engines` 相容於目前 Node 的最新釋出版本：
+伺服器仍可正常運作，但在升級 Node 之前不會再收到更新。若要明確指定，請使用
+`@get-technology-inc/jamf-docs-mcp-server@5`。
 
 ## 快速開始
 

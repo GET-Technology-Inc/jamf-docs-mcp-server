@@ -59,7 +59,7 @@
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/git": "^11.0.1",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^26.0.0",
+    "@types/node": "^24.13.6",
     "@types/turndown": "^5.0.5",
     "@vitest/coverage-v8": "^5.0.1",
     "conventional-changelog-conventionalcommits": "^9.3.1",
@@ -92,7 +92,7 @@
     }
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "files": [
     "dist",
