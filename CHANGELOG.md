@@ -1,3 +1,9 @@
+## [5.11.4](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.3...v5.11.4) (2026-09-24)
+
+### Dependencies
+
+* bump vitest and @vitest/coverage-v8 to 5.0.1 ([#304](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/304)) ([f9b30bb](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/f9b30bba5dc24f4a67597b92d62d2d4cbea18228)), closes [#300](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/300) [#298](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/298) [#300](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/300)
+
 ## [5.11.3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.2...v5.11.3) (2026-09-24)
 
 ### Bug Fixes
