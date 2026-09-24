@@ -263,6 +263,11 @@ describe('CACHE_DIR', () => {
       '../other/cache',
       '../../cache',
       'nested/../../outside',
+      // Siblings whose names start with the project's own name. They resolve
+      // to /work/proj-evil/... and /work/project2, which begin with the string
+      // "/work/proj"; a string-prefix check accepted both.
+      `../${path.basename(PROJECT)}-evil/cache`,
+      `../${path.basename(PROJECT)}ect2`,
     ])('rejects %j', raw => {
       expect(cacheDir(raw)).toBe('.cache');
       expect(warnings()).toEqual([

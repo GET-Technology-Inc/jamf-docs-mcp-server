@@ -56,6 +56,23 @@ function getEnvString(key: string, defaultValue: string): string {
   return value.replace(/[\r\n]/g, '');
 }
 
+/**
+ * Whether `target` is `dir` itself or somewhere beneath it.
+ *
+ * Compared by path segment, not by string prefix. Until 2026-09-24 the check
+ * was `resolved.startsWith(cwd)`, which a sibling passes whenever its name
+ * begins with the project's: with cwd `/x/proj`, `../proj-evil/cache` resolves
+ * to `/x/proj-evil/cache`, starts with `/x/proj`, and was accepted, while
+ * `../other/cache` was rejected.
+ */
+function isWithin(dir: string, target: string): boolean {
+  const rel = path.relative(dir, target);
+  // '' is `dir` itself. Escaping shows as a leading '..' segment; a child
+  // whose name merely starts with two dots (`..cache`) is still inside. On
+  // Windows a target on another drive comes back as an absolute path.
+  return !path.isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${path.sep}`);
+}
+
 function getValidatedCacheDir(): string {
   const raw = getEnvString('CACHE_DIR', DEFAULT_CACHE_DIR);
   const resolved = path.resolve(raw);
@@ -70,7 +87,7 @@ function getValidatedCacheDir(): string {
         return DEFAULT_CACHE_DIR;
       }
     }
-  } else if (!resolved.startsWith(cwd)) {
+  } else if (!isWithin(cwd, resolved)) {
     // Relative paths must resolve within cwd
     console.error(`[WARNING] [config] CACHE_DIR "${raw}" resolves outside project directory. Using default "${DEFAULT_CACHE_DIR}".`);
     return DEFAULT_CACHE_DIR;
