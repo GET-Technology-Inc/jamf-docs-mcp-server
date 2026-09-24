@@ -191,13 +191,19 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 ### jamf_docs_get_article
 
 取得特定 Jamf 文件文章的完整內容。可用 `url` 指定文章，或改用搜尋結果與目錄提供的
-`mapId` + `contentId`；兩種方式須擇一，都沒提供會回傳錯誤。
+`mapId` + `contentId`；至少須提供其中一種，都沒提供會回傳錯誤。
+
+搜尋結果會同時帶有這三個欄位，一起傳入也沒問題。在 learn.jamf.com 上由
+`mapId` + `contentId` 決定取得哪篇文章，回傳的 `url` 就是該文章本身的網址，因此
+Source 一定指向實際回傳的頁面；若傳入的 `url` 與它不符，回應會附註說明。
+concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註說明
+`mapId` + `contentId` 已被忽略。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`) |
-| `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供以取代 `url` |
-| `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供以取代 `url` |
+| `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供，可取代 `url` 或與其並用 |
+| `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供，可取代 `url` 或與其並用 |
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |

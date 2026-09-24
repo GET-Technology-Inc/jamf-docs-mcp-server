@@ -164,11 +164,17 @@ the article either by `url`, or by the `mapId` + `contentId` pair that search
 results and the table of contents carry — one of the two is required, and a
 call with neither is an error.
 
+Passing both, as a search result allows, is fine. On learn.jamf.com the pair
+decides which article is fetched, and the result's `url` is that article's own
+address, so the Source line always names the page returned; a note says so when
+the `url` you passed does not match it. A concepts.jamf.com or support.jamf.com
+`url` is fetched by URL, and a note says the pair was ignored.
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com` |
-| `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId` instead of `url` |
-| `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId` instead of `url` |
+| `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId`, instead of `url` or alongside it |
+| `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId`, instead of `url` or alongside it |
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`) |
 | `summaryOnly` | boolean | `false` | Return only article outline — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |

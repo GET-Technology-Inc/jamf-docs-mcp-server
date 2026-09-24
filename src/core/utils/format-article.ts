@@ -167,10 +167,24 @@ function formatRelatedArticles(articles: RelatedArticle[] | undefined): string {
   return result;
 }
 
+/**
+ * The Source line, or nothing when the article has no address.
+ *
+ * Until 2026-09-24 every `mapId` + `contentId` fetch had an empty `url` and
+ * printed `*Source: [](#)*` — a link to nowhere presented as a citation. Such
+ * a fetch is now labelled with the topic's own address, from its metadata or
+ * its map's TOC; this is for the fetch where neither gives one.
+ */
+function formatSourceLine(url: string): string {
+  if (url === '') {
+    return '';
+  }
+  return `*Source: [${sanitizeMarkdownText(url)}](${sanitizeMarkdownUrl(url)})*\n`;
+}
+
 function formatFullFooter(url: string, tokenInfo: TokenInfo): string {
-  const safeUrl = sanitizeMarkdownUrl(url);
   let result = '\n\n---\n\n';
-  result += `*Source: [${sanitizeMarkdownText(url)}](${safeUrl})*\n`;
+  result += formatSourceLine(url);
   result += `*${tokenInfo.tokenCount.toLocaleString()} tokens`;
   if (tokenInfo.truncated) {
     result += ` (truncated from original, max: ${tokenInfo.maxTokens.toLocaleString()})`;
@@ -184,14 +198,14 @@ function formatFullFooter(url: string, tokenInfo: TokenInfo): string {
  * Used by batch-get-articles in full mode.
  */
 function formatBriefFooter(url: string): string {
-  const safeUrl = sanitizeMarkdownUrl(url);
-  return `\n\n---\n*Source: [${sanitizeMarkdownText(url)}](${safeUrl})*\n`;
+  const source = formatSourceLine(url);
+  return source === '' ? '' : `\n\n---\n${source}`;
 }
 
 /** Reports the view, not the article: compact must not bill for what it withheld. */
 function formatCompactFooter(url: string, view: ArticleContentView): string {
-  const safeUrl = sanitizeMarkdownUrl(url);
-  return `\n---\n*[Source](${safeUrl}) | ${String(view.tokenCount)} tokens${view.truncated ? ' (truncated)' : ''}*\n`;
+  const source = url === '' ? '' : `[Source](${sanitizeMarkdownUrl(url)}) | `;
+  return `\n---\n*${source}${String(view.tokenCount)} tokens${view.truncated ? ' (truncated)' : ''}*\n`;
 }
 
 const COMPACT_PREVIEW_TOKENS = 500;

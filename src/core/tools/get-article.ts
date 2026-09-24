@@ -155,11 +155,16 @@ const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be 
  * `description-accuracy.test.ts` now checks every Args list against its
  * schema's properties and `required` array.
  *
- * "Pass one, not both" is advice, not a rule the schema enforces. With both,
- * a Fluid Topics fetch follows the pair while the markdown's Source line still
- * shows the url (measured 2026-09-24: a Policies.html url plus the pair for
- * Computer Configuration Profiles returned the latter under the former's
- * link).
+ * Both addressing forms at once is allowed and described, not rejected. A
+ * search result carries url, mapId and contentId together, so a client passes
+ * all three; 46 of 48 sampled results' urls resolve to their own pair, and the
+ * other two (the LAPS technical paper, where two topics share each of the
+ * slugs `Using_LAPS` and `Implementing_LAPS`) are only right because the pair
+ * decides. What was wrong was the label: until 2026-09-24 a Policies.html url
+ * with the Computer Configuration Profiles pair returned the latter under the
+ * former's link, and a concepts.jamf.com url dropped the pair without a word.
+ * The article is now labelled with its own address, a note names an argument
+ * that went unused, and the description says which one wins.
  *
  * The example URL changed at the same time: `.../page/Configuration_Profiles.html`
  * answered "Topic not found" (live, 2026-09-24); the page Jamf publishes is
@@ -171,13 +176,17 @@ This tool fetches and parses a Jamf documentation article, converting it to
 a clean, readable format. Works with any article from ${ALLOWED_HOSTNAME_LIST}.
 
 Address the article either by \`url\`, or by the \`mapId\` + \`contentId\` pair
-that search results and TOC entries carry. One of the two is required; pass
-one, not both.
+that search results and TOC entries carry. One of the two is required. Passing
+both, as a search result allows, is fine: on learn.jamf.com the pair decides
+which article is fetched, and the result's url is that article's own address
+(a note says so if the url you passed does not match it). A
+${STATIC_SOURCE_HOSTNAMES.join(' or ')} url is fetched by url, and a note says
+the pair was ignored.
 
 Args:
   - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}. Required unless mapId and contentId are given
-  - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId instead of url
-  - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId instead of url
+  - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId, instead of url or alongside it
+  - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId, instead of url or alongside it
   - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. No effect on a mapId + contentId pair (a map is in one language) or on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article

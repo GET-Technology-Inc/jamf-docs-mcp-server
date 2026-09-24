@@ -821,6 +821,12 @@ describe('resolveAndFetchArticle()', () => {
   // ── Direct IDs: skip URL resolution ───────────────────────────────────────
 
   describe('with direct mapId + contentId', () => {
+    // Deliberate, not an optimisation: with both a url and the pair, the pair
+    // decides and the url is not resolved against it. Two topics can share a
+    // slug (the LAPS paper's `Using_LAPS`), so a url cannot overrule the pair
+    // a search result came with. What the caller is told about the article —
+    // its own address, and a note when the url did not match — is asserted on
+    // every channel in test/unit/tools/get-article-addressing.test.ts.
     it('should skip topicResolver.resolve when both IDs are provided', async () => {
       const ctx = createMockContext({
         articleProvider: createMockArticleProvider(() => createFetchArticleResult()),

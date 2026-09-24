@@ -31,7 +31,7 @@ import {
 import type { ServerContext } from '../types/context.js';
 import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
-import { buildDisplayUrl } from './topic-resolver.js';
+import { buildDisplayUrl, buildDisplayUrlFromPrettyUrlMeta } from './topic-resolver.js';
 import type { MapsRegistry } from './maps-registry.js';
 import { cleanSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
@@ -454,10 +454,7 @@ function resolveTopicUrl(topic: NonNullable<FtSearchEntry['topic']>): string {
   const prettyUrls = getMetaValues(topic.metadata, FT_META.PRETTY_URL);
   const rawPrettyUrl = prettyUrls[0];
   if (rawPrettyUrl !== undefined) {
-    const normalizedPath = rawPrettyUrl.startsWith('/')
-      ? rawPrettyUrl
-      : `/r/${rawPrettyUrl}`;
-    return buildDisplayUrl(normalizedPath);
+    return buildDisplayUrlFromPrettyUrlMeta(rawPrettyUrl);
   }
   return buildDisplayUrl(`/r/en-US/${topic.mapId}/${topic.contentId}`);
 }
