@@ -104,6 +104,39 @@ function realLocation(p: string): string {
 }
 
 /**
+ * The OS temp directory and the user's home directory, where they really are.
+ * A cache under either one is allowed even when it lies in a system directory.
+ *
+ * Both are per-user directories that some systems keep under `/var`, so
+ * judging paths by location would reject them:
+ * - macOS: `os.tmpdir()` is `/var/folders/<..>/T`, really `/private/var/…`.
+ *   Root's home is `/var/root`.
+ * - ostree systems (Fedora Silverblue, Kinoite and CoreOS, bootc images):
+ *   `/home` links to `/var/home`, and `$HOME` is `/var/home/<user>`
+ *   (https://ostreedev.github.io/ostree/adapting-existing/). Without the
+ *   home exemption every `CACHE_DIR` in the user's home is rejected, a
+ *   relative one from a project there too, since `process.cwd()` reports
+ *   `/var/home/…`. v6.0.4 compared spellings and accepted `/home/<user>/…`.
+ *
+ * A directory is dropped if it contains one of the system directories
+ * (`TMPDIR=/` or `HOME=/`, say), since it would otherwise cancel the whole
+ * list. So is one that is not absolute: `HOME=""` makes `os.homedir()`
+ * return `""`, which would resolve to the working directory and exempt it.
+ */
+function ownDirs(roots: readonly string[]): string[] {
+  const dirs = [os.tmpdir()];
+  try {
+    dirs.push(os.homedir());
+  } catch {
+    // No $HOME and no passwd entry for this uid. Nothing to exempt.
+  }
+  return dirs
+    .filter(dir => path.isAbsolute(dir))
+    .map(realLocation)
+    .filter(dir => !roots.some(root => isWithin(dir, root)));
+}
+
+/**
  * Whether `location` lies in one of the system directories.
  *
  * Until 2026-09-24 this compared spellings, and on macOS, where `/etc`, `/var`
@@ -117,9 +150,7 @@ function realLocation(p: string): string {
  * realLocation(), and so has each prefix. On macOS that adds `/private/etc`
  * and `/private/var`; `/tmp`, like `/private/tmp`, stays allowed.
  *
- * The OS temp directory is exempt, so `$TMPDIR` works on macOS. The exemption
- * is ignored if the temp directory contains one of the system directories
- * (`TMPDIR=/`, say), since it would otherwise cancel the whole list.
+ * The process's own directories are exempt; see ownDirs().
  *
  * POSIX only, as the list always was. On Windows no path ever matched it, and
  * resolving `/etc` there would turn it into `C:\etc` and start rejecting
@@ -128,10 +159,9 @@ function realLocation(p: string): string {
 function isInSystemDir(location: string): boolean {
   if (process.platform === 'win32') { return false; }
   const roots = [...new Set(SENSITIVE_DIR_PREFIXES.flatMap(p => [p, realLocation(p)]))];
-  const tmp = realLocation(os.tmpdir());
   // Case-sensitive, so on a case-sensitive filesystem the exemption cannot
   // reach a sibling that differs only in case.
-  if (isWithin(tmp, location) && !roots.some(root => isWithin(tmp, root))) {
+  if (ownDirs(roots).some(dir => isWithin(dir, location))) {
     return false;
   }
   // Case-insensitive, as before: macOS volumes are by default, and

@@ -22,21 +22,32 @@ import * as path from 'path';
  * The disk, as far as config.ts looks at it.
  *
  * Since 2026-09-24 the CACHE_DIR guard asks where a path really is
- * (`fs.realpathSync`) and where the temp directory is (`os.tmpdir()`). Asking
- * the machine running the suite would make the answers depend on it: on macOS
- * `/etc` is `/private/etc` and `os.tmpdir()` is under `/var/folders`, on the
- * Linux CI runners neither is true. So each case describes the layout it needs.
- * By default every path exists, none is a symlink and the temp directory is
- * `/tmp`, which is what config.ts assumed before it resolved anything.
+ * (`fs.realpathSync`), and where the temp and home directories are
+ * (`os.tmpdir()`, `os.homedir()`). Asking the machine running the suite would
+ * make the answers depend on it: on macOS `/etc` is `/private/etc` and
+ * `os.tmpdir()` is under `/var/folders`, on the Linux CI runners neither is
+ * true. So each case describes the layout it needs. By default every path
+ * exists, none is a symlink, the temp directory is `/tmp` and the home
+ * directory `/home/me`, none of which config.ts rejected before it resolved
+ * anything.
  *
  * POSIX paths only, like the rest of this file (CI runs on Linux).
  */
-const disk = vi.hoisted(() => ({
+interface Disk {
   /** Symlink -> target, both absolute. One hop: targets are real paths. */
-  links: new Map<string, string>(),
+  links: Map<string, string>;
   /** Real paths that exist. `undefined` means every path does. */
-  existing: undefined as Set<string> | undefined,
+  existing: Set<string> | undefined;
+  tmpdir: string;
+  /** `undefined` makes `os.homedir()` throw, as Node's does with no $HOME and no passwd entry. */
+  homedir: string | undefined;
+}
+
+const disk = vi.hoisted((): Disk => ({
+  links: new Map<string, string>(),
+  existing: undefined,
   tmpdir: '/tmp',
+  homedir: '/home/me',
 }));
 
 vi.mock('fs', async importOriginal => {
@@ -62,6 +73,12 @@ vi.mock('fs', async importOriginal => {
 vi.mock('os', async importOriginal => ({
   ...await importOriginal<typeof OsModule>(),
   tmpdir: (): string => disk.tmpdir,
+  homedir: (): string => {
+    if (disk.homedir === undefined) {
+      throw Object.assign(new Error('ENOENT: no such file or directory, uv_os_get_passwd'), { code: 'ERR_SYSTEM_ERROR' });
+    }
+    return disk.homedir;
+  },
 }));
 
 import { createNodeConfig, getEnvNumber } from '../../../src/platforms/node/config.js';
@@ -94,6 +111,7 @@ beforeEach(() => {
   disk.links = new Map();
   disk.existing = undefined;
   disk.tmpdir = '/tmp';
+  disk.homedir = '/home/me';
   stderr = vi.spyOn(console, 'error').mockImplementation(() => {
     // Swallow the [WARNING] lines; the spy records them.
   });
@@ -442,6 +460,7 @@ describe('CACHE_DIR', () => {
         '/private/var/folders', REAL_TMPDIR, '/usr', '/Users', '/Users/me', '/Users/me/Library/Caches',
       ]);
       disk.tmpdir = TMPDIR;
+      disk.homedir = '/Users/me';
     });
 
     it.each([
@@ -449,7 +468,8 @@ describe('CACHE_DIR', () => {
       // The same directory. v6.0.4 rejected the line above and accepted this one.
       ['/private/etc/jamf', '/private/etc/jamf'],
       ['/PRIVATE/ETC/jamf', '/PRIVATE/ETC/jamf'],
-      // root's home, which v6.0.4 accepted.
+      // root's home, which v6.0.4 accepted. The user here is not root; for
+      // root it is its own home, see below.
       ['/private/var/root/jamf', '/private/var/root/jamf'],
       ['/var/db/jamf', '/private/var/db/jamf'],
       // The temp directory's parent is not exempt, only the directory itself.
@@ -487,6 +507,60 @@ describe('CACHE_DIR', () => {
       expect(cacheDir('.')).toBe('.cache');
       expect(warnings()).toEqual([sensitive('.', '/private/etc')]);
     });
+
+    it.each(['/var/root/.cache/jamf-docs', '/private/var/root/.cache/jamf-docs'])(
+      'accepts %j when running as root, whose home it is',
+      raw => {
+        disk.homedir = '/var/root';
+        expect(cacheDir(raw)).toBe(raw);
+        expect(warnings()).toEqual([]);
+      },
+    );
+  });
+
+  describe('on ostree systems, where /home is a symlink to /var/home', () => {
+    // Fedora Silverblue, Kinoite and CoreOS, and bootc images. The ostree docs
+    // (https://ostreedev.github.io/ostree/adapting-existing/) list /home ->
+    // /var/home, /opt -> /var/opt and /root -> /var/roothome, and $HOME is
+    // /var/home/<user>. Judged by location with no home exemption, every path
+    // in the user's home is in /var.
+    beforeEach(() => {
+      disk.links = new Map([['/home', '/var/home'], ['/opt', '/var/opt'], ['/root', '/var/roothome']]);
+      disk.homedir = '/var/home/me';
+    });
+
+    it.each([
+      // v6.0.4 accepted this spelling and rejected the next, $HOME's own.
+      '/home/me/.cache/jamf-docs',
+      '/var/home/me/.cache/jamf-docs',
+    ])('accepts %j in the home directory', raw => {
+      expect(cacheDir(raw)).toBe(raw);
+      expect(warnings()).toEqual([]);
+    });
+
+    it('accepts a relative path from a project in the home directory', () => {
+      // process.cwd() reports the real path.
+      vi.spyOn(process, 'cwd').mockReturnValue('/var/home/me/proj');
+      expect(cacheDir('cache')).toBe('cache');
+      expect(warnings()).toEqual([]);
+    });
+
+    it('accepts root\'s home when running as root', () => {
+      disk.homedir = '/var/roothome';
+      expect(cacheDir('/root/.cache/jamf-docs')).toBe('/root/.cache/jamf-docs');
+      expect(warnings()).toEqual([]);
+    });
+
+    it.each([
+      ['/var/lib/jamf', '/var/lib/jamf'],
+      // Only this user's home is exempt, not /var/home as a whole.
+      ['/home/other/jamf', '/var/home/other/jamf'],
+      // Stored in /var like /home, but nobody's home. v6.0.4 accepted it.
+      ['/opt/cache', '/var/opt/cache'],
+    ])('still rejects %j (really %s)', (raw, location) => {
+      expect(cacheDir(raw)).toBe('.cache');
+      expect(warnings()).toEqual([sensitive(raw, location)]);
+    });
   });
 
   describe('the temp-directory exemption', () => {
@@ -502,6 +576,37 @@ describe('CACHE_DIR', () => {
       disk.links = new Map([['/etc', '/private/etc'], ['/var', '/private/var']]);
       expect(cacheDir('/etc/jamf')).toBe('.cache');
       expect(cacheDir('/var/cache/jamf')).toBe('.cache');
+    });
+  });
+
+  describe('the home-directory exemption', () => {
+    it('lets a home inside /var through, and nothing else in /var', () => {
+      // A service account, say, whose passwd entry puts its home in /var/lib.
+      disk.homedir = '/var/lib/jamf-docs';
+      expect(cacheDir('/var/lib/jamf-docs/cache')).toBe('/var/lib/jamf-docs/cache');
+      expect(cacheDir('/var/lib/other/cache')).toBe('.cache');
+      expect(cacheDir('/var/lib/JAMF-docs/cache')).toBe('.cache');
+    });
+
+    it.each(['/', '/var', '/private'])('does not apply when HOME=%j contains a system directory', homedir => {
+      disk.homedir = homedir;
+      disk.links = new Map([['/etc', '/private/etc'], ['/var', '/private/var']]);
+      expect(cacheDir('/etc/jamf')).toBe('.cache');
+      expect(cacheDir('/var/cache/jamf')).toBe('.cache');
+    });
+
+    it('does not apply when HOME is empty, which Node reports as ""', () => {
+      // "" would resolve to the working directory and exempt it.
+      disk.homedir = '';
+      vi.spyOn(process, 'cwd').mockReturnValue('/var/lib/app');
+      expect(cacheDir('cache')).toBe('.cache');
+      expect(warnings()).toEqual([sensitive('cache', '/var/lib/app/cache')]);
+    });
+
+    it('still checks the list when there is no home directory at all', () => {
+      disk.homedir = undefined;
+      expect(cacheDir('/etc/jamf')).toBe('.cache');
+      expect(cacheDir('/tmp/jamf')).toBe('/tmp/jamf');
     });
   });
 });
