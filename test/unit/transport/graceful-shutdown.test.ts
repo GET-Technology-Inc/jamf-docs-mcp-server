@@ -54,6 +54,11 @@ function modernRequest(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      // Required on every 2026-07-28 POST. Server 2.0.0 served a request that
+      // omitted it; 2.1.0 (typescript-sdk#2590) refuses one with 400 / -32020
+      // before dispatch — so without it these tests would time a rejection,
+      // not a drain.
+      'MCP-Protocol-Version': '2026-07-28',
       'Mcp-Method': method,
       ...(name !== undefined ? { 'Mcp-Name': name } : {}),
     },
@@ -204,6 +209,8 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
+          // See modernRequest(): server 2.1.0 rejects a 2026-07-28 POST without it.
+          'MCP-Protocol-Version': '2026-07-28',
           'Mcp-Method': 'tools/call',
           'Mcp-Name': 'slow',
         },
@@ -245,6 +252,8 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
+          // See modernRequest(): server 2.1.0 rejects a 2026-07-28 POST without it.
+          'MCP-Protocol-Version': '2026-07-28',
           'Mcp-Method': 'subscriptions/listen',
         },
         body: JSON.stringify({
