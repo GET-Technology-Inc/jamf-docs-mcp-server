@@ -176,40 +176,46 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `product` | string | 否 | 依產品 ID 篩選 (詳見支援產品表) |
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
 | `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`training`、`solution-guide`、`glossary`、`getting-started` |
-| `version` | string | 否 | 依版本篩選 (例如 `"11.5.0"`) |
+| `version` | string | 否 | 依版本篩選 (例如 `"11.13.0"`) 或 `"current"` |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `limit` | number | 否 | 每頁最多結果數 1-50 (預設: 10) |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
-| `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
+| `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
 ### jamf_docs_get_article
 
-取得特定 Jamf 文件文章的完整內容。
+取得特定 Jamf 文件文章的完整內容。可用 `url` 指定文章，或改用搜尋結果與目錄提供的
+`mapId` + `contentId`；兩種方式須擇一，都沒提供會回傳錯誤。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `url` | string | 是 | 文章完整 URL (須來自 `docs.jamf.com` 或 `learn.jamf.com`) |
+| `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`) |
+| `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供以取代 `url` |
+| `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供以取代 `url` |
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`) |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
-| `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
+| `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"`；compact 模式顯示約 500 token 預覽加上段落清單 (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
 ### jamf_docs_get_toc
 
-取得 Jamf 產品文件的目錄結構。
+取得 Jamf 產品文件的目錄結構，也可以取得任何單一出版品 (版本說明、技術文件、課程、
+評估與設定指南) 的目錄。`product` 與 `publication` 必須恰好提供其中一個，兩者都給或
+都不給都會回傳錯誤。(5.1 之前 `product` 為必填，也還沒有 `publication`。)
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `product` | string | 是 | 產品 ID (詳見支援產品表) |
-| `version` | string | 否 | 特定版本 (預設: 最新版) |
+| `product` | string | 擇一 | 產品 ID (詳見支援產品表) |
+| `publication` | string | 擇一 | 單一出版品的 bundle family ID (1-200 字元)，例如 `jamf-pro-release-notes` 或 `technical-paper-laps`；可用 `jamf_docs_list_products` 查詢 |
+| `version` | string | 否 | 特定版本 (例如 `"11.13.0"`) 或 `"current"` (預設: 最新版) |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
-| `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
+| `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
@@ -219,10 +225,10 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆) |
+| `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆，網域限制同 `jamf_docs_get_article`) |
 | `concurrency` | number | 否 | 最大平行請求數 1-5 (預設: 3) |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
-| `maxTokens` | number | 否 | 所有文章的總 token 預算 100-20000 (預設: 5000) |
+| `maxTokens` | number | 否 | 所有文章的總 token 預算 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 每篇文章的輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
@@ -245,10 +251,12 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `language` | string | 否 | 文件語系 (預設: `en-US`) |
-| `maxTokens` | number | 否 | 回應最大 token 數 100-20000 (預設: 5000) |
+| `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 10000，因為回傳的是完整的產品與出版品清單，所以比其他工具的 5000 高) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
+
+這是唯一沒有 `language` 參數的工具。所有工具的輸入 schema 都是嚴格模式，無法辨識的
+參數會直接被拒絕 (`Unrecognized key: "language"`)，而不是默默忽略。
 
 ## MCP Resources
 
@@ -307,7 +315,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 - **摘要預覽**：使用 `summaryOnly: true` 預覽文章大綱，再決定是否取得完整內容
 - **批次取得**：使用 `jamf_docs_batch_get_articles` 一次取得最多 10 篇文章
 - **術語查詢**：使用 `jamf_docs_glossary_lookup` 模糊比對 Jamf 官方術語
-- **多語系支援**：所有工具皆支援 `language` 參數切換文件語系 (例如 `ja-JP`、`de-DE`)
+- **多語系支援**：除 `jamf_docs_list_products` 外，所有工具皆支援 `language` 參數切換文件語系：`en-US` (預設)、`ja-JP`、`zh-TW`、`de-DE`、`es-ES`、`fr-FR`、`nl-NL`、`th-TH`、`it-IT`、`pt-BR`、`zh-CN`
 - **版本查詢**：使用 `version` 參數查詢特定產品版本的文件
 - **搜尋建議**：搜尋無結果時提供替代關鍵字與主題建議
 - **分頁支援**：大型搜尋結果與目錄支援分頁瀏覽
@@ -362,6 +370,22 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 |------|------|--------|----------|
 | `RATE_LIMIT_RPM` | HTTP 模式每 IP 每分鐘請求上限 | `60` | 1 - 10000 |
 | `CORS_ALLOWED_ORIGINS` | CORS 允許的來源 (逗號分隔) | `""` (停用 CORS) | 逗號分隔的 URL 列表 |
+| `TRUST_PROXY` | 改以 `X-Forwarded-For` 最右側的位址作為每 IP 速率限制的客戶端 IP，而非連線來源位址。僅限在反向代理後方啟用，詳見下方說明 | 關閉 | `true` 或 `1` |
+
+`RATE_LIMIT_RPM` 的「每 IP」預設指的是 TCP 連線的來源位址。放在反向代理後方時，所有
+請求都來自代理，所有客戶端會共用同一份額度，一個忙碌的客戶端就會拖累所有人。設定
+`TRUST_PROXY=true` (或 `1`) 後，改從 `X-Forwarded-For` 取得客戶端位址；只有這兩個值
+會啟用，`TRUE`、`yes` 或其他任何值都視為關閉。啟用後：
+
+- 取**最右側**的項目，也就是緊鄰伺服器的那一層代理所附加的位址。左側的項目是客戶端
+  自行送出的內容、可以偽造，因此不採用。這只適用於恰好一層代理；若有兩層 (例如 nginx
+  前面還有 CDN)，最右側會是外層代理的位址，經由它連入的客戶端又會共用同一份額度。
+- 請求沒有 `X-Forwarded-For` 時，退回使用連線來源位址。本伺服器不讀取 `X-Real-IP` 與
+  `Forwarded`，代理必須送出 `X-Forwarded-For`，這項設定才會生效。
+- 這個位址只用於速率限制，沒有其他用途。
+
+客戶端直接連到伺服器時請保持關閉：若前面沒有代理卻啟用，客戶端可以自行填入任意
+`X-Forwarded-For`，每次請求都拿到全新的額度，速率限制形同虛設。
 
 ## 開發
 

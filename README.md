@@ -125,10 +125,13 @@ Returns all available Jamf products and their IDs, available topic filters, and 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `language` | string | `en-US` | Documentation language/locale |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level of the response |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
-| `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
+| `maxTokens` | number (100–50000) | `10000` | Maximum tokens in response. Higher than the other tools' `5000` because the answer is a whole catalogue |
+
+This is the one tool without a `language` parameter. Every tool's input schema
+is strict, so an unrecognised key is rejected
+(`Unrecognized key: "language"`) rather than silently ignored.
 
 ### jamf_docs_search
 
@@ -140,26 +143,31 @@ Searches across all Jamf product documentation.
 | `product` | string | — | Filter by product ID (e.g., `jamf-pro`) |
 | `topic` | string | — | Filter by topic category (e.g., `enrollment`, `security`) |
 | `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, `getting-started` |
-| `version` | string | — | Filter by version (e.g., `"11.5.0"`) |
+| `version` | string | — | Filter by version (e.g., `"11.13.0"`) or `"current"` |
 | `language` | string | `en-US` | Documentation language/locale |
 | `limit` | number (1–50) | `10` | Results per page |
 | `page` | number (1–100) | `1` | Page number for pagination |
-| `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
+| `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; use `"compact"` for token-efficient output |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
 ### jamf_docs_get_article
 
-Fetches and converts a documentation article to clean markdown or JSON.
+Fetches and converts a documentation article to clean markdown or JSON. Address
+the article either by `url`, or by the `mapId` + `contentId` pair that search
+results and the table of contents carry — one of the two is required, and a
+call with neither is an error.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `url` | string | required | Full URL from `docs.jamf.com` or `learn.jamf.com` |
+| `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com` |
+| `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId` instead of `url` |
+| `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId` instead of `url` |
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`) |
 | `summaryOnly` | boolean | `false` | Return only article outline — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
 | `language` | string | `en-US` | Documentation language/locale |
-| `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
+| `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
@@ -167,15 +175,20 @@ When content exceeds `maxTokens`, the tool truncates the response and lists all 
 
 ### jamf_docs_get_toc
 
-Retrieves the navigation structure (table of contents) for a product.
+Retrieves the navigation structure (table of contents) for a product, or for any
+single publication — release notes, technical papers, courses, evaluation and
+configuration guides. Exactly one of `product` and `publication` is required;
+passing both, or neither, is an error. (Before 5.1, `product` was required and
+`publication` did not exist.)
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `product` | string | required | Product ID (see supported products below) |
-| `version` | string | latest | Specific version to fetch |
+| `product` | string | — | Product ID (see supported products below) |
+| `publication` | string (1–200 chars) | — | Bundle family ID of one publication, e.g. `jamf-pro-release-notes` or `technical-paper-laps`. `jamf_docs_list_products` lists them |
+| `version` | string | latest | Specific version to fetch (e.g., `"11.13.0"`) or `"current"` |
 | `language` | string | `en-US` | Documentation language/locale |
 | `page` | number (1–100) | `1` | Page number for paginated TOC |
-| `maxTokens` | number (100–20000) | `5000` | Maximum tokens in response |
+| `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Use `"compact"` for a flat list without nested children |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
@@ -185,10 +198,10 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `urls` | string[] (1–10) | required | Array of Jamf documentation URLs |
+| `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`) |
 | `concurrency` | number (1–5) | `3` | Maximum parallel requests |
 | `language` | string | `en-US` | Documentation language/locale |
-| `maxTokens` | number (100–20000) | `5000` | Total token budget across all articles |
+| `maxTokens` | number (100–50000) | `5000` | Total token budget across all articles |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level per article |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
@@ -290,12 +303,12 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 - **Section Extraction**: Use `section: "Prerequisites"` to retrieve only the part of an article you need
 - **Batch Fetching**: Use `jamf_docs_batch_get_articles` to fetch up to 10 articles in one call with concurrent requests
 - **Glossary Lookup**: Use `jamf_docs_glossary_lookup` to look up Jamf terminology with fuzzy matching
-- **Multi-language**: All tools accept a `language` parameter for localized documentation (e.g., `ja-JP`, `de-DE`)
+- **Multi-language**: Every tool except `jamf_docs_list_products` accepts a `language` parameter for localized documentation: `en-US` (default), `ja-JP`, `zh-TW`, `de-DE`, `es-ES`, `fr-FR`, `nl-NL`, `th-TH`, `it-IT`, `pt-BR`, `zh-CN`
 - **Document Type Filter**: Use `docType` on `jamf_docs_search` to narrow results to `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, or `getting-started`
 - **Version Query**: Use the `version` parameter to query documentation for a specific product version
 - **Pagination**: Search results support `page` and `limit`; table of contents supports `page`; product lists are not paginated
 - **Search Suggestions**: Receive helpful suggestions when a search returns no results
-- **Token Management**: All tools accept a `maxTokens` parameter (100–20000, default 5000) to control response size
+- **Token Management**: All tools accept a `maxTokens` parameter (100–50000; default 5000, or 10000 for `jamf_docs_list_products`) to control response size
 
 ## MCP Apps (interactive viewer)
 
@@ -488,6 +501,26 @@ Multiple origins are separated by commas.
 
 The HTTP server applies per-IP token-bucket rate limiting. The default is 60 requests per minute. Override with the `RATE_LIMIT_RPM` environment variable.
 
+By default the "IP" is the TCP peer address. Behind a reverse proxy every
+request arrives from the proxy, so all clients share one `RATE_LIMIT_RPM`
+bucket and one busy client throttles everyone. Set `TRUST_PROXY=true` (or `1`)
+to take the client address from `X-Forwarded-For` instead. Only those two exact
+values turn it on — `TRUE`, `yes` or anything else leaves it off. When it is on:
+
+- The **rightmost** entry is used: the address appended by the proxy directly
+  in front of the server. Entries to its left are whatever the client sent and
+  can be forged, so they are ignored. That is right for exactly one proxy hop;
+  behind two (a CDN in front of nginx, say) the rightmost entry is the outer
+  proxy, and clients arriving through it share a bucket again.
+- A request without `X-Forwarded-For` falls back to the peer address.
+  `X-Real-IP` and `Forwarded` are not read, so the proxy must send
+  `X-Forwarded-For` for the setting to have any effect.
+- The address feeds the rate limiter and nothing else.
+
+Leave it off when clients reach the server directly. With it on and no proxy in
+front, a client can send any `X-Forwarded-For` it likes and get a fresh bucket
+on every request, which defeats the limit.
+
 ## Configuration
 
 All settings are optional. Set them as environment variables before launching the server.
@@ -521,6 +554,7 @@ Applied to every outbound request to a documentation host.
 |----------|---------|-------|-------------|
 | `RATE_LIMIT_RPM` | `60` | 1–10000 | Inbound requests per minute per IP (HTTP transport only) |
 | `CORS_ALLOWED_ORIGINS` | `` (empty) | — | Comma-separated list of allowed CORS origins (HTTP transport only) |
+| `TRUST_PROXY` | off | `true` or `1` | Take the client IP for the per-IP rate limit from the rightmost `X-Forwarded-For` entry instead of the socket. Enable only behind a reverse proxy — see [Rate Limiting](#rate-limiting) (HTTP transport only) |
 
 ## Development
 
