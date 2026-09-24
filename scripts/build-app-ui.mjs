@@ -33,10 +33,14 @@ const outFile = path.join(repo, 'src', 'core', 'apps', 'generated', 'app-html.ts
  * `zod/v4/core/index.js` does `export * as locales from "../locales/index.js"`,
  * and that barrel eagerly re-exports every translation zod ships. A namespace
  * re-export is not statically analysable the way a named one is, so nothing
- * tree-shakes them and all 63 land in a bundle that is inlined verbatim into
- * every `tools/list` response — 248 kB of Hebrew, Tamil and Ukrainian
- * validation strings, about half the document, to serve an app whose only zod
- * consumer is the MCP SDK's own schema parsing.
+ * tree-shakes them and all 63 land in the bundle — which is inlined verbatim
+ * into the `ui://` resource every MCP Apps host has to download through
+ * `resources/read` before it can render a single result. (Not into
+ * `tools/list`: that carries only the resource's URI.) Without this plugin
+ * that is 252 kB of Hebrew, Tamil and Ukrainian validation strings — the
+ * script is 632 kB with them and 380 kB without, measured 2026-09-24 on
+ * ext-apps 2.0.0, MCP SDK 2.1.0 and zod 4.6.5 — to serve an app whose only
+ * zod consumers are ext-apps' and the MCP SDK's own schema parsing.
  *
  * `en.js` is left alone: `zod/v4/classic/schemas.js` imports it directly and
  * registers it as the default on first `ZodType` construction, so it is the

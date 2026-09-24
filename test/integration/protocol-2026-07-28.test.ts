@@ -58,6 +58,10 @@ async function rpc(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        // Required on every 2026-07-28 POST. Server 2.0.0 served a request
+        // that omitted it; 2.1.0 (typescript-sdk#2590) refuses one with 400 /
+        // -32020 at the same rung that checks Mcp-Method.
+        'MCP-Protocol-Version': '2026-07-28',
         'Mcp-Method': method,
         ...(name !== undefined ? { 'Mcp-Name': name } : {}),
       },
@@ -164,6 +168,9 @@ describe('request header binding', () => {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
+          // Without it, server 2.1.0 answers -32020 for the missing header
+          // instead, and this would pass without reaching the name check.
+          'MCP-Protocol-Version': '2026-07-28',
           'Mcp-Method': 'resources/read',
           'Mcp-Name': 'ui://jamf-docs/something-else.html',
         },

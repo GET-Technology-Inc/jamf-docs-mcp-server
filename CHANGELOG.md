@@ -1,3 +1,15 @@
+## [5.11.7](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.6...v5.11.7) (2026-09-24)
+
+### Dependencies
+
+* bump js-yaml from 4.3.2 to 5.4.2 ([#310](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/310)) ([064d149](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/064d14942ba60a6f93f77d5fa18ad54ba8df2ec8))
+
+## [5.11.6](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.5...v5.11.6) (2026-09-24)
+
+### Dependencies
+
+* move the app-ui bundle to ext-apps 2.0, MCP SDK 2.1 and zod 4.6.5 ([#306](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/306)) ([7f8b100](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/7f8b1001282f5bfbcd14324723fa56516c6d9f8d)), closes [#301](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/301) [typescript-sdk#2590](https://github.com/GET-Technology-Inc/typescript-sdk/issues/2590) [#2494](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/2494) [#2698](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/2698) [#2654](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/2654)
+
 ## [5.11.5](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v5.11.4...v5.11.5) (2026-09-24)
 
 ### Dependencies

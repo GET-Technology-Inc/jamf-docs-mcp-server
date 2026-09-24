@@ -716,6 +716,11 @@ function notice(text: unknown, level: 'info' | 'warning' = 'info'): string {
  * straight into the panel under a heading, which is exactly what the log call
  * beside it exists to avoid — the code was already right about where the raw
  * text belongs and then printed it anyway.
+ *
+ * ext-apps 2.0 no longer adds that prefix itself, but the strip stays: the
+ * message is whatever the *host* put on the wire, and a host still on the 1.x
+ * SDK answers with `error.message` of its own `McpError` — prefix included.
+ * The View upgrading does not upgrade the host it runs in.
  */
 function readableError(message: string): string {
   const stripped = message.replace(/^MCP error -?\d+:\s*/i, '').trim();
@@ -1425,9 +1430,18 @@ async function call(
       return;
     }
     const message = err instanceof Error ? err.message : String(err);
+    // ext-apps 2.0 stopped folding the JSON-RPC code into the message: 1.x
+    // rejected with `MCP error -32602: …`, 2.0 with the bare text and the code
+    // on `err.code` — a number for an error the host or server answered with
+    // (`ProtocolError`), a string such as `REQUEST_TIMEOUT` for one raised
+    // locally (`SdkError`; 1.x logged a timeout as -32001). Read structurally
+    // because ext-apps re-exports neither class, and a log line does not
+    // justify importing @modelcontextprotocol/client directly.
+    const code = typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+    const coded = typeof code === 'number' || typeof code === 'string' ? ` (${String(code)})` : '';
     // The raw JSON-RPC text goes to the host's log, not into a heading the
     // reader has to make sense of.
-    void app.sendLog({ level: 'error', logger: 'JamfDocsApp', data: `${name}: ${message}` });
+    void app.sendLog({ level: 'error', logger: 'JamfDocsApp', data: `${name}${coded}: ${message}` });
     show(
       {
         kind: 'error',
