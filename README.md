@@ -535,12 +535,28 @@ All settings are optional. Set them as environment variables before launching th
 
 | Variable | Default | Range | Description |
 |----------|---------|-------|-------------|
-| `CACHE_DIR` | `.cache` | — | Cache directory (relative paths must stay within the project; sensitive system paths are rejected) |
+| `CACHE_DIR` | `.cache` | — | Cache directory. Must be a directory used only for this cache; see below |
 | `CACHE_TTL_SEARCH` | `1800000` (30 min) | 1 min–30 days | TTL for search result cache entries |
 | `CACHE_TTL_ARTICLE` | `86400000` (24 hr) | 1 min–30 days | TTL for article content cache entries |
 | `CACHE_TTL_PRODUCTS` | `604800000` (7 days) | 1 min–30 days | TTL for product list cache entries |
 | `CACHE_TTL_TOC` | `86400000` (24 hr) | 1 min–30 days | TTL for table of contents cache entries |
 | `CACHE_MAX_ENTRIES` | `500` | 10–10000 | Maximum number of entries kept in the in-memory cache |
+
+`CACHE_DIR` must be a directory used only for this cache. The server writes
+entries there as `<hash>.json`, and every start deletes the ones that have
+expired or can't be read. Files with other names are left alone, but don't
+point it at a project root or a directory other tools use.
+
+- A relative path, including the default `.cache`, resolves against the
+  server's working directory. It must stay inside that directory. If the
+  host starts the server from `/`, set an absolute `CACHE_DIR`: on macOS
+  `/.cache` can't be created, so nothing reaches the disk.
+- A path inside `/etc`, `/usr`, `/var`, `/sys`, `/proc`, `/dev`, `/sbin` or
+  `/bin` is rejected. Symlinks are resolved first, so on macOS
+  `/private/etc/…` is rejected just like `/etc/…`.
+- The OS temp directory is allowed even when it's under one of those
+  (`$TMPDIR` on macOS is under `/private/var`).
+- A rejected value falls back to `.cache`, with a warning on stderr.
 
 ### Request Settings
 
