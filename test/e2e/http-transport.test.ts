@@ -13,14 +13,17 @@ import { asJsonObject } from '../helpers/fixtures.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
+import { getFreePort, waitForServerStart } from '../helpers/server-process.js';
 import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 
 // ============================================================================
 // HTTP Server lifecycle helpers
 // ============================================================================
 
-const HTTP_PORT = 13580; // Different from integration test port (13579)
-const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
+// Set once the server is up. The port is a free one, not a fixed one (13580
+// before), so two runs on one machine do not fail each other; see
+// server-process.ts.
+let baseUrl = '';
 let httpProcess: ChildProcess | undefined;
 
 // Track session state for JSON-RPC
@@ -61,7 +64,7 @@ async function jsonRpc(
     headers['mcp-session-id'] = sessionId;
   }
 
-  const res = await fetch(`${BASE_URL}/mcp`, {
+  const res = await fetch(`${baseUrl}/mcp`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -116,32 +119,24 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
     // Spawns dist/index.js; see require-fresh-build.
     requireFreshBuild();
 
+    const port = await getFreePort();
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
     const proc = spawn(
       'node',
-      [serverPath, '--transport', 'http', '--port', String(HTTP_PORT)],
+      [serverPath, '--transport', 'http', '--port', String(port)],
       { stdio: ['pipe', 'pipe', 'pipe'] }
     );
     httpProcess = proc;
 
-    // Wait for server to start
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => { reject(new Error('HTTP server start timeout')); },
-        10000
-      );
-      proc.stderr.on('data', (data: Buffer) => {
-        if (data.toString().includes('running on http://')) {
-          clearTimeout(timeout);
-          resolve();
-        }
-      });
-      proc.on('error', reject);
-    });
+    // A server that exits instead (a taken port, say) fails this hook at
+    // once, quoting its stderr. The hook outlasts the start budget so that a
+    // server that hangs is reported the same way, not as a bare timeout.
+    await waitForServerStart(proc, 10_000);
+    baseUrl = `http://127.0.0.1:${String(port)}`;
 
     // Establish MCP session
     await initializeSession();
-  });
+  }, 20_000);
 
   afterAll(() => {
     httpProcess?.kill('SIGTERM');
@@ -153,7 +148,7 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
 
   describe('health check coexistence', () => {
     it('should respond to /health alongside MCP session', async () => {
-      const res = await fetch(`${BASE_URL}/health`);
+      const res = await fetch(`${baseUrl}/health`);
       expect(res.status).toBe(200);
       const data = asJsonObject(await res.json());
       expect(data.status).toBe('ok');

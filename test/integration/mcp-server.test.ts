@@ -10,6 +10,7 @@ import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
 import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 import { TOKEN_CONFIG } from '../../src/core/constants/limits.js';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
+import { getFreePort, waitForServerStart } from '../helpers/server-process.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -306,27 +307,23 @@ describe('Jamf Docs MCP Server', () => {
 
   describe('http transport', () => {
     let httpProcess: ChildProcess | undefined;
-    const httpPort = 13579; // Use a non-standard port to avoid conflicts
+    // A free port, not a fixed one (13579 before), so two runs on one machine
+    // do not fail each other; see server-process.ts.
+    let httpPort: number;
 
     beforeAll(async () => {
+      httpPort = await getFreePort();
       const serverPath = path.resolve(process.cwd(), 'dist/index.js');
       const proc = spawn('node', [serverPath, '--transport', 'http', '--port', String(httpPort)], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       httpProcess = proc;
 
-      // Wait for the server to start
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => { reject(new Error('HTTP server start timeout')); }, 10000);
-        proc.stderr.on('data', (data: Buffer) => {
-          if (data.toString().includes('running on http://')) {
-            clearTimeout(timeout);
-            resolve();
-          }
-        });
-        proc.on('error', reject);
-      });
-    });
+      // A server that exits instead (a taken port, say) fails this hook at
+      // once, quoting its stderr. The hook outlasts the start budget so that
+      // a server that hangs is reported the same way, not as a bare timeout.
+      await waitForServerStart(proc, 10_000);
+    }, 20_000);
 
     afterAll(() => {
       httpProcess?.kill('SIGTERM');

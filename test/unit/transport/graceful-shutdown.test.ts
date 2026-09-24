@@ -27,6 +27,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer, type AddressInfo } from 'node:net';
 import path from 'node:path';
 
 import { createHttpHandler } from '../../../src/transport/http-handler.js';
@@ -34,6 +35,7 @@ import { startHttpServer } from '../../../src/platforms/node/http-server.js';
 import { DEFAULT_HTTP_CONFIG } from '../../../src/transport/http-types.js';
 import { createSlowServer } from '../../helpers/slow-server.js';
 import { readJsonRpc, parseSseMessages } from '../../helpers/streamable-http.js';
+import { getFreePort, waitForServerStart } from '../../helpers/server-process.js';
 
 const localIp = (): string => '127.0.0.1';
 
@@ -175,38 +177,71 @@ describe('createHttpHandler().shutdown()', () => {
 // ---------------------------------------------------------------------------
 
 const FIXTURE = path.resolve(process.cwd(), 'test/helpers/slow-http-server.ts');
-const PORT = 13_581;
-const BASE = `http://127.0.0.1:${String(PORT)}`;
 
-async function startFixture(): Promise<ChildProcess> {
+interface Fixture {
+  child: ChildProcess;
+  /** `http://127.0.0.1:<port>`, on the port this fixture was given. */
+  base: string;
+}
+
+/**
+ * Start the fixture on a free port, or on `port` when one is given. Only the
+ * test of the failure path passes a port: the fixed one used here before
+ * (13581) made overlapping test runs fail each other; see server-process.ts.
+ */
+async function startFixture(port?: number): Promise<Fixture> {
+  const bind = port ?? await getFreePort();
   const child = spawn(process.execPath, ['--import', 'tsx', FIXTURE], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(bind) },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
+  await waitForServerStart(child, 30_000);
+  return { child, base: `http://127.0.0.1:${String(bind)}` };
+}
 
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => { reject(new Error('fixture start timed out')); }, 30_000);
-    child.stderr.on('data', (chunk: Buffer) => {
-      if (chunk.toString().includes('running on http://')) {
-        clearTimeout(timer);
-        resolve();
+describe('the SIGTERM fixture', { timeout: 60_000 }, () => {
+  it('takes a port of its own, so two can run at once', async () => {
+    // What two overlapping test runs do. With the fixed port, the second
+    // fixture failed to bind and its test failed.
+    const fixtures = await Promise.allSettled([startFixture(), startFixture()]);
+    try {
+      const [a, b] = fixtures.map((f) => {
+        if (f.status === 'rejected') { throw f.reason; }
+        return f.value;
+      });
+      expect(a.base).not.toBe(b.base);
+      for (const { base } of [a, b]) {
+        expect((await fetch(`${base}/health`)).status).toBe(200);
       }
-    });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      reject(new Error(`fixture exited early with code ${String(code)}`));
-    });
+    } finally {
+      for (const f of fixtures) {
+        if (f.status === 'fulfilled') { f.value.child.kill('SIGKILL'); }
+      }
+    }
   });
 
-  return child;
-}
+  it('says why when its port is taken', async () => {
+    const holder = createServer();
+    await new Promise<void>((resolve) => { holder.listen(0, '127.0.0.1', resolve); });
+    try {
+      const { port } = holder.address() as AddressInfo;
+      // The adapter prints the cause to stderr and exits 1. It used to reach
+      // the test as a bare "fixture exited early with code 1".
+      await expect(startFixture(port)).rejects.toThrow(
+        new RegExp(`exited with code 1[\\s\\S]*Port ${String(port)} is already in use`),
+      );
+    } finally {
+      await new Promise<void>((resolve) => { holder.close(() => { resolve(); }); });
+    }
+  });
+});
 
 describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
   it('answers an in-flight 2026-07-28 tools/call in full and exits cleanly', async () => {
-    const child = await startFixture();
+    const { child, base } = await startFixture();
     try {
-      const call = fetch(`${BASE}/mcp`, {
+      const call = fetch(`${base}/mcp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -247,9 +282,9 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
   });
 
   it('releases an open subscription stream so shutdown can complete', async () => {
-    const child = await startFixture();
+    const { child, base } = await startFixture();
     try {
-      const listen = await fetch(`${BASE}/mcp`, {
+      const listen = await fetch(`${base}/mcp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -291,8 +326,6 @@ describe('SIGTERM against a running HTTP server', { timeout: 60_000 }, () => {
 // ---------------------------------------------------------------------------
 
 describe('startHttpServer signal listeners', () => {
-  const IN_PROCESS_PORT = 13_582;
-
   it('stay installed through the drain and are removed once the server has closed', async () => {
     // Shutdown ends in process.exit, which would take the test worker down.
     // Recording it instead lets the real adapter run here.
@@ -301,6 +334,8 @@ describe('startHttpServer signal listeners', () => {
     const counts = (): number[] => [process.listenerCount('SIGINT'), process.listenerCount('SIGTERM')];
     const baseline = counts();
     const before = process.listeners('SIGTERM');
+    // Not a fixed port (13582 before): see server-process.ts.
+    const port = await getFreePort();
 
     try {
       // The handler builds a server per request, after it has counted the
@@ -312,7 +347,7 @@ describe('startHttpServer signal listeners', () => {
       await startHttpServer(() => {
         dispatched();
         return createSlowServer();
-      }, IN_PROCESS_PORT, '127.0.0.1');
+      }, port, '127.0.0.1');
       expect(counts()).toEqual(baseline.map((n) => n + 1));
 
       // Call the adapter's listener directly: emitting the signal would also
@@ -321,7 +356,7 @@ describe('startHttpServer signal listeners', () => {
       expect(added).toHaveLength(1);
       const onSigterm = added[0];
 
-      const call = fetch(`http://127.0.0.1:${String(IN_PROCESS_PORT)}/mcp`, {
+      const call = fetch(`http://127.0.0.1:${String(port)}/mcp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
