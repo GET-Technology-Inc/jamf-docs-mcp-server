@@ -78,11 +78,19 @@ jobs:
       # Both legs run to the end. With fail-fast, the first leg to fail
       # cancels the other, and a cancelled 26.x leg runs neither its tests nor
       # the hand-off to Codecov Upload, which matters most on exactly those
-      # runs. Of the 19 failed CI runs in the 30 days to 2026-09-24, 6 failed
-      # the 24.x leg's bundle check and 1 its lint, and each would have
-      # cancelled the 26.x leg's tests (11 more were npm ci ERESOLVE, which
-      # fails both legs anyway). The price is the rest of a leg on a failed
-      # run, at most a billed minute.
+      # runs. Of the 19 failed CI runs in the 30 days to 2026-09-24, on the
+      # 20.x/22.x matrix of the time, 7 failed a check that is now pinned to
+      # the 24.x leg: 6 the app-ui bundle check and 1 lint. Fail-fast
+      # cancelled the other leg in 3 of them (runs 33655291381, 35043896601
+      # and 35043916393). In 2 the other leg had already passed, and in 2 it
+      # failed the same check, which then ran on both legs. In this layout
+      # it could be any of them: the 24.x leg is through lint and the bundle
+      # check about 33s in (median of the 49 24.x legs that passed them on
+      # 2026-09-24), which is where the Coverage job was with its unit run
+      # (33.5s median over 178), and the 26.x leg does its build, hand-off
+      # and audit after that. 11 more were npm ci ERESOLVE, which fails both
+      # legs anyway. The price is the rest of a leg on a failed run, at most
+      # a billed minute. test/unit/ci-matrix.test.ts fails if this goes.
       fail-fast: false
       matrix:
         node-version: [24.x, 26.x]
@@ -158,15 +166,18 @@ jobs:
       # with it on 24.x, and in 4 with it here.
       #
       # Ahead of Build, unlike the 24.x leg's Unit Test, for the reason the
-      # Coverage job had no Build step. `npm run build` runs `build:app-ui`,
-      # which rewrites src/core/apps/generated/app-html.ts, and the unit tier
-      # imports that file (test/unit/apps/app-html.test.ts parses the script
-      # it inlines). Here the tier reads the committed file, whatever the 24.x
-      # leg's freshness check finds, and the 24.x Unit Test reads the rebuilt
-      # one; the two are the same bytes whenever that check passes. It also
-      # runs with no dist/, which nothing in test/unit reads, so a unit test
-      # that came to need build output fails here instead of passing on the
-      # leg that built first.
+      # Coverage job ran its app-ui build after its tests. `npm run build`
+      # runs `build:app-ui`, which rewrites
+      # src/core/apps/generated/app-html.ts, and the unit tier imports that
+      # file (test/unit/apps/app-html.test.ts parses the script it inlines).
+      # Here the tier reads the committed file, whatever the 24.x leg's
+      # freshness check finds, and the 24.x Unit Test reads the rebuilt one;
+      # the two are the same bytes whenever that check passes. It also runs
+      # with no dist/, which nothing in test/unit reads (why the Coverage job
+      # had no Build step), so a unit test that came to need build output
+      # fails here instead of passing on the leg that built first.
+      # test/unit/ci-matrix.test.ts fails if a build step moves ahead of it
+      # on this leg.
       #
       # The JUnit report is for Codecov Test Analytics (the Codecov Upload
       # job sends it). Naming any reporter on the command line replaces
@@ -245,18 +256,30 @@ jobs:
           retention-days: 3
           overwrite: true
 
-      # The two steps below reach the npm registry at run time, and come after
-      # the hand-off so that nothing they bring in can shape what the Codecov
-      # Upload job, the one job holding `id-token: write`, receives, or what
-      # the required unit run sees. The audit only reads advisories and runs
-      # nothing; the licence check runs a tool npx resolves on the spot.
-      # test/unit/ci-oidc.test.ts fails if either moves ahead of the hand-off.
+      # The two steps below reach the npm registry at run time. The audit only
+      # reads advisories and runs nothing; the licence check runs a tool npx
+      # resolves on the spot. They come after the hand-off, so nothing they
+      # bring in is on the runner while the unit run tests the tree, or while
+      # the reports are written and the hand-off packs them.
+      # test/unit/ci-oidc.test.ts fails if either moves ahead of it.
+      #
+      # That is what the order buys, and it is not a wall. The hand-off sets
+      # `overwrite`, and the Codecov Upload job downloads only once this
+      # whole leg has ended, so a later step holding the runner's artifact
+      # token could still replace `codecov-inputs`. A run step is not handed
+      # that token, but a process can read it out of the Runner.Worker
+      # process's memory with the runner user's passwordless sudo, the way
+      # the tj-actions/changed-files compromise read secrets. npm ci's
+      # install scripts, ahead of the hand-off, could already do as much.
+      # What holds either way is the Codecov Upload job treating the
+      # artifact as data: unpacked under RUNNER_TEMP, and only the three
+      # reports read from it, by full path.
       #
       # Both are advisory, as they were as a job and a workflow of their own
-      # (neither was ever a required check): a finding shows as a failed step
-      # and an annotation, and the leg's result does not change. `!cancelled()`
-      # because on their own they ran whatever the tests did, and a failed
-      # test should not hide a finding.
+      # (neither was ever a required check), but a finding no longer turns
+      # the run red: it shows as a failed step and an annotation on a green
+      # leg. `!cancelled()` because on their own they ran whatever the tests
+      # did, and a failed test should not hide a finding.
       #
       # Was the Security Audit job: 190 jobs in the 30 days to 2026-09-24, 16s
       # on average and each billed a minute. Production dependencies only:
@@ -295,9 +318,10 @@ jobs:
     name: Integration Test
     # Pull requests only. On a push to main it re-ran, against live APIs, code
     # that had just passed it on the PR, and there it could block nothing: it
-    # ran on 71 of the 73 pushes to main in the 30 days to 2026-09-24 and
-    # failed on none. No `needs`: it starts alongside the Test legs, so a
-    # lint failure on 24.x does not hide what the live APIs say.
+    # ran on 70 of the 73 pushes to main in the 30 days to 2026-09-24 (71
+    # jobs, one push having been re-run) and failed on none. No `needs`: it
+    # starts alongside the Test legs, so a lint failure on 24.x does not hide
+    # what the live APIs say.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     # Integration tests hit real APIs — flaky due to rate limits.
@@ -453,10 +477,10 @@ jobs:
       #
       # Only after both legs passed. `needs.test.result` is the matrix's one
       # result: `success` when every leg succeeded, `failure` when any leg
-      # failed. The 26.x leg writes a coverage report only when its tests
-      # pass (vitest writes none otherwise), so a run whose 24.x leg failed
-      # while 26.x passed sends no coverage although the report exists. That
-      # commit fails a required check anyway, and its test results still go.
+      # failed. So a run whose 24.x leg failed sends no coverage, even when
+      # the 26.x leg passed and wrote a report; that commit fails a required
+      # check anyway, and its test results still go. (When the 26.x leg's own
+      # tests fail, there is no report to send: see the hand-off step.)
       #
       # The file is named and the search is off, so Codecov gets exactly the
       # report the 26.x leg wrote (the search used to find that one file

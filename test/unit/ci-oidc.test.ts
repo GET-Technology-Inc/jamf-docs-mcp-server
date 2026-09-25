@@ -219,11 +219,14 @@ describe('the hand-off from the Test (Node 26.x) leg to the upload job', () => {
     // npx resolves a tool, and its dependency ranges, from the registry on
     // the day: license-checker@25.0.1 pins itself and none of its ten
     // dependencies. Ahead of the hand-off, whatever it resolves can rewrite
-    // the reports that the one job with id-token uploads, and the tree the
-    // required unit run tests. After it, the worst it can do is fail its own
-    // advisory step. npm ci is not in the list: it installs the lockfile.
-    // npm audit is, although it only reads advisories, so the two advisory
-    // steps stay together.
+    // the reports that the one job with id-token uploads before they are
+    // packed, and the tree the required unit run tests, with no more than
+    // the file access every step has. After it, replacing the artifact
+    // takes the runner's own artifact token, which no run step is handed;
+    // the comment over ci.yml's audit step says what that does and does not
+    // stop. npm ci is not in the list: it installs the lockfile. npm audit
+    // is, although it only reads advisories, so the two advisory steps stay
+    // together.
     const early = steps(producer)
       .slice(0, publishIndex)
       .filter(s => commands(s).some(command => /\b(npx|npm (audit|exec|install|i|dlx)|pnpm dlx|yarn dlx|bunx)\b/.test(command)))
