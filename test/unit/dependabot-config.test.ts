@@ -10,6 +10,10 @@
  *   devDependencies; zod is not). That splits them from zod again, and puts
  *   a bump that needs a hand-pushed app-html regeneration into the one PR
  *   carrying every other dev update.
+ * - esbuild belongs in app-ui-bundle for the same reason, since
+ *   scripts/build-app-ui.mjs writes app-html.ts with it. Dropped from the
+ *   group, it would still be in the security exclusions, so the case about
+ *   those would not notice.
  * - The security group takes every security fix. Without its exclusions, a
  *   security bump to a bundle package would hold unrelated security fixes in
  *   a PR that waits for that regeneration and a maintainer's approval.
@@ -65,6 +69,33 @@ describe('dependabot.yml npm groups', () => {
       'group: a regeneration-needing bump would block every dev bump that ' +
       'week, and ext-apps would move without zod.',
     ).toBeLessThan(order.indexOf('dev-dependencies'));
+  });
+
+  it('app-ui-bundle takes every package scripts/build-app-ui.mjs imports', () => {
+    const bundle = groups['app-ui-bundle']?.patterns ?? [];
+    const script = fs.readFileSync(path.join(ROOT, 'scripts/build-app-ui.mjs'), 'utf8');
+    // Bare specifiers only (node: builtins and relative files are not
+    // packages), cut to the package name.
+    const packages = [...script.matchAll(/^import\s[^;]*?from\s+'([^']+)'/gm)]
+      .map(([, specifier]) => specifier)
+      .filter(specifier => !specifier.startsWith('node:') && !specifier.startsWith('.'))
+      .map(specifier => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/'));
+    // esbuild today. Empty would mean the regex no longer finds the imports.
+    expect(packages.length).toBeGreaterThan(0);
+
+    /** Dependabot's patterns as this file uses them: exact, or a trailing `*`. */
+    const matches = (pattern: string, name: string): boolean =>
+      pattern.endsWith('*') ? name.startsWith(pattern.slice(0, -1)) : name === pattern;
+
+    expect(
+      packages.filter(name => !bundle.some(pattern => matches(pattern, name))),
+      'scripts/build-app-ui.mjs writes app-html.ts with these, so a bump that ' +
+      'changes what they emit needs the same regeneration as a zod or ext-apps ' +
+      'bump. Outside app-ui-bundle, a minor or patch bump goes to ' +
+      "dev-dependencies and holds that week's PR, and every dev bump in it, " +
+      'until a maintainer regenerates and approves it. Add the package to ' +
+      "app-ui-bundle's patterns.",
+    ).toEqual([]);
   });
 
   it('the security group leaves out every package app-ui-bundle regenerates', () => {
