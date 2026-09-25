@@ -23,6 +23,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 const ROOT = path.resolve(__dirname, '../..');
 
@@ -131,22 +132,58 @@ describe('the no-network guard is not disabled for the unit tier', () => {
 });
 
 describe('the guards above actually run on a PR that could break them', () => {
-  // Every substantive job in ci.yml is gated on `needs.changes.outputs.code`,
-  // so a path the filter does not list skips the whole test tier — including
-  // this file. A PR that re-added `npm run test:contract` to ci.yml would then
-  // take the test-gate no-op path and the assertion at :60 would never run.
-  it('the paths filter lists the workflow files these tests read', () => {
-    const ci = fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
-    const filter = ci.slice(ci.indexOf('filters: |'), ci.indexOf('\n  test:'));
+  // Until 2026-09 every substantive job in ci.yml was gated on a paths
+  // filter, so a path the filter did not list skipped the whole test tier,
+  // this file included: a PR that re-added `npm run test:contract` to a
+  // workflow the filter missed would take the no-op path, and the assertion
+  // above would never run. The filter listed ci.yml and
+  // upstream-contract.yml for that reason, and still missed release.yml,
+  // .releaserc.json and the rest of .github/, which the unit tier reads too.
+  //
+  // The filter is gone, and every PR runs the whole tier. These keep it
+  // gone. At the trigger, a filter leaves the required checks "Pending" on
+  // the PRs it skips; inside the Test job, it turns them green with nothing
+  // tested (see the top of ci.yml).
+  interface Workflow {
+    on?: unknown;
+    true?: unknown; // `on` as YAML 1.1 reads it
+    jobs: Record<string, { steps?: { uses?: string }[] } | undefined>;
+  }
+  const ci = yaml.load(
+    fs.readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'),
+  ) as Workflow;
 
-    for (const workflow of ['ci.yml', 'upstream-contract.yml']) {
+  /** ci.yml's triggers as `{ event: filter }`, whichever form `on` takes. */
+  function triggers(): Record<string, Record<string, unknown> | null> {
+    const on = ci.on ?? ci.true;
+    if (typeof on === 'string') { return { [on]: null }; }
+    if (Array.isArray(on)) { return Object.fromEntries(on.map(event => [String(event), null])); }
+    return (on ?? {}) as Record<string, Record<string, unknown> | null>;
+  }
+
+  it('ci.yml triggers on every pull request to main and every push to it', () => {
+    const on = triggers();
+    for (const event of ['pull_request', 'push']) {
+      expect(Object.keys(on), `ci.yml no longer runs on ${event}`).toContain(event);
+      const filters = Object.keys(on[event] ?? {}).filter(key => ['paths', 'paths-ignore', 'branches-ignore'].includes(key));
       expect(
-        filter,
-        `.github/workflows/${workflow} is read by this test file but is not in ` +
-        "ci.yml's paths filter, so a PR touching only that workflow skips the " +
-        'test job and these guards never run.'
-      ).toContain(`.github/workflows/${workflow}`);
+        filters,
+        `on.${event} filters on ${JSON.stringify(filters)}. A PR the filter ` +
+        'skips never reports the required Test checks, so it cannot merge, and ' +
+        'a filter narrow enough to be worth having skips these guards too.',
+      ).toEqual([]);
     }
+    const branches = on.pull_request?.branches;
+    expect(branches === undefined ? ['main'] : [branches].flat()).toContain('main');
+  });
+
+  it('no job in ci.yml decides from the changed files', () => {
+    const filters = Object.entries(ci.jobs).flatMap(([id, job]) =>
+      (job?.steps ?? [])
+        .filter(step => /paths-filter|changed-files/.test(step.uses ?? ''))
+        .map(step => `${id} / ${String(step.uses)}`),
+    );
+    expect(filters).toEqual([]);
   });
 });
 

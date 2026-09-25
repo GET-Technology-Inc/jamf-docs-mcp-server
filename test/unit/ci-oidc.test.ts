@@ -3,18 +3,20 @@
  * token, and that job runs none of the project's code.
  *
  * `id-token: write` lets every step of a job request an OIDC token, for any
- * audience. #326 granted it to the Coverage job, which also runs `npm ci` (the
- * install scripts of every dependency), the whole unit tier and esbuild, so
- * any of those could have asked for one. The work is now split in two:
- * Coverage measures and hands its reports over as an artifact, and
- * codecov-upload, the one job with the permission, sends them.
+ * audience. #326 granted it to the job that measured coverage, which also ran
+ * `npm ci` (the install scripts of every dependency), the whole unit tier and
+ * esbuild, so any of those could have asked for one. The work is now split in
+ * two: the Test (Node 26.x) leg measures and hands its reports over as an
+ * artifact, and codecov-upload, the one job with the permission, sends them.
  *
  * Nothing else holds that split in place, and each way of undoing it looks
- * harmless and stays green: the permission added back to a job that "needs to
- * upload", an `npm ci` added to the upload job to get a tool, an action added
- * there that runs one, the artifact unpacked into the checkout, where git
- * reads its config. A Codecov upload that fails is continue-on-error by
- * design, so CI would not say anything either.
+ * harmless and stays green: the permission added to the Test job so that it
+ * can "just upload", an `npm ci` added to the upload job to get a tool, an
+ * action added there that runs one, the artifact unpacked into the checkout,
+ * where git reads its config, a second leg handing over an artifact of the
+ * same name, a tool fetched at run time ahead of the hand-off. A Codecov
+ * upload that fails is continue-on-error by design, so CI would not say
+ * anything either.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -41,6 +43,7 @@ interface Job {
   needs?: string | string[];
   if?: string;
   permissions?: Permissions;
+  strategy?: { matrix?: Record<string, unknown> };
   steps?: Step[];
 }
 
@@ -50,7 +53,9 @@ const ci = yaml.load(
 
 const UPLOAD_JOB = 'codecov-upload';
 const upload = ci.jobs[UPLOAD_JOB];
-const { coverage } = ci.jobs;
+/** The job that measures: the Test matrix, whose 26.x leg runs coverage. */
+const PRODUCER_JOB = 'test';
+const producer = ci.jobs[PRODUCER_JOB];
 
 function grantsIdToken(permissions: Permissions): boolean {
   if (typeof permissions === 'string') {
@@ -107,6 +112,14 @@ describe('ci.yml: only the Codecov Upload job can mint an OIDC token', () => {
     ).toEqual([UPLOAD_JOB]);
   });
 
+  it(`the ${PRODUCER_JOB} job states contents: read, and nothing more`, () => {
+    // It runs npm ci, the tests and esbuild, and it is the job that would
+    // look like the natural place to "just upload" from. The block is there
+    // to make the missing id-token visible, and a job-level block replaces
+    // the workflow's rather than adding to it.
+    expect(producer?.permissions).toEqual({ contents: 'read' });
+  });
+
   it(`no job but ${UPLOAD_JOB} talks to Codecov`, () => {
     // A Codecov step anywhere else has no token to upload with, and the
     // obvious repair is to grant that job the permission.
@@ -139,7 +152,7 @@ describe(`${UPLOAD_JOB} runs none of the project's code`, () => {
     expect(
       offenders,
       'Anything run from the checkout runs with the OIDC token in reach. ' +
-      'Measure in the Coverage job and hand the result over in the artifact.',
+      'Measure in the Test (Node 26.x) leg and hand the result over in the artifact.',
     ).toEqual([]);
   });
 
@@ -176,25 +189,56 @@ describe(`${UPLOAD_JOB} runs none of the project's code`, () => {
   });
 });
 
-describe('the hand-off from Coverage to the upload job', () => {
-  const publish = steps(coverage).find(s => action(s) === 'actions/upload-artifact');
+describe('the hand-off from the Test (Node 26.x) leg to the upload job', () => {
+  const publishers = steps(producer).filter(s => action(s) === 'actions/upload-artifact');
+  const publish = publishers.at(0);
+  const publishIndex = publish === undefined ? -1 : steps(producer).indexOf(publish);
   const download = steps(upload).find(s => action(s) === 'actions/download-artifact');
+  const values = producer?.strategy?.matrix?.['node-version'];
+  const matrix = Array.isArray(values) ? values.map(String) : [];
 
-  it(`${UPLOAD_JOB} downloads the artifact Coverage uploads`, () => {
-    expect(publish, 'the Coverage job publishes no artifact').toBeDefined();
+  it(`${UPLOAD_JOB} downloads the artifact the ${PRODUCER_JOB} job uploads`, () => {
+    expect(publishers.length, `the ${PRODUCER_JOB} job should publish exactly one artifact`).toBe(1);
     expect(download, `${UPLOAD_JOB} downloads no artifact`).toBeDefined();
     // Out of step, the download fails, and continue-on-error keeps that quiet.
     expect(download?.with?.name).toBe(publish?.with?.name);
-    expect([upload?.needs].flat()).toContain('coverage');
+    expect([upload?.needs].flat()).toContain(PRODUCER_JOB);
+  });
+
+  it('exactly one leg of the matrix hands the reports over', () => {
+    // A step runs on every leg unless its `if` pins one. Unpinned, both legs
+    // upload the same name and whichever finishes last wins (`overwrite`);
+    // pinned to a leg the matrix does not run, nothing is uploaded, the
+    // download fails, and continue-on-error keeps both quiet.
+    const legs = [...(publish?.if ?? '').matchAll(/matrix\.node-version\s*==\s*'([^']*)'/g)].map(m => m[1]);
+    expect(legs, `the hand-off's if is ${JSON.stringify(publish?.if)}`).toHaveLength(1);
+    expect(matrix, `${JSON.stringify(legs[0])} is not a leg of the matrix`).toContain(legs[0]);
+  });
+
+  it('nothing fetched at run time runs in the Test job before the hand-off', () => {
+    // npx resolves a tool, and its dependency ranges, from the registry on
+    // the day: license-checker@25.0.1 pins itself and none of its ten
+    // dependencies. Ahead of the hand-off, whatever it resolves can rewrite
+    // the reports that the one job with id-token uploads, and the tree the
+    // required unit run tests. After it, the worst it can do is fail its own
+    // advisory step. npm ci is not in the list: it installs the lockfile.
+    // npm audit is, although it only reads advisories, so the two advisory
+    // steps stay together.
+    const early = steps(producer)
+      .slice(0, publishIndex)
+      .filter(s => commands(s).some(command => /\b(npx|npm (audit|exec|install|i|dlx)|pnpm dlx|yarn dlx|bunx)\b/.test(command)))
+      .map(s => s.name ?? s.run);
+    expect(publishIndex, 'expected the hand-off step').toBeGreaterThan(0);
+    expect(early).toEqual([]);
   });
 
   it(`${UPLOAD_JOB} unpacks the artifact outside the checkout, and reads the reports only from there`, () => {
-    // Whatever runs in the Coverage job decides what the artifact holds, and
-    // download-artifact writes each zip entry at its own path under the
-    // target. Unpacked into the checkout, an entry named .git/config replaces
-    // the checkout's own, and the git commands this job runs there (Codecov's
-    // CLI, the bundle analyzer, checkout's post step) run what its
-    // core.fsmonitor names, with the OIDC token in reach.
+    // Whatever runs in the Test (Node 26.x) leg decides what the artifact
+    // holds, and download-artifact writes each zip entry at its own path
+    // under the target. Unpacked into the checkout, an entry named
+    // .git/config replaces the checkout's own, and the git commands this job
+    // runs there (Codecov's CLI, the bundle analyzer, checkout's post step)
+    // run what its core.fsmonitor names, with the OIDC token in reach.
     const target = String(download?.with?.path);
     expect(target, 'with no path, download-artifact unpacks into the checkout')
       .toMatch(/^\$\{\{ runner\.temp \}\}\/[\w.-]+$/);
@@ -217,7 +261,7 @@ describe('the hand-off from Coverage to the upload job', () => {
     // A run whose tests failed is the one Test Analytics exists to report.
     expect(publish?.if).toContain('!cancelled()');
     expect(upload?.if).toContain('!cancelled()');
-    expect(upload?.if).toContain("needs.coverage.result == 'failure'");
+    expect(upload?.if).toContain(`needs.${PRODUCER_JOB}.result == 'failure'`);
   });
 
   it(`${UPLOAD_JOB} cannot fail the run`, () => {
