@@ -1,18 +1,34 @@
 name: CodeQL
 
+# Source and the manifest, not the lockfile. package-lock.json was a trigger
+# too, and in the 30 days to 2026-09-24, 22 PRs (21 of them Dependabot's)
+# changed it and neither of the other paths: 41 runs (22 on the PRs, 19 on
+# their merges) and 75 billed minutes spent analysing an unchanged src/.
+# Nothing in CodeQL's JavaScript queries or extractor reads package-lock.json
+# (searching github/codeql on 2026-09-25 finds it only in test fixtures and a
+# build file), and a vulnerable locked version is what Dependabot alerts are
+# for.
+#
+# package.json stays. The default suite's js/insecure-dependency query reads
+# its dependencies and devDependencies and flags one fetched over http:// or
+# ftp:// (https://github.com/github/codeql/blob/main/javascript/ql/src/Security/CWE-300/InsecureDependencyResolution.ql),
+# so a PR that adds one should get the alert on the PR, not from the Monday
+# scan after it has merged.
+#
+# The push trigger stays too: code scanning reports a PR's alerts against the
+# latest analysis of main. The Monday schedule re-analyses main in full,
+# whatever changed.
 on:
   push:
     branches: [main]
     paths:
       - 'src/**'
       - 'package.json'
-      - 'package-lock.json'
   pull_request:
     branches: [main]
     paths:
       - 'src/**'
       - 'package.json'
-      - 'package-lock.json'
   schedule:
     - cron: '0 6 * * 1' # every Monday 6:00 UTC
 
