@@ -2,7 +2,8 @@ name: PR Title
 
 # This repository squash-merges, and a squash keeps only the PR title: every
 # typed commit message inside the PR is thrown away, so the title alone decides
-# what semantic-release does with the merge.
+# what the merge earns when release.yml next runs semantic-release (once a day,
+# or at once for a package.json change; CONTRIBUTING.md has the details).
 #
 # On 2026-09-21 that lost a release outright. PR #296 carried sixteen commits
 # including a `feat`, was squashed under a title starting `chore:`, and
