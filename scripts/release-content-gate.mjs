@@ -8,8 +8,9 @@
  *
  * - package.json is compared as a consumer sees it: without `version`,
  *   `devDependencies`, `overrides` (npm applies those to the root project
- *   only, never to a package installed as a dependency) and every script npm
- *   does not run on a consumer's machine, and with key order normalised.
+ *   only, never to a package installed as a dependency) and every script
+ *   other than the install, prepare and uninstall hooks (CONSUMER_SCRIPTS
+ *   says which of those actually run), and with key order normalised.
  *
  * - README.md is reported but not counted. It changes what npmjs.com shows,
  *   not what an install does, and counting it makes a release that ships
@@ -48,10 +49,15 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * The scripts npm runs on a consumer's machine when the package is installed
- * or removed. Every other script (build, test, the prepublishOnly this
- * package has) runs only in this repository, so a change to one ships
- * nothing.
+ * The scripts whose change counts. npm runs the three install hooks on a
+ * consumer's machine when it installs this package from the registry. The
+ * other four are counted to be safe, since counting errs toward releasing:
+ * `prepare` runs when the package is installed from git or from a local
+ * folder, not from a registry tarball, and the uninstall hooks ran under
+ * npm 6 but not under npm 7 or later (npm's scripts docs, "A Note on a lack
+ * of npm uninstall scripts", checked 2026-09-25). Every other script (build,
+ * test, the prepublishOnly this package has) runs only in a checkout of this
+ * repository, so a change to one ships nothing.
  */
 export const CONSUMER_SCRIPTS = new Set([
   'preinstall', 'install', 'postinstall', 'prepare',

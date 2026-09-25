@@ -48,7 +48,10 @@ describe('consumerManifest', () => {
     });
   });
 
-  it('keeps every script npm runs on a consumer machine', () => {
+  it('keeps the install hooks, and prepare and the uninstall hooks to be safe', () => {
+    // Only the install hooks run when a consumer installs from the registry;
+    // prepare (git and folder installs) and the uninstall hooks (npm 6) are
+    // counted anyway, because counting errs toward releasing.
     const scripts = Object.fromEntries(
       ['preinstall', 'install', 'postinstall', 'prepare', 'preuninstall', 'uninstall', 'postuninstall']
         .map(name => [name, `node ${name}.js`]),

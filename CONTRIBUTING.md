@@ -79,15 +79,16 @@ documentation-only PR titled `docs:` is correct and passes.
 
 ### Releases
 
-Merging does not publish. `.github/workflows/release.yml` releases `main` once a
-day, at 02:23 UTC (10:23 Taipei), and publishes only when all of these hold:
+Merging does not publish at once, except for `package.json` changes (below).
+`.github/workflows/release.yml` releases `main` once a day, at 02:23 UTC (10:23
+Taipei), and publishes only when all of these hold:
 
 - something has merged since the last release;
 - the `Test (Node …)` checks on the newest commit of `main` passed;
 - the package it would publish differs from the last one on npm. `README.md`
   does not count, and neither do the parts of `package.json` a consumer's
   install never reads (`version`, `devDependencies`, `overrides`, and scripts
-  other than the install hooks).
+  other than the install, `prepare` and uninstall hooks).
 
 So a `deps:` bump of a devDependency, a lockfile-only bump or a `fix(ci):`
 waits, and goes out in the notes of the next release that ships something.
@@ -95,9 +96,9 @@ Nothing is dropped: semantic-release reads every commit since the last tag, and
 the titles of all of them decide the version. A day with a `feat:` and three
 `fix:` merges publishes one minor release.
 
-A merge that changes `package.json` starts a release straight away, so an
-unattended Dependabot security update that raises a runtime range is published
-without waiting for the next day.
+A merge that changes `package.json` starts a release run straight away, with the
+same three conditions, so an unattended Dependabot security update that raises a
+runtime range is published without waiting for the next day.
 
 To release now:
 
@@ -106,10 +107,12 @@ gh workflow run release.yml
 ```
 
 or Actions › Release › Run workflow. `-f skip_content_gate=true` publishes even
-if the package would be identical (to ship a README change on its own, say), and
-`-f skip_ci_check=true` publishes without waiting for the Test checks. Neither
-forces a version: if nothing merged since the last release earns one, nothing is
-published. A run that holds a release says why in its job summary.
+if the package would be identical (to publish a held `deps:` bump, and with it a
+README change npmjs.com should show, say), and `-f skip_ci_check=true` publishes
+without waiting for the Test checks. Neither forces a version: if nothing merged
+since the last release earns one, nothing is published, so a `docs:` README
+change on its own stays unpublished either way. A run that holds a release says
+why in its job summary.
 
 GitHub disables a scheduled workflow after 60 days with no activity in the
 repository, and that disables all of Release, manual runs included. Nothing
