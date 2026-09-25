@@ -165,16 +165,37 @@ describe('the guards above actually run on a PR that could break them', () => {
     const on = triggers();
     for (const event of ['pull_request', 'push']) {
       expect(Object.keys(on), `ci.yml no longer runs on ${event}`).toContain(event);
-      const filters = Object.keys(on[event] ?? {}).filter(key => ['paths', 'paths-ignore', 'branches-ignore'].includes(key));
+      const filter = on[event] ?? {};
+      const filters = Object.keys(filter).filter(key => ['paths', 'paths-ignore', 'branches-ignore'].includes(key));
       expect(
         filters,
         `on.${event} filters on ${JSON.stringify(filters)}. A PR the filter ` +
         'skips never reports the required Test checks, so it cannot merge, and ' +
         'a filter narrow enough to be worth having skips these guards too.',
       ).toEqual([]);
+
+      // With no `branches`, every branch; but a `tags` filter alone limits
+      // the event to tags, and then no branch push runs it at all.
+      const { branches } = filter;
+      const reaches = branches === undefined
+        ? filter.tags === undefined && filter['tags-ignore'] === undefined
+        : [branches].flat().includes('main');
+      expect(
+        reaches,
+        `on.${event} does not reach main (${JSON.stringify(filter)}). On a PR ` +
+        'the required checks then never report; on a push, main loses the ' +
+        'Codecov baseline that every PR is compared against.',
+      ).toBe(true);
     }
-    const branches = on.pull_request?.branches;
-    expect(branches === undefined ? ['main'] : [branches].flat()).toContain('main');
+
+    // The default is opened, synchronize and reopened. A list without
+    // synchronize runs the checks on a PR's first head and never again.
+    // Required checks are per commit, so every later head waits on checks
+    // that never report, or goes in untested past them on the admin bypass.
+    const types = on.pull_request?.types;
+    if (types !== undefined) {
+      expect([types].flat()).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened']));
+    }
   });
 
   it('no job in ci.yml decides from the changed files', () => {

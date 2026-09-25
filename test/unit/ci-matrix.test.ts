@@ -24,6 +24,11 @@
  * - The unit tier moved between steps. It runs plain on 24.x and with
  *   coverage on 26.x; a leg that runs it twice pays for it twice, and a leg
  *   that runs it zero times is a green check over a runtime nothing tested.
+ * - The hand-off to the Codecov Upload job moved ahead of the reports it
+ *   packs. It then finds nothing, its `continue-on-error` swallows the
+ *   error, the upload job skips every upload, and the run stays green.
+ * - `fail-fast` back on. A failure on the 24.x leg then cancels the 26.x
+ *   leg, and with it the tests and the hand-off that leg exists to run.
  * - The lowest leg is the only evidence that the oldest Node `engines`
  *   accepts actually works. If `engines` moves and the matrix does not, or
  *   the reverse, the package promises a runtime nothing tests.
@@ -60,7 +65,7 @@ interface Job {
   name?: string;
   if?: unknown;
   needs?: string | string[];
-  strategy?: { matrix?: Record<string, unknown> };
+  strategy?: { [key: string]: unknown; matrix?: Record<string, unknown> };
   steps?: Step[];
 }
 interface Workflow { jobs?: Record<string, Job | undefined> }
@@ -158,6 +163,14 @@ function unitRuns(command: string): number {
   return (command.match(/\bnpm (?:run )?test(?::unit|:coverage|:all)?(?![\w:-])|\bvitest\b/g) ?? []).length;
 }
 
+/**
+ * Whether a command runs the build, or the part of it that rewrites
+ * src/core/apps/generated/app-html.ts: `build` runs `build:app-ui` first.
+ */
+function builds(command: string): boolean {
+  return /\bnpm run build(?::app-ui)?(?![\w:-])/.test(command);
+}
+
 describe('ci.yml publishes exactly the required checks', () => {
   const tested = legs('test');
 
@@ -207,6 +220,21 @@ describe('ci.yml publishes exactly the required checks', () => {
 describe('each leg runs what it says', () => {
   const tested = legs('test');
   const floor = tested.slice().sort((a, b) => major(a) - major(b))[0];
+
+  const coverage = testSteps.filter(s => commands(s).some(c => unitRuns(c) > 0 && c.includes('--coverage')));
+  const bundle = testSteps.filter(s => s.env?.APP_UI_BUNDLE_DIR !== undefined);
+  const handOff = testSteps.filter(s => (s.uses ?? '').startsWith('actions/upload-artifact@'));
+  const label = (step: Step): string => step.name ?? step.uses ?? '(unnamed step)';
+
+  it('both legs run to the end: fail-fast is off', () => {
+    expect(
+      test?.strategy?.['fail-fast'],
+      'With fail-fast (the default) the first leg to fail cancels the other. ' +
+      'The 24.x leg is through its type checks, lint and bundle check about ' +
+      '33s in, while the 26.x leg is still running, and a cancelled 26.x leg ' +
+      'runs neither its tests nor the hand-off to the Codecov Upload job.',
+    ).toBe(false);
+  });
 
   it('a step condition in the test job names only its leg, or !cancelled()', () => {
     // Anything else can skip the step on a run where it should have run, and
@@ -264,15 +292,37 @@ describe('each leg runs what it says', () => {
   it('the coverage run, the bundle build for analysis and the hand-off share one leg', () => {
     // The hand-off uploads what the other two wrote. On different legs it
     // finds nothing to upload, and fails quietly under continue-on-error.
-    const coverage = testSteps.filter(s => commands(s).some(c => unitRuns(c) > 0 && c.includes('--coverage')));
-    const bundle = testSteps.filter(s => s.env?.APP_UI_BUNDLE_DIR !== undefined);
-    const handOff = testSteps.filter(s => (s.uses ?? '').startsWith('actions/upload-artifact@'));
     for (const [what, found] of [['coverage run', coverage], ['bundle build', bundle], ['hand-off', handOff]] as const) {
       expect(found.length, `expected one ${what} step in the test job`).toBe(1);
     }
     const where = [coverage[0], bundle[0], handOff[0]].map(step => legsOf(step, tested));
     expect(where[0]).toHaveLength(1);
     expect(where).toEqual([where[0], where[0], where[0]]);
+  });
+
+  it('on that leg the coverage run comes before every build, and the hand-off after both reports', () => {
+    // The same silent pass by order instead of by leg: a hand-off ahead of
+    // the coverage run or the analysis build packs nothing, or half, and
+    // continue-on-error keeps it quiet. And every build rewrites
+    // src/core/apps/generated/app-html.ts, which the unit tier imports, so
+    // the coverage run goes first to measure the committed file with no
+    // dist/ (the comment on it in ci.yml says why).
+    const run = coverage.at(0);
+    const leg = run === undefined ? [] : legsOf(run, tested);
+    const onLeg = testSteps.filter(step => leg.length === 1 && legsOf(step, tested).includes(leg[0]));
+    const at = (step: Step | undefined): number => (step === undefined ? -1 : onLeg.indexOf(step));
+
+    const rebuilds = onLeg.filter(step => commands(step).some(builds));
+    expect(rebuilds.map(label), 'expected Build and the analysis build on the coverage leg').toContain(label(bundle[0] ?? {}));
+    expect(
+      rebuilds.filter(step => at(step) < at(run)).map(label),
+      'these rebuild app-html.ts before the coverage run reads it',
+    ).toEqual([]);
+    expect(at(run), 'expected the coverage run on one leg').toBeGreaterThanOrEqual(0);
+    expect(
+      at(handOff[0]),
+      'the hand-off must come after the coverage run and the analysis build, whose output it packs',
+    ).toBeGreaterThan(Math.max(at(run), at(bundle[0])));
   });
 
   it('every leg runs the unit tier exactly once', () => {
