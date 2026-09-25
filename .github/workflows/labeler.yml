@@ -6,12 +6,13 @@ name: PR Labeler
 # apiece, for jobs that averaged 5 and 13 seconds: 250 billed minutes for 38
 # of work.
 #
-# pull_request_target, so the token can write labels on PRs whose own
-# workflows get a read-only one (forks, and Dependabot). That event runs the
-# base branch's workflow with a write token, which is safe only because
-# nothing here checks out or runs the PR's code: actions/labeler gets the
-# changed files from the API and .github/labeler.yml from the base branch,
-# and pr-size-labeler counts the diff through the API. Keep it that way. A
+# pull_request_target, so the token can write labels on a PR from a fork,
+# whose own workflows get a read-only one. (Dependabot's PRs are the other
+# such case, and the job below skips them.) That event runs the base
+# branch's workflow with a write token, which is safe only because nothing
+# here checks out or runs the PR's code: actions/labeler gets the changed
+# files from the API and .github/labeler.yml from the base branch, and
+# pr-size-labeler counts the diff through the API. Keep it that way. A
 # checkout of the PR head in this job would hand its code that token.
 on:
   pull_request_target:
@@ -26,15 +27,15 @@ jobs:
     name: Label PR
     runs-on: ubuntu-latest
     # Not on Dependabot's PRs: 43 of the 125 runs of each workflow. They carry
-    # the `dependencies` label dependabot.yml gives them, and every one that
-    # got a size label in the window was size/XS (30 of 31), because
-    # package-lock.json is not counted below.
+    # the labels dependabot.yml gives them (`dependencies` for npm, `ci` for
+    # Actions), and every one that got a size label in the window was size/XS
+    # (30 of 31), because package-lock.json is not counted below.
     #
     # The PR's author, not github.actor. When a maintainer pushes onto a
-    # Dependabot PR, as the bundle regeneration for dependabot.yml's
-    # app-ui-bundle group requires, the actor is the maintainer: 3 of those
-    # 43 runs, on #230 and #236. Who pushed last should not decide whether a
-    # PR is labelled.
+    # Dependabot PR (a merge from main, or the regeneration dependabot.yml's
+    # app-ui-bundle group requires), the actor is the maintainer: 3 of those
+    # 43 runs, two merges from main on #230 and #236 and #236's regeneration.
+    # Who pushed last should not decide whether a PR is labelled.
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Path labels
