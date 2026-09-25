@@ -1,19 +1,114 @@
 name: Release
 
+# Releases main once a day, and only when the package it would publish differs
+# from the last one on npm and CI passed on the commit being published.
+#
+# Until 2026-09-25 this ran on every push to main. That published 47 versions
+# in the 30 days to 2026-09-24, 17 of them on 2026-09-24 alone and 16 on
+# 2026-09-02, and 15 of the 47 were byte-identical to the version before (25
+# of 67 over 60 days; scripts/release-content-gate.mjs has the breakdown). The
+# only active consumer, jamf-docs-mcp-worker, deployed one of those, 4.1.2, to
+# production believing it carried a glossary fix, and had to redo the upgrade
+# as 4.1.3. Replayed over the last 30 tags (v5.10.0 to v6.0.11, 2026-09-03 to
+# 2026-09-24) with the real commit-analyzer, .releaserc.json and the content
+# gate on the registry tarballs, a daily run gives 6 releases instead of 30,
+# plus one failed attempt on 2026-09-03 (#230's changelog preset, which failed
+# loudly under the old trigger too), and no feat or breaking change is lost or
+# downgraded. Over the 30 days to 2026-09-24, a shipped change would have
+# waited a median 10.7 hours for its release, at most 23.2.
+#
+# Nothing is lost by waiting. semantic-release derives a release from every
+# commit since the last tag, so whatever one run holds back, a later one
+# releases, with the held commits in its notes. The squash title of each PR
+# still decides what its merge earns (CONTRIBUTING.md, pr-title.yml); this
+# file decides when that is published.
+#
+# To release now rather than at the next 02:23 UTC:
+#
+#   gh workflow run release.yml
+#
+# or Actions > Release > Run workflow. The two inputs below are off unless
+# set: `-f skip_content_gate=true` publishes even if the package would be
+# identical, `-f skip_ci_check=true` publishes without waiting for HEAD's Test
+# checks.
+#
+# In a public repository, as this one is, GitHub disables a scheduled workflow
+# after 60 days without repository activity. It disables the whole workflow,
+# not just the schedule: dispatch and the push trigger stop too, and nothing
+# publishes until someone runs
+#
+#   gh workflow enable release.yml
+#
+# (or Actions > Release > Enable workflow). Dependabot's weekly PRs make that
+# unlikely, but a disabled Release looks exactly like a quiet week. A failed
+# scheduled run notifies only whoever last changed the cron line.
+#
+# Untested so far: publishing from a `schedule` or `workflow_dispatch` event.
+# All 222 Release runs from 2026-01-29 to 2026-09-24 were `push` events. npm's
+# trusted publishing binds the repository and this file's name, release.yml
+# (so it must not be renamed or split), and documents no restriction on the
+# event. If it did refuse, @semantic-release/npm fails in verifyConditions,
+# before any commit, tag or publish, and a held day's dry run (below) goes
+# through the same token exchange. Watch the first scheduled run.
+#
+# Recovering a version that was tagged but never published. semantic-release
+# (25.0.9, index.js) runs `prepare`, where @semantic-release/git commits and
+# pushes the version bump, then tags that commit and pushes the tag, and only
+# then publishes. A publish that fails leaves the commit and the tag behind.
+# Dispatching again finds nothing merged since that tag and publishes nothing;
+# re-running the failed job finds its checkout behind main and does the same.
+# Neither retries the publish. From then on, every run that has commits to
+# release fails at "Is the last release on npm?", which prints these steps
+# with the version filled in:
+#
+#   gh release delete vX.Y.Z --yes      # only if a GitHub release was made
+#   git push origin :refs/tags/vX.Y.Z
+#   gh workflow run release.yml -f skip_ci_check=true
+#
+# skip_ci_check because HEAD is then the `[skip ci]` release commit, which has
+# no Test checks of its own; drop it if a PR has merged since. The re-run
+# computes the same version from the same commits and publishes it.
+# CHANGELOG.md gets a second section for that version, which can be deleted
+# by hand.
 on:
+  schedule:
+    # 02:23 UTC = 10:23 Asia/Taipei. In the 30 days to 2026-09-24, human
+    # merges fell at 00-03h, 14-17h and 21-23h Taipei time and Dependabot's at
+    # 09:2x (01:2x UTC), so this is inside the longest stretch with no merges
+    # and after the weekly Dependabot batch. Off the hour, because GitHub
+    # delays scheduled runs most at the top of the hour and can drop them
+    # under load; a late or dropped run loses nothing, since the next one
+    # releases everything since the last tag.
+    - cron: '23 2 * * *'
+  # A merge that changes package.json releases at once instead of waiting for
+  # 02:23. That is the shape of a Dependabot security update that raises a
+  # runtime range: dependabot-auto-merge.yml merges it with nobody around to
+  # dispatch a release. In-range bumps change only package-lock.json, which
+  # ships nothing. A devDependency range raise starts a run too, and the
+  # content gate holds it. Release commits change package.json as well, but
+  # their `[skip ci]` suppresses push triggers.
   push:
     branches: [main]
-  # Re-run a release that failed for a reason outside the repository — an npm
-  # outage, an expired token, a registry timeout — without having to land
-  # another commit just to trigger one.
-  #
+    paths: ['package.json']
   # This does NOT force a version. semantic-release derives the release from
   # the commit messages since the last tag, so a manual run over commits that
-  # earned nothing reports "no release" and exits successfully, exactly as an
-  # automatic run would. To release work whose commits were flattened into a
+  # earned nothing reports "no release" and exits successfully, exactly as a
+  # scheduled run would. To release work whose commits were flattened into a
   # non-releasable message, land a correctly typed commit — pr-title.yml exists
   # to stop that happening in the first place.
-  workflow_dispatch: {}
+  #
+  # `inputs.*` is empty on schedule and push, which every condition below
+  # reads as false.
+  workflow_dispatch:
+    inputs:
+      skip_content_gate:
+        description: Release even if the package would be identical to the last one on npm
+        type: boolean
+        default: false
+      skip_ci_check:
+        description: Release without waiting for the Test checks on HEAD to pass
+        type: boolean
+        default: false
 
 concurrency:
   group: release
@@ -24,6 +119,8 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
+  # Read HEAD's check runs, for "Did CI pass on the commit being released?".
+  checks: read
 
 jobs:
   release:
@@ -57,6 +154,100 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
+      # Most days nothing has merged since the last release: main took merges
+      # on 11 of the 30 UTC days to 2026-09-24. Stop before anything is
+      # installed then.
+      - name: Anything merged since the last release?
+        id: pending
+        run: |
+          last="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          echo "last=${last}" >> "$GITHUB_OUTPUT"
+          if [ -n "$last" ] && [ "$(git rev-list --count "${last}..HEAD")" = 0 ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing has merged since ${last}, so there is nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Publish only a tree CI passed. Human PRs merge through the main
+      # ruleset's admin bypass: #296, #311, #315, #320, #324, #325, #326 and
+      # #327 were each merged by their author with no approving review, and
+      # the bypass skips the required Test checks as well. So nothing else
+      # guarantees main is green, and with a release per push, 45 of the 47
+      # releases in the 30 days to 2026-09-24 reached npm before CI's Test legs
+      # on the same commit had finished (job and step timestamps). This step
+      # is the one gate that binds everyone.
+      #
+      # HEAD only, the tree being published. Checking every commit since the
+      # last tag would let a red commit that a later one fixed block every
+      # release, and the branch commits of a true merge (#297) never get a push
+      # run at all. Legs are matched by the "Test (Node " prefix, not by name,
+      # so a change to ci.yml's matrix cannot block a release: the commits up
+      # to 5.11.7's (064d149, #310) carry 20.x and 22.x legs, those from
+      # 6.0.0's on 24.x and 26.x. Skipped runs are left out: of ci.yml's test
+      # and test-gate jobs, the one that did not run reports once, skipped,
+      # under its unexpanded name "Test (Node ${{ matrix.node-version }})",
+      # next to its twin's real legs (621f25d's check runs, 2026-09-24).
+      #
+      # It waits, up to 15 minutes, for legs still running: a push to
+      # package.json starts this and CI together. Red, cancelled, or still
+      # missing at the bound, it holds the release with a notice rather than
+      # failing the job, and tomorrow's run looks again at whatever HEAD is
+      # then.
+      - name: Did CI pass on the commit being released?
+        id: ci
+        if: steps.pending.outputs.any != 'false' && !inputs.skip_ci_check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          legs_filter='[.check_runs[]
+            | select(.app.slug == "github-actions" and (.name | startswith("Test (Node ")) and .conclusion != "skipped")
+            | {name, status, conclusion}]'
+          state_filter='if length == 0 then "missing"
+            elif any(.[]; .status == "completed" and .conclusion != "success") then "red"
+            elif any(.[]; .status != "completed") then "running"
+            else "green" end'
+          legs='[]'
+          state=missing
+          read_once=false
+          deadline=$(( $(date +%s) + 15 * 60 ))
+          while :; do
+            if answer="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs" \
+                -f filter=latest -f per_page=100 --jq "$legs_filter")"; then
+              legs="$answer"
+              read_once=true
+              state="$(jq -r "$state_filter" <<< "$legs")"
+              if [ "$state" = green ] || [ "$state" = red ]; then break; fi
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then break; fi
+            sleep 30
+          done
+          jq -r '.[] | "\(.name): \(.conclusion // .status)"' <<< "$legs"
+          if [ "$state" = green ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          case "${read_once}:${state}" in
+            false:*) why="its check runs could not be read for 15 minutes"
+              echo "::warning title=Could not read check runs::gh api failed for ${SHA} on every try." ;;
+            *:red) why="a Test check on it did not pass" ;;
+            *:running) why="its Test checks were still running after 15 minutes" ;;
+            *) why="no Test check has run on it" ;;
+          esac
+          echo "::notice title=Release held::Not releasing ${SHA}: ${why}. The next scheduled run looks again."
+          {
+            echo "### No release: CI is not green on ${SHA}"
+            echo
+            echo "Not releasing, because ${why}."
+            echo
+            jq -r '.[] | "- \(.name): \(.conclusion // .status)"' <<< "$legs"
+            if [ "$legs" != '[]' ]; then echo; fi
+            echo "The next scheduled run checks whatever HEAD is then. To publish this commit anyway: \`gh workflow run release.yml -f skip_ci_check=true\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # '24.x', not an exact 24 release: the release plugins need a recent
       # one. @semantic-release/changelog 7.0.0 and git 11.0.1 declare
       # `^22.22.2 || >=24.15`, and semantic-release 25.0.9, npm 13.1.5 and
@@ -65,6 +256,7 @@ jobs:
       # image update: on 2026-09-24 jobs of one CI run for PR #311 got
       # 24.20.0 and 24.21.0.
       - name: Setup Node.js
+        if: steps.pending.outputs.any != 'false' && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
         uses: actions/setup-node@v7
         with:
           node-version: '24.x'
@@ -72,13 +264,155 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
+        if: steps.pending.outputs.any != 'false' && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
         run: npm ci
 
       - name: Build
+        if: steps.pending.outputs.any != 'false' && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
         run: npm run build
 
+      # A tag npm never got means a publish failed after semantic-release
+      # pushed the tag (the header says why a re-run cannot fix that). Every
+      # run from then on would release the next version over the lost one,
+      # and the content gate below, unable to download it, would fail open.
+      # So this fails the job, loudly, until the tag is dealt with.
+      #
+      # Only a definite "no such version" fails. npm 11 answers E404 for it
+      # (checked 2026-09-25 against 6.0.99); an empty answer counts the same.
+      # Anything else, a timeout or a registry error, is a warning, and the
+      # run goes on as it would have without this step.
+      - name: Is the last release on npm?
+        id: published
+        if: >-
+          steps.pending.outputs.any != 'false' && steps.pending.outputs.last != ''
+          && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
+        env:
+          LAST_TAG: ${{ steps.pending.outputs.last }}
+        run: |
+          set -uo pipefail
+          name="$(node -p "require('./package.json').name")"
+          version="${LAST_TAG#v}"
+          err="$RUNNER_TEMP/npm-view.err"
+          # Three tries, 30 s apart: a version published moments ago can take
+          # a little while to show.
+          for attempt in 1 2 3; do
+            if out="$(npm view "${name}@${version}" version 2> "$err")"; then
+              if [ "$out" = "$version" ]; then
+                echo "${name}@${version} is on npm."
+                exit 0
+              fi
+              if [ -n "$out" ]; then
+                echo "::warning title=Unexpected answer from npm::npm view ${name}@${version} printed '${out}'. Carrying on."
+                exit 0
+              fi
+            elif ! grep -q 'code E404' "$err"; then
+              cat "$err" >&2
+              echo "::warning title=Could not ask npm::npm view ${name}@${version} failed with something other than E404. Carrying on."
+              exit 0
+            fi
+            if [ "$attempt" != 3 ]; then sleep 30; fi
+          done
+          cat "$err" >&2
+          echo "::error title=${LAST_TAG} was tagged but never published::${name}@${version} is not on npm. semantic-release pushed ${LAST_TAG} and then failed to publish it, and no run will release anything until the tag is removed. The job summary has the steps, and the header of release.yml says why."
+          {
+            echo "### ${LAST_TAG} was tagged but never published"
+            echo
+            echo "npm has no ${name}@${version}. semantic-release pushes the release commit and the tag before it publishes, so a failed publish leaves both behind, and re-running finds nothing to release. To publish it:"
+            echo
+            echo '```sh'
+            echo "gh release delete ${LAST_TAG} --yes      # only if a GitHub release was made"
+            echo "git push origin :refs/tags/${LAST_TAG}"
+            echo "gh workflow run release.yml -f skip_ci_check=true"
+            echo '```'
+            echo
+            echo "Drop \`-f skip_ci_check=true\` if a PR has merged since ${LAST_TAG}; it is there because the release commit is \`[skip ci]\` and has no Test checks."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      # Would this release publish anything a consumer does not already have?
+      # Packs HEAD, downloads the last release's tarball from npm, and compares
+      # the two (scripts/release-content-gate.mjs says exactly how, and why
+      # README.md does not count). A Dependabot bump of a devDependency, a
+      # lockfile-only bump and a `fix(ci):` all leave the tarball as it was;
+      # they stay pending and go out in the notes of the next release that
+      # ships something.
+      #
+      # Fails open. On any error (the registry timing out, a script bug) this
+      # step fails without setting `changed`, `continue-on-error` keeps the job
+      # going, and the Release step's `!= 'false'` lets semantic-release decide
+      # as it always did. test/unit/release-workflow.test.ts holds both halves.
+      - name: Does the package differ from the last release?
+        id: gate
+        if: steps.pending.outputs.any != 'false' && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
+        continue-on-error: true
+        env:
+          LAST_TAG: ${{ steps.pending.outputs.last }}
+        run: |
+          set -euo pipefail
+          test -n "$LAST_TAG"
+          name="$(node -p "require('./package.json').name")"
+          dir="$RUNNER_TEMP/content-gate"
+          rm -rf "$dir"
+          mkdir -p "$dir/head" "$dir/previous"
+          npm pack --silent --pack-destination "$dir/head" > /dev/null
+          npm pack --silent --pack-destination "$dir/previous" "${name}@${LAST_TAG#v}" > /dev/null
+          tar -xzf "$dir"/head/*.tgz -C "$dir/head"
+          tar -xzf "$dir"/previous/*.tgz -C "$dir/previous"
+          node scripts/release-content-gate.mjs "$dir/head/package" "$dir/previous/package" >> "$GITHUB_OUTPUT"
+
+      # A held release is visible, not silent: the held commits go to the job
+      # summary. Then it rehearses the release it held. Bumps to
+      # semantic-release, its plugins and the changelog preset are
+      # devDependencies, so the gate holds them too, and without this a broken
+      # release toolchain would first show on the day a real fix has to ship.
+      # That happened once already: #230's preset 10 broke every release after
+      # it (dependabot.yml, where the preset is pinned, has the story). A dry
+      # run goes through verifyConditions (the npm OIDC exchange included),
+      # the commit analysis and the notes, and tags or publishes nothing. Not
+      # continue-on-error: it fails the day the breakage merges.
+      - name: Hold the release, and rehearse it
+        if: steps.gate.outputs.changed == 'false' && !inputs.skip_content_gate
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          NPM_CONFIG_PROVENANCE: true
+          LAST_TAG: ${{ steps.pending.outputs.last }}
+        run: |
+          {
+            echo "### No release: the package would be identical to ${LAST_TAG}"
+            echo
+            echo "These commits stay pending, and go out in the notes of the next release that changes the published package:"
+            echo
+            git log --format='- %s' "${LAST_TAG}..HEAD"
+            echo
+            echo "To publish them anyway: \`gh workflow run release.yml -f skip_content_gate=true\`. The log of this step has the notes they would get."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Release held::$(git rev-list --count "${LAST_TAG}..HEAD") commit(s) since ${LAST_TAG} change nothing in the published package."
+          npx semantic-release --dry-run
+
       - name: Release
+        id: release
+        if: >-
+          steps.pending.outputs.any != 'false'
+          && (steps.ci.outputs.ok == 'true' || inputs.skip_ci_check)
+          && (steps.gate.outputs.changed != 'false' || inputs.skip_content_gate)
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           NPM_CONFIG_PROVENANCE: true
         run: npx semantic-release
+
+      # semantic-release does not release from a checkout that is behind its
+      # remote. It logs "The local branch main is behind the remote one,
+      # therefore a new version won't be published" and exits 0 (index.js in
+      # 25.0.9). Under a per-push trigger the newer commit ran a release of its
+      # own; here it waits for the next run, so say so. After a release, HEAD
+      # is the release commit semantic-release pushed, which is main unless
+      # something merged since.
+      - name: Did main move while this ran?
+        if: steps.release.outcome == 'success'
+        run: |
+          here="$(git rev-parse HEAD)"
+          there="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$here" != "$there" ]; then
+            echo "::warning title=main moved during the release::This run released from ${here}, but main is now ${there}. If it logged that the local branch is behind the remote, it released nothing; the next run releases the newer commits, or run gh workflow run release.yml now."
+            echo "main moved to ${there} while this run was releasing ${here}. The next run releases whatever this one did not." >> "$GITHUB_STEP_SUMMARY"
+          fi
