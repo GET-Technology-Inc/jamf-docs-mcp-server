@@ -3,13 +3,14 @@ updates:
   # npm dependencies
   - package-ecosystem: "npm"
     directory: "/"
-    # Pinned to when it has been running anyway. All five weekly npm runs
-    # from 2026-08-26 to 2026-09-23 started on a Wednesday at 01:22-01:23
-    # UTC, but "weekly" is documented to default to Monday, at a time
-    # Dependabot picks at random, so nothing held it there. Pinned, the batch
-    # lands at a known time: its auto-merged patch and minor PRs were all
-    # merged by 01:28 UTC, so anything scheduled after that, a release
-    # included, sees the whole batch that same day.
+    # Pinned to the day it has been running on, a little ahead of its usual
+    # 01:22 UTC start. All five weekly npm runs from 2026-08-26 to 2026-09-23
+    # started on a Wednesday at 01:22-01:23 UTC, but "weekly" is documented
+    # to default to Monday, at a time Dependabot picks at random, so nothing
+    # held it there. Pinned, the batch lands at a known time. In those runs
+    # its auto-merged patch and minor PRs were all merged by 01:28 UTC,
+    # within six minutes of the start, so anything scheduled after that, a
+    # release included, sees the whole batch that same day.
     schedule:
       interval: "weekly"
       day: "wednesday"
@@ -121,6 +122,18 @@ updates:
       # the push that carries it dismisses the bot's approval; in here, that
       # would hold every unrelated security fix, a runtime one included, in a
       # PR that waits for a maintainer.
+      #
+      # A fix that needs a major version would still hold the batch, and that
+      # is accepted. It puts `major-update` on the whole PR (fetch-metadata
+      # reports the highest type, as above), so dependabot-auto-merge.yml
+      # approves none of it until a maintainer does. `update-types: ["minor",
+      # "patch"]` would take out more than that fix. dependabot-core checks
+      # that rule against the package's newest release, not the fixed version
+      # (semver_rules_allow_grouping? in group_update_creation.rb, read
+      # 2026-09-25), so it would have split both pairs above: #255 kept
+      # fast-uri on 3.x with 4.0.0 out since 2026-06-09, and #277 kept js-yaml
+      # on 4.x with 5.0.0 out since 2026-06-20. All four fixes in the window
+      # were patches.
       security:
         applies-to: security-updates
         patterns: ["*"]
