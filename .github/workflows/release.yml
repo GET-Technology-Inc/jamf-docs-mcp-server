@@ -58,8 +58,8 @@ name: Release
 # Dispatching again finds nothing merged since that tag and publishes nothing;
 # re-running the failed job finds its checkout behind main and does the same.
 # Neither retries the publish. From then on, every run that has commits to
-# release fails at "Is the last release on npm?", which prints these steps
-# with the version filled in:
+# release and a green HEAD (or skip_ci_check) fails at "Is the last release on
+# npm?", which prints these steps with the version filled in:
 #
 #   gh release delete vX.Y.Z --yes      # only if a GitHub release was made
 #   git push origin :refs/tags/vX.Y.Z
@@ -149,6 +149,11 @@ jobs:
           client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
+      # Full history and tags. In a depth-1 clone `git describe` finds no tag,
+      # so every run would count as pending, "Is the last release on npm?"
+      # would skip, and the gate would fail open: releases would go out as
+      # they did before this gate, no-ops included. semantic-release itself
+      # would not notice, since it unshallows the clone on its own.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -188,6 +193,9 @@ jobs:
       # and test-gate jobs, the one that did not run reports once, skipped,
       # under its unexpanded name "Test (Node ${{ matrix.node-version }})",
       # next to its twin's real legs (621f25d's check runs, 2026-09-24).
+      # Counted, it would make every HEAD red and hold every release, each
+      # day with a green job; test/unit/release-workflow.test.ts runs both
+      # filters below through jq over those check runs.
       #
       # It waits, up to 15 minutes, for legs still running: a push to
       # package.json starts this and CI together. Red, cancelled, or still

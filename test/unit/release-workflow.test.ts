@@ -8,17 +8,23 @@
  * succeed, or drop the gate's continue-on-error, and an npm outage or a
  * script bug becomes a release that never happens. Put continue-on-error on
  * the held day's dry run and a broken release toolchain surfaces only when a
- * real fix has to ship, which is what #230's changelog preset did. And npm
- * accepts OIDC publishing only from the workflow file named in the package's
- * trusted-publisher entry, .github/workflows/release.yml, with
+ * real fix has to ship, which is what #230's changelog preset did. Stop the
+ * CI check leaving out skipped check runs and every release is held, each
+ * day with a green job and a notice. Check out a shallow clone and every
+ * tag-based step turns itself off, and the no-op releases come back. And
+ * npm accepts OIDC publishing only from the workflow file named in the
+ * package's trusted-publisher entry, .github/workflows/release.yml, with
  * `id-token: write`.
  *
  * The conditions are checked two ways: as text, for the specific mistakes
- * above, and by evaluating each `if` the way the runner would, over the
- * states a run can be in.
+ * above, and by walking a run step by step the way the runner would,
+ * evaluating every `if` over the outputs the steps before it left, for each
+ * state a run can be in. The CI check's jq filters are run through jq over
+ * a real commit's check runs.
  */
 
 import { describe, it, expect } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -35,6 +41,7 @@ interface Step {
   run?: string;
   if?: string;
   env?: Record<string, unknown>;
+  with?: Record<string, unknown>;
 }
 interface DispatchInput { type?: string; default?: unknown }
 
@@ -157,6 +164,69 @@ const SCHEDULED_DAY: Record<string, Value> = {
 const runs = (step: Step, state: Record<string, Value>): boolean =>
   evaluate(step.if ?? 'true', { ...SCHEDULED_DAY, ...state });
 
+// ─── A whole run, step by step ─────────────────────────────────
+//
+// Walks release.yml's steps in order, as the runner does. A step without an
+// `if` runs; one with an `if` runs when it evaluates true over what the
+// steps before it left. The runner puts `success() &&` in front of an `if`
+// that names no status function, so once a step fails without
+// continue-on-error nothing after it runs, and the job fails. A step that
+// runs leaves the outputs the scenario gives it and the outcome 'success' or
+// 'failure'; one that does not run leaves no outputs and outcome 'skipped'.
+
+/** A short name for each step, from what it does rather than its title. */
+const label = (s: Step): string => {
+  if (s.id !== undefined) { return s.id; }
+  const uses = s.uses ?? '';
+  if (uses.startsWith('actions/checkout@')) { return 'checkout'; }
+  if (uses.startsWith('actions/setup-node@')) { return 'setup-node'; }
+  if (s.run === 'npm ci') { return 'npm-ci'; }
+  if (s.run === 'npm run build') { return 'build'; }
+  if (isDryRun(s)) { return 'dry-run'; }
+  if ((s.run ?? '').includes('git ls-remote origin refs/heads/main')) { return 'main-moved'; }
+  return s.name ?? '(unnamed)';
+};
+
+/** The steps the scenarios below say something about, in release.yml's order. */
+const WATCHED = ['ci', 'setup-node', 'npm-ci', 'build', 'published', 'gate', 'dry-run', 'release', 'main-moved'];
+
+interface Scenario {
+  inputs?: Record<string, boolean>;
+  /** Outputs by step id; each replaces what that step writes on an ordinary day. */
+  outputs?: Record<string, Record<string, string>>;
+  /** Labels of the steps that fail when they run. */
+  failing?: string[];
+}
+
+/** What an ordinary day's steps write: work pending, CI green, the package changed. */
+const ORDINARY_OUTPUTS: Record<string, Record<string, string>> = {
+  pending: { any: 'true', last: 'v6.0.11' },
+  ci: { ok: 'true' },
+  gate: { changed: 'true' },
+};
+
+function simulate(scenario: Scenario): { ran: string[]; jobFails: boolean } {
+  const context: Record<string, Value> = {};
+  for (const [name, value] of Object.entries(scenario.inputs ?? {})) { context[`inputs.${name}`] = value; }
+  const outputs = { ...ORDINARY_OUTPUTS, ...scenario.outputs };
+  const ran: string[] = [];
+  let jobFails = false;
+  for (const step of steps) {
+    const name = label(step);
+    const willRun = !jobFails && evaluate(step.if ?? 'true', context);
+    const fails = willRun && (scenario.failing ?? []).includes(name);
+    if (step.id !== undefined) {
+      context[`steps.${step.id}.outcome`] = willRun ? (fails ? 'failure' : 'success') : 'skipped';
+      for (const [key, value] of Object.entries(willRun ? outputs[step.id] ?? {} : {})) {
+        context[`steps.${step.id}.outputs.${key}`] = value;
+      }
+    }
+    if (willRun) { ran.push(name); }
+    if (fails && step['continue-on-error'] !== true) { jobFails = true; }
+  }
+  return { ran: ran.filter(name => WATCHED.includes(name)), jobFails };
+}
+
 // ─── Triggers and permissions ──────────────────────────────────
 
 describe('release.yml triggers', () => {
@@ -207,10 +277,28 @@ describe('release.yml steps', () => {
     expect(index(byId('gate'))).toBeLessThan(index(publish()));
   });
 
+  it('check out the full history and its tags', () => {
+    const checkout = find(s => (s.uses ?? '').startsWith('actions/checkout@'));
+    expect(
+      checkout.with?.['fetch-depth'],
+      'In a depth-1 clone `git describe` finds no tag: every run counts as pending, the published '
+        + 'check skips and the gate fails open, so the no-op releases come back without a sound.',
+    ).toBe(0);
+  });
+
   it('match the Test legs by prefix, not by the names of today\'s matrix', () => {
     const ci = byId('ci').run ?? '';
     expect(ci).toContain('startswith("Test (Node ")');
     expect(ci).not.toMatch(/\d+\.x/);
+  });
+
+  it('leave skipped check runs out of the CI check', () => {
+    // ci.yml's test or test-gate job, whichever did not run, reports one
+    // skipped "Test (Node ${{ matrix.node-version }})" on every commit.
+    expect(
+      byId('ci').run,
+      'Counted, the skipped placeholder makes every HEAD "red", and every release is held.',
+    ).toContain('.conclusion != "skipped"');
   });
 
   it('fail the job, not open, on a tag npm never got', () => {
@@ -279,6 +367,111 @@ describe('the held day\'s dry run', () => {
 
   it('runs with the Release step\'s environment', () => {
     expect(dryRun().env).toMatchObject(publish().env ?? {});
+  });
+});
+
+describe('a whole run, step by step', () => {
+  const upToGate = ['ci', 'setup-node', 'npm-ci', 'build', 'published', 'gate'];
+
+  it.each<[string, Scenario, string[], boolean]>([
+    ['nothing merged since the last tag',
+      { outputs: { pending: { any: 'false', last: 'v6.0.11' } } },
+      [], false],
+    ['the package changed, on a green HEAD',
+      {},
+      [...upToGate, 'release', 'main-moved'], false],
+    ['the package is identical to the last release',
+      { outputs: { gate: { changed: 'false' } } },
+      [...upToGate, 'dry-run'], false],
+    ['identical, and skip_content_gate is set',
+      { inputs: { skip_content_gate: true }, outputs: { gate: { changed: 'false' } } },
+      [...upToGate, 'release', 'main-moved'], false],
+    ['the gate errored, so it fails open',
+      { outputs: { gate: {} }, failing: ['gate'] },
+      [...upToGate, 'release', 'main-moved'], false],
+    ['HEAD\'s Test checks are not green',
+      { outputs: { ci: { ok: 'false' } } },
+      ['ci'], false],
+    ['skip_ci_check is set',
+      { inputs: { skip_ci_check: true }, outputs: { ci: {} } },
+      ['setup-node', 'npm-ci', 'build', 'published', 'gate', 'release', 'main-moved'], false],
+    ['the last tag never reached npm',
+      { failing: ['published'] },
+      ['ci', 'setup-node', 'npm-ci', 'build', 'published'], true],
+    ['there is no release tag yet',
+      { outputs: { pending: { any: 'true', last: '' }, gate: {} }, failing: ['gate'] },
+      ['ci', 'setup-node', 'npm-ci', 'build', 'gate', 'release', 'main-moved'], false],
+    ['a held day\'s dry run fails',
+      { outputs: { gate: { changed: 'false' } }, failing: ['dry-run'] },
+      [...upToGate, 'dry-run'], true],
+    ['the release fails',
+      { failing: ['release'] },
+      [...upToGate, 'release'], true],
+  ])('%s', (_what, scenario, expected, jobFails) => {
+    expect(simulate(scenario)).toEqual({ ran: expected, jobFails });
+  });
+});
+
+// ─── The CI check's filters, run through jq ────────────────────
+//
+// The step asks `gh api --jq "$legs_filter"` for HEAD's Test legs and hands
+// them to `jq -r "$state_filter"`. These run both filters, taken from
+// release.yml, through jq. They run wherever jq is installed, and always in
+// CI, where ubuntu-latest has it and a missing jq fails them.
+
+const hasJq = spawnSync('jq', ['--version']).status === 0;
+
+function ciFilter(variable: string): string {
+  const match = new RegExp(`${variable}='([^']*)'`).exec(byId('ci').run ?? '');
+  if (match === null) { throw new Error(`the CI check sets no ${variable}`); }
+  return match[1];
+}
+
+function jq(filter: string, input: string, raw = false): string {
+  const result = spawnSync('jq', [raw ? '-r' : '-c', filter], { input, encoding: 'utf8' });
+  if (result.status !== 0) { throw new Error(`jq ${filter} failed: ${result.stderr}`); }
+  return result.stdout.trim();
+}
+
+interface CheckRun { name: string; status: string; conclusion: string | null; app: { slug: string } }
+
+const ciState = (checkRuns: CheckRun[]): string =>
+  jq(ciFilter('state_filter'), jq(ciFilter('legs_filter'), JSON.stringify({ check_runs: checkRuns })), true);
+
+const run = (name: string, conclusion: string | null, status = 'completed', slug = 'github-actions'): CheckRun =>
+  ({ name, status, conclusion, app: { slug } });
+
+/** The check runs of 621f25d (#327's merge), as `filter=latest` listed them on 2026-09-25. */
+const COMMIT_621F25D: CheckRun[] = [
+  run('Codecov Upload', 'success'),
+  run('Test (Node ${{ matrix.node-version }})', 'skipped'),
+  run('Integration Test', 'success'),
+  run('Test (Node 24.x)', 'success'),
+  run('Test (Node 26.x)', 'success'),
+  run('Security Audit', 'success'),
+  run('Coverage', 'success'),
+  run('Analyze (javascript-typescript)', 'success'),
+  run('Release', 'success'),
+  run('Detect Changes', 'success'),
+  run('Analyze (javascript-typescript)', 'success'),
+];
+
+const withLeg = (name: string, leg: CheckRun): CheckRun[] =>
+  COMMIT_621F25D.map(each => (each.name === name ? leg : each));
+
+describe.skipIf(!hasJq && process.env.CI !== 'true')('the CI check\'s filters, through jq', () => {
+  it.each<[string, string, CheckRun[]]>([
+    ['621f25d as it was, skipped placeholder and all', 'green', COMMIT_621F25D],
+    ['a leg failed', 'red', withLeg('Test (Node 26.x)', run('Test (Node 26.x)', 'failure'))],
+    ['a leg was cancelled', 'red', withLeg('Test (Node 24.x)', run('Test (Node 24.x)', 'cancelled'))],
+    ['a leg is still running', 'running', withLeg('Test (Node 26.x)', run('Test (Node 26.x)', null, 'in_progress'))],
+    ['a failed check named like a leg, from another app', 'green', [...COMMIT_621F25D, run('Test (Node 24.x)', 'failure', 'completed', 'some-app')]],
+    ['only the skipped placeholder', 'missing', [run('Test (Node ${{ matrix.node-version }})', 'skipped')]],
+    ['no Test check, like af20812, a [skip ci] release commit', 'missing',
+      [run('Publish to GitHub Packages', 'success'), run('Analyze (javascript-typescript)', 'success')]],
+    ['no check runs at all', 'missing', []],
+  ])('%s: %s', (_what, expected, checkRuns) => {
+    expect(ciState(checkRuns)).toBe(expected);
   });
 });
 
