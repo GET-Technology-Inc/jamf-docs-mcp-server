@@ -11,7 +11,7 @@ import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
-import type { ToolResult, TocResponse, TocEntry, PaginationInfo, TokenInfo, FetchTocOptions, FetchTocResult } from '../types.js';
+import type { ToolResult, TocResponse, TocEntry, TocTruncatedEntry, PaginationInfo, TokenInfo, FetchTocOptions, FetchTocResult } from '../types.js';
 import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
 import { fetchStaticToc } from '../services/sitemap-service.js';
 import {
@@ -46,12 +46,28 @@ function renderTocEntry(entry: TocEntry, depth = 0, compact = false): string {
 }
 
 /**
+ * The `maxTokens` to name beside the next page, or nothing at the default.
+ *
+ * A page holds as many whole top-level entries as fit `maxTokens`, so page
+ * N+1 follows page N only at the same budget. Both footers used to say only
+ * which page came next: live on 2026-09-26, page 1 of Jamf Pro at
+ * `maxTokens: 1000` holds its first 4 top-level entries, and page 2 asked for
+ * as the footer said, at the default budget, starts at the 11th, so following
+ * the footer skipped six. At the default, leaving the budget out asks for the
+ * same pages, and the footer stays as it was.
+ */
+function budgetToResend(maxTokens: number): number | undefined {
+  return maxTokens !== TOKEN_CONFIG.DEFAULT_MAX_TOKENS ? maxTokens : undefined;
+}
+
+/**
  * Format TOC as compact markdown
  */
 function formatTocCompact(
   productName: string,
   toc: TocEntry[],
-  pagination: PaginationInfo
+  pagination: PaginationInfo,
+  maxTokens: number,
 ): string {
   let markdown = `## ${productName} TOC (${pagination.totalItems} entries)\n\n`;
 
@@ -61,7 +77,8 @@ function formatTocCompact(
 
   markdown += `\n---\n*Page ${pagination.page}/${pagination.totalPages}`;
   if (pagination.hasNext) {
-    markdown += ` | page=${pagination.page + 1} for more`;
+    const budget = budgetToResend(maxTokens);
+    markdown += ` | page=${pagination.page + 1}${budget !== undefined ? `, maxTokens=${String(budget)}` : ''} for more`;
   }
   markdown += '*\n';
 
@@ -77,13 +94,41 @@ interface TocFullFormatInput {
   toc: TocEntry[];
   pagination: PaginationInfo;
   tokenInfo: TokenInfo;
+  truncatedEntry: TocTruncatedEntry | undefined;
+  /** The budget the request asked for, which the footer names to resend. */
+  maxTokens: number;
+}
+
+/**
+ * The line under a page that was cut to fit `maxTokens`.
+ *
+ * It used to read "TOC truncated due to token limit. Use `page` parameter or
+ * increase `maxTokens`." under every page the budget shortened, and `page`
+ * could not reach what the cut dropped (see `paginateTocEntries`). Pages are
+ * now cut to the budget, so the only cut left is one top-level entry larger
+ * than `maxTokens` on its own, and the line says which, how much of it is
+ * shown, and the budget that shows it whole — never one the schema rejects.
+ * A `TocProvider` can report `truncated` without saying what it cut; that
+ * gets the one piece of advice that holds for any cut.
+ */
+function truncationLine(tokenInfo: TokenInfo, truncatedEntry: TocTruncatedEntry | undefined): string {
+  if (truncatedEntry === undefined) {
+    return 'TOC truncated due to token limit: entries on this page were left out. Increase `maxTokens` to see them.';
+  }
+  const { title, shownEntries, totalEntries, estimatedTokens } = truncatedEntry;
+  const cut = `"${sanitizeMarkdownText(title)}" is larger than \`maxTokens: ${String(tokenInfo.maxTokens)}\` on its own, ` +
+    `so this page shows the first ${String(shownEntries)} of its ${String(totalEntries)} entries.`;
+  return estimatedTokens <= TOKEN_CONFIG.MAX_TOKENS_LIMIT
+    ? `${cut} Repeat with \`maxTokens: ${String(estimatedTokens)}\` or more to see it whole; ` +
+      'pages are cut to `maxTokens`, so it may then be on a different page.'
+    : `${cut} It needs ${String(estimatedTokens)} tokens, more than \`maxTokens\` allows (${String(TOKEN_CONFIG.MAX_TOKENS_LIMIT)}).`;
 }
 
 /**
  * Format TOC as full markdown
  */
 function formatTocFull(input: TocFullFormatInput): string {
-  const { productName, version, mapId, toc, pagination, tokenInfo } = input;
+  const { productName, version, mapId, toc, pagination, tokenInfo, truncatedEntry, maxTokens } = input;
   let markdown = `# ${productName} Documentation\n\n`;
   markdown += `**Version**: ${version} | **Page ${pagination.page} of ${pagination.totalPages}** | ${tokenInfo.tokenCount.toLocaleString()} tokens`;
   // Half of the `mapId` + `contentId` pair `jamf_docs_get_article` documents.
@@ -103,10 +148,11 @@ function formatTocFull(input: TocFullFormatInput): string {
   markdown += '\n---\n\n';
   markdown += `**Page ${pagination.page} of ${pagination.totalPages}** (${tokenInfo.tokenCount.toLocaleString()} tokens, ${pagination.totalItems} total entries)`;
   if (pagination.hasNext) {
-    markdown += ` | Use \`page=${pagination.page + 1}\` for more`;
+    const budget = budgetToResend(maxTokens);
+    markdown += ` | Use \`page=${pagination.page + 1}\`${budget !== undefined ? ` with \`maxTokens: ${String(budget)}\`` : ''} for more`;
   }
   if (tokenInfo.truncated) {
-    markdown += '\n*TOC truncated due to token limit. Use `page` parameter or increase `maxTokens`.*';
+    markdown += `\n*${truncationLine(tokenInfo, truncatedEntry)}*`;
   }
   markdown += '\n\n*Use `jamf_docs_get_article` with any URL above to read the full content.*\n';
   // Per-entry `contentId`s are deliberately not rendered inline: at roughly a
@@ -144,11 +190,13 @@ interface FlatTocEntry {
  * either `outputMode`.
  *
  * Depth plus this list's order is the whole tree, not a hint at it:
- * `fetchTableOfContents` paginates over top-level entries only
- * (`allToc.slice`) and `truncateListByTokens` drops whole top-level items, so
- * a page never begins part-way down a subtree — every page is a sequence of
- * complete subtrees, each starting at depth 0, which is exactly what a
- * stack-based outline reconstruction needs.
+ * `paginateTocEntries` pages over top-level entries only, so a page never
+ * begins part-way down a subtree — every page is a sequence of complete
+ * subtrees, each starting at depth 0, which is exactly what a stack-based
+ * outline reconstruction needs. The one exception keeps that property: a
+ * top-level entry larger than `maxTokens` on its own is alone on its page and
+ * cut to a document-order prefix of its subtree, so the page still starts at
+ * depth 0 and reads as the start of that entry.
  *
  * That is also why there is no `parentContentId` beside it. It would name the
  * parent by a field the parents mostly do not have: `TocEntry.contentId` is
@@ -221,6 +269,12 @@ Returns:
       "totalItems": number,
       "hasNext": boolean,
       "hasPrev": boolean
+    },
+    "truncatedEntry"?: {  // only on a page cut to fit; see the Note
+      "title": string,
+      "shownEntries": number,
+      "totalEntries": number,
+      "estimatedTokens": number
     }
   }
 
@@ -237,13 +291,25 @@ Errors:
   - 'Version "<version>" not found', followed by the available versions, if that version is not published
 
 Note: Use this to discover what topics are available before searching
-or retrieving specific articles. Large TOCs are paginated.
+or retrieving specific articles. Large TOCs are paginated by top-level
+entry: a page holds up to 10 of them, each with everything under it, as many
+as fit maxTokens, and the next page starts at the first that did not fit.
+Every top-level entry is on exactly one page, but which page depends on
+maxTokens, so keep maxTokens the same while paging; the markdown footer names
+it beside the next page when it is not the default. A top-level entry larger
+than maxTokens on its own is alone on its page, cut to the entries under it
+that fit; only that page has tokenInfo.truncated, and
+truncatedEntry.estimatedTokens is what the whole entry costs. If maxTokens
+makes more pages than page accepts (${PAGINATION_CONFIG.MAX_PAGE}), page ${PAGINATION_CONFIG.MAX_PAGE} offers no next
+page and paginationNote names a maxTokens that reaches the rest.
 The response-level mapId and an entry's contentId together form the pair
 jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
 mapId only; use responseFormat="json" (or read structuredContent) for the
 per-entry contentIds.
-structuredContent also carries productId (or publicationId): the argument to
-send back for the next page. The JSON text does not.
+structuredContent also carries what to send back for the next page:
+productId (or publicationId), version, language (when one was asked for) and
+maxTokens. The JSON text has no id or language, and has the budget as
+tokenInfo.maxTokens.
 structuredContent.entries is the TOC flattened in document order and always
 carries every descendant; each entry's depth (0 for top level) is what
 restores the nesting. The markdown is not the same view: outputMode="full"
@@ -538,6 +604,48 @@ async function fetchTocFor(
   return await fetchTableOfContents(ctx, resolved.source, version, options);
 }
 
+/**
+ * `structuredContent` for one page, before the notices are added.
+ *
+ * Its own function for the reason `buildStructuredContent` is in the glossary
+ * tool: it keeps the handler under the lint complexity limit.
+ */
+function buildTocStructuredContent(
+  params: GetTocInput,
+  sourceLabel: string,
+  version: string,
+  result: FetchTocResult,
+  maxTokens: number,
+): Record<string, unknown> {
+  const { toc, pagination, mapId, truncatedEntry } = result;
+  return {
+    product: sourceLabel,
+    // The ID, not just the display name: a client paging through this
+    // TOC has to pass the same argument back, and `product` is an enum
+    // of IDs. Sending only the name made "next page" impossible. For a
+    // publication the id goes back under its own key, so a client can
+    // tell which parameter to resend without matching against the enum.
+    ...(params.product !== undefined ? { productId: params.product } : {}),
+    ...(params.publication !== undefined ? { publicationId: params.publication } : {}),
+    version,
+    // Resent with the next page like the id and the budget: a translation is
+    // not the same size as the English, so its pages break elsewhere.
+    ...(params.language !== undefined ? { language: params.language } : {}),
+    // Pairs with each entry's `contentId` to form the direct-fetch pair
+    // `jamf_docs_get_article` documents.
+    ...(mapId !== undefined ? { mapId } : {}),
+    totalEntries: pagination.totalItems,
+    page: pagination.page,
+    totalPages: pagination.totalPages,
+    hasMore: pagination.hasNext,
+    // Pages are cut to the budget, so the next page follows this one only
+    // when it is asked for with the same `maxTokens`.
+    maxTokens,
+    entries: flattenTocEntries(toc),
+    ...(truncatedEntry !== undefined ? { truncatedEntry } : {}),
+  };
+}
+
 export function registerGetTocTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
     TOOL_NAME,
@@ -600,7 +708,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 1, total: 4, message: 'Processing entries...' });
 
-        const { toc, pagination, tokenInfo, paginationNote, mapId, resolvedLocale } = tocResult;
+        const { toc, pagination, tokenInfo, paginationNote, mapId, resolvedLocale, truncatedEntry } = tocResult;
 
         // Build response
         const response: TocResponse = {
@@ -609,28 +717,13 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           ...(mapId !== undefined ? { mapId } : {}),
           toc,
           tokenInfo,
-          pagination
+          pagination,
+          ...(truncatedEntry !== undefined ? { truncatedEntry } : {}),
         };
 
-        const structuredContent = {
-          product: sourceLabel,
-          // The ID, not just the display name: a client paging through this
-          // TOC has to pass the same argument back, and `product` is an enum
-          // of IDs. Sending only the name made "next page" impossible. For a
-          // publication the id goes back under its own key, so a client can
-          // tell which parameter to resend without matching against the enum.
-          ...(params.product !== undefined ? { productId: params.product } : {}),
-          ...(params.publication !== undefined ? { publicationId: params.publication } : {}),
-          version,
-          // Pairs with each entry's `contentId` to form the direct-fetch pair
-          // `jamf_docs_get_article` documents.
-          ...(mapId !== undefined ? { mapId } : {}),
-          totalEntries: pagination.totalItems,
-          page: pagination.page,
-          totalPages: pagination.totalPages,
-          hasMore: pagination.hasNext,
-          entries: flattenTocEntries(toc)
-        };
+        const structuredContent = buildTocStructuredContent(
+          params, sourceLabel, version, tocResult, tocOptions.maxTokens,
+        );
 
         const notices: TocNotices = {
           // Two arguments, not one: the note is only truthful when the version
@@ -655,8 +748,11 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
 
         // Format as markdown (compact or full)
         const markdown = (params.outputMode === OutputMode.COMPACT
-          ? formatTocCompact(sourceLabel, toc, pagination)
-          : formatTocFull({ productName: sourceLabel, version, mapId, toc, pagination, tokenInfo }))
+          ? formatTocCompact(sourceLabel, toc, pagination, tocOptions.maxTokens)
+          : formatTocFull({
+            productName: sourceLabel, version, mapId, toc, pagination, tokenInfo, truncatedEntry,
+            maxTokens: tocOptions.maxTokens,
+          }))
           + renderTocNotices(notices);
 
         await reportProgress(extra, { progress: 4, total: 4 });

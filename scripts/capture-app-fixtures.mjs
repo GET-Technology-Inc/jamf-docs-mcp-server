@@ -80,6 +80,13 @@ const CAPTURES = [
     args: { product: 'jamf-routines', responseFormat: 'json' },
   },
   {
+    key: 'toc-cut',
+    label: 'TOC — entry cut to fit',
+    why: 'A top-level entry larger than maxTokens on its own, alone on its page and cut to fit, so truncatedEntry and the note that goes with it render. Page 2 of Jamf Pro at 100 tokens is "Overview of Technologies", 14 of its 21 entries (live 2026-09-26).',
+    tool: 'jamf_docs_get_toc',
+    args: { product: 'jamf-pro', page: 2, maxTokens: 100, responseFormat: 'json' },
+  },
+  {
     key: 'article-parent',
     label: 'Article — with children',
     why: 'A parent topic. On learn.jamf.com its nine <h2> sections are this page; through the API they are nine separate topics, and navigation.children is the only thing that says so.',

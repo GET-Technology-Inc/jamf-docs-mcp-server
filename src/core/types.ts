@@ -22,6 +22,11 @@ export interface TokenInfo {
  */
 export interface PaginationInfo {
   page: number;
+  /**
+   * The most items a page holds. A table of contents page holds at most this
+   * many top-level entries and fewer when they do not fit `maxTokens`, so its
+   * page bounds cannot be computed from this; see `paginateTocEntries`.
+   */
   pageSize: number;
   totalPages: number;
   totalItems: number;
@@ -205,8 +210,20 @@ export interface FetchTocResult {
    * and because a cached tree re-resolves it best-effort.
    */
   mapId?: string;
-  /** Set when the requested page was clamped to the last available page. */
+  /**
+   * Set when the requested page was clamped to the last available page, or
+   * when `maxTokens` makes more pages than `page` accepts (see
+   * `paginateTocEntries`).
+   */
   paginationNote?: string;
+  /**
+   * Set when this page is one top-level entry cut to fit `maxTokens`.
+   *
+   * Only that case sets `tokenInfo.truncated`: every other page holds whole
+   * entries, and the rest are on the pages after it. A `TocProvider` that
+   * sets `truncated` without this gets general advice to raise `maxTokens`.
+   */
+  truncatedEntry?: TocTruncatedEntry;
   /**
    * The locale of the map that actually answered.
    *
@@ -513,6 +530,24 @@ export interface TocEntry {
   children?: TocEntry[];
 }
 
+/**
+ * A top-level TOC entry larger than `maxTokens` on its own, as its page shows
+ * it: alone, with its subtree cut to the entries, in document order, that fit.
+ */
+export interface TocTruncatedEntry {
+  title: string;
+  /** Entries of its subtree the page shows, itself included. */
+  shownEntries: number;
+  /** Entries of its subtree, itself included. */
+  totalEntries: number;
+  /**
+   * What the whole subtree costs: the smallest `maxTokens` at which it is
+   * shown whole. Pages are cut to `maxTokens`, so at that budget it may be on
+   * a different page.
+   */
+  estimatedTokens: number;
+}
+
 export interface TocResponse {
   product: string;
   version: string;
@@ -521,7 +556,9 @@ export interface TocResponse {
   toc: TocEntry[];
   tokenInfo: TokenInfo;
   pagination: PaginationInfo;
-  /** Set when the requested page was clamped to the last available page. */
+  /** See {@link FetchTocResult.truncatedEntry}. */
+  truncatedEntry?: TocTruncatedEntry;
+  /** See {@link FetchTocResult.paginationNote}. */
   paginationNote?: string;
 }
 

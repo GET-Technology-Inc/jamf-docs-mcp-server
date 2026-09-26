@@ -22,7 +22,14 @@ import {
 } from '@modelcontextprotocol/ext-apps';
 import { esc } from './escape.js';
 import { CSS as STYLESHEET } from './styles.js';
-import { type TocEntry, indentCap, renderTocItems } from './toc.js';
+import {
+  type TocEntry,
+  type TocTruncatedEntry,
+  indentCap,
+  renderTocItems,
+  nextTocPageArgs,
+  tocBudgetNote,
+} from './toc.js';
 import { budgetNote, renderGlossaryList } from './glossary.js';
 
 // ---------------------------------------------------------------------------
@@ -86,10 +93,17 @@ interface TocView {
   productId?: string;
   publicationId?: string;
   version: string;
+  /** The language asked for, if any; the next page is asked for in it. */
+  language?: string;
   totalEntries: number;
   page: number;
   totalPages: number;
+  /** False on the last page `page` accepts, even when `totalPages` is larger. */
+  hasMore?: boolean;
+  /** The budget this page was cut to; the next page is asked for with it. */
+  maxTokens?: number;
   entries: TocEntry[];
+  truncatedEntry?: TocTruncatedEntry;
   versionNote?: string;
   localeNote?: string;
   paginationNote?: string;
@@ -955,7 +969,7 @@ function renderToc(view: TocView): string {
   const items = renderTocItems(shown);
   const more = !isFullscreen()
     ? expandAction(view.totalEntries - shown.length, 'entry')
-    : view.page < view.totalPages
+    : view.page < view.totalPages && nextTocPageArgs(view) !== null
       ? `<button class="more" data-more>Show more of ${String(view.totalEntries)}</button>`
       : '';
 
@@ -969,7 +983,7 @@ function renderToc(view: TocView): string {
         `${String(view.totalEntries)} article${view.totalEntries === 1 ? '' : 's'}`,
         view.totalPages > 1 && `page ${String(view.page)} of ${String(view.totalPages)}`,
       ])}
-      ${notice(view.localeNote)}${notice(view.versionNote, 'warning')}${notice(view.paginationNote, 'warning')}
+      ${notice(view.localeNote)}${notice(view.versionNote, 'warning')}${notice(view.paginationNote, 'warning')}${notice(tocBudgetNote(view))}
     </header>
     ${isFullscreen() ? `<div class="filter" hidden>
       <input type="search" placeholder="Filter these entries" autocomplete="off" spellcheck="false" aria-controls="rows">
@@ -1396,16 +1410,9 @@ function pageArgs(view: View): { name: string; args: Record<string, unknown> } |
     };
   }
   if (view.kind === 'toc') {
-    // Whichever id the response echoed back, under the name the request used.
-    // A TOC addressed by publication reports `publicationId` and no
-    // `productId`, and the previous code sent `product: undefined` — which is
-    // a validation error, so "Load more" on a publication TOC always failed.
-    const id = view.data.productId ?? view.data.publicationId;
-    if (!renderableText(id)) {
-      return null;
-    }
-    const key = renderableText(view.data.productId) ? 'product' : 'publication';
-    return { name: 'jamf_docs_get_toc', args: { [key]: id, page: view.data.page + 1 } };
+    // The id under the name the request used, and the version, language and
+    // budget the page on screen was cut with: see toc.ts.
+    return nextTocPageArgs(view.data);
   }
   return null;
 }

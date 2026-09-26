@@ -353,6 +353,19 @@ export const TocOutputSchema = z.object({
   publicationId: z.string().optional(),
   version: z.string(),
   /**
+   * The `language` the request asked for, to send back with the next `page`.
+   * Absent when none was asked for, which means the default.
+   *
+   * Pages are cut to `maxTokens` from whichever tree answered, and Jamf's
+   * translations are not the same size as the English: live on 2026-09-26 at
+   * `maxTokens: 1000`, page 1 of Jamf Pro held 5 top-level entries in ja-JP
+   * and 4 in en-US. So the next page follows this one only when it is asked
+   * for in the same language. The requested one, not the one that answered
+   * (`localeNote` says when those differ): asking again the same way gets
+   * the same tree.
+   */
+  language: z.string().optional(),
+  /**
    * The Fluid Topics map these entries came from.
    *
    * `jamf_docs_get_article` accepts `mapId` + `contentId` and its description
@@ -367,7 +380,24 @@ export const TocOutputSchema = z.object({
   totalEntries: z.number(),
   page: z.number(),
   totalPages: z.number(),
+  /**
+   * Whether there is a next page to ask for. False on the last page `page`
+   * accepts even if `totalPages` is larger; `paginationNote` then names a
+   * `maxTokens` that reaches the rest.
+   */
   hasMore: z.boolean(),
+  /**
+   * The `maxTokens` this page was cut to, to send back with the next `page`.
+   *
+   * A page holds as many whole top-level entries as fit this budget, so page
+   * N+1 starts right after page N only when both are asked for with the same
+   * one. Without it the MCP App's "Show more" asked for the next page at the
+   * default budget, whatever the page on screen had been cut to.
+   *
+   * Required, like `depth`: the tool always knows the budget it cut the page
+   * to, so a client paging on must never have to guess it.
+   */
+  maxTokens: z.number().int().positive(),
   entries: z.array(z.object({
     title: z.string(),
     url: z.string(),
@@ -388,6 +418,22 @@ export const TocOutputSchema = z.object({
     depth: z.number().int().nonnegative(),
   })),
   /**
+   * Present when this page is one top-level entry larger than `maxTokens` on
+   * its own, cut to the first `shownEntries` of its `totalEntries` in
+   * document order. `estimatedTokens` is what it costs whole: the smallest
+   * `maxTokens` that shows it whole, on whichever page it then falls.
+   *
+   * No other page is cut: the rest hold whole entries, and what did not fit
+   * is on the next page. Before 2026-09-26 pages were cut after they were
+   * made, and nothing in this channel said anything was missing.
+   */
+  truncatedEntry: z.object({
+    title: z.string(),
+    shownEntries: z.number(),
+    totalEntries: z.number(),
+    estimatedTokens: z.number(),
+  }).optional(),
+  /**
    * Set when a specific `version` was requested; the upstream API only serves
    * current-version content. Rendered by `jamf_docs_get_toc` since before this
    * schema existed — declaring it keeps the structured channel honest about
@@ -405,6 +451,9 @@ export const TocOutputSchema = z.object({
    * a translated one.
    */
   localeNote: z.string().optional(),
-  /** Set when `page` was clamped to the last available page. */
+  /**
+   * Set when `page` was clamped to the last available page, or when
+   * `maxTokens` makes more pages than `page` accepts.
+   */
   paginationNote: z.string().optional(),
 });

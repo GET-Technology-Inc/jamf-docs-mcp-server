@@ -234,6 +234,8 @@ describe('TocOutputSchema', () => {
     page: 1,
     totalPages: 12,
     hasMore: true,
+    // Pages are cut to this budget, so the next page is asked for with it.
+    maxTokens: 5000,
     entries: [
       {
         title: 'Getting Started',
@@ -310,6 +312,26 @@ describe('TocOutputSchema', () => {
     };
     const result = TocOutputSchema.safeParse(data);
     expect(result.success).toBe(false);
+  });
+
+  // Were it optional, it could be dropped again without a test going red, and
+  // a client paging on at the default budget skips or repeats entries.
+  it('should fail when maxTokens is missing', () => {
+    expect(TocOutputSchema.safeParse(omitKey(VALID_TOC_OUTPUT, 'maxTokens')).success).toBe(false);
+  });
+
+  it('should accept the language the request asked for, and no language', () => {
+    expect(TocOutputSchema.safeParse({ ...VALID_TOC_OUTPUT, language: 'ja-JP' }).success).toBe(true);
+    expect(TocOutputSchema.safeParse(VALID_TOC_OUTPUT).success).toBe(true);
+    expect(TocOutputSchema.safeParse({ ...VALID_TOC_OUTPUT, language: 7 }).success).toBe(false);
+  });
+
+  it('should accept a page that is one entry cut to fit', () => {
+    const data = {
+      ...VALID_TOC_OUTPUT,
+      truncatedEntry: { title: 'Managing Computers', shownEntries: 9, totalEntries: 16, estimatedTokens: 178 },
+    };
+    expect(TocOutputSchema.safeParse(data).success).toBe(true);
   });
 
   it('should fail when a toc entry depth is negative or fractional', () => {
