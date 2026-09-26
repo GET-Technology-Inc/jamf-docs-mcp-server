@@ -31,6 +31,7 @@ import type {
   GlossaryEntry,
   GlossaryLookupResult,
   FtTocNode,
+  TruncatedContentInfo,
 } from '../types.js';
 import { fetchMapToc, fetchTopicContent } from './ft-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
@@ -39,7 +40,7 @@ import type { ServerContext } from '../types/context.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/index.js';
 import { cacheKey } from './cache-key.js';
-import { truncateItemsToTokenLimit } from './tokenizer.js';
+import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 import { HttpError } from '../http-client.js';
 import { sanitizeErrorMessage } from '../utils/sanitize.js';
@@ -882,13 +883,16 @@ function throwIfUnanswerable(
  * 3. Fetch and parse matching glossary topics
  * 4. Rank results with fuse.js and apply token limit
  *
- * An empty result means the glossary was read and nothing in it matches.
- * Anything that stops that from being known throws a
+ * An empty result, `totalMatches: 0`, means the glossary was read and nothing
+ * in it matches. Anything that stops that from being known throws a
  * {@link GlossaryUnavailableError}: the map list or the TOC failing to fetch,
  * every candidate's definition failing, some failing while the rest do not
  * answer the term, or the one that would lead the answer failing (see
  * `throwIfUnanswerable`). When others fail, the result says so in
  * `incomplete`.
+ *
+ * No `entries` beside a nonzero `totalMatches` is not a no-match: the matches
+ * did not fit `maxTokens`, and `truncatedContent` says what each would cost.
  */
 export async function lookupGlossaryTerm(
   ctx: ServerContext,
@@ -1048,6 +1052,26 @@ export async function lookupGlossaryTerm(
     matchedEntries.length,
   );
 
+  // What the budget left out, and what each would cost, the way
+  // `searchDocumentation` reports it. The cut stops at the first entry that
+  // does not fit and keeps no floor of one, so a leading entry over budget
+  // leaves `entries` empty beside `totalMatches > 0`. Until 2026-09-26 that
+  // was all the result said, and the tool read it as a no-match: live at
+  // `maxTokens: 100`, Apple School Manager (134) was "No glossary entries
+  // found". Each cost is the entry's share of `tokenCount`, the estimate the
+  // cut is made with, so when nothing fits, the first is the smallest
+  // `maxTokens` that returns anything.
+  const omittedEntries = matchedEntries.slice(includedEntries.length);
+  const truncatedContent: TruncatedContentInfo | undefined = tokenInfo.truncated
+    ? {
+      omittedCount: omittedEntries.length,
+      omittedItems: omittedEntries.map(e => ({
+        title: e.term,
+        estimatedTokens: estimateTokens(glossaryEntryToString(e)),
+      })),
+    }
+    : undefined;
+
   log.info(
     `Found ${matchedEntries.length} matches, ` +
     `returning ${includedEntries.length} ` +
@@ -1058,6 +1082,7 @@ export async function lookupGlossaryTerm(
     entries: includedEntries,
     totalMatches: matchedEntries.length,
     tokenInfo,
+    ...(truncatedContent !== undefined ? { truncatedContent } : {}),
     ...(failures.length > 0
       ? { incomplete: incompleteNote(term, toFetch.length, failures) }
       : {}),

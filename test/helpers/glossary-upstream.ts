@@ -78,9 +78,13 @@ export function http503(url: string): HttpError {
  * A `fetchTopicContent` implementation over the live titles, answering 503
  * for every title in `failing` — read on each call, so a test can change it
  * between lookups.
+ *
+ * `bodies` replaces the served `/content` of the titles it names, for a suite
+ * that needs an entry's own markup rather than its definition in a `<p>`.
  */
 export function serveGlossaryContent(
   failing: () => ReadonlySet<string>,
+  bodies: Readonly<Record<string, string>> = {},
 ): (http: unknown, mapId: string, contentId: string) => Promise<string> {
   return async (_http, mapId, contentId) => {
     await Promise.resolve();
@@ -88,6 +92,6 @@ export function serveGlossaryContent(
     if (failing().has(title)) {
       throw http503(`https://learn.jamf.com/api/khub/maps/${mapId}/topics/${contentId}/content`);
     }
-    return contentHtml(title);
+    return bodies[title] ?? contentHtml(title);
   };
 }

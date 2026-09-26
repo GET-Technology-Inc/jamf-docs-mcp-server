@@ -10,7 +10,7 @@ import { GlossaryLookupOutputSchema } from '../schemas/output.js';
 import { appToolMeta } from '../apps/index.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
-import type { ToolResult, GlossaryEntry, GlossaryLookupResult, TokenInfo } from '../types.js';
+import type { ToolResult, GlossaryEntry, GlossaryLookupResult } from '../types.js';
 import { lookupGlossaryTerm, GlossaryUnavailableError } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
@@ -59,12 +59,68 @@ function formatIncompleteMarkdown(incomplete: NonNullable<GlossaryLookupResult['
     `> Not fetched: ${links}\n\n`;
 }
 
-function formatTokenFooter(tokenInfo: TokenInfo, totalMatches: number, returnedCount: number): string {
-  let footer = `\n*${returnedCount} of ${totalMatches} match(es) | ${tokenInfo.tokenCount.toLocaleString()} tokens*`;
+/**
+ * What to do when entries match and none fits `maxTokens`.
+ *
+ * "Increase `maxTokens` or narrow your search" is the note for a partial
+ * answer, and half of it is no use here: a single match cannot be narrowed,
+ * and narrowing several does not make the first one shorter. What does work is
+ * a budget that holds it, and the service says what that is. A figure over the
+ * schema's limit is not advice, so that case says so instead of offering it.
+ */
+function formatNothingFits(result: GlossaryLookupResult): string {
+  const { totalMatches } = result;
+  const { maxTokens } = result.tokenInfo;
+  const omitted = result.truncatedContent?.omittedItems ?? [];
+  const lead = omitted[0];
+  const named = lead !== undefined ? `, ${sanitizeMarkdownText(lead.title)},` : '';
+  const matched = totalMatches === 1
+    ? `The one matching entry${named} does not fit in \`maxTokens: ${String(maxTokens)}\`.`
+    : `${String(totalMatches)} entries match, but not even the first${named} fits in \`maxTokens: ${String(maxTokens)}\`.`;
+
+  if (lead === undefined) {
+    return `${matched} Repeat the lookup with a larger \`maxTokens\` to get ${totalMatches === 1 ? 'it' : 'them'}.`;
+  }
+  const limit = TOKEN_CONFIG.MAX_TOKENS_LIMIT;
+  if (lead.estimatedTokens > limit) {
+    return `${matched} It needs ${String(lead.estimatedTokens)} tokens, more than \`maxTokens\` allows (${String(limit)}).`;
+  }
+  let advice = `Repeat the lookup with \`maxTokens: ${String(lead.estimatedTokens)}\` or more to get it`;
+  // Every match is listed when none fits, so their costs add up to the whole
+  // answer. Only said when it is a budget the schema accepts.
+  const all = omitted.reduce((sum, e) => sum + e.estimatedTokens, 0);
+  if (totalMatches > 1 && omitted.length === totalMatches && all <= limit) {
+    advice += `, or \`maxTokens: ${String(all)}\` for all ${String(totalMatches)}`;
+  }
+  return `${matched} ${advice}.`;
+}
+
+function formatTokenFooter(result: GlossaryLookupResult): string {
+  const { tokenInfo, totalMatches } = result;
+  let footer = `\n*${result.entries.length} of ${totalMatches} match(es) | ${tokenInfo.tokenCount.toLocaleString()} tokens*`;
   if (tokenInfo.truncated) {
-    footer += '\n*Results truncated due to token limit. Increase `maxTokens` or narrow your search.*';
+    footer += result.entries.length === 0
+      ? `\n*${formatNothingFits(result)}*`
+      : '\n*Results truncated due to token limit. Increase `maxTokens` or narrow your search.*';
   }
   return `${footer}\n`;
+}
+
+/** What the structured channel carries: `GlossaryLookupOutputSchema`, in every reply. */
+function buildStructuredContent(term: string, result: GlossaryLookupResult): Record<string, unknown> {
+  return {
+    term,
+    totalMatches: result.totalMatches,
+    entries: result.entries.map(e => ({
+      term: e.term,
+      definition: e.definition,
+      ...(e.product !== undefined ? { product: e.product } : {}),
+      url: e.url,
+    })),
+    truncated: result.tokenInfo.truncated,
+    ...(result.truncatedContent !== undefined ? { truncatedContent: result.truncatedContent } : {}),
+    ...(result.incomplete !== undefined ? { incomplete: result.incomplete } : {}),
+  };
 }
 
 const TOOL_NAME = 'jamf_docs_glossary_lookup';
@@ -91,6 +147,12 @@ const TOOL_NAME = 'jamf_docs_glossary_lookup';
  * a lookup answered when learn.jamf.com could not be reached, so a client
  * concluded that a term it could not check did not exist. A failed read is
  * now the error listed above it.
+ *
+ * Until 2026-09-26 it was also the answer for a term whose entry did not fit
+ * `maxTokens`, since the check read no entries as no match: live at
+ * `maxTokens: 100`, six of the 123 terms looked up by their own title, Apple
+ * School Manager (134 tokens) among them. The note now says which reply that
+ * is, and "truncatedContent" in Returns is where the budget comes from.
  */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
@@ -118,6 +180,7 @@ Returns:
     "totalMatches": number,
     "entries": [{ "term": string, "definition": string, "url": string }],
     "tokenInfo": { "tokenCount": number, "truncated": boolean, "maxTokens": number },
+    "truncatedContent"?: { "omittedCount": number, "omittedItems": [{ "title": string, "estimatedTokens": number }] },
     "incomplete"?: { "unfetched": [{ "term": string, "url": string }], "message": string }
   }
 
@@ -136,9 +199,12 @@ Errors:
   - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID
 
 Note: "No glossary entries found" is not an error. It means the glossary was read and no entry
-matches. If some matching entries could not be fetched, the reply answers from the rest and
-says so: "incomplete" names the entries it may be missing. If the entry that would lead the
-answer is one of them, that is the error above instead.`;
+matches; in JSON that is "totalMatches": 0. If entries match but not even the first fits in
+maxTokens, the reply says how many matched and the maxTokens the first one needs:
+"truncatedContent" lists each entry left out and the tokens it costs. If some matching entries
+could not be fetched, the reply answers from the rest and says so: "incomplete" names the entries
+it may be missing. If the entry that would lead the answer is one of them, that is the error
+above instead.`;
 
 export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext): void {
   server.registerTool(
@@ -194,35 +260,16 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
 
         await reportProgress(extra, { progress: 1, total: 3, message: 'Processing matches...' });
 
-        const structuredContent = {
-          term: params.term,
-          totalMatches: result.totalMatches,
-          entries: result.entries.map(e => ({
-            term: e.term,
-            definition: e.definition,
-            ...(e.product !== undefined ? { product: e.product } : {}),
-            url: e.url,
-          })),
-          truncated: result.tokenInfo.truncated,
-          ...(result.incomplete !== undefined ? { incomplete: result.incomplete } : {}),
-        };
+        const structuredContent = buildStructuredContent(params.term, result);
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
 
-        // No results
-        if (result.entries.length === 0) {
-          const noResultText = `No glossary entries found for "${params.term}".\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
-
-          await reportProgress(extra, { progress: 3, total: 3 });
-          return {
-            content: [{ type: 'text', text: noResultText }],
-            structuredContent,
-          };
-        }
-
         const nonEnglish = isNonEnglishLocale(params.language);
 
-        // JSON format
+        // JSON format, whatever the result: the body the description
+        // documents is the answer to a no-match as well, `totalMatches: 0`.
+        // Until 2026-09-26 the no-match check came first and answered JSON
+        // callers with its markdown sentence.
         if (params.responseFormat === ResponseFormat.JSON) {
           const jsonPayload: Record<string, unknown> = {
             term: params.term,
@@ -230,6 +277,9 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
             entries: result.entries,
             tokenInfo: result.tokenInfo,
           };
+          if (result.truncatedContent !== undefined) {
+            jsonPayload.truncatedContent = result.truncatedContent;
+          }
           if (result.incomplete !== undefined) {
             jsonPayload.incomplete = result.incomplete;
           }
@@ -242,6 +292,22 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
               type: 'text',
               text: JSON.stringify(jsonPayload, null, 2),
             }],
+            structuredContent,
+          };
+        }
+
+        // No match: nothing in the glossary matches the term. Decided on
+        // `totalMatches`, as `jamf_docs_search` decides on its total, and not
+        // on `entries` alone: no entries beside a nonzero total means the
+        // matches did not fit `maxTokens`, and the renderers below say so and
+        // what budget holds them. Until 2026-09-26 that case answered this
+        // sentence too, for a term the glossary has.
+        if (result.totalMatches === 0 && result.entries.length === 0) {
+          const noResultText = `No glossary entries found for "${params.term}".\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
+
+          await reportProgress(extra, { progress: 3, total: 3 });
+          return {
+            content: [{ type: 'text', text: noResultText }],
             structuredContent,
           };
         }
@@ -259,7 +325,7 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           result.entries.forEach((entry, idx) => {
             markdown += formatEntryCompact(entry, idx + 1);
           });
-          markdown += formatTokenFooter(result.tokenInfo, result.totalMatches, result.entries.length);
+          markdown += formatTokenFooter(result);
         } else {
           markdown = `# Glossary Lookup: "${params.term}"\n\n`;
           markdown += langWarning;
@@ -269,7 +335,7 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           for (const entry of result.entries) {
             markdown += formatEntryMarkdown(entry);
           }
-          markdown += formatTokenFooter(result.tokenInfo, result.totalMatches, result.entries.length);
+          markdown += formatTokenFooter(result);
         }
 
         await reportProgress(extra, { progress: 3, total: 3 });
