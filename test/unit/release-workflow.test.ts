@@ -293,8 +293,10 @@ describe('release.yml steps', () => {
   });
 
   it('leave skipped check runs out of the CI check', () => {
-    // ci.yml's test or test-gate job, whichever did not run, reports one
-    // skipped "Test (Node ${{ matrix.node-version }})" on every commit.
+    // A skipped matrix job reports one "Test (Node ${{ matrix.node-version }})"
+    // check run, skipped. Before #328 ci.yml's test or test-gate job, whichever
+    // did not run, left one on every commit, and a HEAD from that time can
+    // still be released.
     expect(
       byId('ci').run,
       'Counted, the skipped placeholder makes every HEAD "red", and every release is held.',

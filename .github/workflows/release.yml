@@ -189,13 +189,15 @@ jobs:
       # run at all. Legs are matched by the "Test (Node " prefix, not by name,
       # so a change to ci.yml's matrix cannot block a release: the commits up
       # to 5.11.7's (064d149, #310) carry 20.x and 22.x legs, those from
-      # 6.0.0's on 24.x and 26.x. Skipped runs are left out: of ci.yml's test
-      # and test-gate jobs, the one that did not run reports once, skipped,
-      # under its unexpanded name "Test (Node ${{ matrix.node-version }})",
-      # next to its twin's real legs (621f25d's check runs, 2026-09-24).
-      # Counted, it would make every HEAD red and hold every release, each
-      # day with a green job; test/unit/release-workflow.test.ts runs both
-      # filters below through jq over those check runs.
+      # 6.0.0's on 24.x and 26.x. Skipped runs are left out. Until #328
+      # (e618d6d) ci.yml had a test job and a no-op test-gate twin, and the one
+      # that did not run reported once, skipped, under its unexpanded name
+      # "Test (Node ${{ matrix.node-version }})", next to its twin's real legs
+      # (621f25d's check runs, 2026-09-24). A matrix job skipped for any
+      # reason reports the same way. Counted, that would make HEAD red and
+      # hold every release, each day with a green job;
+      # test/unit/release-workflow.test.ts runs both filters below through jq
+      # over those check runs.
       #
       # It waits, up to 15 minutes, for legs still running: a push to
       # package.json starts this and CI together. Red, cancelled, or still
