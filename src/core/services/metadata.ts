@@ -31,6 +31,43 @@ export interface DegradationStatus {
   degraded: boolean;
 }
 
+/**
+ * How a lookup treats a fallback it finds in the cache.
+ *
+ * `revalidateFallback` is for a caller that has just had an answer from the
+ * maps registry. A cached fallback is then known to be stale, and rebuilding
+ * it costs no request, because the registry is built and in memory. Without
+ * this, such a caller gets the fallback until its minute is up: `list_products`
+ * reads the publication axis first for exactly this, so one reply cannot pair
+ * the registry's publications with the fallback's products (#335). A caller
+ * with no such news leaves it unset, so an outage does not send it back to an
+ * endpoint that has just failed. A real cached answer is served either way.
+ */
+export interface MetadataReadOptions {
+  revalidateFallback?: boolean;
+}
+
+/**
+ * How long an answer the registry outage forced is cached, against the
+ * lifetime of a real one.
+ *
+ * A minute. `MapsRegistry` does not cache a failure at all, so a fallback kept
+ * any longer outlives the outage it stands in for: kept for the full article
+ * TTL, one failed fetch made `list_products` and `jamf://products` report Jamf
+ * Pro as unversioned for 24 hours, while the publication list beside it had
+ * the registry's versions again on the next call (#335). Not zero, because a
+ * burst of calls during an outage would each wait on an endpoint that has just
+ * failed. A minute is also well inside the one-hour public hint that
+ * `jamf://products` withholds from these answers, so core no longer keeps a
+ * fallback longer than it would let a shared cache keep a real answer.
+ */
+const FALLBACK_TTL_MS = 60 * 1000;
+
+/** Whether a cache hit is a fallback the caller has asked not to be served. */
+function isStaleFallback(entry: { degraded: boolean }, options: MetadataReadOptions): boolean {
+  return entry.degraded && options.revalidateFallback === true;
+}
+
 // Declared once, in the interfaces layer, and re-exported here because this
 // module's own consumers name it. The dependency runs implementation ->
 // interface, not the other way round; core/index.ts publishes the interfaces
@@ -102,9 +139,9 @@ function buildFallbackMetadata(productId: ProductId): ProductMetadata {
  *
  * The list alone is not enough: a caller has to be able to tell an answer
  * built from the live registry apart from one the registry outage forced, and
- * a 24-hour cache entry outlives the outage that produced it by a long way. So
- * the flag is stored *with* the value — a cache hit reports its provenance as
- * accurately as a miss does.
+ * a cache hit is no different from a miss in that. So the flag is stored
+ * *with* the value — a cache hit reports its provenance as accurately as a
+ * miss does, for the minute a forced answer is kept ({@link FALLBACK_TTL_MS}).
  *
  * The key carries a `:v2` suffix because entries written by earlier versions
  * are a bare `ProductMetadata[]`. Bumping it retires those without any
@@ -136,11 +173,14 @@ function isCachedProductsMetadata(value: unknown): value is CachedProductsMetada
 /**
  * Build (or fetch from cache) the product catalogue and its provenance.
  */
-async function loadProductsMetadata(ctx: ServerContext): Promise<CachedProductsMetadata> {
+async function loadProductsMetadata(
+  ctx: ServerContext,
+  options: MetadataReadOptions,
+): Promise<CachedProductsMetadata> {
   const log = ctx.logger.createLogger('metadata');
 
   const cached = await ctx.cache.get<unknown>(PRODUCTS_CACHE_KEY);
-  if (isCachedProductsMetadata(cached)) {
+  if (isCachedProductsMetadata(cached) && !isStaleFallback(cached, options)) {
     return cached;
   }
 
@@ -181,8 +221,13 @@ async function loadProductsMetadata(ctx: ServerContext): Promise<CachedProductsM
 
   const entry: CachedProductsMetadata = { products, degraded };
 
-  // Cache for 24 hours
-  await ctx.cache.set(PRODUCTS_CACHE_KEY, entry, ctx.config.cacheTtl.article);
+  // A real catalogue for the article TTL (24 hours by default); a forced one
+  // for a minute (FALLBACK_TTL_MS).
+  await ctx.cache.set(
+    PRODUCTS_CACHE_KEY,
+    entry,
+    degraded ? FALLBACK_TTL_MS : ctx.config.cacheTtl.article,
+  );
 
   return entry;
 }
@@ -195,12 +240,14 @@ async function loadProductsMetadata(ctx: ServerContext): Promise<CachedProductsM
  * @param status - Optional sink; `degraded` is set when the returned catalogue
  *   is the static fallback because MapsRegistry was unreachable. Reported on
  *   cache hits too.
+ * @param options - See {@link MetadataReadOptions}.
  */
 export async function getProductsMetadata(
   ctx: ServerContext,
-  status?: DegradationStatus
+  status?: DegradationStatus,
+  options: MetadataReadOptions = {},
 ): Promise<ProductMetadata[]> {
-  const { products, degraded } = await loadProductsMetadata(ctx);
+  const { products, degraded } = await loadProductsMetadata(ctx, options);
 
   if (degraded && status !== undefined) {
     status.degraded = true;
@@ -323,21 +370,53 @@ export async function getTopicsMetadata(ctx: ServerContext): Promise<TopicMetada
 // ============================================================================
 
 /**
- * Check which products have documentation available via MapsRegistry.
+ * What the availability cache entry holds: the map, and whether it is the
+ * optimistic stand-in an outage forced. The same design as
+ * {@link CachedProductsMetadata}, for the same reason.
+ *
+ * The key carries a `-v2` suffix because entries written by earlier versions
+ * are the bare map, and an optimistic one of those would be served for up to
+ * an hour as though the registry had built it. They fail
+ * {@link isCachedProductAvailability} as well; the new key means they are
+ * never read.
  */
-export async function getProductAvailability(
-  ctx: ServerContext
-): Promise<Record<string, boolean>> {
-  const log = ctx.logger.createLogger('metadata');
-  const key = cacheKey('metadata-product-availability');
+interface CachedProductAvailability {
+  availability: Record<string, boolean>;
+  degraded: boolean;
+}
 
-  const cached = await ctx.cache.get<Record<string, boolean>>(key);
-  if (cached !== null) {
+const AVAILABILITY_CACHE_KEY = cacheKey('metadata-product-availability-v2');
+
+/** How long a real availability map is kept. */
+const AVAILABILITY_TTL_MS = 60 * 60 * 1000;
+
+/** Whether a cache hit really holds what {@link getProductAvailability} wrote. */
+function isCachedProductAvailability(value: unknown): value is CachedProductAvailability {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as { availability?: unknown; degraded?: unknown };
+  return typeof candidate.availability === 'object' && candidate.availability !== null
+    && typeof candidate.degraded === 'boolean';
+}
+
+/**
+ * Build (or fetch from cache) the availability map and its provenance.
+ */
+async function loadProductAvailability(
+  ctx: ServerContext,
+  options: MetadataReadOptions,
+): Promise<CachedProductAvailability> {
+  const log = ctx.logger.createLogger('metadata');
+
+  const cached = await ctx.cache.get<unknown>(AVAILABILITY_CACHE_KEY);
+  if (isCachedProductAvailability(cached) && !isStaleFallback(cached, options)) {
     return cached;
   }
 
   const availability: Record<string, boolean> = {};
   const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
+  let degraded = false;
 
   try {
     const registryProducts = await ctx.mapsRegistry.getProducts();
@@ -351,14 +430,44 @@ export async function getProductAvailability(
     }
   } catch (error) {
     log.error(`MapsRegistry failed for availability check: ${String(error)}`);
-    // On failure, assume all products are available (optimistic)
+    // On failure, assume all products are available (optimistic). That is a
+    // guess standing in for the registry's answer, so it is reported as one.
+    degraded = true;
     for (const productId of productIds) {
       availability[productId] = true;
     }
   }
 
-  // Cache for 1 hour
-  await ctx.cache.set(key, availability, 60 * 60 * 1000);
+  const entry: CachedProductAvailability = { availability, degraded };
+
+  // A real map for an hour; a forced one for a minute (FALLBACK_TTL_MS).
+  await ctx.cache.set(
+    AVAILABILITY_CACHE_KEY,
+    entry,
+    degraded ? FALLBACK_TTL_MS : AVAILABILITY_TTL_MS,
+  );
+
+  return entry;
+}
+
+/**
+ * Check which products have documentation available via MapsRegistry.
+ *
+ * @param status - Optional sink, as for {@link getProductsMetadata}: set when
+ *   the registry was unreachable and every product is assumed available.
+ *   Reported on cache hits too.
+ * @param options - See {@link MetadataReadOptions}.
+ */
+export async function getProductAvailability(
+  ctx: ServerContext,
+  status?: DegradationStatus,
+  options: MetadataReadOptions = {},
+): Promise<Record<string, boolean>> {
+  const { availability, degraded } = await loadProductAvailability(ctx, options);
+
+  if (degraded && status !== undefined) {
+    status.degraded = true;
+  }
 
   return availability;
 }

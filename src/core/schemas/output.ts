@@ -28,8 +28,12 @@ export const ProductListOutputSchema = z.object({
    * another document rather than having one of their own. Folding them
    * together would turn "which product" into "which document".
    *
-   * Optional: it comes from the live maps registry, so a request that cannot
-   * reach it still gets the products and topics it asked for.
+   * Declared optional, as it was when it came only from the live maps
+   * registry and was left out when that could not be reached. Since 5.7.0
+   * (#264) every reply carries it: the static sources' sections are compiled
+   * in, so an unreachable source costs its own rows and not the field. Its
+   * presence therefore says nothing about whether rows are missing;
+   * `incomplete` below does.
    */
   publications: z.array(z.object({
     id: z.string(),
@@ -49,6 +53,30 @@ export const ProductListOutputSchema = z.object({
     locales: z.array(z.string()),
     versions: z.array(z.string()),
   })).optional(),
+  /**
+   * Present when a source could not be read, and absent when every one was.
+   * The reply then lists what it could, and this says what it could not.
+   * Without it a registry outage looked like the real catalogue: the two
+   * Jamf Concepts sections were listed as every document Jamf publishes, and
+   * every product reported `['current']` as its versions (#335).
+   *
+   * `unavailable` names each source. `maps-registry` is learn.jamf.com's
+   * `/api/khub/maps`, which both halves read. Any of three things can then be
+   * a stand-in, each cached on its own clock, and `message` says which: its
+   * documents are missing from `publications`, the products' versions are
+   * compiled-in defaults, or every product's `hasContent` is assumed true.
+   * Any other value is a static source whose sections are discovered at
+   * runtime, such as `jamf-support`: its sections are then missing, and
+   * `message` names their publication ids (`jamf-support-*`).
+   *
+   * Shaped like `jamf_docs_glossary_lookup`'s `incomplete`: a list of what is
+   * missing, and a sentence saying so, which the markdown reply puts at the
+   * top.
+   */
+  incomplete: z.object({
+    unavailable: z.array(z.string()),
+    message: z.string(),
+  }).optional(),
 });
 
 export const SearchOutputSchema = z.object({
