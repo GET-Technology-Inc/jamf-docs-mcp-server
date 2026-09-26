@@ -106,6 +106,14 @@ export interface SearchResult {
    * dropped is what makes that reversible: the reader can see the topic
    * exists in 11.26 and ask for it by version. Newest first; absent when
    * nothing was collapsed.
+   *
+   * A SearchProvider's results are collapsed by the same rule
+   * (`dedupeResultsToLatestVersions`), with two differences. A requested
+   * `version` is kept over a newer one; Fluid Topics needs no such rule,
+   * because it sends the version upstream and gets back only that version.
+   * And every provider result at the version kept stays, with this set on the
+   * first-ranked of them only. A provider may set this itself. What it lists
+   * is kept, and any versions collapsed into the result are added to it.
    */
   otherVersions?: string[];
 }

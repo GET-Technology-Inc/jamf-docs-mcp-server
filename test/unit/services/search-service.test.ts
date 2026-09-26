@@ -1205,10 +1205,11 @@ describe('searchDocumentation()', () => {
   });
 
   it('should include versionNote when a SearchProvider returns other versions than the one requested', async () => {
-    // The provider is handed `params` and its results are taken as given —
-    // nothing in the service enforces `version` on this path. A result stamped
-    // 11.20.0 proves the filter did not hold, and the tool would otherwise echo
-    // filters.version back as though it had.
+    // The provider is handed `params` and its results are only collapsed to
+    // one version per topic — nothing in the service enforces `version` on
+    // this path (search-provider-versions.test.ts covers the collapse). A
+    // result stamped 11.20.0 proves the filter did not hold, and the tool
+    // would otherwise echo filters.version back as though it had.
     const result = await searchDocumentation(
       providerCtx([providerResult('11.20.0')]),
       { query: 'profiles', version: '11.5.0' },
