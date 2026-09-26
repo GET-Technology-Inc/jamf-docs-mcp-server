@@ -2,7 +2,7 @@
  * Searching the non-Fluid-Topics sources.
  *
  * These results are kept in their own block rather than merged into the
- * Fluid Topics ranking. `SearchResult` has no score field and Fluid Topics
+ * main results' ranking. `SearchResult` has no score field and Fluid Topics
  * does not return one — `search.ts` says so where it builds a result — so
  * there is nothing on either side to fuse two orderings on. Inventing a
  * comparable number would produce an interleaving that looks authoritative

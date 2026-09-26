@@ -841,10 +841,10 @@ function renderSearch(view: SearchView): string {
     notice(view.filterRelaxation?.message, 'warning'),
     notice(view.versionNote, 'warning'),
     notice(view.paginationNote, 'warning'),
-    // `relevanceNote` is deliberately not rendered. It is the same two
-    // sentences on every non-empty search — an explanation of the Fluid Topics
-    // ranking written for the model reading the text channel. On screen it is
-    // three lines of grey prose above the first result, every single time.
+    // `relevanceNote` is deliberately not rendered. It is the same sentence or
+    // two on every non-empty search — which backend ranked the results, written
+    // for the model reading the text channel. On screen it is three lines of
+    // grey prose above the first result, every single time.
     view.truncatedContent !== undefined && view.truncatedContent.omittedCount > 0
       ? notice(
           `${String(view.truncatedContent.omittedCount)} long result${

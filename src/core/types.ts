@@ -212,6 +212,12 @@ export interface FetchTocResult {
 }
 
 /**
+ * The backend that ordered a search's results: the Fluid Topics clustered
+ * search, or an injected `SearchProvider` that answered instead of it.
+ */
+export type SearchRanker = 'fluid-topics' | 'provider';
+
+/**
  * Search response with token and pagination info
  */
 export interface SearchDocumentationResult {
@@ -225,6 +231,16 @@ export interface SearchDocumentationResult {
   paginationNote?: string;
   /** Set when the upstream search call failed; results will be empty. */
   searchError?: string;
+  /**
+   * Which backend ranked `results`. The order is that backend's: filtering,
+   * paging and token truncation all keep it.
+   *
+   * What lets the tool say who ranked them. Without it the tool could not
+   * tell, and its relevanceNote named Fluid Topics on every reply, including
+   * the ones a provider answered without a single request to Fluid Topics.
+   * Absent when `searchError` is set, because then nothing ranked anything.
+   */
+  rankedBy?: SearchRanker;
 }
 
 // Article types

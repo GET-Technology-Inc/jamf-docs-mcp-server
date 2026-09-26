@@ -10,7 +10,7 @@ import { SearchInputSchema } from '../schemas/index.js';
 import { SearchOutputSchema } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, CONTENT_LIMITS, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
-import type { ToolResult, SearchResponse, SearchResult, PaginationInfo, TokenInfo } from '../types.js';
+import type { ToolResult, SearchResponse, SearchResult, SearchRanker, PaginationInfo, TokenInfo } from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
@@ -392,9 +392,40 @@ function renderOtherSources(hits: StaticSearchHit[]): string {
     }
     out += '\n';
   }
-  out += '*Matched on title, ranked separately from the results above — '
-    + 'Fluid Topics returns no score to rank them against.*\n';
+  out += '*Matched on title, ranked separately from the results above, '
+    + 'which carry no score to rank them against.*\n';
   return out;
+}
+
+/**
+ * The JSON reply's sentence on ordering, naming the backend that ranked.
+ *
+ * Neither wording promises a score. The one this replaced said "relevance
+ * scores ... higher values indicate stronger keyword matches", but Fluid
+ * Topics returns no score of any kind — a clustered-search entry carries only
+ * `type`, `missingTerms` and the topic/map payload, with no score, rank or
+ * weight field anywhere in the response — and no result this server emits has
+ * ever carried a numeric relevance. Both carry the words "no numeric relevance
+ * score", in lower case: clients match on them, and at least one downstream
+ * test does so case-sensitively on the provider path.
+ *
+ * Fluid Topics is named only when the service says it ranked the results. Its
+ * ordering is real: `sortId: 'relevance'` is sent explicitly (see
+ * resolveSearchResults). A SearchProvider answers before any Fluid Topics
+ * request is built, and core keeps its order but cannot see how it was
+ * reached, so that branch says whose order it is and nothing about the
+ * method. It is also the wording when nothing says who ranked: crediting
+ * Fluid Topics needs Fluid Topics to have answered. The service leaves
+ * `rankedBy` unset only on a failed search, which has no results and gets the
+ * no-results reply before any note is built, so that default is for a result
+ * built without the field, not a path the service reaches.
+ */
+function relevanceNote(rankedBy: SearchRanker | undefined): string {
+  return rankedBy === 'fluid-topics'
+    ? 'Results are ordered by relevance, as ranked by the Fluid Topics search API. '
+      + 'The API returns no numeric relevance score, so none is included.'
+    : 'Results are in the order the configured search backend ranked them; '
+      + 'no numeric relevance score is included.';
 }
 
 function buildSearchStructuredContent(
@@ -625,12 +656,12 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         // The non-Fluid-Topics sources, as their own block.
         //
-        // Deliberately not merged into the ranking above. Fluid Topics
-        // returns no score — see the relevanceNote below, which says so —
-        // and neither does this server's SearchResult, so there is nothing
-        // on either side to fuse two orderings on. Interleaving them on an
-        // invented number would look authoritative and would not be. Never
-        // allowed to fail the search it runs beside.
+        // Deliberately not merged into the ranking above. A SearchResult
+        // carries no score: Fluid Topics returns none (see relevanceNote),
+        // and the type has no field in which a SearchProvider could pass one
+        // on. So there is nothing on either side to fuse two orderings on.
+        // Interleaving them on an invented number would look authoritative
+        // and would not be. Never allowed to fail the search it runs beside.
         const otherSources = await searchStaticSources(
           ctx, params.query, params.language ?? DEFAULT_LOCALE,
         ).catch((error: unknown) => {
@@ -642,7 +673,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         const {
           results, pagination, tokenInfo, filterRelaxation, versionNote,
-          paginationNote, truncatedContent
+          paginationNote, truncatedContent, rankedBy
         } = searchResult;
 
         // Build response
@@ -687,19 +718,11 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         );
 
         if (params.responseFormat === ResponseFormat.JSON) {
-          // Add relevance note only in JSON format.
-          //
-          // States the ordering and nothing more. The previous wording promised
-          // "relevance scores ... higher values indicate stronger keyword
-          // matches", but Fluid Topics returns no score of any kind — a
-          // clustered-search entry carries only `type`, `missingTerms` and the
-          // topic/map payload, with no score, rank or weight field anywhere in
-          // the response — and no result this server emits has ever carried a
-          // numeric relevance. The ordering itself is real: `sortId:
-          // 'relevance'` is sent explicitly (see resolveSearchResults).
+          // Add relevance note only in JSON format. It states the ordering and
+          // who produced it, and nothing more — see relevanceNote.
           const jsonResponse = {
             ...response,
-            relevanceNote: 'Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included.'
+            relevanceNote: relevanceNote(rankedBy)
           };
           await reportProgress(extra, { progress: 3, total: 3 });
           return {

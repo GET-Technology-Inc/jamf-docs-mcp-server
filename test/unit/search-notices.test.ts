@@ -7,6 +7,13 @@
  * no note is emitted. The rule is covered against the real service in
  * services/search-service.test.ts and its rendering in
  * tools/notice-rendering.test.ts.
+ *
+ * The mock says which backend ranked its results, as the real service does,
+ * and these cases cover how the tool words each answer. Whether the service
+ * gives the right answer is not something a mock can show — this file once
+ * pinned "Fluid Topics" on every reply, including the ones a SearchProvider
+ * ranked — so that is driven through the real service in
+ * tools/search-relevance-note.test.ts.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
@@ -25,6 +32,7 @@ const mockSearchDocumentation = vi.fn().mockImplementation(async (_ctx: ServerCo
     results: [{ title: 'Test', url: 'https://learn.jamf.com/test.html', snippet: 'Test snippet content for the relevance note', product: 'Jamf Pro', version: params.version ?? 'current', docType: 'documentation' }],
     pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
     tokenInfo: { tokenCount: 50, truncated: false, maxTokens: 5000 },
+    rankedBy: 'fluid-topics',
   });
 });
 
@@ -64,9 +72,29 @@ describe('Search notices', () => {
     expect(json.relevanceNote).toContain('Fluid Topics search API');
     // The note must not promise a score. Fluid Topics returns none — a
     // clustered-search entry has no score, rank or weight field — and no
-    // result this server emits carries a numeric relevance.
-    expect(json.relevanceNote).toMatch(/no numeric relevance score/i);
+    // result this server emits carries a numeric relevance. Matched as
+    // written: clients match the phrase, some of them case-sensitively.
+    expect(json.relevanceNote).toContain('no numeric relevance score');
     expect(json.relevanceNote).not.toMatch(/higher values/i);
+  });
+
+  it('should credit no backend when the result does not say which one ranked it', async () => {
+    mockSearchDocumentation.mockImplementationOnce(async () => await Promise.resolve({
+      results: [{ title: 'Test', url: 'https://learn.jamf.com/test.html', snippet: 'Test snippet content for the relevance note', product: 'Jamf Pro' }],
+      pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
+      tokenInfo: { tokenCount: 50, truncated: false, maxTokens: 5000 },
+    }));
+
+    const result = await client.callTool({
+      name: 'jamf_docs_search',
+      arguments: { query: 'enrollment', responseFormat: 'json' },
+    });
+
+    const json = JSON.parse((result.content[0] as TextContent).text);
+    expect(json.relevanceNote).toBe(
+      'Results are in the order the configured search backend ranked them; '
+      + 'no numeric relevance score is included.',
+    );
   });
 
   it('should NOT include relevanceNote in markdown format', async () => {
