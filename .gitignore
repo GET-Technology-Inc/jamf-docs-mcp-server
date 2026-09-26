@@ -30,7 +30,7 @@ npm-debug.log*
 # Test coverage
 coverage/
 
-# What ci.yml's Coverage job hands to its Codecov Upload job besides
+# What ci.yml's Test (Node 26.x) leg hands to its Codecov Upload job besides
 # coverage/: the Test Analytics report, and the app-ui script for bundle
 # analysis
 test-results/

@@ -1,5 +1,6 @@
 # Codecov settings for coverage, Test Analytics and bundle analysis, all of
-# which ci.yml's Codecov Upload job sends from the Coverage job's reports.
+# which ci.yml's Codecov Upload job sends from the Test (Node 26.x) leg's
+# reports.
 # Schema: docs.codecov.com/docs/codecov-yaml.
 #
 # Validate every change before pushing it. Codecov falls back to its defaults

@@ -6,9 +6,10 @@
  * case: `dist/` predated the MCP Apps viewer, so `resources/list` returned two
  * resources instead of three and the failure surfaced as "expected [...] to
  * include 'ui://jamf-docs/app-<hash>.html'" — indistinguishable from the
- * resource having been dropped from the server. CI always builds first
- * (ci.yml runs `npm run build` before the test steps), so this only bites
- * locally, and it costs a bisect against main to rule out.
+ * resource having been dropped from the server. CI builds first (ci.yml's
+ * Integration job runs `npm run build` before `test:integration`, and no
+ * workflow runs the e2e tier), so this only bites locally, and it costs a
+ * bisect against main to rule out.
  *
  * SCOPE — read before trusting this. `APP_HTML_HASH` is produced by
  * `scripts/build-app-ui.mjs` from the contents of `app-ui/` alone, so this
