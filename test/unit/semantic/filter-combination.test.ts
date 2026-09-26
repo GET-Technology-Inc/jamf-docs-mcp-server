@@ -98,8 +98,9 @@ describe('multi-filter combination behavior', () => {
 
     // None of the three matches a Jamf Pro techdocs page about nothing in
     // particular. jamf-protect rather than jamf-routines: routines has no
-    // classification to filter by, so it is reported up front instead of
-    // relaxed (next test), and would not exercise this order.
+    // classification to filter by, and this registry no map of its
+    // publication, so it is reported up front instead of relaxed (next
+    // test), and would not exercise this order.
     const result = await searchDocumentation(ctx, {
       query: 'test',
       product: 'jamf-protect',
@@ -118,9 +119,10 @@ describe('multi-filter combination behavior', () => {
       ])
     );
 
-    // jamf-routines has no classification value, so nothing was sent upstream
-    // for it. It used to reach relaxation as an ordinary filter that could
-    // never match, and was only removed after docType and topic.
+    // jamf-routines has no classification value, and createClassifying-
+    // MapsRegistry has no map of its publication, so nothing was sent
+    // upstream for it. It used to reach relaxation as an ordinary filter that
+    // could never match, and was only removed after docType and topic.
     const result = await searchDocumentation(ctx, {
       query: 'test',
       product: 'jamf-routines',

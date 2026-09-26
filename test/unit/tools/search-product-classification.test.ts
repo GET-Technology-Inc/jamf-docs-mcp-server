@@ -320,11 +320,14 @@ describe('a document Jamf files under several products is found under each', () 
   });
 });
 
-describe('a product Jamf classifies nothing under', () => {
+describe('a product Jamf classifies nothing under, with no map of its publication', () => {
   it('says so up front and keeps the topic filter', async () => {
-    // jamf-routines has no classification value, so nothing can be sent
-    // upstream. The search goes out unfiltered; the topic filter must still
-    // run over it rather than being relaxed away before product is.
+    // jamf-routines has no classification value, and MAPS above hold no map
+    // of its publication to filter by instead, so nothing can be sent
+    // upstream. (With one, it is filtered by that publication:
+    // search-product-publication.test.ts.) The search goes out unfiltered;
+    // the topic filter must still run over it rather than being relaxed away
+    // before product is.
     const json = await searchJson({ product: 'jamf-routines', topic: 'scripts', responseFormat: 'json' });
 
     expect(sent).toEqual([[]]);
