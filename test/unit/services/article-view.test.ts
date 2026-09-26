@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildArticleView, type ArticleViewOptions } from '../../../src/core/services/article-view.js';
+import { buildArticleView, withNote, type ArticleViewOptions } from '../../../src/core/services/article-view.js';
 import { estimateTokens, extractSections } from '../../../src/core/services/tokenizer.js';
 import { TOKEN_CONFIG } from '../../../src/core/constants.js';
 import type { ArticleNavigation, FetchArticleResult } from '../../../src/core/types.js';
@@ -229,5 +229,46 @@ describe('buildArticleView: a budget that holds everything changes nothing', () 
     // It used to be the count of `extractSummary`'s own, differently built
     // string: 459 for a reply of 449 on CCP, live.
     expect(result.tokenInfo.tokenCount).toBe(estimateTokens(result.content));
+  });
+});
+
+describe('withNote: a reply rendered elsewhere, ended with core\'s note', () => {
+  const MAX = 100;
+  const block = `\n\n---\n*Note: ${SHORT_NOTE}*\n`;
+  /** What the reply may take up and still leave the note room within MAX. */
+  const budget = MAX - estimateTokens(block);
+
+  /** A provider's reply of `tokens` tokens, sized by the provider for its own `maxTokens`. */
+  function rendered(tokens: number, maxTokens = MAX): FetchArticleResult {
+    const content = 'A line of a page a provider rendered itself.\n'.repeat(tokens).slice(0, tokens * 4);
+    expect(estimateTokens(content)).toBe(tokens);
+    return {
+      title: 'Policies', url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Policies', content, sections: [],
+      tokenInfo: { tokenCount: tokens, truncated: false, maxTokens },
+    };
+  }
+
+  it('appends the note to a reply that leaves it room exactly, and cuts nothing', () => {
+    const reply = rendered(budget);
+
+    const result = withNote(reply, SHORT_NOTE, MAX);
+
+    expect(result.content).toBe(reply.content + block);
+    expect(result.tokenInfo).toEqual({ tokenCount: MAX, truncated: false, maxTokens: MAX });
+  });
+
+  it('cuts a reply one token longer than that, and says so', () => {
+    const result = withNote(rendered(budget + 1), SHORT_NOTE, MAX);
+
+    expect(result.content.endsWith(block)).toBe(true);
+    expect(result.tokenInfo.tokenCount).toBe(estimateTokens(result.content));
+    expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(MAX);
+    expect(result.tokenInfo.truncated).toBe(true);
+  });
+
+  it('reports the maxTokens it kept the reply within, not the one the provider sized it for', () => {
+    const result = withNote(rendered(budget, TOKEN_CONFIG.DEFAULT_MAX_TOKENS), SHORT_NOTE, MAX);
+
+    expect(result.tokenInfo.maxTokens).toBe(MAX);
   });
 });

@@ -34,6 +34,7 @@ export type {
   LoggerFactory,
   SearchProvider,
   ArticleProvider,
+  ArticleProviderOptions,
   GlossaryProvider,
   TocProvider,
   MapsProvider,
