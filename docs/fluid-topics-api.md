@@ -34,8 +34,8 @@ Primary search endpoint. Returns results grouped into clusters.
     "page": 1
   },
   "filters": [
-    { "key": "zoominmetadata", "values": ["product-pro"] },
-    { "key": "latestVersion", "values": ["yes"] }
+    { "key": "jamf:portal", "values": ["Jamf Pro"] },
+    { "key": "zoominmetadata", "values": ["content-releasenotes"] }
   ],
   "sortId": "relevance"
 }
@@ -47,8 +47,9 @@ Primary search endpoint. Returns results grouped into clusters.
 
 | Filter key | Values | Purpose |
 |------------|--------|---------|
-| `zoominmetadata` | `product-pro`, `product-connect`, `product-protect`, `product-school`, etc. | Filter by product |
+| `jamf:portal` / `jamf:app` / `jamf:utility` | A product's classification value(s), e.g. `Jamf Pro`, `Jamf Connect`, `Title Editor` | Filter by product — one key, whichever the value sits on (see section 3) |
 | `zoominmetadata` | `content-techdocs`, `content-releasenotes`, `content-training`, `content-solutionguide`, `content-glossary`, `content-gettingstarted` | Filter by content type |
+| `zoominmetadata` | `product-pro`, `product-connect`, `product-protect`, `product-school`, etc. | Legacy product labels. Still accepted, no longer used by this server |
 | `version` | Specific version string (e.g. `"11.13.0"`) | Pin to a version |
 
 **Filter by content type with `content-*`, never with `jamf:contentType`.** The
@@ -147,9 +148,9 @@ These are the metadata descriptors returned by `GET /api/configuration/metadata`
 | 1 | `zoominmetadata` | Legacy Zoomin vocabulary: `product-*` and `content-*` values. Still the source for docType filtering (`content-*`); no longer used for product filtering — see rows 4-6. |
 | 2 | `jamf:contentType` | Content type. **Descriptive only — do not filter on it**; its values are localised (see the search section above). Use the `content-*` values of `zoominmetadata` instead. |
 | 3 | `jamf:product` | Jamf product descriptor. |
-| 4 | `jamf:portal` | Platform a publication documents. **This is what the `product` search filter sends.** Multi-valued. |
+| 4 | `jamf:portal` | Platform a publication documents. Multi-valued. |
 | 5 | `jamf:app` | Client app a publication documents. Multi-valued. |
-| 6 | `jamf:utility` | Utility a publication documents. |
+| 6 | `jamf:utility` | Utility a publication documents. Single-valued on every live map so far; read as a list all the same. |
 | 7 | `jamf:solution` | Solution grouping. |
 | 8 | `latestVersion` | Whether the content is from the latest version |
 | 9 | `version` | Specific product version string |
@@ -159,6 +160,22 @@ These are the metadata descriptors returned by `GET /api/configuration/metadata`
 | 13 | `ft:lastPublication` | Last published date |
 | 14 | `ft:lastTechChange` | Last technical change (per bundle, not per topic) |
 | 15 | `ft:searchableFrom` | Date the content became searchable |
+
+**Rows 4-6 are what the `product` search filter uses.** Upstream it sends one
+of them: the key the product's value sits on, which `MapsRegistry` derives
+from the maps (each value sits on exactly one key; sending all three would
+intersect to nothing). Client-side it keeps a result when **any** value on
+**any** of the three keys is one of the product's values — the same any-value
+test Fluid Topics applies — so a document Jamf files under several products is
+found under each of them, and shown under the product searched for. The
+Security Cloud setup guide carries `jamf:portal = [Jamf Security Cloud, Jamf
+Protect]` and `jamf:app = [Jamf Connect]`, and is returned for all three.
+
+Until #334 the client-side filter read one value per result instead — the
+first on the most specific key — and rejected most of what the API returned
+for `jamf-security-cloud`, `jamf-setup-reset` and `jamf-trust`. Measured
+2026-09-26 over 270 product-filtered searches, every topic and map entry
+returned carried the filter's value on the filter's key (12,597 of 12,597).
 
 ---
 

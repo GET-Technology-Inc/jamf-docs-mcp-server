@@ -1115,7 +1115,7 @@ describe('searchDocumentation()', () => {
     await searchDocumentation(ctx, { query: 'ttl-test' });
 
     expect(ctx.cache.set).toHaveBeenCalledWith(
-      expect.stringContaining('ft-search:'),
+      expect.stringContaining('ft-search-v2:'),
       expect.any(Array),
       ctx.config.cacheTtl.search,
     );

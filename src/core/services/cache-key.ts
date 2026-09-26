@@ -76,7 +76,14 @@ export type CanonicalSearchFilters = readonly (readonly [string, readonly string
    already allows snake_case on typeProperty for API response shapes — the
    format is dictated by what they name, not by TypeScript convention. */
 export interface CacheKeySpaces {
-  'ft-search': {
+  // v2 (#334): the cached results gained `classification`, every value Jamf
+  // files a result under, which the `product` filter now reads — and lost
+  // `bundleSlug`, the single value it read before. An entry of the old shape
+  // has nothing there for the filter to read. Nothing validates a payload on
+  // read, so rather than teach the filter a v1 fallback, the namespace moves
+  // and no build reads a v1 entry; those expire on their search TTL
+  // (CACHE_TTL_SEARCH, 30 minutes by default).
+  'ft-search-v2': {
     query: string;
     contentLocale: string | null;
     sortId: string | null;
@@ -192,7 +199,7 @@ type IsKeyMaterial<T> =
 const CACHE_NAMESPACE_REGISTRY: {
   readonly [N in CacheNamespace]: IsKeyMaterial<CacheKeySpaces[N]>;
 } = {
-  'ft-search': true,
+  'ft-search-v2': true,
   'ft-article-v3': true,
   'ft-toc': true,
   'ft-tocindex-v3': true,

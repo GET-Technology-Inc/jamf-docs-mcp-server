@@ -89,6 +89,14 @@ function formatSearchResult(result: SearchResult): string {
   if (result.product !== null && result.product !== '') {
     meta.push(`**Product**: ${result.product}`);
   }
+  // A product search shows every result under the product searched for, and
+  // Jamf files some documents under several. Where the product would pass one
+  // off as its own — a topic titled "Windows" from the Jamf Trust release
+  // notes, shown as Jamf Protect — name the publication. Only then: on every
+  // result it would cost tokens to repeat what the product already says.
+  if (result.crossFiled === true && result.mapTitle !== undefined) {
+    meta.push(`**Publication**: ${sanitizeMarkdownText(result.mapTitle)}`);
+  }
   if (result.version !== undefined) {
     meta.push(`**Version**: ${result.version}`);
   }

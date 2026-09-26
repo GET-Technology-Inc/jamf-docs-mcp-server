@@ -89,6 +89,15 @@ export interface SearchResult {
   breadcrumb?: string[];
   mapTitle?: string;
   /**
+   * Set when a `product` search shows this result under the product searched
+   * for, although Jamf files it first under another product and `mapTitle`
+   * does not name the product it is shown under — the Jamf Trust release
+   * notes, returned for jamf-protect. `product` alone would then pass the
+   * document off as that product's own, so the markdown output names the
+   * publication beside it. Absent otherwise.
+   */
+  crossFiled?: boolean;
+  /**
    * Other versions of this same topic that the search collapsed away.
    *
    * Fluid Topics publishes one entry per product version, all sharing an
