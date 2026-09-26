@@ -35,6 +35,8 @@ import {
   collectInternalLinkMapIds,
   fetchTopicAncestors,
   fetchTopicNavigation,
+  loadSettledTocIndex,
+  type SettledTocIndex,
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
@@ -130,6 +132,16 @@ export async function fetchArticleFromFt(
   const key = cacheKey('ft-article-v3', { mapId, contentId, articleUrl });
   let cached = await cache.get<CachedArticle>(key);
 
+  // The topic's own map index, loaded once on an article-cache miss and handed
+  // to every lookup the article makes over it: the internal links, the
+  // breadcrumb and the navigation. Each used to load it for itself, and a
+  // failure is not cached, so a `/toc` that timed out cost one article three
+  // timeouts and three warnings in a row (#339). Settled rather than thrown,
+  // so a TOC that will not load still costs those lookups their answers and
+  // not the article. A hit leaves it unset: the navigation is then the only
+  // lookup, and loads the index for itself.
+  let ownMap: SettledTocIndex | undefined;
+
   if (cached === null) {
     const [topicMeta, html] = await Promise.all([
       fetchTopicMetadata(options.http, mapId, contentId),
@@ -144,14 +156,40 @@ export async function fetchArticleFromFt(
     // FT's in-documentation links are hrefless spans addressed by TOC node id,
     // so placing them needs the TOC of whichever map(s) they point into. Scoped
     // to the maps this topic actually references: a topic with no internal
-    // links collects nothing and the resolver does no I/O. The index is cached
-    // per map, so the fetch is shared by every article in it.
+    // links collects nothing, and only its own map is loaded. A link into
+    // another map loads that map's index too, alongside the own map's rather
+    // than after it, so a cold cross-map article waits for one `/toc`, not two
+    // in a row. Each index is cached per map and shared by every article in it.
+    const linkedMapIds = collectInternalLinkMapIds(html);
+    const settle = async (id: string, consequence: string): Promise<SettledTocIndex> =>
+      await loadSettledTocIndex({
+        http: options.http,
+        cache,
+        mapId: id,
+        ttl: options.cacheTtl,
+        logger: options.logger,
+        consequence,
+      });
+    // The own map's failure is warned about once, for everything it costs, and
+    // names the links only when the topic has some into that map.
+    const ownConsequence = linkedMapIds.includes(mapId)
+      ? 'this article will have no breadcrumb or navigation,'
+        + ' and its internal links into that map will render without a destination'
+      : 'this article will have no breadcrumb or navigation';
+    const [own, otherMaps] = await Promise.all([
+      settle(mapId, ownConsequence),
+      Promise.all(linkedMapIds
+        .filter((id) => id !== mapId)
+        .map(async (id) => await settle(id, 'its internal links will render without a destination'))),
+    ]);
+    ownMap = own;
     const resolveInternalLink = await buildInternalLinkResolver({
       http: options.http,
       cache,
-      mapIds: collectInternalLinkMapIds(html),
+      mapIds: linkedMapIds,
       ttl: options.cacheTtl,
       logger: options.logger,
+      loaded: [own, ...otherMaps],
     });
     const parsed = parseArticle(html, displayUrl, {
       includeRelated: true,
@@ -161,8 +199,8 @@ export async function fetchArticleFromFt(
     // The `/content` fragment is the article body, and a breadcrumb belongs to
     // the reader shell around it, so `parsed.breadcrumb` is empty for every FT
     // topic — the selector has nothing to match. The hierarchy exists only in
-    // the map's TOC, which is already fetched and cached here for internal
-    // links, so the fallback is a second lookup rather than a second fetch.
+    // the map's TOC, whose index is already loaded above, so the fallback is a
+    // second lookup rather than a second load.
     // Still a fallback and not a replacement: a page served as full HTML does
     // have a breadcrumb in its markup, and that one is what the site itself
     // renders.
@@ -175,6 +213,7 @@ export async function fetchArticleFromFt(
           contentId,
           ttl: options.cacheTtl,
           logger: options.logger,
+          loaded: ownMap,
         });
 
     // Metadata title is authoritative; parseArticle h1 is only a fallback
@@ -199,11 +238,12 @@ export async function fetchArticleFromFt(
 
   const { title, parsed, displayUrl, product, version, lastUpdated, ownUrl } = cached;
 
-  // Read off the same cached map index the breadcrumb came from, so this is a
-  // second lookup rather than a second fetch — and read outside the article
+  // Read off the same map index the breadcrumb came from, so on a miss this is
+  // a second lookup rather than a second load — and read outside the article
   // cache entry on purpose: the index has its own TTL, and burying navigation
   // inside `CachedArticle` would freeze one map's tree into every article
-  // cached from it until each of those entries expired separately.
+  // cached from it until each of those entries expired separately. Which is
+  // also why a hit still loads the index, for this lookup alone.
   //
   // Why it is worth having: the Fluid Topics API serves one topic per call
   // while the website concatenates a topic and its children into one page, so
@@ -218,6 +258,7 @@ export async function fetchArticleFromFt(
     contentId,
     ...(options.cacheTtl !== undefined ? { ttl: options.cacheTtl } : {}),
     logger: options.logger,
+    loaded: ownMap,
   });
 
   // Build base result (shared across all code paths)
