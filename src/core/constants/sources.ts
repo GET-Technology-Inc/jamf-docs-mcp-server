@@ -39,6 +39,17 @@ export interface StaticDocSource {
   readonly hostname: string;
   /** Origin, without a trailing slash. Root-relative links resolve against it. */
   readonly baseUrl: string;
+  /**
+   * Which spelling of a page URL this source answers with a 200 rather than a
+   * redirect: `add` a trailing slash, or `strip` it. {@link canonicalStaticUrl}
+   * applies it.
+   *
+   * Required, because the sources here disagree and neither answer is a safe
+   * default. A sitemap is no guide either: both list every page without the
+   * slash (990 of 990 and 916 of 916, 2026-09-26), whichever form the site
+   * then serves.
+   */
+  readonly trailingSlash: 'add' | 'strip';
   /** Human name, for prose and error messages. */
   readonly name: string;
   /**
@@ -109,6 +120,11 @@ export const STATIC_DOC_SOURCES = {
     id: 'jamf-concepts',
     hostname: 'concepts.jamf.com',
     baseUrl: 'https://concepts.jamf.com',
+    // `…/apiutil` is a 301 to `…/apiutil/`, on 11 of 11 URLs sampled across
+    // both sections and nine locales (2026-09-26). The page's own
+    // `<link rel="canonical">` cannot settle it: every page names the site
+    // root, `https://concepts.jamf.com/en/`.
+    trailingSlash: 'add',
     name: 'Jamf Concepts',
     parser: 'html',
     selectors: {
@@ -173,6 +189,14 @@ export const STATIC_DOC_SOURCES = {
     id: 'jamf-support',
     hostname: 'support.jamf.com',
     baseUrl: 'https://support.jamf.com',
+    // The mirror image of concepts.jamf.com: `…/articles/…/` is a 301 to the
+    // slashless form, on 19 of 19 URLs sampled (articles and collections, all
+    // six locales, 2026-09-26), and the slashless form is each article's
+    // `<link rel="canonical">`, though that spells a non-ASCII slug raw where
+    // core percent-encodes it (see `canonicalStaticUrl`). This source
+    // inherited concepts.jamf.com's rule until #338, so every uncached article
+    // fetch paid that redirect — a median 329 ms on eight measured.
+    trailingSlash: 'strip',
     name: 'Jamf Support Knowledge Base',
     parser: 'intercom',
     // Unused: the Intercom parser reads __NEXT_DATA__, not the DOM. Present
@@ -204,6 +228,64 @@ export const STATIC_DOC_SOURCES = {
     dynamicSections: { kind: 'intercom-collections', idPrefix: 'jamf-support' },
   },
 } as const satisfies Record<string, StaticDocSource>;
+
+/**
+ * The one spelling of a page URL that `source` serves, rather than redirects.
+ *
+ * Every page URL core hands out goes through here — search hits, TOC entries
+ * and an article's `url` — and so does every article and collection page it
+ * requests, and the article cache key. So one page has one name whichever
+ * tool reports it, and no page request pays for a redirect the site would
+ * answer with. The two requests that name no page are made as spelled:
+ * `sitemap.xml`, and an Intercom locale home (`/en/`), which support.jamf.com
+ * answers with a 200 with or without the slash.
+ *
+ * Only the path's trailing slash changes, per
+ * {@link StaticDocSource.trailingSlash}. `strip` drops every trailing slash:
+ * support.jamf.com 301s `…/` and `…//` alike to the slashless form. `add`
+ * leaves exactly one, since concepts.jamf.com serves `…//` as the same bytes
+ * as `…/`; but under `add` a path whose last segment looks like a file
+ * (`llms-full.txt`) is left exactly as it is. A query or fragment is kept,
+ * and the rule still applies to the path in front of it: both sites redirect
+ * on the path alone, `…/apiutil?x=1` to `…/apiutil/?x=1` on concepts.jamf.com
+ * and the mirror image on support.jamf.com.
+ *
+ * The result is the WHATWG serialisation, so a non-ASCII slug comes back
+ * percent-encoded: the form a request puts on the wire, the form a raw and an
+ * encoded spelling of the same page both reduce to, and the form `get_article`
+ * has always reported. support.jamf.com itself spells such a slug raw, in its
+ * sitemap, its collection pages and its `<link rel="canonical">`, and the
+ * encoded form is longer: about 182 characters against 75, on average, for its
+ * 31 such pages (2026-09-26).
+ *
+ * An unparseable input is returned unchanged; rejecting it is validation's job.
+ */
+export function canonicalStaticUrl(source: StaticDocSource, urlStr: string): string;
+/**
+ * The form this took until #338, in `services/static-article-service`, which
+ * still re-exports it. The source is the one whose host the URL names; a host
+ * with no source gets `add`, which is what this did to every URL before.
+ *
+ * @deprecated Pass the source: `canonicalStaticUrl(source, url)`.
+ */
+export function canonicalStaticUrl(urlStr: string): string;
+export function canonicalStaticUrl(sourceOrUrl: StaticDocSource | string, maybeUrl?: string): string {
+  const urlStr = typeof sourceOrUrl === 'string' ? sourceOrUrl : maybeUrl ?? '';
+  const source = typeof sourceOrUrl === 'string' ? staticSourceForUrl(sourceOrUrl) : sourceOrUrl;
+  try {
+    const url = new URL(urlStr);
+    const bare = url.pathname.replace(/\/+$/, '');
+    const last = bare.split('/').pop() ?? '';
+    if (source?.trailingSlash === 'strip') {
+      url.pathname = bare;
+    } else if (!last.includes('.')) {
+      url.pathname = `${bare}/`;
+    }
+    return url.toString();
+  } catch {
+    return urlStr;
+  }
+}
 
 /** Every non-Fluid-Topics hostname this server will fetch from. */
 export const STATIC_SOURCE_HOSTNAMES: readonly string[] =

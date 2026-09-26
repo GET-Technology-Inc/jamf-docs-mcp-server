@@ -13,7 +13,7 @@
 import * as cheerio from 'cheerio';
 import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
-import type { StaticDocSource } from '../constants/sources.js';
+import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
@@ -518,18 +518,24 @@ export async function fetchIntercomCollectionToc(
   source: StaticDocSource,
   collection: IntercomCollection,
 ): Promise<TocEntry[]> {
-  const key = cacheKey('intercom-collection-toc', { source: source.id, collection: collection.id });
+  const key = cacheKey('intercom-collection-toc-v2', { source: source.id, collection: collection.id });
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await ctx.http.getText(collection.url);
+  const html = await ctx.http.getText(canonicalStaticUrl(source, collection.url));
   const props = pageProps(html);
   const raw = props?.collection as RawCollection | undefined;
 
+  // Every URL in the tree goes out in the source's spelling, the one
+  // `get_article` reports and fetches. Intercom already lists them slashless
+  // (0 of 849 article URLs in en, ja and zh-TW end in `/`, 2026-09-26), but
+  // it lists a non-ASCII slug raw, so until #338 those pages — 29 ja and
+  // zh-TW articles — had one URL here and a percent-encoded one in the
+  // article.
   const toEntries = (summaries: { title?: unknown; url?: unknown }[] | undefined): TocEntry[] =>
     (summaries ?? []).map(summary => ({
       title: asString(summary.title, 'Untitled'),
-      url: asString(summary.url),
+      url: canonicalStaticUrl(source, asString(summary.url)),
     }));
 
   const entries: TocEntry[] = [
@@ -541,7 +547,7 @@ export async function fetchIntercomCollectionToc(
       const children = toEntries(sub.articleSummaries);
       const entry: TocEntry = {
         title: asString(sub.name, 'Untitled'),
-        url: asString(sub.url),
+        url: canonicalStaticUrl(source, asString(sub.url)),
       };
       if (children.length > 0) { entry.children = children; }
       return entry;

@@ -400,6 +400,17 @@ describe('fetchIntercomCollectionToc', () => {
 
     expect(mockHttpGetText).toHaveBeenCalledTimes(1);
   });
+
+  it('requests the collection page in the spelling the source serves', async () => {
+    // Intercom lists every collection slashless today (0 of 86, 2026-09-26),
+    // but support.jamf.com 301s the slashed form, so a collection listed with
+    // the slash would cost a round trip per TOC if requested as listed (#338).
+    mockHttpGetText.mockResolvedValue(page({ collection: { articleSummaries: [], subcollections: [] } }));
+
+    await fetchIntercomCollectionToc(createMockContext(), SUPPORT, { ...COLLECTION, url: `${COLLECTION.url}/` });
+
+    expect(mockHttpGetText.mock.calls).toEqual([[COLLECTION.url]]);
+  });
 });
 
 describe('renderBlocks', () => {

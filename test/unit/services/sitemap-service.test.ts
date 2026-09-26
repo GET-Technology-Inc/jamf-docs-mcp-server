@@ -23,6 +23,7 @@ import { STATIC_DOC_SOURCES } from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const CONCEPTS = STATIC_DOC_SOURCES['jamf-concepts'];
+const SUPPORT = STATIC_DOC_SOURCES['jamf-support'];
 const GUIDES = CONCEPTS.sections[0];
 
 function sitemapXml(paths: string[]): string {
@@ -33,28 +34,48 @@ function sitemapXml(paths: string[]): string {
 
 describe('parseSitemap', () => {
   it('extracts loc, path segments and lastmod', () => {
-    const [entry] = parseSitemap(sitemapXml(['/en/guides/ai-governance']));
+    const [entry] = parseSitemap(CONCEPTS, sitemapXml(['/en/guides/ai-governance']));
     expect(entry.url).toBe('https://concepts.jamf.com/en/guides/ai-governance/');
     expect(entry.segments).toEqual(['en', 'guides', 'ai-governance']);
     expect(entry.lastModified).toBe('2026-09-02');
   });
 
   it('canonicalises every loc, since all 990 are listed unslashed', () => {
-    const entries = parseSitemap(sitemapXml(['/en/guides', '/en/concepts/apiutil']));
+    const entries = parseSitemap(CONCEPTS, sitemapXml(['/en/guides', '/en/concepts/apiutil']));
     expect(entries.map(e => e.url)).toEqual([
       'https://concepts.jamf.com/en/guides/',
       'https://concepts.jamf.com/en/concepts/apiutil/',
     ]);
   });
 
+  it('canonicalises by the source it was given, not by one rule for every site', () => {
+    // support.jamf.com serves the slashless form its sitemap lists, and 301s
+    // the slashed one. Until #338 this added the slash on every source.
+    const xml = '<urlset><url><loc>https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now</loc></url></urlset>';
+    expect(parseSitemap(SUPPORT, xml).map(e => e.url)).toEqual([
+      'https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now',
+    ]);
+  });
+
+  it('given only the XML, as before #338, canonicalises each loc by its own host', () => {
+    const xml = '<urlset>'
+      + '<url><loc>https://concepts.jamf.com/en/concepts/apiutil</loc></url>'
+      + '<url><loc>https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now</loc></url>'
+      + '</urlset>';
+    expect(parseSitemap(xml).map(e => e.url)).toEqual([
+      'https://concepts.jamf.com/en/concepts/apiutil/',
+      'https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now',
+    ]);
+  });
+
   it('skips an entry whose loc will not parse rather than failing the sitemap', () => {
     const xml = '<urlset><url><loc>::::</loc></url>'
       + '<url><loc>https://concepts.jamf.com/en/guides/x</loc></url></urlset>';
-    expect(parseSitemap(xml)).toHaveLength(1);
+    expect(parseSitemap(CONCEPTS, xml)).toHaveLength(1);
   });
 
   it('returns nothing for a document with no url blocks', () => {
-    expect(parseSitemap('<html>not a sitemap</html>')).toEqual([]);
+    expect(parseSitemap(CONCEPTS, '<html>not a sitemap</html>')).toEqual([]);
   });
 });
 

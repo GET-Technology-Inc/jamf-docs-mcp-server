@@ -14,12 +14,17 @@ import { buildArticleView, type ArticleViewOptions } from './article-view.js';
 import { extractSections } from './tokenizer.js';
 import { cacheKey } from './cache-key.js';
 import { TOKEN_CONFIG } from '../constants.js';
-import type { StaticDocSource } from '../constants/sources.js';
+import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 import type { FetchArticleOptions, FetchArticleResult } from '../types.js';
 import { parseIntercomArticle } from './intercom-service.js';
 import type { ParsedArticleContent } from './content-parser.js';
+
+// Exported from here until #338 moved it next to the registry it reads.
+// `./core/*` is a published path, so an embedder's import of it from here
+// keeps resolving.
+export { canonicalStaticUrl };
 
 /** What gets cached: the parse, not the rendered view. */
 interface CachedStaticArticle {
@@ -28,28 +33,6 @@ interface CachedStaticArticle {
   displayUrl: string;
   /** Only Intercom publishes one; the static pages carry no date. */
   lastUpdated?: string;
-}
-
-/**
- * Canonicalise a URL for a static site.
- *
- * concepts.jamf.com's sitemap emits paths without a trailing slash while the
- * site itself redirects to the slashed form — all 990 entries, so fetching
- * them as listed is 990 redirects. Adding the slash up front is one line here
- * and saves a round trip per article. Paths that look like a file (`.html`,
- * `.json`) are left alone, as is anything with a query or fragment.
- */
-export function canonicalStaticUrl(urlStr: string): string {
-  try {
-    const url = new URL(urlStr);
-    const last = url.pathname.split('/').pop() ?? '';
-    if (!url.pathname.endsWith('/') && !last.includes('.')) {
-      url.pathname = `${url.pathname}/`;
-    }
-    return url.toString();
-  } catch {
-    return urlStr;
-  }
 }
 
 /**
@@ -97,7 +80,10 @@ export async function fetchStaticArticle(
   options: FetchArticleOptions & Pick<ArticleViewOptions, 'note'> = {},
 ): Promise<FetchArticleResult> {
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
-  const displayUrl = canonicalStaticUrl(url);
+  // One spelling for the fetch, the cache key and the reported `url`, so
+  // either spelling a caller passes is one request to the form the site
+  // serves, one cache entry, and one name for the page.
+  const displayUrl = canonicalStaticUrl(source, url);
   const key = cacheKey('static-article', { source: source.id, url: displayUrl });
 
   let cached = await ctx.cache.get<CachedStaticArticle>(key);

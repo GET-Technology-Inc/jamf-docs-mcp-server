@@ -27,7 +27,11 @@ import {
   renderBlocks,
   HANDLED_BLOCK_TYPES,
 } from '../../src/core/services/intercom-service.js';
+import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
+import { STATIC_DOC_SOURCES } from '../../src/core/constants/sources.js';
+import { createMockContext } from '../helpers/mock-context.js';
 
+const SOURCE = STATIC_DOC_SOURCES['jamf-support'];
 const SUPPORT_BASE = 'https://support.jamf.com';
 const LOCALE = 'en';
 
@@ -198,6 +202,49 @@ describe('support.jamf.com contracts', () => {
     for (const article of articles) {
       expect(typeof article.title === 'string' && article.title !== '', article.url).toBe(true);
     }
+  });
+
+  /**
+   * support.jamf.com 301s an article's slashed URL to the slashless one, the
+   * mirror image of concepts.jamf.com. Until #338 `fetchStaticArticle` added
+   * the slash here as well, so every uncached article paid that redirect, and
+   * nothing in this file could see it: everything above fetches
+   * `articleSummaries[].url` itself rather than the URL the service builds.
+   *
+   * So this asks the service, with redirects not followed, and hands it the
+   * slashed spelling a caller may well pass. Whatever it requests must be the
+   * 200 — otherwise every article costs a round trip, and a client that does
+   * not follow redirects gets nothing.
+   */
+  it('has fetchStaticArticle request the form the site serves, not the redirect', async () => {
+    const requested: { url: string; status: number }[] = [];
+    const live = createMockContext().http;
+    const ctx = createMockContext({
+      http: {
+        ...live,
+        getText: async (url) => {
+          const response = await fetch(url, {
+            redirect: 'manual',
+            headers: { 'user-agent': 'jamf-docs-mcp-server contract check' },
+          });
+          requested.push({ url, status: response.status });
+          return await response.text();
+        },
+      },
+    });
+
+    const sample = articles.slice(0, 3).map(a => a.url);
+    for (const url of sample) {
+      // A 301 carries no `__NEXT_DATA__`, so the parse fails as well; the
+      // statuses below are the message worth reading.
+      await fetchStaticArticle(ctx, SOURCE, `${url.replace(/\/$/, '')}/`).catch(() => undefined);
+    }
+
+    expect(requested, 'one request per article').toHaveLength(sample.length);
+    expect(
+      requested.filter(r => r.status !== 200).map(r => `${String(r.status)} ${r.url}`),
+      'requests fetchStaticArticle made that the site answered with something other than the page',
+    ).toEqual([]);
   });
 
   /**

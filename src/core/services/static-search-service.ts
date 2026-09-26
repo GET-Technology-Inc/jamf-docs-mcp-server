@@ -17,7 +17,7 @@
 
 import Fuse, { type IFuseOptions } from 'fuse.js';
 import { cacheKey } from './cache-key.js';
-import { titleFromSlug } from './sitemap-service.js';
+import { parseSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { ServerContext } from '../types/context.js';
@@ -47,20 +47,14 @@ export interface StaticSearchHit extends StaticSearchEntry {
 const NON_ARTICLE_SEGMENTS = new Set(['browse', 'about', 'ecosystem', 'collections']);
 
 /**
- * Turn a sitemap path into an index entry.
+ * Turn a sitemap entry into an index entry.
  *
  * Intercom article slugs are prefixed with the numeric id
  * (`10631322-get-started-with-jamf-now`), which is stripped before casing —
  * leaving it in produces "10631322 Get Started With Jamf Now".
  */
-function entryFor(source: StaticDocSource, url: string, locale: string): StaticSearchEntry | null {
-  let segments: string[];
-  try {
-    segments = new URL(url).pathname.split('/').filter(Boolean);
-  } catch {
-    return null;
-  }
-  const [entryLocale, section, ...rest] = segments;
+function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string): StaticSearchEntry | null {
+  const [entryLocale, section, ...rest] = entry.segments;
   if (entryLocale !== locale) { return null; }
   if (section === undefined || NON_ARTICLE_SEGMENTS.has(section)) { return null; }
   // A section index page is a container, not an article.
@@ -69,7 +63,7 @@ function entryFor(source: StaticDocSource, url: string, locale: string): StaticS
   const slug = (rest[rest.length - 1] ?? '').replace(/^\d+-/, '');
   if (slug === '') { return null; }
 
-  return { title: titleFromSlug(slug), url, source: source.name };
+  return { title: titleFromSlug(slug), url: entry.url, source: source.name };
 }
 
 /** Build one source's title index for a locale. */
@@ -78,14 +72,21 @@ export async function loadStaticIndex(
   source: StaticDocSource,
   locale: string,
 ): Promise<StaticSearchEntry[]> {
-  const key = cacheKey('static-search-index', { source: source.id, locale });
+  const key = cacheKey('static-search-index-v2', { source: source.id, locale });
   const cached = await ctx.cache.get<StaticSearchEntry[]>(key);
   if (cached !== null) { return cached; }
 
+  // The concepts.jamf.com TOC's own parse, and so the canonicaliser that the
+  // support.jamf.com TOC (read off Intercom's collection pages) and
+  // `get_article` apply too: a hit carries the URL `get_toc` and
+  // `get_article` report for the same page. This used to scan for `<loc>`
+  // itself and hand out each value as listed — slashless, which
+  // concepts.jamf.com answers with a 301 — so a concepts page had one URL
+  // here and another everywhere else.
   const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries: StaticSearchEntry[] = [];
-  for (const match of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)) {
-    const entry = entryFor(source, match[1] ?? '', locale);
+  for (const sitemapEntry of parseSitemap(source, xml)) {
+    const entry = entryFor(source, sitemapEntry, locale);
     if (entry !== null) { entries.push(entry); }
   }
 
