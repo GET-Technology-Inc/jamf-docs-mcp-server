@@ -114,7 +114,21 @@ export const SearchOutputSchema = z.object({
     mapId: z.string().optional(),
     contentId: z.string().optional(),
     breadcrumb: z.array(z.string()).optional(),
+    /**
+     * The title of the publication the result is from, e.g. "Jamf Trust
+     * Release Notes". Declared here since #78 but not emitted until
+     * 2026-09-26, although the JSON text of the same reply carried it.
+     */
     mapTitle: z.string().optional(),
+    /**
+     * Present, and true, when `product` is the product a `product` search
+     * asked for, but Jamf files the document first under another product and
+     * `mapTitle` does not name the one it is shown under: a Jamf Trust
+     * release-notes topic titled "Windows", returned for jamf-protect. Read
+     * `product` beside `mapTitle` for these, as the markdown does, or the
+     * result passes for that product's own. Absent otherwise.
+     */
+    crossFiled: z.boolean().optional(),
     /**
      * Other versions of this topic that the search collapsed away.
      *
@@ -164,6 +178,18 @@ export const SearchOutputSchema = z.object({
     })),
   }).optional(),
 });
+
+/**
+ * The shape `jamf_docs_search` publishes on the structured channel.
+ *
+ * Its result keys are checked at build time against the search tool's
+ * `SEARCH_RESULT_FIELD_DISPOSITION`, in both directions: a key that table
+ * publishes or replaces must be declared here, and a key declared here must
+ * be one it publishes or replaces. That compares keys only. What the builder
+ * actually emits, and with values of which types, is checked by
+ * test/unit/tools/search-structured-output.test.ts.
+ */
+export type SearchStructuredOutput = z.infer<typeof SearchOutputSchema>;
 
 /** One table-of-contents neighbour: a title to read, a URL to fetch. */
 const NavigationLinkSchema = z.object({
