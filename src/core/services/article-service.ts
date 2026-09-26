@@ -9,6 +9,7 @@
  */
 
 import type { CacheProvider } from './interfaces/cache.js';
+import type { ArticleProvider, ArticleProviderOptions } from './interfaces/providers.js';
 import type { ServerContext } from '../types/context.js';
 import { TOKEN_CONFIG } from '../constants.js';
 import type {
@@ -27,7 +28,7 @@ import {
 import { fetchTopicContent, fetchTopicMetadata } from './ft-client.js';
 import { parseArticle, type ParsedArticleContent } from './content-parser.js';
 import { staticSourceForUrl } from '../constants/sources.js';
-import { buildArticleView } from './article-view.js';
+import { buildArticleView, withNote } from './article-view.js';
 import { fetchStaticArticle } from './static-article-service.js';
 import {
   buildInternalLinkResolver,
@@ -267,6 +268,15 @@ export async function fetchArticleFromFt(
  * learn.jamf.com the pair is fetched and the url is not resolved at all. Either
  * way the result is labelled with the address of what was fetched, and a note
  * says when an argument went unused.
+ *
+ * An `articleProvider` changes where the article comes from and nothing else:
+ * the same call gets the same article and the same note with one as without.
+ * Until 2026-09-26 it did not. An article a provider answered never carried a
+ * note (#333). And when `getArticleByIds` found nothing, the provider's page
+ * for the url was used whatever it was, under the pair's ids (#332): another
+ * topic at the same url, the `-current` page for an older version's pair
+ * (a topic keeps its contentId across versions), or, with a `language` that
+ * moved the lookup, the original-language page.
  */
 export async function resolveAndFetchArticle(
   ctx: ServerContext,
@@ -321,19 +331,24 @@ export async function resolveAndFetchArticle(
     articleUrlNamesTopic = parseUrl(articleUrl)?.locale === resolved.locale;
   }
 
+  // What to tell the caller about how this call was resolved. Bound here
+  // because only here are its inputs known — the caller's url, and whether the
+  // pair came from the caller — and handed to a provider as well as to step 3,
+  // so the note does not depend on where the article came from. It used to be
+  // given to step 3 alone, and every article a provider answered went out
+  // without one: a `language` the article is not in, or a url that was not
+  // used, and nothing said so.
+  const noteFor = (labelled: LabelledArticle): string | undefined =>
+    resolutionNote(labelled, articleUrl, pairGiven, options.locale);
+
   // Step 2: Try provider shortcuts (ID-based is primary, URL-based is fallback)
-  let article: FetchArticleResult | null = null;
-
   if (articleProvider !== undefined) {
-    article = await articleProvider.getArticleByIds(mapId, contentId, options);
-  }
-
-  if (article === null && articleProvider?.getArticle !== undefined && articleUrl !== '') {
-    article = await articleProvider.getArticle(articleUrl, options);
-  }
-
-  if (article !== null) {
-    return { ...article, mapId, contentId };
+    const article = await fetchFromProvider(
+      articleProvider, { mapId, contentId, articleUrl, articleUrlNamesTopic }, { ...options, noteFor },
+    );
+    if (article !== null) {
+      return withNote(article, noteFor(article), options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS);
+    }
   }
 
   // Step 3: Default — fetch from FT API + parse
@@ -345,9 +360,70 @@ export async function resolveAndFetchArticle(
       cacheTtl: ctx.config.cacheTtl.article,
       logger: ctx.logger.createLogger('article-service'),
       articleUrlNamesTopic,
-      noteFor: labelled => resolutionNote(labelled, articleUrl, pairGiven, options.locale),
+      noteFor,
     }
   );
+}
+
+/** What step 2 of {@link resolveAndFetchArticle} asks a provider for. */
+interface ProviderRequest {
+  /** The pair the call fetches: the caller's, or the one the url resolved to. */
+  mapId: string;
+  contentId: string;
+  articleUrl: string;
+  /**
+   * Whether the url alone chose the pair: no pair from the caller, and no
+   * `language` that moved the lookup. See
+   * `FetchArticleFromFtOptions.articleUrlNamesTopic`.
+   */
+  articleUrlNamesTopic: boolean;
+}
+
+/**
+ * The article `provider` has for this call, or `null` to fetch it from Fluid
+ * Topics. By the pair first; by the url only when that finds nothing.
+ */
+async function fetchFromProvider(
+  provider: ArticleProvider,
+  request: ProviderRequest,
+  options: ArticleProviderOptions,
+): Promise<FetchArticleResult | null> {
+  const { mapId, contentId, articleUrl, articleUrlNamesTopic } = request;
+  let article = await provider.getArticleByIds(mapId, contentId, options);
+
+  if (article === null && provider.getArticle !== undefined && articleUrl !== '') {
+    const byUrl = await provider.getArticle(articleUrl, options);
+    // The url's page is used only when it is the article this call fetches
+    // without a provider: the pair's, whether the caller gave the pair or the
+    // url resolved to it. It used to be taken on trust, and a url does not
+    // always name that article:
+    //  - Two topics can share a url. Live on 2026-09-26,
+    //    `…/technical-paper-laps-current/Using_LAPS` alone resolves to "Using
+    //    LAPS in the Jamf Pro API", while the search result that carries it is
+    //    "Use LAPS". A url-keyed provider, measured with one written for the
+    //    purpose, answered that triple with the child under "Use LAPS"'s ids.
+    //  - A topic keeps its contentId from one version to the next: all 747
+    //    topics Jamf Pro 11.31 and 11.32 share do (live, 2026-09-26). An 11.31
+    //    pair sent with a `-current` url matches the url's page on contentId,
+    //    and only the mapId tells them apart.
+    //  - `language` moves the lookup to another locale's topic, and the page
+    //    for the url is still the original-language one.
+    // A page that carries no ids cannot be checked, so it is used only when
+    // the url alone chose the pair. A page that carries its ids is still used
+    // whenever the url names the pair's own topic, as it does for the 46 of 48
+    // sampled search results `labelUrl` cites.
+    const ownPair = byUrl?.mapId === mapId && byUrl.contentId === contentId;
+    const unlabelled = byUrl?.mapId === undefined && byUrl?.contentId === undefined;
+    article = ownPair || (unlabelled && articleUrlNamesTopic) ? byUrl : null;
+  }
+
+  // The ids asked for are a default, not a label: stamped over the provider's
+  // own, they gave one topic's body another topic's ids.
+  return article === null ? null : {
+    ...article,
+    mapId: article.mapId ?? mapId,
+    contentId: article.contentId ?? contentId,
+  };
 }
 
 // ─── Helpers ───────────────────────────────────────────────────

@@ -63,15 +63,63 @@ export function buildArticleView(
   allSections: ArticleSection[],
 ): FetchArticleResult {
   const { note } = options;
-  const noteBlock = note === undefined ? '' : `\n\n---\n*Note: ${note}*\n`;
-  const body = buildBody(base, content, options, maxTokens - estimateTokens(noteBlock), allSections);
-  const reply = body.content + noteBlock;
+  const block = note === undefined ? '' : noteBlock(note);
+  const body = buildBody(base, content, options, maxTokens - estimateTokens(block), allSections);
+  const reply = body.content + block;
   return {
     ...base,
     content: reply,
     tokenInfo: { tokenCount: estimateTokens(reply), truncated: body.truncated, maxTokens },
     ...(body.sectionNotFound === true && { sectionNotFound: true }),
   };
+}
+
+/**
+ * An article rendered elsewhere, ended with `note` the way
+ * {@link buildArticleView} ends one, and still within `maxTokens`.
+ *
+ * For an `ArticleProvider` that renders its own reply and leaves out the note
+ * core hands it as `noteFor`: the note is what tells the caller an argument
+ * went unused, and a provider that was written before it existed would
+ * otherwise drop it. A reply that already contains the note is returned as it
+ * is, so one that passed `noteFor` on, or ends with its own copy of the
+ * sentence, does not get it again. Nor is a copy taken out: a reply that
+ * passed `noteFor` on and appended its own copy as well carries it twice.
+ *
+ * The provider sized its reply to the whole of `maxTokens`, so the note can
+ * push it over. Then the reply is cut to make room, and marked truncated. The
+ * cut is made after the fact, on the provider's finished reply: its own
+ * truncation notice or outline loses its tail rather than being laid out
+ * again, as it would be had the note been known when it was built. A provider
+ * that passes `noteFor` on is never cut here, because its reply was built with
+ * the note in it.
+ */
+export function withNote(
+  article: FetchArticleResult,
+  note: string | undefined,
+  maxTokens: number,
+): FetchArticleResult {
+  if (note === undefined || article.content.includes(note)) {
+    return article;
+  }
+  const block = noteBlock(note);
+  const budget = maxTokens - estimateTokens(block);
+  const fits = estimateTokens(article.content) <= budget;
+  const reply = (fits ? article.content : truncateToTokenLimit(article.content, budget, []).content) + block;
+  return {
+    ...article,
+    content: reply,
+    tokenInfo: {
+      tokenCount: estimateTokens(reply),
+      truncated: article.tokenInfo.truncated || !fits,
+      maxTokens,
+    },
+  };
+}
+
+/** A note as the reply's last lines, set off like the article's other notes. */
+function noteBlock(note: string): string {
+  return `\n\n---\n*Note: ${note}*\n`;
 }
 
 /** The reply before any note, and whether it left something out. */

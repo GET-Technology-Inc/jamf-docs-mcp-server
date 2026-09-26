@@ -909,8 +909,9 @@ describe('resolveAndFetchArticle()', () => {
       );
 
       expect(result.title).toBe('From Provider');
+      // The caller's options, and the note core would end the reply with.
       expect(ctx.articleProvider!.getArticleByIds).toHaveBeenCalledWith(
-        MAP_ID, CONTENT_ID, {},
+        MAP_ID, CONTENT_ID, { noteFor: expect.any(Function) },
       );
     });
 
@@ -929,6 +930,24 @@ describe('resolveAndFetchArticle()', () => {
       expect(result.mapId).toBe(MAP_ID);
       expect(result.contentId).toBe(CONTENT_ID);
     });
+
+    it('should keep the mapId and contentId the provider result carries', async () => {
+      // They describe the article returned. The ones asked for are only a
+      // default, and stamped over these they label one topic with another's ids.
+      const providerResult = createFetchArticleResult({
+        mapId: 'provider-map', contentId: 'provider-topic',
+      });
+      const ctx = createMockContext({
+        articleProvider: createMockArticleProvider(() => providerResult),
+      });
+
+      const result = await resolveAndFetchArticle(
+        ctx, { url: ARTICLE_URL, mapId: MAP_ID, contentId: CONTENT_ID }, {},
+      );
+
+      expect(result.mapId).toBe('provider-map');
+      expect(result.contentId).toBe('provider-topic');
+    });
   });
 
   // ── ArticleProvider.getArticle URL fallback ───────────────────────────────
@@ -941,13 +960,129 @@ describe('resolveAndFetchArticle()', () => {
         getArticle: vi.fn().mockResolvedValue(urlResult),
       };
       const ctx = createMockContext({ articleProvider });
+      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+        mapId: MAP_ID, contentId: CONTENT_ID, locale: 'en-US',
+      });
+
+      const result = await resolveAndFetchArticle(ctx, { url: ARTICLE_URL }, {});
+
+      expect(articleProvider.getArticle).toHaveBeenCalledWith(
+        ARTICLE_URL, { noteFor: expect.any(Function) },
+      );
+      expect(result.title).toBe('From URL Fallback');
+    });
+
+    // With a pair as well, the pair decides which article is returned, as it
+    // does without a provider: two topics can share a url. This test used to
+    // pin the opposite — the url's page, whatever it was, under the pair's
+    // ids. The tool-level cases are in
+    // test/unit/tools/get-article-with-provider.test.ts.
+    it('should use getArticle for a url + pair when its result carries that pair', async () => {
+      const urlResult = createFetchArticleResult({
+        title: 'From URL Fallback', mapId: MAP_ID, contentId: CONTENT_ID,
+      });
+      const articleProvider = {
+        getArticleByIds: vi.fn().mockResolvedValue(null),
+        getArticle: vi.fn().mockResolvedValue(urlResult),
+      };
+      const ctx = createMockContext({ articleProvider });
 
       const result = await resolveAndFetchArticle(
         ctx, { url: ARTICLE_URL, mapId: MAP_ID, contentId: CONTENT_ID }, {},
       );
 
-      expect(articleProvider.getArticle).toHaveBeenCalledWith(ARTICLE_URL, {});
       expect(result.title).toBe('From URL Fallback');
+      expect(mockedGetText).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['another topic\'s ids', { mapId: MAP_ID, contentId: OTHER_CONTENT_ID }],
+      // A topic keeps its contentId from one version to the next (all 747
+      // topics Jamf Pro 11.31 and 11.32 share, live on 2026-09-26), so an older
+      // version's pair and the `-current` url's page differ only in the map.
+      ['another version\'s map, same contentId', { mapId: 'other-version-map', contentId: CONTENT_ID }],
+      ['no ids, so it cannot be checked', { mapId: undefined, contentId: undefined }],
+    ])('should fetch a url + pair by the pair when getArticle returns %s', async (_name, ids) => {
+      const articleProvider = {
+        getArticleByIds: vi.fn().mockResolvedValue(null),
+        getArticle: vi.fn().mockResolvedValue(
+          createFetchArticleResult({ title: 'From URL Fallback', ...ids }),
+        ),
+      };
+      const ctx = createMockContext({ articleProvider });
+
+      const result = await resolveAndFetchArticle(
+        ctx, { url: ARTICLE_URL, mapId: MAP_ID, contentId: CONTENT_ID }, {},
+      );
+
+      expect(mockedGetText).toHaveBeenCalledWith(
+        expect.stringContaining(`/topics/${CONTENT_ID}/content`),
+      );
+      expect(result.title).toBe('Computer Configuration Profiles');
+      expect(result.contentId).toBe(CONTENT_ID);
+    });
+
+    // A url alone is held to the pair it resolved to, for the same reason.
+    it.each([
+      ['another topic\'s ids', { mapId: MAP_ID, contentId: OTHER_CONTENT_ID }],
+      ['another version\'s map, same contentId', { mapId: 'other-version-map', contentId: CONTENT_ID }],
+    ])('should fetch a url alone by the pair it resolved to when getArticle returns %s', async (_name, ids) => {
+      const articleProvider = {
+        getArticleByIds: vi.fn().mockResolvedValue(null),
+        getArticle: vi.fn().mockResolvedValue(
+          createFetchArticleResult({ title: 'From URL Fallback', ...ids }),
+        ),
+      };
+      const ctx = createMockContext({ articleProvider });
+      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+        mapId: MAP_ID, contentId: CONTENT_ID, locale: 'en-US',
+      });
+
+      const result = await resolveAndFetchArticle(ctx, { url: ARTICLE_URL }, {});
+
+      expect(articleProvider.getArticle).toHaveBeenCalled();
+      expect(result.title).toBe('Computer Configuration Profiles');
+      expect(result.mapId).toBe(MAP_ID);
+      expect(result.contentId).toBe(CONTENT_ID);
+    });
+
+    it('should use getArticle for a url alone when its result carries the pair the url resolved to', async () => {
+      const articleProvider = {
+        getArticleByIds: vi.fn().mockResolvedValue(null),
+        getArticle: vi.fn().mockResolvedValue(createFetchArticleResult({
+          title: 'From URL Fallback', mapId: MAP_ID, contentId: CONTENT_ID,
+        })),
+      };
+      const ctx = createMockContext({ articleProvider });
+      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+        mapId: MAP_ID, contentId: CONTENT_ID, locale: 'ja-JP',
+      });
+
+      const result = await resolveAndFetchArticle(ctx, { url: ARTICLE_URL }, { locale: 'ja-JP' });
+
+      expect(result.title).toBe('From URL Fallback');
+      expect(mockedGetText).not.toHaveBeenCalled();
+    });
+
+    it('should not use a result without ids for a url whose lookup `language` moved', async () => {
+      // The page for an en-US url is the en-US one; the ja-JP topic the call
+      // resolved to is another article, and nothing on the page says which.
+      const articleProvider = {
+        getArticleByIds: vi.fn().mockResolvedValue(null),
+        getArticle: vi.fn().mockResolvedValue(createFetchArticleResult({ title: 'From URL Fallback' })),
+      };
+      const ctx = createMockContext({ articleProvider });
+      ctx.topicResolver.resolve = vi.fn().mockResolvedValue({
+        mapId: MAP_ID, contentId: CONTENT_ID, locale: 'ja-JP',
+      });
+
+      const result = await resolveAndFetchArticle(ctx, { url: ARTICLE_URL }, { locale: 'ja-JP' });
+
+      expect(articleProvider.getArticle).toHaveBeenCalled();
+      expect(mockedGetText).toHaveBeenCalledWith(
+        expect.stringContaining(`/topics/${CONTENT_ID}/content`),
+      );
+      expect(result.title).toBe('Computer Configuration Profiles');
     });
 
     it('should not call getArticle when articleUrl is empty string', async () => {

@@ -15,6 +15,7 @@ export type { Logger, LoggerFactory, WriteStderrFn } from './logger.js';
 export type {
   SearchProvider,
   ArticleProvider,
+  ArticleProviderOptions,
   GlossaryProvider,
   TocProvider,
   MapsProvider,
