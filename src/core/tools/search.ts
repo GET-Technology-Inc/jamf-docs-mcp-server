@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { appToolMeta } from '../apps/index.js';
 import { SearchInputSchema } from '../schemas/index.js';
-import { SearchOutputSchema } from '../schemas/output.js';
+import { SearchOutputSchema, type SearchStructuredOutput } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, CONTENT_LIMITS, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, SearchResponse, SearchResult, SearchRanker, PaginationInfo, TokenInfo } from '../types.js';
@@ -273,6 +273,11 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * `language` never had a bullet. The "Invalid product ID" error listed here is
  * the handler's, which the schema's enum pre-empts: a client sees the SDK's
  * "Invalid option: expected one of".
+ *
+ * `otherSources` joined the JSON shape on 2026-09-26, when the JSON text began
+ * to carry it. The comment on it is the caveat the markdown prints under the
+ * same matches (see renderOtherSources): the JSON reply's relevanceNote
+ * speaks of "Results", and these are not ranked with them.
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -311,7 +316,11 @@ Returns:
       "totalItems": number,
       "hasNext": boolean,
       "hasPrev": boolean
-    }
+    },
+    // Pages outside the product documentation, matched on title and ranked
+    // separately from "results", which carry no score to rank them against.
+    // Omitted when none matched.
+    "otherSources"?: [{ "title": string, "url": string, "source": string }]
   }
 
   For Markdown format:
@@ -428,6 +437,173 @@ function relevanceNote(rankedBy: SearchRanker | undefined): string {
       + 'no numeric relevance score is included.';
 }
 
+/** What the structured channel does with one field of a search result. */
+type SearchResultFieldDisposition =
+  /** Copied through verbatim when the result has it. */
+  | 'publish'
+  /** Emitted, but not verbatim: see {@link toStructuredResult}. */
+  | 'replace'
+  /** Deliberately not on this channel. No field is, today. */
+  | 'withhold';
+
+/**
+ * Every field of {@link SearchResult}, and what the structured channel does
+ * with it.
+ *
+ * The guard `ARTICLE_FIELD_DISPOSITION` puts on get-article, for the defect it
+ * was put there for. This builder used to list the result fields it copied
+ * one by one, and a field left off the list was dropped with no error
+ * anywhere: `mapId` and `contentId` until #200, `breadcrumb` until #216, and
+ * `mapTitle` until 2026-09-26. `SearchOutputSchema` had declared `mapTitle`
+ * since #78 and the JSON text carried it, so the channel a program reads was
+ * the one that could not say which publication a result came from. That
+ * mattered most for the results #343 marks `crossFiled`, which the schema
+ * never declared at all. Live, jamf-protect + "install" named the publication
+ * of 27 of its 44 results in markdown; the JSON text carried `mapTitle` on
+ * all 44 and `crossFiled` on 27, and structuredContent carried neither.
+ *
+ * So `satisfies Record<keyof SearchResult, …>` stops this compiling when a
+ * field is added to `SearchResult`, until someone says what happens to it.
+ * The two checks below compare this table, not what the builder returns,
+ * with the result keys `SearchOutputSchema` declares: a key the table
+ * publishes or replaces that the schema does not declare fails `tsc`, and so
+ * does a declared key the table does not publish or replace.
+ * `toStructuredResult` copies every `publish` field in a loop, so none of
+ * those can be left off. Whether it emits the `replace` fields, and with
+ * values of the declared types, is for the tests to check:
+ * test/unit/tools/search-structured-output.test.ts does.
+ */
+const SEARCH_RESULT_FIELD_DISPOSITION = {
+  title: 'publish',
+  url: 'publish',
+  snippet: 'publish',
+  version: 'publish',
+  docType: 'publish',
+  // `jamf_docs_get_article` tells callers to take these "from search results
+  // or TOC".
+  mapId: 'publish',
+  contentId: 'publish',
+  mapTitle: 'publish',
+  crossFiled: 'publish',
+  otherVersions: 'publish',
+  // `null` when Fluid Topics sends no classification, and the schema declares
+  // a string.
+  product: 'replace',
+  // Slugs collide across products, so this is the field that tells ten
+  // `Overview` hits apart. Omitted, not emitted as `[]`: "no trail known" and
+  // "a trail with no steps in it" are different, and only the first is true.
+  breadcrumb: 'replace',
+} as const satisfies Record<keyof SearchResult, SearchResultFieldDisposition>;
+
+type SearchResultField = keyof typeof SEARCH_RESULT_FIELD_DISPOSITION;
+
+/** The `SearchResult` keys the table sends to the structured channel, verbatim or replaced. */
+type EmittedSearchResultField = {
+  [K in SearchResultField]: (typeof SEARCH_RESULT_FIELD_DISPOSITION)[K] extends 'withhold' ? never : K
+}[SearchResultField];
+
+type StructuredSearchResult = SearchStructuredOutput['results'][number];
+
+type KeysWithin<All, Some extends All> = Some;
+
+/**
+ * Compile error if the table publishes or replaces a key that
+ * `SearchOutputSchema` does not declare. Its result items allow no other key,
+ * so the client's check of the reply against the published schema would
+ * reject every search that carried it.
+ */
+export type EmittedSearchResultFieldsAreDeclared = KeysWithin<
+  keyof StructuredSearchResult,
+  EmittedSearchResultField
+>;
+
+/**
+ * Compile error if `SearchOutputSchema` declares a result key that the table
+ * does not publish or replace. In this table the `mapTitle` drop would have
+ * been `mapTitle: 'withhold'`, and would not have compiled.
+ */
+export type DeclaredSearchResultFieldsAreEmitted = KeysWithin<
+  EmittedSearchResultField,
+  keyof StructuredSearchResult
+>;
+
+/**
+ * `result` without a `mapTitle` that is not a string or a `crossFiled` that is
+ * not a boolean.
+ *
+ * `SearchResult` types both, but a SearchProvider's results are taken as
+ * given, and a provider that builds them from untyped rows can hand over a
+ * database `NULL` as `mapTitle: null`. Until 2026-09-26 neither field reached
+ * structuredContent, so a value like that did no harm there. Published as is,
+ * it fails the client's check against `SearchOutputSchema`, and the whole
+ * search becomes an output validation error. Read as absent, it still says
+ * what the provider said: no publication named, not marked cross-filed.
+ *
+ * Applied before any channel is built, so the markdown, the JSON text and
+ * structuredContent agree, and the markdown's publication note is never asked
+ * to escape a `null` title, which threw. A well-typed result is returned as it
+ * came.
+ */
+function withWellTypedPublication(result: SearchResult): SearchResult {
+  const { mapTitle, crossFiled }: { mapTitle?: unknown; crossFiled?: unknown } = result;
+  const mapTitleFits = mapTitle === undefined || typeof mapTitle === 'string';
+  const crossFiledFits = crossFiled === undefined || typeof crossFiled === 'boolean';
+  if (mapTitleFits && crossFiledFits) {
+    return result;
+  }
+  const kept = { ...result };
+  if (!mapTitleFits) {
+    delete kept.mapTitle;
+  }
+  if (!crossFiledFits) {
+    delete kept.crossFiled;
+  }
+  return kept;
+}
+
+/**
+ * One result as the structured channel publishes it.
+ *
+ * A field the result does not have is left out, not filled in with an empty
+ * value, so "the backend did not say" stays distinct from any value it could
+ * have said: no `mapTitle: ''`, no `crossFiled: false`. A `publish` field the
+ * result does have is sent as it is; {@link withWellTypedPublication} has
+ * already dropped a mistyped `mapTitle` or `crossFiled`.
+ */
+function toStructuredResult(r: SearchResult): Record<string, unknown> {
+  const published: Record<string, unknown> = {};
+  for (const [field, disposition] of Object.entries(SEARCH_RESULT_FIELD_DISPOSITION)) {
+    if (disposition !== 'publish') {
+      continue;
+    }
+    const value = r[field as SearchResultField];
+    if (value !== undefined) {
+      published[field] = value;
+    }
+  }
+
+  return {
+    ...published,
+    product: r.product ?? '',
+    ...(r.breadcrumb !== undefined && r.breadcrumb.length > 0 ? { breadcrumb: r.breadcrumb } : {}),
+  };
+}
+
+/**
+ * The other-source matches, as both JSON channels carry them.
+ *
+ * Omitted rather than emitted empty: "nothing matched elsewhere" and "the
+ * other sources were not reachable" are different answers, and an empty array
+ * would claim the first.
+ */
+function otherSourcesField(
+  hits: StaticSearchHit[] | undefined,
+): { otherSources?: { title: string; url: string; source: string }[] } {
+  return hits !== undefined && hits.length > 0
+    ? { otherSources: hits.map(hit => ({ title: hit.title, url: hit.url, source: hit.source })) }
+    : {};
+}
+
 function buildSearchStructuredContent(
   query: string,
   results: SearchResult[],
@@ -450,43 +626,12 @@ function buildSearchStructuredContent(
     totalPages: pagination.totalPages,
     ...(extras?.limit !== undefined ? { limit: extras.limit } : {}),
     hasMore: pagination.hasNext,
-    results: results.map(r => ({
-      title: r.title,
-      url: r.url,
-      snippet: r.snippet,
-      product: r.product ?? '',
-      ...(r.version !== undefined ? { version: r.version } : {}),
-      ...(r.docType !== undefined ? { docType: r.docType } : {}),
-      // `jamf_docs_get_article` tells callers to take these "from search
-      // results or TOC". `SearchOutputSchema` has always declared them; not
-      // emitting them made the documented direct-fetch workflow impossible to
-      // perform from the outputs this server actually produces.
-      ...(r.mapId !== undefined ? { mapId: r.mapId } : {}),
-      ...(r.contentId !== undefined ? { contentId: r.contentId } : {}),
-      ...(r.otherVersions !== undefined ? { otherVersions: r.otherVersions } : {}),
-      // Same drop as `mapId`/`contentId` above: declared on
-      // `SearchOutputSchema`, populated by `buildSearchResult` from the Fluid
-      // Topics topic (and by the downstream worker's search provider), and
-      // mapped away here. Slugs collide across products, so this is the field
-      // that tells ten `Overview` hits apart on the channel a program reads.
-      // Omitted, not emitted as `[]`: "no trail known" and "a trail with no
-      // steps in it" are different, and only the first one is true.
-      ...(r.breadcrumb !== undefined && r.breadcrumb.length > 0 ? { breadcrumb: r.breadcrumb } : {})
-    })),
+    results: results.map(toStructuredResult),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
     ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
     ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {}),
-    // Omitted rather than emitted empty: "nothing matched elsewhere" and
-    // "the other sources were not reachable" are different answers, and an
-    // empty array would claim the first.
-    ...(extras?.otherSources !== undefined && extras.otherSources.length > 0
-      ? {
-          otherSources: extras.otherSources.map(hit => ({
-            title: hit.title, url: hit.url, source: hit.source,
-          })),
-        }
-      : {})
+    ...otherSourcesField(extras?.otherSources),
   };
 }
 
@@ -672,9 +817,11 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         });
 
         const {
-          results, pagination, tokenInfo, filterRelaxation, versionNote,
+          pagination, tokenInfo, filterRelaxation, versionNote,
           paginationNote, truncatedContent, rankedBy
         } = searchResult;
+        // Before any channel is built, so all three read the same fields.
+        const results = searchResult.results.map(withWellTypedPublication);
 
         // Build response
         const filters = buildFilterSummary(params);
@@ -722,6 +869,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           // who produced it, and nothing more — see relevanceNote.
           const jsonResponse = {
             ...response,
+            // The markdown lists these below the results, and structuredContent
+            // has carried them since #266. Until 2026-09-26 this text did not.
+            // The caveat the markdown prints under them is in TOOL_DESCRIPTION.
+            ...otherSourcesField(otherSources),
             relevanceNote: relevanceNote(rankedBy)
           };
           await reportProgress(extra, { progress: 3, total: 3 });
