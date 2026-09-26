@@ -3,22 +3,59 @@ updates:
   # npm dependencies
   - package-ecosystem: "npm"
     directory: "/"
+    # Pinned to the day it has been running on, a little ahead of its usual
+    # 01:22 UTC start. All five weekly npm runs from 2026-08-26 to 2026-09-23
+    # started on a Wednesday at 01:22-01:23 UTC, but "weekly" is documented
+    # to default to Monday, at a time Dependabot picks at random, so nothing
+    # held it there. Pinned, the batch lands at a known time. In those runs
+    # its auto-merged patch and minor PRs were all merged by 01:28 UTC,
+    # within six minutes of the start, so anything scheduled after that, a
+    # release included, sees the whole batch that same day.
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+      day: "wednesday"
+      time: "01:00"
+    # 5 is the documented default; it was 10. It caps how many PRs, and so
+    # how many rounds of checks, the open backlog can reach. The most
+    # version-update PRs open at once in the window was 6 (2026-09-02: #230
+    # plus five from that morning's run); under the groups below the same
+    # updates make 3. Security PRs are not counted against it and are never
+    # held back by it.
+    open-pull-requests-limit: 5
+    # `deps` for every bump, and on purpose there is no `prefix-development`.
+    # .releaserc.json releases `deps` as a patch, and "devDependency" does
+    # not mean "not shipped" here: @modelcontextprotocol/ext-apps and
+    # @modelcontextprotocol/client (with the @modelcontextprotocol/core they
+    # pull in) are devDependencies that esbuild inlines into
+    # src/core/apps/generated/app-html.ts, which is in the published package,
+    # and esbuild, the tool that writes that file, is one too. A dev prefix
+    # of a type that does not release (`chore`, say) would let such a bump
+    # merge with every check green and publish nothing until some unrelated
+    # change happened to cut a release. test/unit/dependabot-config.test.ts
+    # holds this.
     commit-message:
       prefix: "deps"
     labels:
       - "dependencies"
-    # Packages that cannot land one at a time. Ungrouped, Dependabot opens one
-    # PR per package. For the sets below, those PRs keep going red and can
-    # only land by hand: every weekly run from 2026-09-02 to 2026-09-23 opened
-    # at least one (the PRs are listed under each group).
+    # Four groups, and their order matters: a dependency that matches more
+    # than one goes to the first it matches.
     #
-    # `update-types` is unset on purpose. The default takes every SemVer level,
-    # and majors are exactly where a split breaks. A group PR carrying a major
-    # still gets `major-update` and no auto-approval: dependabot/fetch-metadata
-    # reports the highest update type in the PR.
+    # The first two hold packages that cannot land one at a time. Ungrouped,
+    # Dependabot opens one PR per package. For those sets, the PRs keep going
+    # red and can only land by hand: every weekly run from 2026-09-02 to
+    # 2026-09-23 opened at least one (the PRs are listed under each group).
+    # `update-types` is unset on both on purpose. The default takes every
+    # SemVer level, and majors are exactly where a split breaks. A group PR
+    # carrying a major still gets `major-update` and no auto-approval:
+    # dependabot/fetch-metadata reports the highest update type in the PR.
+    #
+    # The last two only cut volume. Every Dependabot PR is its own round of
+    # PR checks and its own run on main when it merges, and each of the five
+    # weekly runs in the window took the organization to exactly 20
+    # concurrent jobs, the GitHub Free limit, between 01:23 and 01:27 UTC.
+    # Grouped this way, 9 of the 31 npm PRs in the 30 days to 2026-09-24
+    # would have folded into another PR from the same run: 7 devDependency
+    # bumps and 2 security fixes.
     groups:
       # @vitest/coverage-v8 pins vitest as an exact peer (4.1.11 wants vitest
       # "4.1.11", 5.0.1 wants "5.0.1"), so a PR moving one without the other
@@ -63,6 +100,44 @@ updates:
         patterns:
           - "@modelcontextprotocol/*"
           - "zod"
+          # esbuild writes app-html.ts, so a bump that changes what it emits
+          # needs the same regeneration. Left to dev-dependencies below, it
+          # would hold that week's PR, and every other dev bump in it, until
+          # a maintainer regenerated and approved it by hand.
+          - "esbuild"
+      # Every other devDependency minor and patch bump, one PR a week. It was
+      # one PR per package: 13 in the 30 days to 2026-09-24, which would have
+      # been 6. A major outside the two groups above keeps a PR of its own,
+      # which dependabot-auto-merge.yml never approves.
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+      # Security fixes, one PR per batch. They arrive off the schedule and
+      # together: #255/#256 on 2026-09-02 and #277/#278 on 2026-09-09, each
+      # pair opened seconds apart. The groups above cannot take them:
+      # `applies-to` defaults to version-updates.
+      #
+      # The bundle packages stay out, and keep arriving as a security PR
+      # each. Any of them needs the regeneration app-ui-bundle describes, and
+      # the push that carries it dismisses the bot's approval; in here, that
+      # would hold every unrelated security fix, a runtime one included, in a
+      # PR that waits for a maintainer.
+      #
+      # A fix that needs a major version would still hold the batch, and that
+      # is accepted. It puts `major-update` on the whole PR (fetch-metadata
+      # reports the highest type, as above), so dependabot-auto-merge.yml
+      # approves none of it until a maintainer does. `update-types: ["minor",
+      # "patch"]` would take out more than that fix. dependabot-core checks
+      # that rule against the package's newest release, not the fixed version
+      # (semver_rules_allow_grouping? in group_update_creation.rb, read
+      # 2026-09-25), so it would have split both pairs above: #255 kept
+      # fast-uri on 3.x with 4.0.0 out since 2026-06-09, and #277 kept js-yaml
+      # on 4.x with 5.0.0 out since 2026-06-20. All four fixes in the window
+      # were patches.
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+        exclude-patterns: ["zod", "@modelcontextprotocol/*", "esbuild"]
     ignore:
       # Held at 9.x deliberately. The 10.x line switched to
       # @conventional-changelog/template and requires

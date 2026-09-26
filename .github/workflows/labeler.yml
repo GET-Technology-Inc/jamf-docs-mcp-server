@@ -1,5 +1,19 @@
 name: PR Labeler
 
+# Path labels and the size label, from one job. They were two workflows, PR
+# Labeler and PR Size Label, and GitHub bills every job rounded up to a whole
+# minute. In the 30 days to 2026-09-24 each ran 125 times, 125 billed minutes
+# apiece, for jobs that averaged 5 and 13 seconds: 250 billed minutes for 38
+# of work.
+#
+# pull_request_target, so the token can write labels on a PR from a fork,
+# whose own workflows get a read-only one. (Dependabot's PRs are the other
+# such case, and the job below skips them.) That event runs the base
+# branch's workflow with a write token, which is safe only because nothing
+# here checks out or runs the PR's code: actions/labeler gets the changed
+# files from the API and .github/labeler.yml from the base branch, and
+# pr-size-labeler counts the diff through the API. Keep it that way. A
+# checkout of the PR head in this job would hand its code that token.
 on:
   pull_request_target:
     types: [opened, synchronize]
@@ -10,10 +24,43 @@ permissions:
 
 jobs:
   label:
-    name: Auto Label PR
+    name: Label PR
     runs-on: ubuntu-latest
+    # Not on Dependabot's PRs: 43 of the 125 runs of each workflow. They carry
+    # the labels dependabot.yml gives them (`dependencies` for npm, `ci` for
+    # Actions), and every one that got a size label in the window was size/XS
+    # (30 of 31), because package-lock.json is not counted below.
+    #
+    # The PR's author, not github.actor. When a maintainer pushes onto a
+    # Dependabot PR (a merge from main, or the regeneration dependabot.yml's
+    # app-ui-bundle group requires), the actor is the maintainer: 3 of those
+    # 43 runs, two merges from main on #230 and #236 and #236's regeneration.
+    # Who pushed last should not decide whether a PR is labelled.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
-      - uses: actions/labeler@v7
+      - name: Path labels
+        uses: actions/labeler@v7
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           sync-labels: true
+
+      # Still runs when the path labels fail: the two were independent
+      # workflows before, and neither label depends on the other.
+      - name: Size label
+        if: ${{ !cancelled() }}
+        uses: codelytv/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_label: 'size/XS'
+          xs_max_size: 10
+          s_label: 'size/S'
+          s_max_size: 50
+          m_label: 'size/M'
+          m_max_size: 200
+          l_label: 'size/L'
+          l_max_size: 500
+          xl_label: 'size/XL'
+          fail_if_xl: false
+          message_if_xl: >
+            This PR is very large. Consider splitting it into smaller PRs for easier review.
+          files_to_ignore: 'package-lock.json'
