@@ -71,6 +71,22 @@ describe('jamf_docs_glossary_lookup integration', () => {
     expect(text.length).toBeGreaterThan(0);
   }, 30000);
 
+  it('does not call a term the glossary has missing because its entry is over maxTokens', async () => {
+    // Live on 2026-09-26 this entry cost 134 tokens and the reply at the
+    // minimum budget was "No glossary entries found". Whether it still costs
+    // more than 100 is Jamf's to change; what is asserted is the part that is
+    // ours: a lookup that matched says so, whether or not the entry fit.
+    const result = await client.callTool({
+      name: 'jamf_docs_glossary_lookup',
+      arguments: { term: 'Apple School Manager', maxTokens: 100 },
+    });
+
+    const text = getTextContent(result);
+    expect(result.isError, text).not.toBe(true);
+    expect((result.structuredContent as { totalMatches: number }).totalMatches).toBeGreaterThan(0);
+    expect(text).not.toContain('No glossary entries found');
+  }, 30000);
+
   it('should return structured content for no results', async () => {
     const result = await client.callTool({
       name: 'jamf_docs_glossary_lookup',

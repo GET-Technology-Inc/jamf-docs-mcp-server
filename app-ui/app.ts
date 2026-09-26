@@ -23,6 +23,7 @@ import {
 import { esc } from './escape.js';
 import { CSS as STYLESHEET } from './styles.js';
 import { type TocEntry, indentCap, renderTocItems } from './toc.js';
+import { budgetNote, renderGlossaryList } from './glossary.js';
 
 // ---------------------------------------------------------------------------
 // Tool result shapes (mirrors of src/core/schemas/output.ts)
@@ -128,6 +129,8 @@ interface GlossaryView {
   totalMatches: number;
   entries: { term: string; definition: string; product?: string; url: string }[];
   truncated: boolean;
+  /** Set when matching entries were cut to fit `maxTokens`; see app-ui/glossary.ts. */
+  truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] };
   /** Set when some matching entries could not be fetched; `message` names them. */
   incomplete?: { message?: string };
 }
@@ -1213,6 +1216,10 @@ function renderGlossary(view: GlossaryView): string {
   // definitions: without it, an entry whose own definition failed to fetch
   // left a neighbour looking like the whole answer.
   const incomplete = notice(view.incomplete?.message, 'warning');
+  // What the token budget left out, in either layout, below what it kept. When
+  // it kept nothing, this is the whole answer: the count in the heading and
+  // why none of them is shown, rather than an empty list under the count.
+  const omitted = notice(budgetNote(view));
   const only = view.entries.length === 1 ? view.entries[0] : undefined;
   if (only !== undefined) {
     return `
@@ -1224,8 +1231,18 @@ function renderGlossary(view: GlossaryView): string {
         ])}
       </header>
       ${incomplete}
-      <div class="prose">${markdown(only.definition)}</div>`;
+      <div class="prose">${markdown(only.definition)}</div>
+      ${omitted}`;
   }
+
+  const rows = view.entries.map(
+    (e) => `
+        <li><a class="hit" href="${esc(e.url)}" data-url="${esc(e.url)}">
+          <span class="hit-title">${esc(e.term)}</span>
+          <span class="hit-snippet" style="-webkit-line-clamp:none;line-clamp:none">${inline(esc(e.definition))}</span>
+          ${renderableText(e.product) ? `<span class="hit-meta">${esc(e.product)}</span>` : ''}
+        </a></li>`,
+  );
 
   return `
     <header class="head">
@@ -1235,17 +1252,7 @@ function renderGlossary(view: GlossaryView): string {
       ])}
     </header>
     ${incomplete}
-    <ol class="list list-hits">${view.entries
-      .map(
-        (e) => `
-        <li><a class="hit" href="${esc(e.url)}" data-url="${esc(e.url)}">
-          <span class="hit-title">${esc(e.term)}</span>
-          <span class="hit-snippet" style="-webkit-line-clamp:none;line-clamp:none">${inline(esc(e.definition))}</span>
-          ${renderableText(e.product) ? `<span class="hit-meta">${esc(e.product)}</span>` : ''}
-        </a></li>`,
-      )
-      .join('')}</ol>
-    ${view.truncated ? notice('Some definitions were omitted to fit the token budget.') : ''}`;
+    ${renderGlossaryList(rows, omitted)}`;
 }
 
 /**

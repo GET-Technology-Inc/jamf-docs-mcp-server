@@ -325,6 +325,14 @@ export interface GlossaryLookupResult {
   totalMatches: number;
   tokenInfo: TokenInfo;
   /**
+   * Set when matching entries were left out to fit `maxTokens`: each one, in
+   * rank order, with the tokens it costs against that budget. `entries` can be
+   * empty while `totalMatches` is not, when not even the leading entry fits;
+   * the first item's `estimatedTokens` is then the smallest `maxTokens` that
+   * returns it. Absent when every match fits.
+   */
+  truncatedContent?: TruncatedContentInfo | undefined;
+  /**
    * Set when some candidate entries could not be fetched but the others
    * answered the term. `entries` is then an answer from part of the glossary:
    * `unfetched` names the rest, and `message` says so in a sentence. Absent

@@ -251,6 +251,23 @@ export const GlossaryLookupOutputSchema = z.object({
   })),
   truncated: z.boolean(),
   /**
+   * Present when matching entries were left out to fit `maxTokens`, each with
+   * its estimated cost, in rank order: the shape `jamf_docs_search` reports.
+   * `entries` is empty beside a nonzero `totalMatches` when not even the
+   * leading entry fits, and then the first `estimatedTokens` is the
+   * `maxTokens` that returns it. Before 2026-09-26 nothing said what budget
+   * would hold an entry that did not fit. Separately, the tool decided
+   * no-match on `entries.length === 0`, so live at `maxTokens: 100` it
+   * answered Apple School Manager as a term the glossary does not have.
+   */
+  truncatedContent: z.object({
+    omittedCount: z.number(),
+    omittedItems: z.array(z.object({
+      title: z.string(),
+      estimatedTokens: z.number(),
+    })),
+  }).optional(),
+  /**
    * Present when some of the entries whose title is close to the term could
    * not be fetched, and the rest answered it. `entries` is then an answer
    * from part of the glossary, and `unfetched` is what it may be missing.
