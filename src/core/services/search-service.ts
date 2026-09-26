@@ -929,6 +929,7 @@ export async function searchDocumentation(
   let allResults: SearchResultWithMeta[];
   let fromProvider = false;
   let productUnfilterable = false;
+  let rankedBy: SearchDocumentationResult['rankedBy'];
   let searchError: string | undefined;
 
   try {
@@ -936,6 +937,7 @@ export async function searchDocumentation(
     allResults = resolved.results;
     fromProvider = resolved.fromProvider;
     productUnfilterable = resolved.productUnfilterable;
+    rankedBy = fromProvider ? 'provider' : 'fluid-topics';
   } catch (error) {
     const message = String(error);
     log.error(`Search error: ${message}`);
@@ -988,6 +990,7 @@ export async function searchDocumentation(
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {}),
     ...(searchError !== undefined ? { searchError } : {}),
+    ...(rankedBy !== undefined ? { rankedBy } : {}),
   };
 }
 

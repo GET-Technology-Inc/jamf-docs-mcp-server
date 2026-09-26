@@ -117,6 +117,7 @@ export type {
   FetchTocResult,
   FetchTocOptions,
   SearchDocumentationResult,
+  SearchRanker,
 } from './types.js';
 
 export {

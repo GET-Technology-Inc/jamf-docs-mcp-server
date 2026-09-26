@@ -25,8 +25,18 @@ import type {
 /**
  * Custom search backend (e.g., Vectorize semantic search).
  *
- * Return all matched results as a flat array. The core handles pagination,
- * token truncation, version deduplication, and filter relaxation.
+ * Return all matched results as a flat array, in the order you rank them:
+ * the core keeps that order, and a JSON reply says the configured search
+ * backend ranked it. The core handles pagination, token truncation, and
+ * filter relaxation.
+ *
+ * It does not collapse versions. Fluid Topics returns a Jamf Pro topic once
+ * per product version, and the core keeps the newest (`dedupeToLatestVersions`)
+ * while they are still clustered-search entries, before they become
+ * `SearchResult`s. A provider's results arrive as `SearchResult`s and are
+ * taken as given, so several versions of one topic stay several results. A
+ * result can name its topic's other versions in `otherVersions`.
+ *
  * Return `null` to fall through to the default Fluid Topics API search.
  */
 export interface SearchProvider {
