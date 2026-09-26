@@ -4,6 +4,11 @@
  * Tests the progressive filter relaxation logic when multiple filters
  * (product, topic, docType) are applied and produce zero results.
  * Relaxation order: docType -> topic -> product
+ *
+ * The Fluid Topics stub here ignores the filters it is sent and always returns
+ * the Jamf Pro fixture, which is what lets a product mismatch reach the local
+ * filter at all: a real product search only returns documents Jamf files under
+ * the product (see test/unit/tools/search-product-classification.test.ts).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -68,12 +73,15 @@ describe('multi-filter combination behavior', () => {
       docType: 'release-notes',
     });
 
-    if (result.filterRelaxation !== undefined) {
-      expect(result.filterRelaxation.removed.length).toBeGreaterThan(0);
-      expect(result.filterRelaxation.message).toContain('Removed filter');
-      // docType should be removed first per relaxation order
-      expect(result.filterRelaxation.removed[0]).toBe('docType');
-    }
+    // The fixture carries no `content-*` label, so docType lets it through and
+    // the product is what excludes it. docType still goes first — relaxation
+    // follows its order, not the culprit — and product second.
+    expect(result.results.map(r => r.title)).toEqual(['Jamf Pro Article']);
+    expect(result.filterRelaxation?.removed).toEqual(['docType', 'product']);
+    expect(result.filterRelaxation?.message).toContain('Removed filter(s): docType, product.');
+    // A relaxed product filter says nothing about the results, so they keep
+    // their own product instead of being shown under the one asked for.
+    expect(result.results.map(r => r.product)).toEqual(['Jamf Pro']);
   });
 
   it('should relax docType before topic before product', async () => {
@@ -88,7 +96,31 @@ describe('multi-filter combination behavior', () => {
       ])
     );
 
-    // Combination very unlikely to match: uncommon product + rare topic + rare docType
+    // None of the three matches a Jamf Pro techdocs page about nothing in
+    // particular. jamf-protect rather than jamf-routines: routines has no
+    // classification to filter by, so it is reported up front instead of
+    // relaxed (next test), and would not exercise this order.
+    const result = await searchDocumentation(ctx, {
+      query: 'test',
+      product: 'jamf-protect',
+      topic: 'graphql',
+      docType: 'training',
+    });
+
+    expect(result.results.map(r => r.title)).toEqual(['Some Article']);
+    expect(result.filterRelaxation?.removed).toEqual(['docType', 'topic', 'product']);
+  });
+
+  it('reports a product it cannot filter by up front, before relaxing anything', async () => {
+    mockedFtSearch.mockResolvedValueOnce(
+      makeFtSearchResponse([
+        { title: 'Some Article', mapId: 'jamf-pro-documentation', productLabel: 'product-pro' },
+      ])
+    );
+
+    // jamf-routines has no classification value, so nothing was sent upstream
+    // for it. It used to reach relaxation as an ordinary filter that could
+    // never match, and was only removed after docType and topic.
     const result = await searchDocumentation(ctx, {
       query: 'test',
       product: 'jamf-routines',
@@ -96,24 +128,13 @@ describe('multi-filter combination behavior', () => {
       docType: 'training',
     });
 
-    if (result.filterRelaxation !== undefined) {
-      const { removed } = result.filterRelaxation;
-      // Verify relaxation order: docType first, then topic, then product
-      if (removed.length >= 2) {
-        const docTypeIdx = removed.indexOf('docType');
-        const topicIdx = removed.indexOf('topic');
-        if (docTypeIdx >= 0 && topicIdx >= 0) {
-          expect(docTypeIdx).toBeLessThan(topicIdx);
-        }
-      }
-      if (removed.length >= 3) {
-        const topicIdx = removed.indexOf('topic');
-        const productIdx = removed.indexOf('product');
-        if (topicIdx >= 0 && productIdx >= 0) {
-          expect(topicIdx).toBeLessThan(productIdx);
-        }
-      }
-    }
+    const sentFilters = mockedFtSearch.mock.calls[0]?.[1].filters;
+    expect(sentFilters).toEqual([{ key: 'zoominmetadata', values: ['content-training'] }]);
+    expect(result.results.map(r => r.title)).toEqual(['Some Article']);
+    expect(result.filterRelaxation?.removed).toEqual(['product', 'docType', 'topic']);
+    expect(result.filterRelaxation?.message).toMatch(
+      /^The product filter "jamf-routines" was not applied: .* No results with the remaining filters applied\. Removed filter\(s\): docType, topic\./,
+    );
   });
 
   it('should include original filter values in relaxation info', async () => {
@@ -125,16 +146,12 @@ describe('multi-filter combination behavior', () => {
 
     const result = await searchDocumentation(ctx, {
       query: 'test',
-      product: 'jamf-routines',
+      product: 'jamf-protect',
       docType: 'training',
     });
 
-    if (result.filterRelaxation !== undefined) {
-      expect(result.filterRelaxation.original).toBeDefined();
-      for (const filterName of result.filterRelaxation.removed) {
-        expect(result.filterRelaxation.original[filterName]).toBeDefined();
-      }
-    }
+    expect(result.filterRelaxation?.removed).toEqual(['docType', 'product']);
+    expect(result.filterRelaxation?.original).toEqual({ docType: 'training', product: 'jamf-protect' });
   });
 
   it('should not relax when all filters match results', async () => {

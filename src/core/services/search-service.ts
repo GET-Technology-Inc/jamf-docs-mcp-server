@@ -33,7 +33,7 @@ import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl, buildDisplayUrlFromPrettyUrlMeta } from './topic-resolver.js';
 import type { MapsRegistry } from './maps-registry.js';
-import { cleanSnippet } from './content-parser.js';
+import { cleanSnippet, titleProductSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
@@ -60,7 +60,15 @@ interface ActiveFilter {
 
 interface SearchResultWithMeta {
   result: SearchResult;
-  bundleSlug: string | null;
+  /**
+   * Every product Jamf files the result under: all the values of
+   * `jamf:portal`, `jamf:app` and `jamf:utility` together. What the `product`
+   * post-filter reads on the Fluid Topics path — see {@link belongsToProduct}.
+   *
+   * `null` for a SearchProvider result, which is a flat SearchResult with no
+   * metadata to read. There the filter goes by the product name it reports.
+   */
+  classification: string[] | null;
   matchedTopics: TopicId[];
   labelKeys: string[];
 }
@@ -84,14 +92,24 @@ function matchTopics(title: string, snippet: string): TopicId[] {
   );
 }
 
-/** Pre-computed reverse lookup: product display name → ProductId */
+/**
+ * Pre-computed reverse lookup: product name → ProductId.
+ *
+ * Both names a product goes by: this server's display name, and every
+ * classification value Jamf files it under. They differ for one product —
+ * `jamf-setup-reset` is "Jamf Setup and Reset" here and "Jamf Setup" / "Jamf
+ * Reset" to Jamf — and knowing only the display name meant a result reported
+ * under either of Jamf's names could never satisfy that product's filter.
+ */
 const PRODUCT_NAME_TO_ID: Record<string, ProductId> = Object.fromEntries(
-  (Object.keys(JAMF_PRODUCTS) as ProductId[]).map(id => [JAMF_PRODUCTS[id].name, id])
+  (Object.keys(JAMF_PRODUCTS) as ProductId[]).flatMap(id =>
+    [JAMF_PRODUCTS[id].name, ...classificationValuesFor(id)].map(name => [name, id])
+  )
 );
 
 /**
- * Resolve a product display name (e.g. 'Jamf Pro') to its ProductId
- * (e.g. 'jamf-pro'). Returns null when the name is unknown.
+ * Resolve a product name (e.g. 'Jamf Pro', or Jamf's 'Jamf Setup') to its
+ * ProductId (e.g. 'jamf-pro'). Returns null when the name is unknown.
  */
 function productNameToId(name: string | null): ProductId | null {
   if (name === null) { return null; }
@@ -124,8 +142,13 @@ function productNameToId(name: string | null): ProductId | null {
  * on the same axis — 29 maps carry two or three portals — is reported under
  * the first Jamf lists, the same choice {@link listPublications} documents.
  *
- * This never decides what a search RETURNS: the client-side product filter
- * matches on `bundleSlug`, not on this field.
+ * That makes this the attribution of a result nobody filtered by product, and
+ * nothing more. It does not decide what a product search returns — that is
+ * {@link belongsToProduct}, which reads every value — and a result that passed
+ * a product filter is shown under the product asked for instead
+ * ({@link showUnderProduct}). Until #334 it did decide it: the post-filter
+ * compared this one value with the product, and a jamf-security-cloud search
+ * rejected its own setup guide as "Jamf Connect".
  */
 function extractProductFromClassification(metadata: FtMetadataEntry[] | undefined): string | null {
   for (const key of [FT_META.UTILITY, FT_META.APP, FT_META.PORTAL]) {
@@ -133,6 +156,112 @@ function extractProductFromClassification(metadata: FtMetadataEntry[] | undefine
     if (value !== undefined && value !== '') { return value; }
   }
   return null;
+}
+
+/**
+ * Every classification value a result carries, all three axes together.
+ *
+ * Read in the same order as {@link extractProductFromClassification}, though
+ * nothing depends on it: the product filter only asks whether any of these is
+ * one of the product's values.
+ */
+function classificationValues(metadata: FtMetadataEntry[] | undefined): string[] {
+  return [FT_META.UTILITY, FT_META.APP, FT_META.PORTAL]
+    .flatMap(key => getMetaValues(metadata, key));
+}
+
+/**
+ * Whether a result belongs to `product`, by the rule the upstream filter uses.
+ *
+ * On the Fluid Topics path that rule is Jamf's classification: the result
+ * belongs when any value on any of the three axes is one of the product's
+ * classification values. It is the test `clustered-search` applies to the
+ * filter {@link resolveProductFilter} sends — a filter object keeps an entry
+ * when its key carries any of the filter's values — so everything the API
+ * returns for a product passes it: 12,597 of 12,597 topic and map entries over
+ * 270 product x query searches, measured 2026-09-26. All three axes are read
+ * rather than the filter's one because a value sits on one axis only, so the
+ * two readings agree, and knowing which axis is the registry's job.
+ *
+ * Re-applied rather than skipped, although the API has already applied it:
+ * the same rule costs nothing here, and if upstream ever returns a result it
+ * should not have, that result is dropped and any relaxation that follows is
+ * true. What it replaces was a different rule. It compared the single product
+ * a result is DISPLAYED under ({@link extractProductFromClassification}) with
+ * the product asked for, which for a document Jamf files under several
+ * products is a different question with a different answer: over ten queries
+ * per product it kept 0 of 181 upstream results for jamf-trust, 0 of 133 for
+ * jamf-setup-reset and 1 of 401 for jamf-security-cloud, reporting "Removed
+ * filter(s): product" over each, and dropped 38.8% of jamf-protect's and
+ * 25.1% of jamf-safe-internet's without a word.
+ *
+ * So a document Jamf files under several products is returned for each of
+ * them — the Security Cloud setup guide for jamf-security-cloud and for
+ * jamf-protect. That is intended, not a side effect: Jamf's classification is
+ * what Jamf files the document under and what the API selects on, and a local
+ * rule that narrowed it further would be this server overruling Jamf without
+ * saying so.
+ *
+ * A SearchProvider result has no classification to read, so its reported
+ * product name is looked up instead.
+ */
+function belongsToProduct(r: SearchResultWithMeta, product: ProductId): boolean {
+  if (r.classification === null) {
+    return productNameToId(r.result.product) === product;
+  }
+  const values = classificationValuesFor(product);
+  return r.classification.some(value => values.includes(value));
+}
+
+/**
+ * Show a result under the product the caller filtered by.
+ *
+ * Display follows the filter. A result that passed a `product` filter carries
+ * one of that product's classification values, so it is that product's
+ * document whichever value Jamf lists first on the most specific axis. Without
+ * this, a jamf-security-cloud search listed every hit as "Jamf Connect", and
+ * {@link belongsToProduct} widening to every product Jamf files a document
+ * under would have broken what test/integration/service-chain.test.ts checks
+ * against the live API: that every result of a product search is shown under
+ * the product asked for. For jamf-setup-reset that is this server's name for
+ * it, "Jamf Setup and Reset", rather than whichever of Jamf's two came first.
+ *
+ * The short-snippet fallback repeats the product name, so it is rebuilt with
+ * the new one rather than left naming the old.
+ *
+ * What the relabel gives up is the document's own identity, and for some
+ * results that matters: the Jamf Trust release notes returned for jamf-protect
+ * include topics titled "Windows" and "macOS", which shown as Jamf Protect
+ * read as Jamf Protect's. So a result Jamf files first under a different
+ * product, from a publication whose title does not name the product it is now
+ * shown under, is marked `crossFiled` and the markdown output names the
+ * publication beside it. A product's own publications are not marked even
+ * when relabelled — "Jamf Security Cloud Portal Setup Guide", listed first
+ * under Jamf Connect, needs no note under Jamf Security Cloud — nor is a
+ * result only renamed within its product ("Jamf Reset" → "Jamf Setup and
+ * Reset"), which is every relabel on the SearchProvider path.
+ */
+function showUnderProduct(result: SearchResult, product: ProductId): SearchResult {
+  const { name } = JAMF_PRODUCTS[product];
+  if (result.product === name) { return result; }
+  const snippet = result.snippet === titleProductSnippet(result.title, result.product)
+    ? titleProductSnippet(result.title, name)
+    : result.snippet;
+  const crossFiled = productNameToId(result.product) !== product
+    && result.mapTitle !== undefined
+    && !namesProduct(result.mapTitle, name);
+  return { ...result, product: name, snippet, ...(crossFiled ? { crossFiled } : {}) };
+}
+
+/**
+ * Whether a publication title names a product as a whole name: "Jamf Protect
+ * Release Notes" names Jamf Protect, but not Jamf Pro.
+ */
+function namesProduct(title: string, name: string): boolean {
+  for (let at = title.indexOf(name); at !== -1; at = title.indexOf(name, at + 1)) {
+    if (!/[\p{L}\p{N}]/u.test(title.charAt(at + name.length))) { return true; }
+  }
+  return false;
 }
 
 /** The metadata array of whichever payload an FT search entry actually carries. */
@@ -195,9 +324,14 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * guarded the table red — while the classification is what Jamf files
  * documents under today, and the axis is looked up rather than written down.
  *
- * Returns null when Jamf names nothing by this product, which today is
- * `jamf-routines` alone. The caller must treat that as "cannot filter", not
- * as "no filter": searching unfiltered would answer a different question.
+ * Returns null in two cases, which the caller tells apart. When Jamf names
+ * nothing by this product, which today is `jamf-routines` alone, the caller
+ * treats it as "cannot filter", not as "no filter": the search still goes
+ * out, unfiltered, but the product filter is reported as removed before
+ * anything else is ({@link applyFiltersWithFallback}). An unfiltered search
+ * that did not say so would answer a different question as if it were this
+ * one. When the registry cannot place the value, only the upstream half of
+ * the filter is lost; the local one still applies ({@link belongsToProduct}).
  */
 export async function resolveProductFilter(
   registry: Pick<MapsRegistry, 'classificationAxis'>,
@@ -503,18 +637,25 @@ function transformMapEntry(entry: FtSearchEntry): SearchResult {
 
 /**
  * Build active filters from search params for progressive relaxation.
- * These are client-side post-filters for topic matching (which FT
- * doesn't support server-side).
+ *
+ * These are client-side post-filters. Topic has no upstream equivalent; product
+ * and docType are also sent upstream on the Fluid Topics path, and applied here
+ * again by the same rule so the SearchProvider path is filtered too.
+ *
+ * `productFilterable` is false when Jamf classifies nothing under the product
+ * (see `productUnfilterable` on {@link ResolvedSearchResults}). The product
+ * filter is then left out entirely, because nothing fetched can satisfy it —
+ * see {@link applyFiltersWithFallback} for how its removal is reported instead.
  */
-function buildActiveFilters(params: SearchParams): ActiveFilter[] {
+function buildActiveFilters(params: SearchParams, productFilterable: boolean): ActiveFilter[] {
   const activeFilters: ActiveFilter[] = [];
 
-  if (params.product !== undefined) {
+  if (params.product !== undefined && productFilterable) {
     const productId = params.product;
     activeFilters.push({
       name: 'product',
       value: productId,
-      apply: (results) => results.filter(r => r.bundleSlug === productId),
+      apply: (results) => results.filter(r => belongsToProduct(r, productId)),
     });
   }
 
@@ -545,59 +686,95 @@ function buildActiveFilters(params: SearchParams): ActiveFilter[] {
   return activeFilters;
 }
 
+function applyAll(results: SearchResultWithMeta[], filters: ActiveFilter[]): SearchResultWithMeta[] {
+  let filtered = results;
+  for (const filter of filters) {
+    filtered = filter.apply(filtered);
+  }
+  return filtered;
+}
+
+/** What is said about a product filter that could not be applied at all. */
+function unfilterableProductNote(product: ProductId): string {
+  return `The product filter "${product}" was not applied: Jamf classifies no `
+    + `documentation as ${JAMF_PRODUCTS[product].name}, so these results are not `
+    + 'limited to it. Browse its documentation with '
+    + `jamf_docs_get_toc (product "${product}").`;
+}
+
 /**
  * Apply filters with progressive relaxation when results are zero.
  * Relaxation order: docType -> topic -> product
+ *
+ * Two cases are settled before relaxation rather than by it.
+ *
+ * A product that could not be filtered (`unfilterableProduct`: Jamf
+ * classifies nothing under it) is reported as removed up front. It is not
+ * among `activeFilters`, so it cannot be what empties the page, and topic and
+ * docType are not relaxed away on its account. They used to be: the search
+ * went out unfiltered, the local product filter matched none of it, and
+ * relaxation removed topic before reaching product — `product:
+ * 'jamf-routines', topic: 'scripts'` returned 50 unfiltered results where
+ * `topic: 'scripts'` alone returned 4 (live, 2026-09-26).
+ *
+ * And a fetch that came back empty is not relaxed at all. Relaxation only
+ * re-filters what was fetched, so with nothing there removing a filter changes
+ * nothing, and "Removed filter(s): product" would name a filter that held —
+ * upstream, where it matched no document for this query. Every one of the 40
+ * empty product x query cells measured on 2026-09-26 carried that notice.
  */
 function applyFiltersWithFallback(
   allResults: SearchResultWithMeta[],
-  activeFilters: ActiveFilter[]
+  activeFilters: ActiveFilter[],
+  unfilterableProduct?: ProductId,
 ): { filtered: SearchResultWithMeta[]; relaxation?: FilterRelaxation } {
-  let filtered = allResults;
-  for (const filter of activeFilters) {
-    filtered = filter.apply(filtered);
-  }
-
-  if (filtered.length > 0 || activeFilters.length === 0) {
-    return { filtered };
-  }
-
-  // Progressive relaxation
-  const relaxOrder: FilterName[] = ['docType', 'topic', 'product'];
   const removed: string[] = [];
   const original: Record<string, string> = {};
+  const notes: string[] = [];
 
-  for (const filterName of relaxOrder) {
-    if (filtered.length > 0) { break; }
+  if (unfilterableProduct !== undefined) {
+    removed.push('product');
+    original.product = unfilterableProduct;
+    notes.push(unfilterableProductNote(unfilterableProduct));
+  }
 
-    const filterIndex = activeFilters.findIndex(f => f.name === filterName);
-    if (filterIndex === -1) { continue; }
+  let filtered = applyAll(allResults, activeFilters);
 
-    const removedFilter = activeFilters[filterIndex];
-    if (removedFilter === undefined) { continue; }
-    removed.push(removedFilter.name);
-    original[removedFilter.name] = removedFilter.value;
-    activeFilters.splice(filterIndex, 1);
+  if (filtered.length === 0 && allResults.length > 0) {
+    // Progressive relaxation
+    const relaxOrder: FilterName[] = ['docType', 'topic', 'product'];
+    const relaxed: string[] = [];
 
-    // Re-apply remaining filters
-    filtered = allResults;
-    for (const filter of activeFilters) {
-      filtered = filter.apply(filtered);
+    for (const filterName of relaxOrder) {
+      if (filtered.length > 0) { break; }
+
+      const filterIndex = activeFilters.findIndex(f => f.name === filterName);
+      if (filterIndex === -1) { continue; }
+
+      const removedFilter = activeFilters[filterIndex];
+      if (removedFilter === undefined) { continue; }
+      relaxed.push(removedFilter.name);
+      original[removedFilter.name] = removedFilter.value;
+      activeFilters.splice(filterIndex, 1);
+
+      // Re-apply remaining filters
+      filtered = applyAll(allResults, activeFilters);
+    }
+
+    if (relaxed.length > 0) {
+      removed.push(...relaxed);
+      const scope = unfilterableProduct === undefined ? 'all filters' : 'the remaining filters';
+      notes.push(
+        `No results with ${scope} applied. Removed filter(s): ${relaxed.join(', ')}. `
+        + 'Try broader search terms or fewer filters.'
+      );
     }
   }
 
-  if (removed.length > 0) {
-    return {
-      filtered,
-      relaxation: {
-        removed,
-        original,
-        message: `No results with all filters applied. Removed filter(s): ${removed.join(', ')}. Try broader search terms or fewer filters.`,
-      },
-    };
+  if (removed.length === 0) {
+    return { filtered };
   }
-
-  return { filtered };
+  return { filtered, relaxation: { removed, original, message: notes.join(' ') } };
 }
 
 // ─── Token Truncation ──────────────────────────────────────────
@@ -654,27 +831,34 @@ function truncateSearchResults(
  */
 function toSearchResultWithMeta(
   result: SearchResult,
-  ftLabelKeys?: string[],
+  ft?: { labelKeys: string[]; classification: string[] },
 ): SearchResultWithMeta {
-  // Derive bundleSlug from the product display name (extracted from
-  // zoominmetadata). Do NOT use result.mapId — FT API mapIds are
-  // opaque hashes (e.g. 'uRhiWJWbjHyL1vegaHmj8g'), not readable
-  // bundle stems.
-  const bundleSlug = productNameToId(result.product);
-
   // Prefer the full label set read off FT metadata: a topic carries several
   // and `result.docType` is only the most specific one, so re-deriving from it
   // would narrow a release note back down to release-notes alone. A
   // SearchProvider hands us a flat SearchResult with no metadata to read, so
   // there the single docType is all there is.
-  const labelKeys: string[] = ftLabelKeys ?? (
+  const labelKeys: string[] = ft?.labelKeys ?? (
     result.docType !== undefined ? [DOC_TYPE_LABEL_MAP[result.docType]] : []
   );
 
   return {
     result,
-    bundleSlug,
-    matchedTopics: matchTopics(result.title, result.snippet),
+    // The same holds for the product, and more strongly. `result.product` is
+    // ONE of the classification values, picked for display, and filtering on
+    // it is the defect #334 describes; the filter needs all of them. Nor can
+    // `result.mapId` stand in: FT mapIds are opaque hashes (e.g.
+    // 'uRhiWJWbjHyL1vegaHmj8g'), not bundle stems.
+    classification: ft?.classification ?? null,
+    // Matched on the document's own text. The short-snippet fallback is the
+    // title plus the product the result is shown under, and that product is
+    // attribution, not content: several topics list product names among their
+    // keywords, so "11.42 — Jamf Connect" matched connect-login — and still
+    // did once a jamf-trust search showed it as "11.42 — Jamf Trust".
+    matchedTopics: matchTopics(
+      result.title,
+      result.snippet === titleProductSnippet(result.title, result.product) ? '' : result.snippet,
+    ),
     labelKeys,
   };
 }
@@ -729,7 +913,7 @@ function buildVersionNote(
  * 1. Checks SearchProvider first (custom backend injection).
  * 2. Calls ft-client.search() with constructed filters.
  * 3. Transforms results and applies post-processing pipeline:
- *    - Client-side topic/docType filtering with progressive relaxation
+ *    - Client-side product/topic/docType filtering with progressive relaxation
  *    - Pagination
  *    - Token truncation
  */
@@ -744,12 +928,14 @@ export async function searchDocumentation(
 
   let allResults: SearchResultWithMeta[];
   let fromProvider = false;
+  let productUnfilterable = false;
   let searchError: string | undefined;
 
   try {
     const resolved = await resolveSearchResults(ctx, params, log);
     allResults = resolved.results;
     fromProvider = resolved.fromProvider;
+    productUnfilterable = resolved.productUnfilterable;
   } catch (error) {
     const message = String(error);
     log.error(`Search error: ${message}`);
@@ -758,16 +944,23 @@ export async function searchDocumentation(
   }
 
   // Build and apply filters with progressive relaxation
-  const activeFilters = buildActiveFilters(params);
+  const activeFilters = buildActiveFilters(params, !productUnfilterable);
   const { filtered: filteredResults, relaxation: filterRelaxation } =
-    applyFiltersWithFallback(allResults, activeFilters);
+    applyFiltersWithFallback(allResults, activeFilters, productUnfilterable ? params.product : undefined);
+
+  // Display follows the filter (see showUnderProduct), but only while it held:
+  // a product filter that was relaxed or could not be applied says nothing
+  // about which product the results are.
+  const shownUnder = filterRelaxation?.removed.includes('product') === true
+    ? undefined
+    : params.product;
 
   // Calculate pagination
   const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
 
   const paginatedResults = filteredResults
     .slice(paginationInfo.startIndex, paginationInfo.endIndex)
-    .map(r => r.result);
+    .map(r => shownUnder === undefined ? r.result : showUnderProduct(r.result, shownUnder));
 
   const { finalResults, finalTokenCount, truncated, truncatedContent } =
     truncateSearchResults(paginatedResults, maxTokens);
@@ -833,7 +1026,7 @@ export async function searchDocumentation(
  * always fetches one over-fetched page and paginates client-side.
  */
 export function buildSearchCacheKey(request: FtSearchRequest): CacheKey {
-  return cacheKey('ft-search', {
+  return cacheKey('ft-search-v2', {
     query: request.query,
     // `?? null` rather than passing `undefined` through: the space declares
     // these nullable so that "absent" is one value, not two. `cacheKey` drops
@@ -867,6 +1060,15 @@ export function buildSearchCacheKey(request: FtSearchRequest): CacheKey {
 interface ResolvedSearchResults {
   results: SearchResultWithMeta[];
   fromProvider: boolean;
+  /**
+   * A `product` was asked for that Jamf classifies nothing under, so no
+   * filter for it exists upstream or here, and the results were fetched
+   * without one. Not set merely because {@link resolveProductFilter} returned
+   * null: when the registry cannot place a value, the product is still
+   * filtered locally. Always false on the provider path, which is handed
+   * `params` and whose results are then filtered by the name each one reports.
+   */
+  productUnfilterable: boolean;
 }
 
 async function resolveSearchResults(
@@ -881,6 +1083,7 @@ async function resolveSearchResults(
       return {
         results: provided.map(r => toSearchResultWithMeta(r)),
         fromProvider: true,
+        productUnfilterable: false,
       };
     }
   }
@@ -929,9 +1132,10 @@ async function resolveSearchResults(
     for (const { entry, collapsedVersions } of dedupeToLatestVersions(ftResponse.results)) {
       const searchResult = transformFtSearchResult(entry);
       if (searchResult.url !== '') {
+        const metadata = entryMetadata(entry);
         out.push(toSearchResultWithMeta(
           { ...searchResult, ...(collapsedVersions.length > 0 ? { otherVersions: collapsedVersions } : {}) },
-          docTypeLabelKeys(entryMetadata(entry)),
+          { labelKeys: docTypeLabelKeys(metadata), classification: classificationValues(metadata) },
         ));
       }
     }
@@ -943,6 +1147,22 @@ async function resolveSearchResults(
   };
 
   const productFilter = await resolveProductFilter(ctx.mapsRegistry, params.product);
+  // No upstream filter has two causes, and only one makes the product
+  // unfilterable. A product with no classification value cannot be filtered
+  // anywhere. A value the registry cannot place (an empty or trimmed maps
+  // list) only costs the upstream filter: every result still carries its
+  // classification, so the local filter narrows the unfiltered fetch, and
+  // relaxes as any filter does if nothing fetched belongs to the product.
+  const productUnfilterable = params.product !== undefined
+    && classificationValuesFor(params.product).length === 0;
+  if (productUnfilterable) {
+    log.debug(`No classification filter for product "${String(params.product)}"; searching without one`);
+  } else if (params.product !== undefined && productFilter === null) {
+    log.debug(
+      `Product "${params.product}" has no classification axis in the maps registry; ` +
+      'searching without an upstream product filter and filtering locally'
+    );
+  }
   let results = await fetchFiltered(buildSearchFilters(params, productFilter));
 
   // 3. Re-query without docType when narrowing by it emptied the result set
@@ -971,5 +1191,5 @@ async function resolveSearchResults(
     ));
   }
 
-  return { results, fromProvider: false };
+  return { results, fromProvider: false, productUnfilterable };
 }

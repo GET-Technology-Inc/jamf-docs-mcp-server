@@ -208,6 +208,7 @@ export const CLASSIFICATION_AXIS: Record<string, string> = {
   'Jamf Assessment': 'jamf:app',
   'Jamf Setup': 'jamf:app',
   'Jamf Reset': 'jamf:app',
+  'Jamf Trust': 'jamf:app',
   'Self Service+': 'jamf:app',
   'Title Editor': 'jamf:utility',
   'Jamf App Catalog': 'jamf:utility',
@@ -221,10 +222,25 @@ export const CLASSIFICATION_AXIS: Record<string, string> = {
 };
 
 /**
+ * A topic's classification: every value it carries, per axis.
+ *
+ * Keyed by axis with a list of values because that is the live shape. Jamf
+ * files a document under every product it covers, so one topic can carry two
+ * portals and two apps at once — the Jamf Trust release notes carry `portal:
+ * [Jamf Safe Internet, Jamf Protect]` and `app: [Jamf Connect, Jamf Trust]`.
+ * A single `{ key, value }` could not say that, and no fixture ever did, which
+ * is how a product filter that read one value per result went unnoticed (#334).
+ */
+export type FixtureClassification = Partial<Record<'jamf:portal' | 'jamf:app' | 'jamf:utility', readonly string[]>>;
+
+/**
  * The classification a fixture's `mapId` implies, matched against the product
  * registry's bundleIds so a fixture does not have to spell it out.
+ *
+ * Every value of the product is emitted, not the first: `jamf-setup-reset` is
+ * filed under both `Jamf Setup` and `Jamf Reset`, as it is live.
  */
-function classificationForMap(mapId: string): { key: string; value: string } | null {
+function classificationForMap(mapId: string): FixtureClassification | null {
   for (const id of Object.keys(JAMF_PRODUCTS) as ProductId[]) {
     if (!mapId.startsWith(JAMF_PRODUCTS[id].bundleId)) { continue; }
     // Length-checked rather than `[0] === undefined`: test/tsconfig.json turns
@@ -233,8 +249,8 @@ function classificationForMap(mapId: string): { key: string; value: string } | n
     // nothing (jamf-routines, whose override is an empty list).
     const values = classificationValuesFor(id);
     if (values.length === 0) { return null; }
-    const value = values[0];
-    return { key: CLASSIFICATION_AXIS[value] ?? 'jamf:portal', value };
+    const axis = (CLASSIFICATION_AXIS[values[0]] ?? 'jamf:portal') as keyof FixtureClassification;
+    return { [axis]: [...values] };
   }
   return null;
 }
@@ -266,7 +282,9 @@ export function makeFtSearchResponse(
      * `product-*` label carries a classification too (3997 of 3997 measured
      * across six unfiltered queries).
      */
-    classification?: { key: string; value: string };
+    classification?: FixtureClassification;
+    /** The publication's title, as Fluid Topics repeats it on every topic. */
+    mapTitle?: string;
     contentLabels?: string[];
     contentType?: string;
   }[]
@@ -304,12 +322,8 @@ export function makeFtSearchResponse(
           });
         }
         const classification = e.classification ?? classificationForMap(e.mapId);
-        if (classification !== null) {
-          metadata.push({
-            key: classification.key,
-            label: classification.key,
-            values: [classification.value],
-          });
+        for (const [key, values] of Object.entries(classification ?? {})) {
+          metadata.push({ key, label: key, values: [...values] });
         }
         if (e.contentType !== undefined && e.contentType !== '') {
           metadata.push({
@@ -327,7 +341,7 @@ export function makeFtSearchResponse(
             tocId: 'toc-1',
             title: e.title,
             htmlTitle: e.title,
-            mapTitle: 'Docs',
+            mapTitle: e.mapTitle ?? 'Docs',
             breadcrumb: [],
             htmlExcerpt: e.snippet ?? `Snippet for ${e.title}`,
             metadata,

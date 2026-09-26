@@ -373,12 +373,24 @@ export function cleanSnippet(
   cleaned = cleaned.replace(/[<>]/g, '').trim();
 
   if (cleaned.length < MIN_SNIPPET_LENGTH) {
-    const productSuffix =
-      product !== null && product !== '' ? ` \u2014 ${product}` : '';
-    return `${title}${productSuffix}`;
+    return titleProductSnippet(title, product);
   }
 
   return cleaned;
+}
+
+/**
+ * The snippet {@link cleanSnippet} falls back to when the excerpt is too short
+ * to say anything: the title, and the product the result is shown under.
+ *
+ * Exported so that a caller which changes the product a result is shown under
+ * can recognise this form and rebuild it, rather than leave the snippet naming
+ * a different product from the result's own `product` field.
+ */
+export function titleProductSnippet(title: string, product: string | null): string {
+  const productSuffix =
+    product !== null && product !== '' ? ` \u2014 ${product}` : '';
+  return `${title}${productSuffix}`;
 }
 
 /**

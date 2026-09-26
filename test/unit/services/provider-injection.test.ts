@@ -115,7 +115,7 @@ describe('SearchProvider injection', () => {
     expect(result.results.length).toBeLessThan(20);
   });
 
-  it('should derive bundleSlug from product display name for product filter', async () => {
+  it('should filter provider results by the product name they report', async () => {
     const results: SearchResult[] = [
       {
         title: 'Jamf Pro Article',
