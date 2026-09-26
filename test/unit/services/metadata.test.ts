@@ -178,8 +178,13 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
 // `jamf://products` is served with a one-hour *public* cache hint. A catalogue
 // that only exists because MapsRegistry was unreachable must not be offered to
 // shared caches under that hint, so the caller has to be able to tell the two
-// apart — including on a cache hit, since the entry outlives the outage that
-// produced it by 24 hours.
+// apart — including on a cache hit, since the entry is kept for a minute after
+// the outage that produced it.
+//
+// A minute, not the 24 hours a real catalogue is kept (#335). MapsRegistry does
+// not cache a failure, so a day-long fallback outlived the outage it stood in
+// for: `list_products` reported Jamf Pro as unversioned for a day after one
+// failed fetch, beside publications that already had its versions again.
 // ============================================================================
 
 describe('getProductsMetadata - degradation reporting', () => {
@@ -230,7 +235,20 @@ describe('getProductsMetadata - degradation reporting', () => {
     expect((cachedValue as { products: unknown[] }).products.length).toBeGreaterThan(0);
   });
 
+  it('should keep a forced catalogue for a minute, and a real one for the article TTL', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('ECONNREFUSED'));
+    await getProductsMetadata(ctx);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(60_000);
+
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+    await getProductsMetadata(ctx);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(ctx.config.cacheTtl.article);
+  });
+
   it('should still report degraded when the answer comes from cache', async () => {
+    // Inside its minute, a forced entry is served as it is, and a caller that
+    // has no news of the registry does not send another request after one
+    // that has just failed.
     const cachedProducts = [
       {
         id: 'jamf-pro',
@@ -263,6 +281,38 @@ describe('getProductsMetadata - degradation reporting', () => {
 
     expect(getMockedRegistry().getProducts).toHaveBeenCalled();
     expect(products.find(p => p.id === 'jamf-pro')?.latestVersion).toBe('11.24.0');
+  });
+
+  it('should ask the registry again on a forced hit when told it has just answered', async () => {
+    // `list_products` reads the publication axis first. When that reached the
+    // registry, a cached fallback is known to be stale and rebuilding costs
+    // no request — and serving it would pair the registry's publications with
+    // the fallback's products in one reply, which is what #335 reproduced.
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: [], degraded: true });
+    getMockedRegistry().getProducts.mockClear();
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const status = { degraded: false };
+    const products = await getProductsMetadata(ctx, status, { revalidateFallback: true });
+
+    expect(getMockedRegistry().getProducts).toHaveBeenCalledOnce();
+    expect(products.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.24.0', '11.23.0']);
+    expect(status.degraded).toBe(false);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[1]).toMatchObject({ degraded: false });
+  });
+
+  it('should not ask the registry again on a real hit, whatever it is told', async () => {
+    const cachedProducts = [{
+      id: 'jamf-pro', name: 'Jamf Pro', description: 'Cached',
+      bundleId: 'jamf-pro-documentation-11.0.0', latestVersion: '11.0.0', availableVersions: ['11.0.0'],
+    }];
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: false });
+    getMockedRegistry().getProducts.mockClear();
+
+    const products = await getProductsMetadata(ctx, undefined, { revalidateFallback: true });
+
+    expect(products).toEqual(cachedProducts);
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
   });
 });
 
@@ -491,10 +541,25 @@ describe('getProductAvailability', () => {
 
   it('should return cached availability', async () => {
     const cached = { 'jamf-pro': true, 'jamf-school': false };
-    vi.mocked(ctx.cache.get).mockResolvedValue(cached);
+    vi.mocked(ctx.cache.get).mockResolvedValue({ availability: cached, degraded: false });
+    getMockedRegistry().getProducts.mockClear();
 
     const availability = await getProductAvailability(ctx);
     expect(availability).toEqual(cached);
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
+  });
+
+  it('should treat an entry written before it carried its provenance as a miss', async () => {
+    // Earlier builds cached the bare record, under the unversioned key. Read
+    // as the new shape it has no `degraded`, and an optimistic fallback from
+    // one of them would be served as the real answer for up to an hour.
+    vi.mocked(ctx.cache.get).mockResolvedValue({ 'jamf-pro': true, 'jamf-school': true });
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const availability = await getProductAvailability(ctx);
+
+    expect(getMockedRegistry().getProducts).toHaveBeenCalled();
+    expect(availability['jamf-school']).toBe(false);
   });
 
   it('should assume all products available on registry failure', async () => {
@@ -505,6 +570,54 @@ describe('getProductAvailability', () => {
     for (const id of productIds) {
       expect(availability[id]).toBe(true);
     }
+  });
+
+  it('should report that optimistic answer as degraded, on a miss and on a hit', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('fail'));
+
+    const miss = { degraded: false };
+    await getProductAvailability(ctx, miss);
+    expect(miss.degraded).toBe(true);
+
+    const [, cachedValue] = vi.mocked(ctx.cache.set).mock.calls.at(-1) ?? [];
+    vi.mocked(ctx.cache.get).mockResolvedValue(cachedValue);
+    getMockedRegistry().getProducts.mockClear();
+    const hit = { degraded: false };
+    await getProductAvailability(ctx, hit);
+    expect(hit.degraded).toBe(true);
+    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
+  });
+
+  it('should not report degraded when the registry answers', async () => {
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const status = { degraded: false };
+    await getProductAvailability(ctx, status);
+
+    expect(status.degraded).toBe(false);
+  });
+
+  it('should keep the optimistic answer for a minute, and a real one for an hour', async () => {
+    getMockedRegistry().getProducts.mockRejectedValue(new Error('fail'));
+    await getProductAvailability(ctx);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(60_000);
+
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+    await getProductAvailability(ctx);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(60 * 60 * 1000);
+  });
+
+  it('should ask the registry again on a forced hit when told it has just answered', async () => {
+    const optimistic = Object.fromEntries(Object.keys(JAMF_PRODUCTS).map(id => [id, true]));
+    vi.mocked(ctx.cache.get).mockResolvedValue({ availability: optimistic, degraded: true });
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
+
+    const status = { degraded: false };
+    const availability = await getProductAvailability(ctx, status, { revalidateFallback: true });
+
+    expect(availability['jamf-pro']).toBe(true);
+    expect(availability['jamf-school']).toBe(false);
+    expect(status.degraded).toBe(false);
   });
 });
 

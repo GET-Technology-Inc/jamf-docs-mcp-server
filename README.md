@@ -140,6 +140,13 @@ This is the one tool without a `language` parameter. Every tool's input schema
 is strict, so an unrecognised key is rejected
 (`Unrecognized key: "language"`) rather than silently ignored.
 
+If a source cannot be read, the reply lists what it could and says so:
+`incomplete` names each unavailable source, and the markdown reply says the same
+at the top. `maps-registry` is learn.jamf.com, where the publication list and the
+product versions both come from, so either can then be missing or a compiled-in
+default. `jamf-support` is support.jamf.com, whose `jamf-support-*` publications
+are then missing. No `incomplete` means every source answered.
+
 ### jamf_docs_search
 
 Searches across all Jamf product documentation.

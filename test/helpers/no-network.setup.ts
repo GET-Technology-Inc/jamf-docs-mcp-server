@@ -3,13 +3,14 @@
  * slowly.
  *
  * Several tools now degrade gracefully when an upstream source is
- * unreachable: `list_products` omits its publications, `search` omits its
- * other-source block, `get_toc` reports a lookup failure. That is correct in
- * production and dangerous in a test, because a missing module mock produces
- * a real request whose failure is swallowed — the test passes, a little
- * slower, and nothing says the code under test was never exercised against
- * its fixture. That happened three times while the non-Fluid-Topics sources
- * were being added, and each time the only symptom was a slow test.
+ * unreachable: `list_products` lists only the publications it could read,
+ * `search` omits its other-source block, `get_toc` reports a lookup failure.
+ * That is correct in production and dangerous in a test, because a missing
+ * module mock produces a real request whose failure is swallowed — the test
+ * passes, a little slower, and nothing says the code under test was never
+ * exercised against its fixture. That happened three times while the
+ * non-Fluid-Topics sources were being added, and each time the only symptom
+ * was a slow test.
  *
  * Scoped by host rather than by directory: a unit test may talk to a server
  * it started itself, which the transport tests do. The integration and e2e

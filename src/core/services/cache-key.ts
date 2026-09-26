@@ -154,7 +154,7 @@ export interface CacheKeySpaces {
   'maps-registry-v3': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
-  'metadata-product-availability': null;
+  'metadata-product-availability-v2': null;
 }
 
 /* eslint-enable @typescript-eslint/naming-convention */
@@ -214,7 +214,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'maps-registry-v3': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
-  'metadata-product-availability': true,
+  'metadata-product-availability-v2': true,
 };
 
 /** Every namespace, at runtime. The only enumerable list of this server's caches. */

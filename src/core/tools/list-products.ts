@@ -10,17 +10,39 @@ import { ProductListOutputSchema } from '../schemas/output.js';
 import { JAMF_TOPICS, DOC_TYPES, ResponseFormat, OutputMode, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult } from '../types.js';
 import { estimateTokens, createTokenInfo, truncateToTokenLimit } from '../services/tokenizer.js';
-import { getProductAvailability, getProductsMetadata } from '../services/metadata.js';
+import {
+  getProductAvailability,
+  getProductsMetadata,
+  type DegradationStatus,
+} from '../services/metadata.js';
 import {
   STATIC_SECTIONS,
   DYNAMIC_SECTION_SOURCES,
   dynamicSectionId,
+  type StaticDocSource,
 } from '../constants/sources.js';
 import { listIntercomCollections } from '../services/intercom-service.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
+
+/**
+ * What `incomplete.unavailable` calls learn.jamf.com's `/api/khub/maps`.
+ *
+ * The one Fluid Topics read this tool depends on, and both halves of it do:
+ * the publication axis is built from it, and so are the products' versions
+ * and `hasContent`. "maps registry" is also what this tool's contract has
+ * always called it. Every other value is the id of a source in
+ * {@link DYNAMIC_SECTION_SOURCES}, and the message names the publication ids
+ * that source contributes, so a client can tell which rows are missing.
+ */
+const MAPS_REGISTRY = 'maps-registry';
+
+/** The publication ids a runtime-discovered source contributes, as a pattern. */
+function sectionIdPattern(source: StaticDocSource): string {
+  return `${source.dynamicSections?.idPrefix ?? source.id}-*`;
+}
 
 const TOOL_DESCRIPTION = `List Jamf products, publications, topics, and documentation versions.
 
@@ -45,8 +67,9 @@ Returns:
   For JSON format:
   {
     "products": [...],
-    "publications": [...],   // omitted if the maps registry is unreachable
+    "publications": [...],
     "topics": [...],
+    "incomplete"?: { "unavailable": string[], "message": string },
     "tokenInfo": {
       "tokenCount": number,
       "truncated": boolean,
@@ -63,7 +86,16 @@ Examples:
   - "What topics can I filter by?" → use this tool
   - "Where are the Jamf Pro release notes?" → use this tool, then get_toc with the publication ID
 
-Note: This is a read-only operation that does not modify any state.`;
+Note: This is a read-only operation that does not modify any state.
+
+If a source could not be read, the reply lists what it could and says so. "incomplete" then
+names each unavailable source, its "message" says what that cost, and the Markdown reply
+says the same at the top. "${MAPS_REGISTRY}" is learn.jamf.com, where the publication list
+and the product versions both come from: either can then be missing or a compiled-in default.
+${DYNAMIC_SECTION_SOURCES.map(source =>
+    `"${source.id}" is ${source.hostname}, whose ${sectionIdPattern(source)} publications are then missing.`,
+  ).join('\n')}
+This may be temporary: try again in a minute. No "incomplete" means every source answered.`;
 
 /**
  * One publication as `list_products` reports it.
@@ -81,14 +113,29 @@ interface PublicationRow {
   versions: string[];
 }
 
+/** The publication axis, and what it could not be built from. */
+interface PublicationListing {
+  rows: PublicationRow[];
+  /**
+   * Each source that could not be read, as `incomplete.unavailable` names it:
+   * {@link MAPS_REGISTRY}, then dynamic sources in declaration order. Empty
+   * when every source answered.
+   */
+  unavailable: string[];
+}
+
 /**
- * The publication axis, or null when the registry cannot answer.
+ * The publication axis, from every source that answers.
  *
- * `products` and `topics` are compiled in; this needs a live `/api/khub/maps`.
- * Making the whole tool fail because the newest section could not load would
- * be a regression for every caller that only wanted the product list.
+ * `products` and `topics` are compiled in; this needs a live `/api/khub/maps`
+ * and a live support.jamf.com. Making the whole tool fail because one of them
+ * could not be read would be a regression for every caller that only wanted
+ * the product list, so each source costs its own rows and no more. Since 5.7.0
+ * (#264) that means the list is never empty: the static sections are compiled
+ * in. So the rows cannot say whether anything is missing, and `unavailable`
+ * does.
  */
-async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationRow[] | null> {
+async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationListing> {
   // Static sources are compiled in, so they list whether or not the maps
   // registry answers — and they are the only way to discover that
   // concepts.jamf.com is reachable at all.
@@ -99,6 +146,8 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
     locales: Object.keys(source.locales).sort(),
     versions: [],
   }));
+
+  const unreadSources: string[] = [];
 
   // Sources whose sections come from the source itself. Best-effort per
   // source: an unreachable Help Center costs its own rows, not the list.
@@ -119,12 +168,14 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
       ctx.logger.createLogger('list-products').warning(
         `Could not list ${source.name} collections: ${String(error)}`,
       );
+      unreadSources.push(source.id);
     }
   }
 
+  let registryRows: PublicationRow[] | null = null;
   try {
     const pubs = await ctx.mapsRegistry.listPublications();
-    return [...staticRows, ...pubs.map(pub => ({
+    registryRows = pubs.map(pub => ({
       id: pub.id,
       title: pub.title,
       ...(pub.portal.length > 0 ? { portal: pub.portal } : {}),
@@ -132,13 +183,99 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationR
       ...(pub.utility.length > 0 ? { utility: pub.utility } : {}),
       locales: pub.locales,
       versions: pub.versions,
-    }))];
+    }));
   } catch (error) {
     ctx.logger.createLogger('list-products').warning(
       `Could not list publications: ${String(error)}`,
     );
-    return staticRows;
   }
+
+  return {
+    rows: [...staticRows, ...(registryRows ?? [])],
+    unavailable: [...(registryRows === null ? [MAPS_REGISTRY] : []), ...unreadSources],
+  };
+}
+
+/** What a reply that could not read every source carries. */
+interface Incomplete {
+  unavailable: string[];
+  message: string;
+}
+
+/**
+ * Which parts of the product list are the compiled-in stand-in for an
+ * unreachable registry. Each comes from its own cache entry, so each is
+ * reported by its own {@link DegradationStatus}.
+ */
+interface ProductFallbacks {
+  /** `currentVersion` and `availableVersions`, from getProductsMetadata. */
+  versions: boolean;
+  /** `hasContent`, from getProductAvailability, which assumes true for all. */
+  availability: boolean;
+}
+
+/**
+ * The `incomplete` note, or undefined when every source answered.
+ *
+ * The registry's sentences name only what is actually a stand-in, because the
+ * three can differ. Each is cached on its own clock: the product catalogue for
+ * a day, the availability map for an hour. When the registry's own entry
+ * lapses (after 7 days on Node) and cannot be rebuilt, each of the two turns
+ * into a fallback only as it expires in turn, the availability map first.
+ */
+function describeIncomplete(
+  publicationsUnavailable: readonly string[],
+  fallback: ProductFallbacks,
+): Incomplete | undefined {
+  const registryPublicationsMissing = publicationsUnavailable.includes(MAPS_REGISTRY);
+  const registryUnavailable = registryPublicationsMissing || fallback.versions || fallback.availability;
+  const unreadSources = DYNAMIC_SECTION_SOURCES.filter(s => publicationsUnavailable.includes(s.id));
+  if (!registryUnavailable && unreadSources.length === 0) { return undefined; }
+
+  const sentences: string[] = [];
+  if (registryUnavailable) {
+    sentences.push('The maps registry on learn.jamf.com could not be read.');
+  }
+  if (registryPublicationsMissing) {
+    sentences.push('The publication list has none of the documents published there.');
+  }
+  if (fallback.versions) {
+    sentences.push('Product versions are compiled-in defaults.');
+  }
+  if (fallback.availability) {
+    sentences.push('Every product is assumed to have a table of contents.');
+  }
+  for (const source of unreadSources) {
+    sentences.push(sectionsLost(source));
+  }
+  sentences.push('This may be temporary: try again in a minute.');
+
+  return {
+    unavailable: [...(registryUnavailable ? [MAPS_REGISTRY] : []), ...unreadSources.map(s => s.id)],
+    message: sentences.join(' '),
+  };
+}
+
+/** The sentence for a runtime-discovered source that could not be read. */
+function sectionsLost(source: StaticDocSource): string {
+  return `The ${source.name} on ${source.hostname} could not be read, so the publication list ` +
+    `has none of its sections (\`${sectionIdPattern(source)}\`).`;
+}
+
+/**
+ * `head` whole, then `body` cut to what `maxTokens` leaves after it.
+ *
+ * `head` carries the `incomplete` note, and a maxTokens cut must not take it:
+ * the shorter the reply, the less of the catalogue it shows, and the more its
+ * reader needs to know that even the whole of it is partial. So the note is
+ * charged to the budget but never cut. The reply stays within `maxTokens`
+ * whenever the note leaves room for the truncation notice. When it does not,
+ * which takes both sources down and a budget near the 100-token minimum, the
+ * reply goes over by what the note needs rather than drop it, as
+ * `jamf_docs_glossary_lookup` keeps its own `incomplete` note out of its budget.
+ */
+function truncateAfter(head: string, body: string, maxTokens: number): string {
+  return head + truncateToTokenLimit(body, Math.max(0, maxTokens - estimateTokens(head))).content;
 }
 
 /** The heading a publication Jamf classifies under nothing is filed under. */
@@ -202,9 +339,13 @@ function groupByClassification(
  * Deliberately its own section rather than extra rows under Products: the
  * `product` search filter accepts the twelve above and nothing here, and
  * merging the two lists is exactly the dilution #239 asked to avoid.
+ *
+ * `partial` is set when a source could not be read. The rows are then some of
+ * what Jamf publishes, and the preamble must not call them all of it: during
+ * a registry outage that claim headed the two Jamf Concepts sections (#335).
  */
-function renderPublications(publications: PublicationRow[] | null, mode: OutputMode): string {
-  if (publications === null || publications.length === 0) { return ''; }
+function renderPublications(publications: PublicationRow[], mode: OutputMode, partial: boolean): string {
+  if (publications.length === 0) { return ''; }
 
   const ordered = groupByClassification(publications);
 
@@ -219,7 +360,10 @@ function renderPublications(publications: PublicationRow[] | null, mode: OutputM
 
   let out = '---\n\n';
   out += `# Publications (${String(publications.length)})\n\n`;
-  out += 'Every document Jamf publishes, grouped the way Jamf classifies it. ';
+  out += partial
+    ? 'The documents that could be listed, which are not all of them (see the note at the top), ' +
+      'grouped the way Jamf classifies them. '
+    : 'Every document Jamf publishes, grouped the way Jamf classifies it. ';
   out += 'Pass an ID as the `publication` parameter of `jamf_docs_get_toc` to browse one. ';
   out += 'These are documents, not products — the `product` filter in `jamf_docs_search` ';
   out += 'takes the product IDs above, not these. ';
@@ -272,12 +416,33 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
       try {
         await reportProgress(extra, { progress: 0, total: 3, message: 'Fetching product info...' });
 
-        // Fetch product availability (cached)
-        const availability = await getProductAvailability(ctx);
+        // The publication axis first. Best-effort: it needs the live maps
+        // registry and support.jamf.com, and the products and topics below do
+        // not, so a source that cannot answer costs its own rows rather than
+        // the whole response.
+        //
+        // First because it is also the one read that says whether the
+        // registry is answering now: `MapsRegistry` does not cache a failure,
+        // so this succeeds only if the registry is built and in memory. When
+        // it is, a fallback the product half cached during an outage is stale
+        // and costs nothing to rebuild, and serving it would pair the
+        // registry's publications with the fallback's product versions in
+        // one reply, as #335 reproduced.
+        const listing = await listPublicationsQuietly(ctx);
+        const publications = listing.rows;
+        const readOptions = { revalidateFallback: !listing.unavailable.includes(MAPS_REGISTRY) };
 
-        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
+        // Each set when its part of the product half is the compiled-in
+        // stand-in for an unreachable registry, cached or not. Two, because
+        // the two entries expire on their own clocks and the note names only
+        // the one that is a stand-in.
+        const versionsStatus: DegradationStatus = { degraded: false };
+        const availabilityStatus: DegradationStatus = { degraded: false };
 
-        // Build product list — always include all known products.
+        // Product availability and versions, both cached. Asked for together
+        // so that when neither is cached they share one registry request
+        // (MapsRegistry deduplicates a build in flight) rather than making two
+        // in a row, which during an outage is two waits on a failing endpoint.
         //
         // Versions come from getProductsMetadata, not from JAMF_PRODUCTS.
         // Every registry row declares `versions: ['current']`, which is true
@@ -287,7 +452,14 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         // getProductsMetadata already resolves those through MapsRegistry —
         // it is what `jamf://products` has been serving all along — so the
         // two views of the same catalogue now agree.
-        const metadata = await getProductsMetadata(ctx);
+        const [availability, metadata] = await Promise.all([
+          getProductAvailability(ctx, availabilityStatus, readOptions),
+          getProductsMetadata(ctx, versionsStatus, readOptions),
+        ]);
+
+        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing availability...' });
+
+        // Build product list — always include all known products.
         const products = metadata.map(product => ({
           id: product.id,
           name: product.name,
@@ -304,15 +476,22 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           keywords: topic.keywords
         }));
 
-        // The publication axis. Best-effort: it needs the live maps registry,
-        // and the products and topics above do not, so a registry that cannot
-        // answer costs this section rather than the whole response.
-        const publications = await listPublicationsQuietly(ctx);
+        // `tools/call` has no cache or degradation channel, so the result body
+        // is the only place a fallback can be reported.
+        const incomplete = describeIncomplete(listing.unavailable, {
+          versions: versionsStatus.degraded,
+          availability: availabilityStatus.degraded,
+        });
+        const incompleteNote = incomplete !== undefined
+          ? `> **This catalogue is incomplete.** ${incomplete.message}\n\n`
+          : '';
+        const publicationsPartial = listing.unavailable.length > 0;
 
         const structuredContent = {
           products,
           topics,
-          ...(publications !== null ? { publications } : {}),
+          publications,
+          ...(incomplete !== undefined ? { incomplete } : {}),
         };
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
@@ -345,22 +524,24 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           for (const topic of topics) {
             markdown += `- \`${topic.id}\`: ${topic.name}\n`;
           }
-          markdown += renderPublications(publications, OutputMode.COMPACT);
+          markdown += renderPublications(publications, OutputMode.COMPACT, publicationsPartial);
 
-          const compactResult = truncateToTokenLimit(markdown, maxTokens);
+          const compactText = truncateAfter(incompleteNote, markdown, maxTokens);
           await reportProgress(extra, { progress: 3, total: 3 });
 
           return {
             content: [{
               type: 'text',
-              text: compactResult.content
+              text: compactText
             }],
             structuredContent
           };
         }
 
-        // Full markdown format
-        let markdown = '# Jamf Documentation Products\n\n';
+        // Full markdown format. The heading and the note are kept whole, and
+        // only what follows them is cut to fit (see truncateAfter).
+        const head = `# Jamf Documentation Products\n\n${incompleteNote}`;
+        let markdown = '';
 
         for (const product of products) {
           markdown += `## ${product.name}\n\n`;
@@ -374,7 +555,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           markdown += '\n';
         }
 
-        markdown += renderPublications(publications, OutputMode.FULL);
+        markdown += renderPublications(publications, OutputMode.FULL, publicationsPartial);
 
         markdown += '---\n\n';
         markdown += '# Available Topics for Filtering\n\n';
@@ -395,20 +576,20 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         markdown += '\n---\n\n';
 
         // Token info
-        const tokenCount = estimateTokens(markdown);
+        const tokenCount = estimateTokens(head + markdown);
         markdown += `*${tokenCount.toLocaleString()} tokens*\n\n`;
 
         markdown += '*Use `jamf_docs_search` to search within these products, ';
         markdown += 'or `jamf_docs_get_toc` to browse the table of contents.*\n';
 
-        const fullResult = truncateToTokenLimit(markdown, maxTokens);
+        const fullText = truncateAfter(head, markdown, maxTokens);
 
         await reportProgress(extra, { progress: 3, total: 3 });
 
         return {
           content: [{
             type: 'text',
-            text: fullResult.content
+            text: fullText
           }],
           structuredContent
         };
