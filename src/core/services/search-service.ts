@@ -38,6 +38,7 @@ import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { compareVersions } from '../utils/bundle.js';
+import { dedupeResultsToLatestVersions } from './search-result-versions.js';
 import {
   estimateTokens,
   calculatePagination,
@@ -455,6 +456,10 @@ export interface DedupedEntry {
  * dropped, so "what changed in 11.26?" is answerable rather than invisible.
  * That matters most for release notes, whose whole value is the older
  * versions.
+ *
+ * A SearchProvider's results never pass through here, because they arrive
+ * as `SearchResult`s. {@link dedupeResultsToLatestVersions} collapses them by
+ * the same rule.
  */
 export function dedupeToLatestVersions(
   clusters: FtSearchCluster[]
@@ -875,11 +880,12 @@ function isSpecificVersion(version: string | undefined): version is string {
  *
  * On the Fluid Topics path the filter goes upstream ({@link buildSearchFilters}),
  * so the API enforces it. On the SearchProvider path nothing here enforces
- * anything — the provider is handed `params` and its results are taken as
- * given. When such a result set contains an article stamped with a *different*
- * version, the filter provably did not hold, and staying silent means the tool
- * echoes `filters.version` back as though it had: a claim about the result set
- * that is false.
+ * it — the provider is handed `params`, and its results are only collapsed to
+ * one version per topic, the requested one wherever a topic has it
+ * ({@link dedupeResultsToLatestVersions}). This runs on what survives. When a
+ * surviving article is stamped with a *different* version, the filter provably
+ * did not hold, and staying silent means the tool echoes `filters.version`
+ * back as though it had: a claim about the result set that is false.
  *
  * Only a positive mismatch counts. Results with no version metadata are the
  * normal shape for the unversioned products (School, Connect, Protect, …) and
@@ -1084,7 +1090,12 @@ async function resolveSearchResults(
     const provided = await ctx.searchProvider.search(params);
     if (provided !== null) {
       return {
-        results: provided.map(r => toSearchResultWithMeta(r)),
+        // Versions collapsed as the Fluid Topics path collapses them below, so
+        // a topic comes back at one version whichever backend answered. Its
+        // own ranking is kept; see dedupeResultsToLatestVersions for what it
+        // can identify.
+        results: dedupeResultsToLatestVersions(provided, params.version)
+          .map(r => toSearchResultWithMeta(r)),
         fromProvider: true,
         productUnfilterable: false,
       };

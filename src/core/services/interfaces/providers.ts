@@ -27,15 +27,31 @@ import type {
  *
  * Return all matched results as a flat array, in the order you rank them:
  * the core keeps that order, and a JSON reply says the configured search
- * backend ranked it. The core handles pagination, token truncation, and
- * filter relaxation.
+ * backend ranked it. The core handles version deduplication, pagination,
+ * token truncation, and filter relaxation.
  *
- * It does not collapse versions. Fluid Topics returns a Jamf Pro topic once
- * per product version, and the core keeps the newest (`dedupeToLatestVersions`)
- * while they are still clustered-search entries, before they become
- * `SearchResult`s. A provider's results arrive as `SearchResult`s and are
- * taken as given, so several versions of one topic stay several results. A
- * result can name its topic's other versions in `otherVersions`.
+ * Versions are collapsed by the rule Fluid Topics results follow
+ * (`dedupeResultsToLatestVersions`). Of a topic you return at several
+ * versions, the newest is kept, or the requested `version` when the topic has
+ * it, and results at its other versions are dropped. The first-ranked result
+ * kept takes the place of the topic's first result, so your ranking is kept
+ * topic by topic, and lists the versions dropped in its `otherVersions`,
+ * newest first. Only versions are collapsed: several results for a topic at
+ * one version (passages of one page, its `#fragment` and `?query` variants,
+ * or one page Jamf lists under several breadcrumbs) all come back as you
+ * returned them, where the Fluid Topics path keeps one entry per cluster. So
+ * do results that name each topic at one version, including any
+ * `otherVersions` you set.
+ *
+ * The topic and version are read from what a Fluid Topics result carries: a
+ * learn.jamf.com (or docs.jamf.com) `url` in the `/r/{locale}/{bundle}/{slug}`
+ * or `/{locale}/bundle/{bundle}/page/{slug}.html` form, or
+ * `/r/{locale}/{bundle}` for a whole publication, and `version`, or else a
+ * version number in the url's bundle (`jamf-pro-documentation-11.31.0`). A
+ * result whose version cannot be read that way is never merged or dropped.
+ * That includes one that has only a `-current` url, because Jamf's unversioned
+ * publications (Jamf Connect's current documentation, the technical papers)
+ * are published there too.
  *
  * Return `null` to fall through to the default Fluid Topics API search.
  */
