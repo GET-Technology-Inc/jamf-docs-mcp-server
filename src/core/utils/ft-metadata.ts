@@ -23,6 +23,14 @@ export const FT_META = {
    */
   LAST_EDITION: 'ft:lastEdition',
   CLUSTER_ID: 'ft:clusterId',
+  /**
+   * The map an entry belongs to: the map's own id, on the map and on every
+   * topic of it. Not among the descriptors `/api/configuration/metadata`
+   * lists, but `clustered-search` filters on it all the same, which is how a
+   * product Jamf classifies nothing under is filtered by its publication
+   * (`resolveProductFilter` in search-service.ts). docs/fluid-topics-api.md
+   * has the measurements.
+   */
   PUBLICATION_ID: 'ft:publicationId',
   PRODNAME: 'prodname',
 

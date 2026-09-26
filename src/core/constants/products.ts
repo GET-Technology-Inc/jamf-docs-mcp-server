@@ -319,14 +319,16 @@ export const PRODUCT_ID_LIST = PRODUCT_IDS.join(', ');
  *   product has to know these too; the search post-filter once did not, and
  *   no search result could satisfy this product (#334).
  * - `jamf-routines` has no classification value at all, and an empty list
- *   here means "no product filter is possible". That is not a gap this table
- *   can close. On 2026-09-18 no Jamf Routines topic was in the
+ *   here means "no classification filter is possible". That is not a gap this
+ *   table can close. On 2026-09-18 no Jamf Routines topic was in the
  *   clustered-search index at all; by 2026-09-26 it was — 13 of the first 14
  *   results for the query "Jamf Routines" — but filed, like its map, under
  *   `jamf:portal = Jamf Pro`, so no classification value selects it apart
  *   from the rest of Jamf Pro. Its `product-routines` label was never the
- *   cause. TOC and article fetch still work, because those address the bundle
- *   directly.
+ *   cause: its map carries `product-pro`. So a search filters it by its own
+ *   publication instead, the maps of its `bundleId` family, which the maps
+ *   registry finds at runtime (`resolveProductFilter` in search-service.ts).
+ *   TOC and article fetch address that same family directly.
  */
 const CLASSIFICATION_OVERRIDES: Partial<Record<string, readonly string[]>> = {
   'jamf-setup-reset': ['Jamf Setup', 'Jamf Reset'],
@@ -337,9 +339,11 @@ const CLASSIFICATION_OVERRIDES: Partial<Record<string, readonly string[]>> = {
  * Jamf's own classification values for a product — what the `product` search
  * filter sends upstream, and what it matches results against locally.
  *
- * Empty when Jamf names nothing by this product, in which case no product
- * filter can be built and the caller must say so: a search that goes out
- * unfiltered anyway must not present its results as filtered.
+ * Empty when Jamf names nothing by this product, in which case no
+ * classification filter can be built. The search then filters by the
+ * product's own publication, and when the maps list has no map of that
+ * either, it must say so: a search that goes out unfiltered anyway must not
+ * present its results as filtered.
  */
 export function classificationValuesFor(id: ProductId): readonly string[] {
   return CLASSIFICATION_OVERRIDES[id] ?? [JAMF_PRODUCTS[id].name];

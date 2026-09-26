@@ -50,3 +50,29 @@ describe('a product search keeps what Fluid Topics returned for the product', ()
     }
   }, 30000);
 });
+
+describe('a product Jamf classifies nothing under is filtered by its publication', () => {
+  // jamf-routines is filed under Jamf Pro, so until this was fixed every
+  // jamf-routines search reported the product filter as not applied and
+  // answered with the whole library: measured 2026-09-26 over ten queries,
+  // 33 of 432 results were Jamf Routines documentation. data-contracts checks
+  // the upstream key itself; this checks what a search returns.
+  it.each(['Jamf Routines', 'connection', 'delete'])('jamf-routines ("%s") returns only its own publication', async (query) => {
+    const product: ProductId = 'jamf-routines';
+    const result = await searchDocumentation(ctx, { query, product, limit: 50 });
+    const mapIds = await ctx.mapsRegistry.mapIdsOf(JAMF_PRODUCTS[product].bundleId);
+
+    expect(result.searchError).toBeUndefined();
+    expect(
+      result.filterRelaxation?.removed ?? [],
+      'The product filter was reported as not applied or relaxed: no map of ' +
+      'jamf-routines-documentation was found, or Fluid Topics ignored ' +
+      'ft:publicationId and the unfiltered window held none of its results.',
+    ).not.toContain('product');
+    for (const r of result.results) {
+      expect(mapIds).toContain(r.mapId);
+      expect(r.url).toMatch(/\/jamf-routines-documentation(\/|$)/);
+      expect(r.product).toBe('Jamf Routines');
+    }
+  }, 30000);
+});

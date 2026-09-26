@@ -551,10 +551,6 @@ describe('FT API data contracts', () => {
   // The original suite only ever inspected Jamf Pro maps, so the migration was
   // invisible. These contracts touch the non-Pro surface directly.
   describe('non-Pro / unversioned product contracts', () => {
-    // Products whose zoominmetadata search label Jamf does NOT currently expose,
-    // so they cannot be product-filtered via clustered-search. Documented gaps,
-    // not regressions — see products.ts. jamf-routines docs are tagged product-pro
-    // upstream, so 'product-routines' never appears as a label.
     // ─── What the `product` filter now depends on ─────────────────────────
     //
     // The filter used to translate each product into `zoominmetadata`'s legacy
@@ -615,6 +611,45 @@ describe('FT API data contracts', () => {
         'than applying it, so every product-filtered search is now unfiltered.'
       ).toBe(0);
     });
+
+    it('a product with no classification value is filtered by its publication, and that key filters', async () => {
+      // A product Jamf names nothing by (jamf-routines today) is filtered by
+      // the `ft:publicationId` of its own maps instead. That depends on two
+      // things: its `bundleId` family still has maps, and Fluid Topics still
+      // honours the key. Most keys it does not know return the unfiltered
+      // ranking, which looks like a filter that matched everything.
+      const unclassified = (PRODUCT_IDS as readonly ProductId[])
+        .filter(id => classificationValuesFor(id).length === 0);
+
+      for (const id of unclassified) {
+        const { bundleId, name } = JAMF_PRODUCTS[id];
+        const mapIds = maps.filter(m => deriveBundleStem(m.metadata) === bundleId).map(m => m.id);
+        expect(
+          mapIds,
+          `${id}: no map of its publication "${bundleId}" is left, so a search ` +
+          'reports its product filter as not applied.',
+        ).not.toEqual([]);
+
+        const filtered = await search(http, {
+          query: name,
+          contentLocale: 'en-US',
+          paging: { perPage: 50, page: 1 },
+          filters: [{ key: 'ft:publicationId', values: mapIds }],
+        });
+        const hits = filtered.results.flatMap(c => c.entries)
+          .filter(e => e.topic !== undefined || e.map !== undefined);
+        expect(hits.length, `ft:publicationId=${bundleId} returned nothing for "${name}"`).toBeGreaterThan(0);
+
+        // The local filter matches each result's `mapId` against the ids sent.
+        const strays = hits.filter(e => !mapIds.includes(e.topic?.mapId ?? e.map?.mapId ?? ''));
+        expect(
+          strays.length,
+          `${String(strays.length)} of ${String(hits.length)} results are not from ${bundleId}. ` +
+          'Upstream is ignoring ft:publicationId, or an entry\'s mapId is no longer its ' +
+          `publication id, so a ${id} search now returns what the unfiltered window happens to hold.`,
+        ).toBe(0);
+      }
+    }, 30000);
 
     it('every docType content-* label still exists in the live zoominmetadata set', () => {
       const liveLabels = new Set<string>();

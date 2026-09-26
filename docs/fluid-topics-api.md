@@ -48,6 +48,7 @@ Primary search endpoint. Returns results grouped into clusters.
 | Filter key | Values | Purpose |
 |------------|--------|---------|
 | `jamf:portal` / `jamf:app` / `jamf:utility` | A product's classification value(s), e.g. `Jamf Pro`, `Jamf Connect`, `Title Editor` | Filter by product — one key, whichever the value sits on (see section 3) |
+| `ft:publicationId` | Map ids from `/api/khub/maps` | Filter by publication. Used for a product Jamf classifies nothing under (see section 3) |
 | `zoominmetadata` | `content-techdocs`, `content-releasenotes`, `content-training`, `content-solutionguide`, `content-glossary`, `content-gettingstarted` | Filter by content type |
 | `zoominmetadata` | `product-pro`, `product-connect`, `product-protect`, `product-school`, etc. | Legacy product labels. Still accepted, no longer used by this server |
 | `version` | Specific version string (e.g. `"11.13.0"`) | Pin to a version |
@@ -74,6 +75,17 @@ An earlier version of this line read `content-releasenotes alone 940` while the
 paragraph above said 1323 for the same en-US filter. Both cannot have been
 en-US at one moment — a zh-TW number was pasted into an en-US measurement — and
 nobody could tell, because neither figure carried a date.
+
+**A key Fluid Topics does not know is not rejected.** The request succeeds,
+and what comes back depends on how the key is spelled. Most unknown keys are
+ignored, and the unfiltered ranking looks like a filter that matched
+everything. One with a hyphen in it matches nothing instead, which looks like
+a query with no hits. Measured 2026-09-26, en-US: `madeupkey`, `foo_bar`,
+`ft:madeUp` and `ft:mapId` each returned the unfiltered count, 3930 for
+"policy" and 26,081 for "Jamf Routines", while `made-up-key`, `foo-bar` and
+`ft:made-up` returned 0 for both. So a new filter key is checked by comparing
+filtered and unfiltered counts, and by checking that every hit carries the
+value, never by the absence of an error.
 
 **Do not send `latestVersion=yes`.** See architectural note 4 below.
 
@@ -176,6 +188,45 @@ first on the most specific key — and rejected most of what the API returned
 for `jamf-security-cloud`, `jamf-setup-reset` and `jamf-trust`. Measured
 2026-09-26 over 270 product-filtered searches, every topic and map entry
 returned carried the filter's value on the filter's key (12,597 of 12,597).
+
+**A product Jamf classifies nothing under is filtered by its publication.**
+Today that is `jamf-routines` alone: its one map, and every topic of it, is
+filed under `jamf:portal = Jamf Pro`, so no classification value separates it
+from Jamf Pro. The other 27 products each have a value some map carries, and
+their own publication carries it (checked 2026-09-26 against all 685 maps).
+For Jamf Routines the server sends `ft:publicationId` with the ids of every
+map of the product's `bundleId` family, read from `/api/khub/maps`, and the
+client-side filter keeps a result whose `mapId` is one of them. A
+SearchProvider result is also kept when its URL names that family, or when it
+reports the product by name.
+
+`ft:publicationId` is not among the descriptors above, but `clustered-search`
+filters and facets on it. On a map it is the map's own id (685 of 685 maps),
+and on a search entry it is the entry's `mapId` (4,466 of 4,466 entries over
+five unfiltered queries). Measured 2026-09-26, en-US, for the query "Jamf
+Routines" (26,081 unfiltered), each key filtering on the Routines publication:
+
+| Key | Results | What it matched |
+|-----|---------|-----------------|
+| `ft:publicationId` | 13 | The map and 12 topics: the publication, and only it |
+| `legacy_bundle` | 12 | Topics only; maps do not carry it |
+| `bundle` | 1 | The map only; topics do not carry it |
+| `ft:clusterId` | 1 | The map only; a topic's is `{bundle}/{topic}` |
+| `version_bundle_stem` | 0 | Carried by 311 of 685 maps, and not by this one |
+| `ft:mapId` | 26,081 | Ignored |
+
+The upstream filter matters, and a client-side filter alone would not do.
+The server fetches one page of 50 clusters, and unfiltered that page is a
+window on the whole library. Over twelve queries it held 34 of the 54
+entries `ft:publicationId` returned, and none of them for "create", "policy",
+"install" or "trigger". The twelve: "Jamf Routines", "routine", "connection",
+"create", "delete", "single sign-on", "policy", "scripts", "template",
+"install", "trigger", "schedule".
+
+`ft:publicationId` intersects with `zoominmetadata` like any other filter
+object (13 for "routine" with `content-techdocs`, 0 with
+`content-releasenotes`), and a value that is no map id returns 0, not the
+unfiltered set.
 
 ---
 

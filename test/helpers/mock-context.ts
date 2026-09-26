@@ -125,6 +125,11 @@ export function createStubMapsRegistry(
  *
  * Pass this where a test exercises something that resolves a product's
  * classification axis, which today means any product-filtered search.
+ *
+ * A product with no classification (jamf-routines) gets no map here, so a
+ * search for it finds no publication to filter by either, and reports the
+ * product filter as not applied. search-product-publication.test.ts builds
+ * the live Routines map for the case where there is one.
  */
 export function createClassifyingMapsRegistry(): MapsRegistry {
   const maps = fixtureMaps();

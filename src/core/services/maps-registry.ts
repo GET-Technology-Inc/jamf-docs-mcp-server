@@ -549,6 +549,26 @@ export class MapsRegistry {
   }
 
   /**
+   * The id of every map of a bundle family, in every locale and version.
+   *
+   * These are also what Fluid Topics files each search entry under, as
+   * `ft:publicationId`, so they are the filter that selects one publication
+   * and nothing else. Measured 2026-09-26: every map's `ft:publicationId` is
+   * its own id (685 of 685), and every search entry's is its `mapId` (4,466 of
+   * 4,466 over five unfiltered queries). The `product` search filter uses this
+   * for a product Jamf classifies nothing under — see `resolveProductFilter`.
+   *
+   * Every locale rather than one, because a search already narrows by
+   * `contentLocale`, and a publication's maps in other locales are simply not
+   * in that locale's index. Empty when the family is unknown.
+   */
+  async mapIdsOf(bundleStem: string): Promise<string[]> {
+    await this.ensureBuilt();
+    const normalized = stripCurrentSuffix(bundleStem);
+    return this.entries.filter(e => e.bundleStem === normalized).map(e => e.mapId);
+  }
+
+  /**
    * Whether a bundle family exists at all, in any locale.
    *
    * `resolveMapId` returning null cannot distinguish "no such publication"

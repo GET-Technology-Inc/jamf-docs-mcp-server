@@ -36,6 +36,7 @@ import type { MapsRegistry } from './maps-registry.js';
 import { cleanSnippet, titleProductSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
+import { extractBundleStemFromUrl } from '../utils/url.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { compareVersions } from '../utils/bundle.js';
 import { dedupeResultsToLatestVersions } from './search-result-versions.js';
@@ -205,8 +206,19 @@ function classificationValues(metadata: FtMetadataEntry[] | undefined): string[]
  *
  * A SearchProvider result has no classification to read, so its reported
  * product name is looked up instead.
+ *
+ * A product with no classification is filtered by its own publication
+ * instead ({@link resolveProductFilter}), and `publication` then holds the
+ * ids of its maps: see {@link fromPublication}.
  */
-function belongsToProduct(r: SearchResultWithMeta, product: ProductId): boolean {
+function belongsToProduct(
+  r: SearchResultWithMeta,
+  product: ProductId,
+  publication?: ReadonlySet<string>,
+): boolean {
+  if (publication !== undefined) {
+    return fromPublication(r, product, publication);
+  }
   if (r.classification === null) {
     return productNameToId(r.result.product) === product;
   }
@@ -215,11 +227,40 @@ function belongsToProduct(r: SearchResultWithMeta, product: ProductId): boolean 
 }
 
 /**
+ * Whether a result is from the publication a product with no classification
+ * is filtered by.
+ *
+ * On the Fluid Topics path that is its `mapId`, the `ft:publicationId` it was
+ * matched on upstream, and nothing else.
+ *
+ * A SearchProvider result has no classification to read, and the product
+ * name it reports is the provider's own reading. A provider that goes by
+ * Jamf's classification reports Jamf Routines documentation as Jamf Pro,
+ * which is where Jamf files it, and matched by that name alone, none of it
+ * passed and the filter was relaxed away. So a provider result is also from
+ * the publication when its `mapId` is one of the ids or its URL names the
+ * product's bundle family, and it still belongs when it reports the product
+ * by name, as any provider result does.
+ */
+function fromPublication(
+  r: SearchResultWithMeta,
+  product: ProductId,
+  publication: ReadonlySet<string>,
+): boolean {
+  if (r.result.mapId !== undefined && publication.has(r.result.mapId)) { return true; }
+  if (r.classification !== null) { return false; }
+  return productNameToId(r.result.product) === product
+    || extractBundleStemFromUrl(r.result.url) === JAMF_PRODUCTS[product].bundleId;
+}
+
+/**
  * Show a result under the product the caller filtered by.
  *
  * Display follows the filter. A result that passed a `product` filter carries
- * one of that product's classification values, so it is that product's
- * document whichever value Jamf lists first on the most specific axis. Without
+ * one of that product's classification values, or, for a product with none,
+ * comes from that product's own publication. Either way it is that product's
+ * document whichever value Jamf lists first on the most specific axis: a
+ * Jamf Routines topic, filed under Jamf Pro, is shown as Jamf Routines. Without
  * this, a jamf-security-cloud search listed every hit as "Jamf Connect", and
  * {@link belongsToProduct} widening to every product Jamf files a document
  * under would have broken what test/integration/service-chain.test.ts checks
@@ -240,7 +281,9 @@ function belongsToProduct(r: SearchResultWithMeta, product: ProductId): boolean 
  * when relabelled — "Jamf Security Cloud Portal Setup Guide", listed first
  * under Jamf Connect, needs no note under Jamf Security Cloud — nor is a
  * result only renamed within its product ("Jamf Reset" → "Jamf Setup and
- * Reset"), which is every relabel on the SearchProvider path.
+ * Reset"), which is every relabel on the SearchProvider path save one: a
+ * Jamf Routines result the provider reported as Jamf Pro
+ * ({@link fromPublication}), which is marked by the same rule.
  */
 function showUnderProduct(result: SearchResult, product: ProductId): SearchResult {
   const { name } = JAMF_PRODUCTS[product];
@@ -325,23 +368,56 @@ function docTypeFromLabelKeys(labelKeys: string[]): DocTypeId | undefined {
  * guarded the table red — while the classification is what Jamf files
  * documents under today, and the axis is looked up rather than written down.
  *
- * Returns null in two cases, which the caller tells apart. When Jamf names
- * nothing by this product, which today is `jamf-routines` alone, the caller
- * treats it as "cannot filter", not as "no filter": the search still goes
- * out, unfiltered, but the product filter is reported as removed before
+ * A product Jamf names nothing by, which today is `jamf-routines` alone, is
+ * filtered by its own publication instead: `ft:publicationId`, carrying the
+ * ids of every map of the product's `bundleId` family, which the registry
+ * reads off `/api/khub/maps`. Jamf files the Routines documentation under
+ * `jamf:portal = Jamf Pro`, so no classification value separates it from the
+ * rest of Jamf Pro, but Fluid Topics files every entry under its map, and
+ * that key filters: for the query "Jamf Routines", 13 entries against 26,081
+ * unfiltered, all of them the Routines map or its topics (live, 2026-09-26).
+ * It narrows to the one publication, so a document Jamf files elsewhere that
+ * merely mentions the product is not found. With no classification there is
+ * no wider set to find it by.
+ *
+ * Until then such a product was left out of the search and reported as not
+ * applied, which was right while none of its topics were in the index
+ * (2026-09-18). By 2026-09-26 they were, and ten live jamf-routines searches
+ * all reported the filter as not applied (`removed: ['product']`) over
+ * results of which 33 of 432 were Jamf Routines documentation. Filtering
+ * locally instead would not have served: the unfiltered fetch is one
+ * 50-cluster page of the whole library, and over twelve queries it held 34
+ * of the 54 entries the upstream filter returns, and none at all for
+ * "create", "policy", "install" or "trigger".
+ *
+ * Returns null in two cases, which the caller tells apart. When the product
+ * has no classification and the registry has no map of its publication, the
+ * caller treats it as "cannot filter", not as "no filter": the search still
+ * goes out, unfiltered, but the product filter is reported as removed before
  * anything else is ({@link applyFiltersWithFallback}). An unfiltered search
  * that did not say so would answer a different question as if it were this
- * one. When the registry cannot place the value, only the upstream half of
- * the filter is lost; the local one still applies ({@link belongsToProduct}).
+ * one. When the registry cannot place a classification value, only the
+ * upstream half of the filter is lost; the local one still applies
+ * ({@link belongsToProduct}).
+ *
+ * `mapIdsOf` is optional in the parameter's type so that a caller written
+ * when only `classificationAxis` was needed still compiles; without it, a
+ * product with no classification gets null, as it always did. A registry
+ * whose maps list cannot be read throws here for every product; a search
+ * catches that for a product with no classification only
+ * ({@link resolveSearchProductFilter}).
  */
 export async function resolveProductFilter(
-  registry: Pick<MapsRegistry, 'classificationAxis'>,
+  registry: Pick<MapsRegistry, 'classificationAxis'> & Partial<Pick<MapsRegistry, 'mapIdsOf'>>,
   product: ProductId | undefined,
 ): Promise<FtSearchFilter | null> {
   if (product === undefined) { return null; }
 
   const values = classificationValuesFor(product);
-  if (values.length === 0) { return null; }
+  if (values.length === 0) {
+    const mapIds = await registry.mapIdsOf?.(JAMF_PRODUCTS[product].bundleId) ?? [];
+    return mapIds.length === 0 ? null : { key: FT_META.PUBLICATION_ID, values: mapIds };
+  }
 
   // Fluid Topics intersects filter objects and unions values within one, so
   // every value has to ride on the same key. They always do: a classification
@@ -351,6 +427,40 @@ export async function resolveProductFilter(
   if (axis === null) { return null; }
 
   return { key: axis, values: [...values] };
+}
+
+/** A product Jamf classifies nothing under, which is filtered by its own publication instead. */
+function isUnclassified(product: ProductId | undefined): product is ProductId {
+  return product !== undefined && classificationValuesFor(product).length === 0;
+}
+
+/**
+ * {@link resolveProductFilter} for a search, which a maps list that cannot be
+ * read fails only where it always did.
+ *
+ * A classified product's search has always needed the list, to know which
+ * axis its value sits on, and fails without it. A product with no
+ * classification needs the list only to be filtered by its publication, and
+ * before it was, its search never read the list at all. So for that product
+ * a list that cannot be read (the fetch fails, or an injected MapsProvider
+ * throws) gives null, which leaves the search where it was then: unfiltered,
+ * and the product reported as not applied.
+ */
+async function resolveSearchProductFilter(
+  ctx: ServerContext,
+  product: ProductId | undefined,
+  log: Logger,
+): Promise<FtSearchFilter | null> {
+  try {
+    return await resolveProductFilter(ctx.mapsRegistry, product);
+  } catch (error) {
+    if (!isUnclassified(product)) { throw error; }
+    log.warning(
+      `Could not read the maps list (${String(error)}); the product filter ` +
+      `"${product}" cannot be applied by its publication`
+    );
+    return null;
+  }
 }
 
 /**
@@ -647,12 +757,18 @@ function transformMapEntry(entry: FtSearchEntry): SearchResult {
  * and docType are also sent upstream on the Fluid Topics path, and applied here
  * again by the same rule so the SearchProvider path is filtered too.
  *
- * `productFilterable` is false when Jamf classifies nothing under the product
+ * `productFilterable` is false when the product cannot be filtered at all
  * (see `productUnfilterable` on {@link ResolvedSearchResults}). The product
  * filter is then left out entirely, because nothing fetched can satisfy it —
  * see {@link applyFiltersWithFallback} for how its removal is reported instead.
+ * `publication` is set when the product is filtered by its own publication,
+ * and is what the local filter matches then ({@link belongsToProduct}).
  */
-function buildActiveFilters(params: SearchParams, productFilterable: boolean): ActiveFilter[] {
+function buildActiveFilters(
+  params: SearchParams,
+  productFilterable: boolean,
+  publication?: ReadonlySet<string>,
+): ActiveFilter[] {
   const activeFilters: ActiveFilter[] = [];
 
   if (params.product !== undefined && productFilterable) {
@@ -660,7 +776,7 @@ function buildActiveFilters(params: SearchParams, productFilterable: boolean): A
     activeFilters.push({
       name: 'product',
       value: productId,
-      apply: (results) => results.filter(r => belongsToProduct(r, productId)),
+      apply: (results) => results.filter(r => belongsToProduct(r, productId, publication)),
     });
   }
 
@@ -699,12 +815,19 @@ function applyAll(results: SearchResultWithMeta[], filters: ActiveFilter[]): Sea
   return filtered;
 }
 
-/** What is said about a product filter that could not be applied at all. */
+/**
+ * What is said about a product filter that could not be applied at all.
+ *
+ * Both reasons are named, because the first alone is no longer why: a
+ * product Jamf classifies nothing under is filtered by its own publication,
+ * and this is said only when the maps list has no map of that either.
+ */
 function unfilterableProductNote(product: ProductId): string {
+  const { name, bundleId } = JAMF_PRODUCTS[product];
   return `The product filter "${product}" was not applied: Jamf classifies no `
-    + `documentation as ${JAMF_PRODUCTS[product].name}, so these results are not `
-    + 'limited to it. Browse its documentation with '
-    + `jamf_docs_get_toc (product "${product}").`;
+    + `documentation as ${name}, and no map of its publication "${bundleId}" was `
+    + 'found to filter by instead, so these results are not limited to it. '
+    + `Browse its documentation with jamf_docs_get_toc (product "${product}").`;
 }
 
 /**
@@ -714,7 +837,8 @@ function unfilterableProductNote(product: ProductId): string {
  * Two cases are settled before relaxation rather than by it.
  *
  * A product that could not be filtered (`unfilterableProduct`: Jamf
- * classifies nothing under it) is reported as removed up front. It is not
+ * classifies nothing under it, and the registry has no map of its own
+ * publication to filter by instead) is reported as removed up front. It is not
  * among `activeFilters`, so it cannot be what empties the page, and topic and
  * docType are not relaxed away on its account. They used to be: the search
  * went out unfiltered, the local product filter matched none of it, and
@@ -935,6 +1059,7 @@ export async function searchDocumentation(
   let allResults: SearchResultWithMeta[];
   let fromProvider = false;
   let productUnfilterable = false;
+  let productPublication: ReadonlySet<string> | undefined;
   let rankedBy: SearchDocumentationResult['rankedBy'];
   let searchError: string | undefined;
 
@@ -943,6 +1068,15 @@ export async function searchDocumentation(
     allResults = resolved.results;
     fromProvider = resolved.fromProvider;
     productUnfilterable = resolved.productUnfilterable;
+    if (resolved.productPublication !== undefined) {
+      productPublication = new Set(resolved.productPublication);
+    } else if (fromProvider && isUnclassified(params.product)) {
+      // Nothing was sent upstream, but the provider's results are still
+      // matched against the product's publication (see fromPublication). With
+      // no map of it, or no maps list, they are matched by URL and name only.
+      const filter = await resolveSearchProductFilter(ctx, params.product, log);
+      productPublication = new Set(filter?.values ?? []);
+    }
     rankedBy = fromProvider ? 'provider' : 'fluid-topics';
   } catch (error) {
     const message = String(error);
@@ -952,7 +1086,7 @@ export async function searchDocumentation(
   }
 
   // Build and apply filters with progressive relaxation
-  const activeFilters = buildActiveFilters(params, !productUnfilterable);
+  const activeFilters = buildActiveFilters(params, !productUnfilterable, productPublication);
   const { filtered: filteredResults, relaxation: filterRelaxation } =
     applyFiltersWithFallback(allResults, activeFilters, productUnfilterable ? params.product : undefined);
 
@@ -1070,14 +1204,24 @@ interface ResolvedSearchResults {
   results: SearchResultWithMeta[];
   fromProvider: boolean;
   /**
-   * A `product` was asked for that Jamf classifies nothing under, so no
+   * A `product` was asked for that Jamf classifies nothing under, and the
+   * registry has no map of its own publication to filter by instead, so no
    * filter for it exists upstream or here, and the results were fetched
    * without one. Not set merely because {@link resolveProductFilter} returned
-   * null: when the registry cannot place a value, the product is still
-   * filtered locally. Always false on the provider path, which is handed
-   * `params` and whose results are then filtered by the name each one reports.
+   * null: when the registry cannot place a classification value, the product
+   * is still filtered locally. Always false on the provider path, which is
+   * handed `params` and whose results are then filtered by the name each one
+   * reports, and for a product with no classification by its publication too
+   * ({@link fromPublication}).
    */
   productUnfilterable: boolean;
+  /**
+   * The map ids a product with no classification was filtered by, upstream
+   * as `ft:publicationId`, for the local filter to match each result's
+   * `mapId` against. Absent for every other search, and on the provider path,
+   * where {@link searchDocumentation} looks them up itself.
+   */
+  productPublication?: readonly string[];
 }
 
 async function resolveSearchResults(
@@ -1160,17 +1304,22 @@ async function resolveSearchResults(
     return out;
   };
 
-  const productFilter = await resolveProductFilter(ctx.mapsRegistry, params.product);
+  const productFilter = await resolveSearchProductFilter(ctx, params.product, log);
   // No upstream filter has two causes, and only one makes the product
-  // unfilterable. A product with no classification value cannot be filtered
-  // anywhere. A value the registry cannot place (an empty or trimmed maps
-  // list) only costs the upstream filter: every result still carries its
-  // classification, so the local filter narrows the unfiltered fetch, and
-  // relaxes as any filter does if nothing fetched belongs to the product.
-  const productUnfilterable = params.product !== undefined
-    && classificationValuesFor(params.product).length === 0;
+  // unfilterable. A product with no classification value, whose publication
+  // the registry has no map of either, cannot be filtered anywhere. A value
+  // the registry cannot place (an empty or trimmed maps list) only costs the
+  // upstream filter: every result still carries its classification, so the
+  // local filter narrows the unfiltered fetch, and relaxes as any filter does
+  // if nothing fetched belongs to the product.
+  const unclassified = isUnclassified(params.product);
+  const productUnfilterable = unclassified && productFilter === null;
+  const productPublication = unclassified && productFilter !== null ? productFilter.values : undefined;
   if (productUnfilterable) {
-    log.debug(`No classification filter for product "${String(params.product)}"; searching without one`);
+    log.debug(
+      `No classification filter for product "${String(params.product)}", and no map of its ` +
+      'publication to filter by; searching without one'
+    );
   } else if (params.product !== undefined && productFilter === null) {
     log.debug(
       `Product "${params.product}" has no classification axis in the maps registry; ` +
@@ -1205,5 +1354,10 @@ async function resolveSearchResults(
     ));
   }
 
-  return { results, fromProvider: false, productUnfilterable };
+  return {
+    results,
+    fromProvider: false,
+    productUnfilterable,
+    ...(productPublication !== undefined ? { productPublication } : {}),
+  };
 }

@@ -7,6 +7,10 @@
 
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type LocaleId } from '../constants.js';
 import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
+import { stripCurrentSuffix, stripVersionSuffix } from './bundle.js';
+
+/** The two Fluid Topics hosts, whose paths name a bundle. */
+const FT_HOSTNAMES: readonly string[] = ['learn.jamf.com', 'docs.jamf.com'];
 
 /**
  * Allowed hostnames for URL validation.
@@ -18,8 +22,7 @@ import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
  * "must be from" error that names the wrong problem.
  */
 export const ALLOWED_HOSTNAMES = new Set<string>([
-  'learn.jamf.com',
-  'docs.jamf.com',
+  ...FT_HOSTNAMES,
   ...STATIC_SOURCE_HOSTNAMES,
 ]);
 
@@ -67,4 +70,27 @@ export function extractLocaleFromUrl(urlStr: string): LocaleId {
     // Invalid URL, fall through
   }
   return DEFAULT_LOCALE;
+}
+
+/**
+ * The bundle family a Fluid Topics URL names, or null for any other URL.
+ *
+ * Reads `/r/{locale}/{bundle}/…`, the reader address of a topic, or of a
+ * whole publication when nothing follows the bundle, and
+ * `/{locale}/bundle/{bundle}/page/…`, the legacy address. The family is the
+ * bundle without `-current` or a version number, as the maps registry keys it
+ * (`deriveBundleStem`), so it compares with a product's `bundleId`.
+ */
+export function extractBundleStemFromUrl(urlStr: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(urlStr);
+  } catch {
+    return null;
+  }
+  if (!FT_HOSTNAMES.includes(url.hostname)) { return null; }
+
+  const [first, second, third] = url.pathname.split('/').filter(segment => segment !== '');
+  const bundle = first === 'r' || second === 'bundle' ? third : undefined;
+  return bundle === undefined ? null : stripVersionSuffix(stripCurrentSuffix(bundle));
 }

@@ -8,9 +8,9 @@
  * there: a SearchProvider, which hands over no classification to read; a Fluid
  * Topics response that contains a result the filter should not have let
  * through; an upstream that returned nothing; a registry that cannot say which
- * axis a product's value sits on; which relabelled results are marked as
- * filed under another product; and the short-snippet fallback that repeats
- * the product name.
+ * axis a product's value sits on, or cannot read the maps list at all; which
+ * relabelled results are marked as filed under another product; and the
+ * short-snippet fallback that repeats the product name.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -26,7 +26,7 @@ import { searchDocumentation } from '../../../src/core/services/search-service.j
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
 import { createClassifyingMapsRegistry, createMockCache, createMockContext } from '../../helpers/mock-context.js';
 import { makeFtSearchResponse, type FixtureClassification } from '../../helpers/fixtures.js';
-import type { SearchProvider } from '../../../src/core/services/interfaces/index.js';
+import type { MapsProvider, SearchProvider } from '../../../src/core/services/interfaces/index.js';
 import type { SearchResult } from '../../../src/core/types.js';
 
 const mockedFtSearch = vi.mocked(ftSearch);
@@ -35,11 +35,45 @@ beforeEach(() => {
   mockedFtSearch.mockReset();
 });
 
-function providerContext(results: SearchResult[]): ReturnType<typeof createMockContext> {
+/**
+ * The registry is an offline one: a provider search for a product with no
+ * classification reads the maps list, to match results against its
+ * publication.
+ */
+function providerContext(
+  results: SearchResult[],
+  mapsRegistry: MapsRegistry = createClassifyingMapsRegistry(),
+): ReturnType<typeof createMockContext> {
   const searchProvider: SearchProvider = {
     search: vi.fn<SearchProvider['search']>().mockResolvedValue(results),
   };
-  return createMockContext({ searchProvider });
+  return createMockContext({ searchProvider, mapsRegistry });
+}
+
+function registryOf(getMaps: MapsProvider['getMaps']): MapsRegistry {
+  return new MapsRegistry(createMockCache(), undefined, { getMaps });
+}
+
+/** The live Jamf Routines map id (learn.jamf.com, 2026-09-26). */
+const ROUTINES_MAP_ID = 'C~Tmp9IxyjJUYOFsJQew8g';
+
+/** A maps list holding the Jamf Routines map, filed under Jamf Pro as it is live. */
+function routinesRegistry(): MapsRegistry {
+  return registryOf(async () => await Promise.resolve([{
+    id: ROUTINES_MAP_ID,
+    title: 'Jamf Routines Documentation',
+    mapApiEndpoint: `/api/khub/maps/${ROUTINES_MAP_ID}`,
+    metadata: [
+      { key: 'ft:locale', label: 'ft:locale', values: ['en-US'] },
+      { key: 'bundle', label: 'bundle', values: ['jamf-routines-documentation'] },
+      { key: 'jamf:portal', label: 'jamf:portal', values: ['Jamf Pro'] },
+    ],
+  }]));
+}
+
+/** A maps list that cannot be read: the fetch failed, or an injected MapsProvider threw. */
+function unreadableRegistry(): MapsRegistry {
+  return registryOf(async () => await Promise.reject(new Error('maps list unavailable')));
 }
 
 function providerResult(title: string, product: string | null): SearchResult {
@@ -78,9 +112,10 @@ describe('on the SearchProvider path the filter reads the reported product name'
   });
 
   it('keeps jamf-routines as an ordinary filter: a provider can report it', async () => {
-    // The up-front removal is about Fluid Topics having no classification to
-    // send. A provider is handed `params` and filters however it filters, so
-    // its results are judged by the name they report, as any product's are.
+    // The up-front removal when there is no publication to filter by is about
+    // what can be sent to Fluid Topics. A provider is handed `params` and
+    // filters however it filters, so its results are judged by the name they
+    // report, as any product's are, and by the publication (next test).
     const ctx = providerContext([
       providerResult('Routine Templates Reference', 'Jamf Routines'),
       providerResult('Policies', 'Jamf Pro'),
@@ -89,6 +124,68 @@ describe('on the SearchProvider path the filter reads the reported product name'
     const result = await searchDocumentation(ctx, { query: 'routine', product: 'jamf-routines' });
 
     expect(result.results.map(r => r.title)).toEqual(['Routine Templates Reference']);
+    expect(result.filterRelaxation).toBeUndefined();
+  });
+
+  it('takes a jamf-routines result from its publication whatever product the provider reports', async () => {
+    // A provider that goes by Jamf's classification reports Jamf Routines
+    // documentation as Jamf Pro, where Jamf files it. Matched by that name
+    // alone, none of these passed, and the product filter was relaxed away.
+    const ctx = providerContext([
+      {
+        ...providerResult('Creating a Routine', 'Jamf Pro'),
+        url: 'https://learn.jamf.com/r/en-US/jamf-routines-documentation/Creating_a_Routine',
+        mapTitle: 'Jamf Routines Documentation',
+      },
+      // By map id: the url names no bundle this server can read.
+      { ...providerResult('Routine Templates', 'Jamf Pro'), mapId: ROUTINES_MAP_ID },
+      // The publication itself, as a MAP result is addressed.
+      {
+        ...providerResult('Jamf Routines Documentation', 'Jamf Pro'),
+        url: 'https://learn.jamf.com/r/en-US/jamf-routines-documentation',
+      },
+      {
+        ...providerResult('Policies', 'Jamf Pro'),
+        url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation/Policies',
+        mapId: 'pro-map',
+      },
+      // A Jamf Pro video about Routines, with no map id: not the publication.
+      {
+        ...providerResult('How to Use Jamf Routines with Jamf Pro', 'Jamf Pro'),
+        url: 'https://learn.jamf.com/r/en-US/training-video-shorts-jamf-pro/How_to_Use_Jamf_Routines',
+      },
+      // Only a Fluid Topics address names a bundle.
+      {
+        ...providerResult('Mirrored Page', 'Jamf Pro'),
+        url: 'https://example.com/r/en-US/jamf-routines-documentation/Mirrored_Page',
+      },
+    ], routinesRegistry());
+
+    const result = await searchDocumentation(ctx, { query: 'routine', product: 'jamf-routines' });
+
+    expect(result.results.map(r => [r.title, r.product, r.crossFiled])).toEqual([
+      ['Creating a Routine', 'Jamf Routines', undefined],
+      ['Routine Templates', 'Jamf Routines', undefined],
+      ['Jamf Routines Documentation', 'Jamf Routines', undefined],
+    ]);
+    expect(result.filterRelaxation).toBeUndefined();
+  });
+
+  it('still matches jamf-routines by url and name when the maps list cannot be read', async () => {
+    const ctx = providerContext([
+      {
+        ...providerResult('Creating a Routine', 'Jamf Pro'),
+        url: 'https://learn.jamf.com/en-US/bundle/jamf-routines-documentation/page/Creating_a_Routine.html',
+      },
+      // No map ids to match it against.
+      { ...providerResult('Routine Templates', 'Jamf Pro'), mapId: ROUTINES_MAP_ID },
+      providerResult('Routine Templates Reference', 'Jamf Routines'),
+    ], unreadableRegistry());
+
+    const result = await searchDocumentation(ctx, { query: 'routine', product: 'jamf-routines' });
+
+    expect(result.searchError).toBeUndefined();
+    expect(result.results.map(r => r.title)).toEqual(['Creating a Routine', 'Routine Templates Reference']);
     expect(result.filterRelaxation).toBeUndefined();
   });
 
@@ -237,6 +334,77 @@ describe('when the registry cannot place a product value', () => {
     expect(result.filterRelaxation?.message).not.toContain('was not applied');
     // Relaxed, so shown under their own products rather than Jamf School.
     expect(result.results.map(r => r.product)).toEqual(['Jamf Connect', 'Jamf Pro', 'Jamf Protect']);
+  });
+});
+
+describe('on the Fluid Topics path jamf-routines is matched by map id alone', () => {
+  const ctx = createMockContext({ mapsRegistry: routinesRegistry() });
+
+  beforeEach(async () => {
+    await ctx.cache.clear();
+  });
+
+  it('drops a result from another publication, whatever product it is shown under', async () => {
+    // The local filter is the rule upstream applied, `ft:publicationId`, so a
+    // Fluid Topics result that is not from the publication goes even when it
+    // would be shown as Jamf Routines. Synthetic: Jamf files nothing as Jamf
+    // Routines today. The stub returns both whatever the filters, as Fluid
+    // Topics would if it ignored the key.
+    mockedFtSearch.mockResolvedValue(makeFtSearchResponse([
+      { title: 'Creating a Routine', mapId: ROUTINES_MAP_ID, classification: { 'jamf:portal': ['Jamf Pro'] } },
+      {
+        title: 'How to Use Jamf Routines with Jamf Pro',
+        mapId: 'training-video-shorts-jamf-pro',
+        classification: { 'jamf:portal': ['Jamf Pro'], 'jamf:app': ['Jamf Routines'] },
+      },
+    ]));
+
+    const result = await searchDocumentation(ctx, { query: 'routine', product: 'jamf-routines' });
+
+    expect(mockedFtSearch.mock.calls[0]?.[1].filters).toEqual([{ key: 'ft:publicationId', values: [ROUTINES_MAP_ID] }]);
+    expect(result.results.map(r => [r.title, r.product])).toEqual([['Creating a Routine', 'Jamf Routines']]);
+    expect(result.filterRelaxation).toBeUndefined();
+  });
+});
+
+describe('when the maps list cannot be read', () => {
+  // The maps fetch fails, or an injected MapsProvider throws. A classified
+  // product's search has always needed the list, to know which axis its value
+  // sits on. jamf-routines needs it only to be filtered by its publication,
+  // and before that its search never read the list, so it falls back to what
+  // it did then.
+  const ctx = createMockContext({ mapsRegistry: unreadableRegistry() });
+
+  beforeEach(async () => {
+    await ctx.cache.clear();
+    mockedFtSearch.mockResolvedValue(makeFtSearchResponse([
+      { title: 'Policies', mapId: 'jamf-pro-documentation' },
+      { title: 'Login Window', mapId: 'jamf-connect-documentation' },
+    ]));
+  });
+
+  it('searches for jamf-routines unfiltered and says the filter was not applied', async () => {
+    const result = await searchDocumentation(ctx, { query: 'q', product: 'jamf-routines' });
+
+    expect(result.searchError).toBeUndefined();
+    expect(mockedFtSearch.mock.calls[0]?.[1].filters).toEqual([]);
+    expect(result.results.map(r => [r.title, r.product])).toEqual([
+      ['Policies', 'Jamf Pro'],
+      ['Login Window', 'Jamf Connect'],
+    ]);
+    expect(result.filterRelaxation).toEqual({
+      removed: ['product'],
+      original: { product: 'jamf-routines' },
+      message: expect.stringContaining('The product filter "jamf-routines" was not applied'),
+    });
+  });
+
+  it('still fails a classified product search, as it always did', async () => {
+    const result = await searchDocumentation(ctx, { query: 'q', product: 'jamf-pro' });
+
+    expect(result.searchError).toContain('maps list unavailable');
+    expect(result.results).toEqual([]);
+    expect(mockedFtSearch).not.toHaveBeenCalled();
   });
 });
 
