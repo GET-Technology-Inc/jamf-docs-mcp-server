@@ -72,7 +72,7 @@ export async function loadStaticIndex(
   source: StaticDocSource,
   locale: string,
 ): Promise<StaticSearchEntry[]> {
-  const key = cacheKey('static-search-index-v2', { source: source.id, locale });
+  const key = cacheKey('static-search-index-v3', { source: source.id, locale });
   const cached = await ctx.cache.get<StaticSearchEntry[]>(key);
   if (cached !== null) { return cached; }
 

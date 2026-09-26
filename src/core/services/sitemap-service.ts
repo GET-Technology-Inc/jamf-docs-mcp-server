@@ -19,7 +19,11 @@ import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
 export interface SitemapEntry {
   /** Absolute URL, in the spelling the source serves. See {@link canonicalStaticUrl}. */
   url: string;
-  /** Path segments after the origin, e.g. `['en', 'guides', 'ai-governance']`. */
+  /**
+   * Path segments after the origin, e.g. `['en', 'guides', 'ai-governance']`,
+   * spelled as `URL.pathname` spells them: a non-ASCII character is
+   * percent-encoded. {@link titleFromSlug} decodes one for display.
+   */
   segments: string[];
   /** `<lastmod>`, when present. */
   lastModified?: string;
@@ -110,6 +114,66 @@ const TITLE_MINOR_WORDS = new Set([
 ]);
 
 /**
+ * Characters a title must not carry, though a slug can spell any of them as
+ * an escape: the controls, of which a newline would end the Markdown list
+ * item a title is written into; the line and paragraph separators; and the
+ * bidi marks, embeddings, overrides and isolates, which reorder the text
+ * around them when it is displayed.
+ */
+const UNSAFE_IN_TITLE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A path segment with its percent-escapes decoded, where they decode.
+ *
+ * Decoded one run of escapes at a time, and a run that will not decode is
+ * kept as written: `decodeURIComponent` throws on an escape that is not
+ * UTF-8, and one bad escape must not cost a sitemap its index. Neither live
+ * sitemap holds such an escape: every one of their 1,906 `<loc>`s decodes
+ * (2026-09-26). The escapes of one character always stand side by side, so a
+ * slug that would decode whole decodes to the same text run by run.
+ *
+ * A character in {@link UNSAFE_IN_TITLE} is written as its escape, as it was
+ * before slugs were decoded.
+ */
+function decodeSlug(slug: string): string {
+  return slug
+    .replace(/(?:%[0-9A-Fa-f]{2})+/g, run => {
+      try { return decodeURIComponent(run); } catch { return run; }
+    })
+    .replace(UNSAFE_IN_TITLE, char => encodeURIComponent(char));
+}
+
+const LATIN_LETTER = /\p{Script=Latin}/u;
+
+/**
+ * A letter of a script other than Latin: kana, a CJK ideograph, and so on.
+ * A letter of the Common script, which belongs to no one script, does not
+ * count: `µ` in `10µs` does not make that a mixed word. (`ー`, the kana
+ * length mark, is Common too, and stands beside kana, which count.)
+ */
+const NON_LATIN_LETTER = /(?![\p{Script=Latin}\p{Script=Common}])\p{L}/u;
+
+/**
+ * One run of Latin letters and digits, inside a word that also holds others.
+ * A run keeps its digits, as a word does, so it is cased as the same letters
+ * and digits would be on their own: `2faで` stays `2faで`, as `2fa` stays `2fa`.
+ */
+const LATIN_RUN = /[\p{Script=Latin}\p{N}]+/gu;
+
+/** Whether a word mixes Latin letters with another script's, as `accountでjamf` does. */
+function mixesScripts(word: string): boolean {
+  return LATIN_LETTER.test(word) && NON_LATIN_LETTER.test(word);
+}
+
+/** One word of a heading, cased; `opensTitle` exempts it from the minor-word rule. */
+function titleCaseWord(word: string, opensTitle: boolean): string {
+  const known = TITLE_CASE_TERMS[word.toLowerCase()];
+  if (known !== undefined) { return known; }
+  if (!opensTitle && TITLE_MINOR_WORDS.has(word.toLowerCase())) { return word.toLowerCase(); }
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
  * Turn a slug into a heading: `ai-governance` → `AI Governance`.
  *
  * Checked against the fourteen real titles concepts.jamf.com's own guides
@@ -119,16 +183,40 @@ const TITLE_MINOR_WORDS = new Set([
  * and this produces as "Infrastructure as Code" — standard title case
  * lowercases "as", and matching one page's capitalisation is not worth a
  * special case.
+ *
+ * `slug` is a path segment as `URL.pathname` spells it, which percent-encodes
+ * every character that is not ASCII, so it is decoded first. Until it was,
+ * each of the 29 support.jamf.com articles with a Japanese or Chinese slug —
+ * every ja and zh-TW article it lists, 2026-09-26 — was titled with its
+ * escapes ("Jamf ID %E3%81%AE%E4%BD%9C%E6%88%90"), and no query in either
+ * language could match one. A slug that is already decoded comes out the
+ * same, unless it holds a `%` and two hex digits, which are read as an
+ * escape, or a character {@link UNSAFE_IN_TITLE} names, which is escaped. An
+ * escaped hyphen, `%2D`, is a hyphen, as RFC 3986 says it is, and so
+ * separates words like any other.
+ *
+ * Japanese writes no space between words, and Intercom's slugs keep that, so
+ * one hyphen-separated word can hold several: `accountでjamf`. Each Latin run
+ * in such a word is cased as a word of its own, or it reads "Accountでjamf
+ * Idを…" where the article says "AccountでJamf IDを…". Only the run that
+ * opens the title is exempt from the minor-word rule. Any other word is cased
+ * whole, exactly as before.
+ *
+ * Measured against the titles Intercom's collection pages give those 29
+ * (2026-09-26): all 29 have the letters and digits of their real title, in
+ * order, and 24 match it exactly but for punctuation and spacing. The other
+ * five differ only in case, which a slug loses and the rules here guess
+ * wrong: `Cer` for `.cer`, `Apns` and `Idp` for `APNs` and `IdP`, and, in two
+ * quoted error messages, `Jamf Auth` for `jamf-auth` and "We Are Sorry an
+ * Error Occurred" for "We are sorry, an error occurred".
  */
 export function titleFromSlug(slug: string): string {
-  const words = slug.split('-').filter(Boolean);
+  const words = decodeSlug(slug).split('-').filter(Boolean);
   return words
-    .map((word, index) => {
-      const known = TITLE_CASE_TERMS[word.toLowerCase()];
-      if (known !== undefined) { return known; }
-      if (index > 0 && TITLE_MINOR_WORDS.has(word.toLowerCase())) { return word.toLowerCase(); }
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
+    .map((word, index) => mixesScripts(word)
+      ? word.replace(LATIN_RUN, (run: string, offset: number) =>
+        titleCaseWord(run, index === 0 && offset === 0))
+      : titleCaseWord(word, index === 0))
     .join(' ');
 }
 
@@ -140,7 +228,9 @@ interface TreeNode {
 
 function toTocEntries(nodes: Iterable<TreeNode>, titles: Map<string, string>): TocEntry[] {
   return [...nodes]
-    .sort((a, b) => a.slug.localeCompare(b.slug))
+    // By its words, not its escapes, which would sort every non-ASCII slug
+    // ahead of every ASCII one.
+    .sort((a, b) => decodeSlug(a.slug).localeCompare(decodeSlug(b.slug)))
     .map(node => {
       const children = toTocEntries(node.children.values(), titles);
       const entry: TocEntry = {

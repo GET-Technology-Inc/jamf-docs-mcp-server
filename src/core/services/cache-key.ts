@@ -139,9 +139,13 @@ export interface CacheKeySpaces {
    * A static source's title index for one locale, derived from its sitemap.
    * v2 since #338: v1 entries hold each URL as the sitemap spells it, not as
    * the source serves it, and `cacheTtl.products` (7 days by default) would
-   * have kept handing that spelling out after an upgrade.
+   * have kept handing that spelling out after an upgrade. v3 because v1 and
+   * v2 entries also hold every non-ASCII slug's title as its percent-escapes
+   * (see `titleFromSlug`), all 13 ja and 16 zh-TW support.jamf.com titles,
+   * and would go on serving them for the same 7 days. v2 was in no release,
+   * so from 6.0.11 this is one move, not two.
    */
-  'static-search-index-v2': { source: string; locale: string };
+  'static-search-index-v3': { source: string; locale: string };
   /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
   /**
@@ -208,7 +212,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'glossary-content': true,
   'static-article': true,
   'static-sitemap': true,
-  'static-search-index-v2': true,
+  'static-search-index-v3': true,
   'intercom-collections': true,
   'intercom-collection-toc-v2': true,
   'maps-registry-v3': true,
