@@ -36,11 +36,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as cheerio from 'cheerio';
 import { parseSitemap, type SitemapEntry } from '../../src/core/services/sitemap-service.js';
-import {
-  fetchStaticArticle,
-  canonicalStaticUrl,
-} from '../../src/core/services/static-article-service.js';
-import { STATIC_DOC_SOURCES } from '../../src/core/constants/sources.js';
+import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
+import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../src/core/constants/sources.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
 const SOURCE = STATIC_DOC_SOURCES['jamf-concepts'];
@@ -105,7 +102,7 @@ async function mapLimit<T, R>(items: T[], work: (item: T) => Promise<R>): Promis
 
 beforeAll(async () => {
   xml = await getText(`${SOURCE.baseUrl}/sitemap.xml`);
-  entries = parseSitemap(xml);
+  entries = parseSitemap(SOURCE, xml);
 
   // Stride across the whole list so both sections and several locales are
   // represented, rather than the first N which are all one locale's roots.
@@ -132,7 +129,7 @@ beforeAll(async () => {
   });
   sampled = await mapLimit(sample, async (entry) => {
     const article = await fetchStaticArticle(ctx, SOURCE, entry.url);
-    const html = served.get(canonicalStaticUrl(entry.url)) ?? '';
+    const html = served.get(canonicalStaticUrl(SOURCE, entry.url)) ?? '';
     return {
       url: entry.url,
       title: article.title,
@@ -201,7 +198,7 @@ describe('concepts.jamf.com contracts', () => {
     const leaf = entries.find(entry => entry.segments.length >= 4);
     if (leaf === undefined) { throw new Error('sitemap carries no leaf entry to test'); }
 
-    const canonical = canonicalStaticUrl(leaf.url);
+    const canonical = canonicalStaticUrl(SOURCE, leaf.url);
     expect(canonical.endsWith('/'), canonical).toBe(true);
 
     const response = await fetch(canonical, {
@@ -214,7 +211,7 @@ describe('concepts.jamf.com contracts', () => {
   it('wraps every page body in the one element the selectors read', async () => {
     const leaf = entries.find(entry => entry.segments.length >= 4);
     if (leaf === undefined) { throw new Error('sitemap carries no leaf entry to test'); }
-    const html = await getText(canonicalStaticUrl(leaf.url));
+    const html = await getText(canonicalStaticUrl(SOURCE, leaf.url));
     // `CONTENT` is 'article, [class*="prose"]', and `.html()` takes the first
     // match in document order. More than one would silently change which.
     expect((html.match(/<article/g) ?? []).length, 'article elements on the page').toBe(1);

@@ -128,12 +128,22 @@ export interface CacheKeySpaces {
   'static-article': { source: string; url: string };
   /** A static source's sitemap, whole. One per source, so no per-locale part. */
   'static-sitemap': { source: string };
-  /** A static source's title index for one locale, derived from its sitemap. */
-  'static-search-index': { source: string; locale: string };
+  /**
+   * A static source's title index for one locale, derived from its sitemap.
+   * v2 since #338: v1 entries hold each URL as the sitemap spells it, not as
+   * the source serves it, and `cacheTtl.products` (7 days by default) would
+   * have kept handing that spelling out after an upgrade.
+   */
+  'static-search-index-v2': { source: string; locale: string };
   /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
-  /** One Intercom collection's article tree. Keyed on the collection, which is locale-specific. */
-  'intercom-collection-toc': { source: string; collection: string };
+  /**
+   * One Intercom collection's article tree. Keyed on the collection, which is
+   * locale-specific. v2 since #338, for the same reason as the search index:
+   * v1 entries hold URLs as Intercom spells them, raw where a slug is not
+   * ASCII, rather than as `get_article` reports them.
+   */
+  'intercom-collection-toc-v2': { source: string; collection: string };
   'maps-registry-v3': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
@@ -191,9 +201,9 @@ const CACHE_NAMESPACE_REGISTRY: {
   'glossary-content': true,
   'static-article': true,
   'static-sitemap': true,
-  'static-search-index': true,
+  'static-search-index-v2': true,
   'intercom-collections': true,
-  'intercom-collection-toc': true,
+  'intercom-collection-toc-v2': true,
   'maps-registry-v3': true,
   'metadata-products-v2': true,
   'metadata-topics': true,

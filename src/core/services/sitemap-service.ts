@@ -10,15 +10,14 @@
 
 import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
-import { canonicalStaticUrl } from './static-article-service.js';
-import type { StaticDocSource, StaticSection } from '../constants/sources.js';
+import { canonicalStaticUrl, type StaticDocSource, type StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
 
 /** One `<url>` of a sitemap, reduced to what a TOC needs. */
 export interface SitemapEntry {
-  /** Canonical absolute URL. */
+  /** Absolute URL, in the spelling the source serves. See {@link canonicalStaticUrl}. */
   url: string;
   /** Path segments after the origin, e.g. `['en', 'guides', 'ai-governance']`. */
   segments: string[];
@@ -33,8 +32,22 @@ export interface SitemapEntry {
  * document is a flat list, cheerio would have to be told to treat it as XML,
  * and a sitemap that fails to parse should still yield the entries it does
  * have.
+ *
+ * Takes the source because a `<loc>` is not a page's canonical spelling: both
+ * sitemaps list every page without a trailing slash, and only one of the two
+ * sites serves that form.
  */
-export function parseSitemap(xml: string): SitemapEntry[] {
+export function parseSitemap(source: StaticDocSource, xml: string): SitemapEntry[];
+/**
+ * The form this took until #338. Each `<loc>` is canonicalised by the source
+ * its own host names, as the one-argument {@link canonicalStaticUrl} does.
+ *
+ * @deprecated Pass the source: `parseSitemap(source, xml)`.
+ */
+export function parseSitemap(xml: string): SitemapEntry[];
+export function parseSitemap(sourceOrXml: StaticDocSource | string, maybeXml?: string): SitemapEntry[] {
+  const source = typeof sourceOrXml === 'string' ? undefined : sourceOrXml;
+  const xml = typeof sourceOrXml === 'string' ? sourceOrXml : maybeXml ?? '';
   const out: SitemapEntry[] = [];
   for (const block of xml.match(/<url\b[\s\S]*?<\/url>/g) ?? []) {
     const loc = /<loc>\s*([^<\s]+)\s*<\/loc>/.exec(block)?.[1];
@@ -47,7 +60,7 @@ export function parseSitemap(xml: string): SitemapEntry[] {
       continue;
     }
     out.push({
-      url: canonicalStaticUrl(loc),
+      url: source === undefined ? canonicalStaticUrl(loc) : canonicalStaticUrl(source, loc),
       segments,
       ...(lastmod !== undefined ? { lastModified: lastmod } : {}),
     });
@@ -65,7 +78,7 @@ export async function loadSitemap(
   if (cached !== null) { return cached; }
 
   const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
-  const entries = parseSitemap(xml);
+  const entries = parseSitemap(source, xml);
   await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
   return entries;
 }

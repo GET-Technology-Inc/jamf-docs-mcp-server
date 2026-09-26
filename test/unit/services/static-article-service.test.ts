@@ -17,16 +17,22 @@ vi.mock('../../../src/core/http-client.js', () => ({
 }));
 
 import {
-  canonicalStaticUrl,
+  canonicalStaticUrl as canonicalStaticUrlFromOldPath,
   extractDocumentTitle,
   fetchStaticArticle,
 } from '../../../src/core/services/static-article-service.js';
-import { STATIC_DOC_SOURCES, staticSourceForUrl, type StaticDocSource } from '../../../src/core/constants/sources.js';
+import {
+  STATIC_DOC_SOURCES,
+  canonicalStaticUrl,
+  staticSourceForUrl,
+  type StaticDocSource,
+} from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 import { CONCEPTS_STRAY_H1_HTML, CONCEPTS_STRAY_H1_URL } from '../../fixtures/concepts-guide-stray-h1-page.js';
 
 const CONCEPTS = STATIC_DOC_SOURCES['jamf-concepts'];
+const SUPPORT = STATIC_DOC_SOURCES['jamf-support'];
 
 /**
  * Shaped like a tool page: one `<article class="prose">`, chrome around it,
@@ -55,22 +61,76 @@ describe('canonicalStaticUrl', () => {
   // The sitemap lists all 990 entries without a trailing slash and the site
   // redirects to the slashed form, so fetching them as listed is 990 needless
   // round trips.
-  it('adds the trailing slash a directory-style path redirects to', () => {
-    expect(canonicalStaticUrl('https://concepts.jamf.com/en/guides'))
+  it('adds the trailing slash concepts.jamf.com redirects to', () => {
+    expect(canonicalStaticUrl(CONCEPTS, 'https://concepts.jamf.com/en/guides'))
       .toBe('https://concepts.jamf.com/en/guides/');
   });
 
-  it('leaves an already-canonical URL alone', () => {
-    expect(canonicalStaticUrl('https://concepts.jamf.com/en/guides/'))
+  it('leaves an already-canonical concepts.jamf.com URL alone', () => {
+    expect(canonicalStaticUrl(CONCEPTS, 'https://concepts.jamf.com/en/guides/'))
       .toBe('https://concepts.jamf.com/en/guides/');
+  });
+
+  // The mirror image: support.jamf.com 301s the slashed form to the slashless
+  // one, which is also each article's <link rel="canonical">. Until #338 the
+  // concepts rule ran here too and every article fetch paid that redirect.
+  it('strips the trailing slash support.jamf.com redirects away from', () => {
+    expect(canonicalStaticUrl(SUPPORT, 'https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now/'))
+      .toBe('https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now');
+  });
+
+  it('leaves an already-canonical support.jamf.com URL alone', () => {
+    expect(canonicalStaticUrl(SUPPORT, 'https://support.jamf.com/en/collections/12369024-jamf-pro'))
+      .toBe('https://support.jamf.com/en/collections/12369024-jamf-pro');
+  });
+
+  it('counts a run of trailing slashes as one', () => {
+    // support.jamf.com 301s `…//` to the slashless form; concepts.jamf.com
+    // serves `…//` as the same page as `…/`. Either way, one cache entry.
+    expect(canonicalStaticUrl(CONCEPTS, 'https://concepts.jamf.com/en/concepts/apiutil//'))
+      .toBe('https://concepts.jamf.com/en/concepts/apiutil/');
+    expect(canonicalStaticUrl(SUPPORT, 'https://support.jamf.com/en/articles/1-a//'))
+      .toBe('https://support.jamf.com/en/articles/1-a');
   });
 
   it('leaves a file path alone', () => {
-    expect(canonicalStaticUrl('https://concepts.jamf.com/llms-full.txt'))
+    expect(canonicalStaticUrl(CONCEPTS, 'https://concepts.jamf.com/llms-full.txt'))
       .toBe('https://concepts.jamf.com/llms-full.txt');
   });
 
+  it('applies the rule to the path in front of a query or fragment, and keeps them', () => {
+    // Both sites redirect on the path alone: `…/apiutil?x=1` is a 301 to
+    // `…/apiutil/?x=1` on concepts.jamf.com, `…/?x=1` a 301 to `…?x=1` on
+    // support.jamf.com (2026-09-26).
+    expect(canonicalStaticUrl(CONCEPTS, 'https://concepts.jamf.com/en/concepts/apiutil?x=1#usage'))
+      .toBe('https://concepts.jamf.com/en/concepts/apiutil/?x=1#usage');
+    expect(canonicalStaticUrl(SUPPORT, 'https://support.jamf.com/en/articles/1-a/?x=1#h_2'))
+      .toBe('https://support.jamf.com/en/articles/1-a?x=1#h_2');
+  });
+
+  it('reduces a raw and a percent-encoded non-ASCII slug to one spelling', () => {
+    const encoded = 'https://support.jamf.com/zh-TW/collections/12369024-jamf-pro-%E7%9B%B8%E9%97%9C';
+    expect(canonicalStaticUrl(SUPPORT, 'https://support.jamf.com/zh-TW/collections/12369024-jamf-pro-相關/'))
+      .toBe(encoded);
+    expect(canonicalStaticUrl(SUPPORT, encoded)).toBe(encoded);
+  });
+
   it('returns an unparseable input unchanged rather than throwing', () => {
+    expect(canonicalStaticUrl(CONCEPTS, 'not a url')).toBe('not a url');
+    expect(canonicalStaticUrl(SUPPORT, '')).toBe('');
+  });
+
+  // Where it lived, and what it took, until #338. `./core/*` is a published
+  // path, so an embedder's call in the old form keeps working, now under each
+  // host's own rule.
+  it('still answers at its old path, taking the source from the host when given only a URL', () => {
+    expect(canonicalStaticUrlFromOldPath).toBe(canonicalStaticUrl);
+    expect(canonicalStaticUrl('https://concepts.jamf.com/en/guides'))
+      .toBe('https://concepts.jamf.com/en/guides/');
+    expect(canonicalStaticUrl('https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now/'))
+      .toBe('https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now');
+    // A host with no source keeps the rule this applied to every URL before.
+    expect(canonicalStaticUrl('https://example.com/docs')).toBe('https://example.com/docs/');
     expect(canonicalStaticUrl('not a url')).toBe('not a url');
   });
 });
