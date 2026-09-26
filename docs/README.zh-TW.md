@@ -232,6 +232,8 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
+目錄依 `maxTokens` 分頁。每頁最多 10 個頂層項目，每個都包含其下所有子項目，放得下多少就放多少，下一頁從第一個放不下的項目開始。每個頂層項目都恰好出現在某一頁，但在第幾頁取決於 `maxTokens`（也取決於目錄本身，因此與 `version`、`language` 有關），所以翻頁時請維持這些參數不變。當 `maxTokens` 不是預設值時，markdown 頁尾會在下一個 `page` 旁註明 `maxTokens`；`structuredContent` 會回傳翻頁時該重送的參數：`productId` 或 `publicationId`、`version`、`language`（有指定時）與 `maxTokens`。MCP App 的「Show more」會全部重送。若某個頂層項目本身就超過 `maxTokens`，它會獨佔一頁，只列出其下放得下的項目。只有這種頁面的 `tokenInfo.truncated` 為 `true`，`truncatedEntry` 會說明列出了其中幾個項目，以及整個項目需要多少 token (`estimatedTokens`)；`outputMode: "full"` 的 markdown 會註明重新呼叫時該用多少 `maxTokens`。(`"compact"` 只列出頂層項目，所以這種截短不會藏起它原本會列出的內容。) 若 `maxTokens` 使頁數超過 `page` 可接受的上限 (100)，第 100 頁不會再提供下一頁，`paginationNote` 會註明能讀到其餘項目的 `maxTokens`。
+
 ### jamf_docs_batch_get_articles
 
 一次取得多篇文件文章。每個 URL 平行取得，無效網域會以單篇錯誤回報，不影響整批結果。

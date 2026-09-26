@@ -3,11 +3,16 @@
  *
  * `jamf_docs_get_toc` sends `structuredContent.entries` as the TOC flattened
  * into document order with every entry tagged by `depth` (0 at the root).
- * Order plus depth is the whole tree, not a hint at it: the tool paginates and
- * token-truncates over top-level entries only, so a page is always a sequence
- * of complete subtrees. This module is what turns that back into something
- * that reads as a tree — before it, the one in-repo host of that payload drew
- * every level of a navigation structure as a sibling of every other.
+ * Order plus depth is the whole tree, not a hint at it: the tool pages over
+ * top-level entries only, so a page is a sequence of complete subtrees, or one
+ * top-level entry too large for the budget cut to the start of its subtree.
+ * This module is what turns that back into something that reads as a tree —
+ * before it, the one in-repo host of that payload drew every level of a
+ * navigation structure as a sibling of every other.
+ *
+ * It also holds what paging needs: the arguments for the next page, and the
+ * note for a page that was cut. Both are here rather than in app.ts for the
+ * reason glossary.ts gives: importing app.ts throws outside a browser.
  */
 
 import { esc } from './escape.js';
@@ -111,4 +116,108 @@ export function renderTocItems(entries: TocEntry[]): string {
       );
     })
     .join('');
+}
+
+/** A top-level entry too large for the budget on its own, as its page shows it. */
+export interface TocTruncatedEntry {
+  title: string;
+  shownEntries: number;
+  totalEntries: number;
+  /** What the whole entry costs, in tokens. */
+  estimatedTokens: number;
+}
+
+/** The part of the TOC payload paging reads. Unvalidated, like all of it. */
+export interface TocPaging {
+  productId?: string;
+  publicationId?: string;
+  /** The version asked for, or `current`. */
+  version?: string;
+  /** The language asked for; absent for the default. Older servers do not send it. */
+  language?: string;
+  page: number;
+  /** False when there is no next page to ask for, even below `totalPages`. */
+  hasMore?: boolean;
+  /** The budget this page was cut to. Older servers do not send it. */
+  maxTokens?: number;
+  /** Present when this page is one top-level entry cut to fit. */
+  truncatedEntry?: TocTruncatedEntry;
+}
+
+function text(value: unknown): value is string {
+  return typeof value === 'string' && value !== '';
+}
+
+function count(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * The arguments that fetch the page after this one, or null when there is no
+ * next page or the payload does not say what to ask for.
+ *
+ * Whichever id the response echoed back, under the name the request used. A
+ * TOC addressed by publication reports `publicationId` and no `productId`,
+ * and sending `product: undefined` instead is a validation error, which is how
+ * "Load more" on a publication TOC once always failed.
+ *
+ * Everything else that decides where this page ends goes back too. A page
+ * holds as many whole top-level entries as fit `maxTokens`, so the next page
+ * starts right after this one only at the same budget, in the same tree:
+ * asked for at the default budget, it started wherever the default's pages
+ * do, and asked for without the version or language, it came from another
+ * tree whose pages break elsewhere (live on 2026-09-26, page 1 of Jamf Pro
+ * at `maxTokens: 1000` held 5 top-level entries in ja-JP and 4 in en-US).
+ * Either way entries were skipped or repeated, with nothing on screen to say
+ * so. `current` is what the server assumes without a version, so it is left
+ * out.
+ *
+ * `hasMore` is false on the last page `page` accepts even when there are
+ * more; asking past it is a validation error.
+ */
+export function nextTocPageArgs(view: TocPaging): { name: string; args: Record<string, unknown> } | null {
+  const id = text(view.productId) ? view.productId : view.publicationId;
+  if (!text(id) || view.hasMore === false) {
+    return null;
+  }
+  const key = text(view.productId) ? 'product' : 'publication';
+  const version = text(view.version) && view.version !== 'current' ? view.version : undefined;
+  const language = text(view.language) ? view.language : undefined;
+  const maxTokens = count(view.maxTokens);
+  return {
+    name: 'jamf_docs_get_toc',
+    args: {
+      [key]: id,
+      ...(version !== undefined ? { version } : {}),
+      ...(language !== undefined ? { language } : {}),
+      page: view.page + 1,
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+    },
+  };
+}
+
+/**
+ * The note for a page that is one top-level entry cut to fit, or nothing.
+ *
+ * The reader of the panel does not set `maxTokens`, so this says what the page
+ * leaves out and what the whole entry needs; the model reads the text channel,
+ * which says what budget to ask for.
+ */
+export function tocBudgetNote(view: TocPaging): string | undefined {
+  // Read as unknown: the payload is only cast to this shape, not checked.
+  const raw: unknown = view.truncatedEntry;
+  if (typeof raw !== 'object' || raw === null) {
+    return undefined;
+  }
+  const cut = raw as Partial<Record<keyof TocTruncatedEntry, unknown>>;
+  const shown = count(cut.shownEntries);
+  const total = count(cut.totalEntries);
+  const needs = count(cut.estimatedTokens);
+  const name = text(cut.title) ? `“${cut.title}”` : 'This section';
+  const part = shown !== undefined && total !== undefined
+    ? `: showing ${String(shown)} of its ${String(total)} entries`
+    : '';
+  return `${name} is too long for the token budget this page was given${part}.${
+    needs !== undefined ? ` The whole section needs ${String(needs)} tokens.` : ''
+  }`;
 }

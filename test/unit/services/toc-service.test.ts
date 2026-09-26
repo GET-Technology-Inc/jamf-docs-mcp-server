@@ -511,7 +511,7 @@ describe('fetchTableOfContents()', () => {
     expect(result.mapId).toBeUndefined();
   });
 
-  it('should respect maxTokens option and truncate when needed', async () => {
+  it('should cut pages to maxTokens without leaving any entry off every page', async () => {
     // Build a large set of nodes to exceed a small token limit
     const manyNodes: FtTocNode[] = Array.from({ length: 50 }, (_, i) => ({
       tocId: `toc-${i}`,
@@ -528,9 +528,19 @@ describe('fetchTableOfContents()', () => {
       maxTokens: 50,
     });
 
-    expect(result.tokenInfo.truncated).toBe(true);
+    // As many whole entries as fit; the rest start the next page, so this
+    // page is not truncated.
+    expect(result.tokenInfo.truncated).toBe(false);
     expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(50);
-    expect(result.toc.length).toBeLessThan(50);
+    expect(result.toc.length).toBeLessThan(10);
+    expect(result.pagination.hasNext).toBe(true);
+
+    const seen: string[] = [];
+    for (let page = 1; page <= result.pagination.totalPages; page++) {
+      const next = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { maxTokens: 50, page });
+      seen.push(...next.toc.map(e => e.title));
+    }
+    expect(seen).toEqual(manyNodes.map(n => n.title));
   });
 
   it('should pass locale option to registry resolution', async () => {

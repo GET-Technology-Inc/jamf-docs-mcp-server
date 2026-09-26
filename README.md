@@ -213,6 +213,8 @@ passing both, or neither, is an error. (Before 5.1, `product` was required and
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Use `"compact"` for a flat list without nested children |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
+Pages are cut to `maxTokens`. A page holds up to 10 top-level entries, each with everything under it, as many as fit, and the next page starts at the first one that did not fit. Every top-level entry is on exactly one page, but which page depends on `maxTokens` (and on the tree, so on `version` and `language`), so keep them the same while paging. The markdown footer names `maxTokens` beside the next `page` when it is not the default, and `structuredContent` echoes back what to resend: `productId` or `publicationId`, `version`, `language` (when one was asked for) and `maxTokens`. The MCP App's "Show more" resends all of them. A top-level entry larger than `maxTokens` on its own is alone on its page, cut to the entries under it that fit. Only that page has `tokenInfo.truncated: true`, and `truncatedEntry` says how many of its entries are shown and what the whole entry costs (`estimatedTokens`); `outputMode: "full"` markdown names the `maxTokens` to repeat the call with. (`"compact"` lists top-level entries only, so a cut there hides nothing it would show.) If `maxTokens` makes more pages than `page` accepts (100), page 100 offers no next page and `paginationNote` names a `maxTokens` that reaches the rest.
+
 ### jamf_docs_batch_get_articles
 
 Fetches multiple documentation articles in a single call. Each URL is fetched concurrently, and invalid domains are reported as per-article errors without failing the entire batch.

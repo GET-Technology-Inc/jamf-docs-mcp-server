@@ -175,14 +175,25 @@ describe('fetchStaticToc', () => {
     expect(result.resolvedLocale).toBe('en');
   });
 
-  it('truncates to the token budget like the Fluid Topics path', async () => {
-    mockHttpGetText.mockResolvedValue(sitemapXml(
-      Array.from({ length: 60 }, (_, i) => `/en/guides/a-rather-long-guide-slug-number-${String(i)}`)
-    ));
+  it('cuts pages to the token budget like the Fluid Topics path, dropping nothing', async () => {
+    // Padded, so slug order (the tree's order) is numeric order.
+    const slugs = Array.from({ length: 60 }, (_, i) => `a-rather-long-guide-slug-number-${String(i).padStart(2, '0')}`);
+    mockHttpGetText.mockResolvedValue(sitemapXml(slugs.map(slug => `/en/guides/${slug}`)));
+    const ctx = createMockContext();
 
-    const result = await fetchStaticToc(createMockContext(), CONCEPTS, GUIDES, 'en', { maxTokens: 60 });
+    const first = await fetchStaticToc(ctx, CONCEPTS, GUIDES, 'en', { maxTokens: 60 });
+    // Fewer than 10 fit in 60 tokens; the rest are on the pages after it,
+    // so nothing on this page was cut.
+    expect(first.toc.length).toBeLessThan(10);
+    expect(first.tokenInfo.tokenCount).toBeLessThanOrEqual(60);
+    expect(first.tokenInfo.truncated).toBe(false);
+    expect(first.pagination.hasNext).toBe(true);
 
-    expect(result.tokenInfo.truncated).toBe(true);
-    expect(result.toc.length).toBeLessThan(60);
+    const seen: string[] = [];
+    for (let page = 1; page <= first.pagination.totalPages; page++) {
+      const result = await fetchStaticToc(ctx, CONCEPTS, GUIDES, 'en', { maxTokens: 60, page });
+      seen.push(...result.toc.map(e => e.url));
+    }
+    expect(seen).toEqual(slugs.map(slug => `https://concepts.jamf.com/en/guides/${slug}/`));
   });
 });

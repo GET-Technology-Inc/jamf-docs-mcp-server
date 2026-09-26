@@ -108,6 +108,7 @@ export type {
   GlossaryLookupResult,
   GetTocParams,
   TocEntry,
+  TocTruncatedEntry,
   TocResponse,
   CacheEntry,
   CacheOptions,
