@@ -3,7 +3,7 @@
  *
  * This repository squash-merges, and a squash keeps only the PR title. Every
  * typed commit message inside the PR is discarded, so the title alone decides
- * what semantic-release does with the merge.
+ * what the merge earns when release.yml next runs semantic-release.
  *
  * On 2026-09-21 that lost a release outright. PR #296 carried sixteen commits
  * including a `feat`, was squashed under a title starting `chore:`, and
@@ -110,7 +110,8 @@ export function checkPrTitle({ title, commits, rules }) {
       `but its title would produce ${titleLevel === LEVEL.none ? 'no release' : `only a ${LEVEL_NAME[titleLevel]}`}:\n` +
       `    ${title}\n\n` +
       'Merging squashes those commits away and keeps only the title, so the\n' +
-      'release would be lost silently — CI stays green and nothing is published.\n' +
+      'release would be lost silently — CI stays green, and the title is all\n' +
+      'semantic-release reads of this PR when it next runs.\n' +
       `Retitle the PR with a type that releases at least a ${LEVEL_NAME[commitLevel]}.`,
   };
 }
