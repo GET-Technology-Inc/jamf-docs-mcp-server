@@ -20,9 +20,12 @@
  *
  * Hence the shape here: fetch `GET /maps/{mapId}/toc` once per map, reduce it
  * to a `tocId -> display URL` index, cache the index, and hand the article
- * parser a synchronous lookup. The fetch happens only when the topic HTML
- * actually contains internal links, and the index is shared by every article
- * in the map, so the amortised cost is one TOC fetch per map per cache TTL.
+ * parser a synchronous lookup. The same index also carries the breadcrumb and
+ * the navigation, so every article reads its own map's, once, and hands it to
+ * all three lookups; another map's TOC is fetched only when the topic links
+ * into it. The index is shared by every article in the map, and a burst of
+ * articles in a cold map shares one load of it, so the amortised cost is one
+ * TOC fetch per map per cache TTL.
  *
  * When the TOC cannot be loaded the lookup returns `undefined` and the parser
  * leaves the span as plain text. That is deliberate: a tocId cannot be turned
@@ -205,7 +208,67 @@ function indexTocNodes(
   }
 }
 
+/**
+ * Loads of a map's TOC index still in flight, per cache and then per map.
+ *
+ * Collapses a burst of loads of one map into one. `batch_get_articles` runs up
+ * to five articles at once, and in a cold map every one of them missed the
+ * cache and fetched the TOC for itself: the workers start together and fetch
+ * their topics in about the same time, so they reach the index within
+ * milliseconds of each other, well inside one `/toc` download (#339).
+ * `TopicResolver.inflight` and `MapsRegistry.buildPromise` guard the topic
+ * index and the map list against the same fan-out.
+ *
+ * Keyed by the `CacheProvider` rather than module-level, for the reason
+ * `TopicResolver.inflight` is an instance member: a guard scoped to one server
+ * cannot reach across requests in a runtime where module scope persists
+ * (Cloudflare Workers). The glossary's and the static sources' Fuse indexes are
+ * scoped the same way. It holds a load only while it runs and nothing after
+ * it settles, so it can neither serve a stale index nor pin a failure: the
+ * cache stays the only store of the index.
+ */
+const loadsInFlight = new WeakMap<CacheProvider, Map<string, Promise<MapTocIndex>>>();
+
 async function loadMapTocIndex(
+  http: HttpClient,
+  cache: CacheProvider,
+  mapId: string,
+  ttl: number | undefined,
+): Promise<MapTocIndex> {
+  let inFlight = loadsInFlight.get(cache);
+  if (inFlight === undefined) {
+    inFlight = new Map();
+    loadsInFlight.set(cache, inFlight);
+  }
+  // A caller that joins gets the load as the first caller started it, with the
+  // first caller's client and TTL. Both come from one server's config.
+  const pending = inFlight.get(mapId);
+  if (pending !== undefined) {
+    return await pending;
+  }
+
+  const load = readOrBuildMapTocIndex(http, cache, mapId, ttl);
+  inFlight.set(mapId, load);
+  // Cleaned up in a `finally` around the await, not with `load.finally(...)`:
+  // that returns a second promise which rejects along with `load` and which
+  // nothing handles, and an unhandled rejection terminates the process. It is
+  // the bug test/unit/services/topic-resolver-crash.test.ts pins.
+  try {
+    return await load;
+  } finally {
+    inFlight.delete(mapId);
+  }
+}
+
+/**
+ * The cached index, or one built from a fresh fetch and stored.
+ *
+ * The cache read is inside the guarded load, not ahead of it. A caller that
+ * read the cache first and checked the guard second could miss both, reading
+ * before the index was written and checking after the load had cleared, and
+ * fetch the TOC again.
+ */
+async function readOrBuildMapTocIndex(
   http: HttpClient,
   cache: CacheProvider,
   mapId: string,
@@ -231,6 +294,67 @@ async function loadMapTocIndex(
   return index;
 }
 
+// ─── Loading once per article ──────────────────────────────────
+
+/**
+ * One map's TOC index, loaded and settled: the index, or `undefined` when the
+ * TOC would not load, in which case the failure has already been reported.
+ *
+ * What lets one article load its map's index once and hand it to every lookup
+ * that needs it. Each lookup used to load it for itself, and a failure is never
+ * cached, so a `/toc` that timed out was attempted, and warned about, once per
+ * lookup, one after another: up to three timeouts on one article (#339).
+ */
+export interface SettledTocIndex {
+  readonly mapId: string;
+  readonly index: MapTocIndex | undefined;
+}
+
+export interface SettledTocIndexOptions {
+  http: HttpClient;
+  cache: CacheProvider;
+  mapId: string;
+  /** TTL for the cached index; `undefined` uses the cache default. */
+  ttl?: number | undefined;
+  logger?: Logger | undefined;
+  /**
+   * What the caller goes without when the TOC will not load, which finishes
+   * the warning: "this article will have no navigation", say.
+   */
+  consequence: string;
+}
+
+/**
+ * Load one map's TOC index and settle it. Never rejects: a TOC that will not
+ * load is reported once, here, and comes back as `index: undefined`.
+ */
+export async function loadSettledTocIndex(
+  options: SettledTocIndexOptions,
+): Promise<SettledTocIndex> {
+  const { http, cache, mapId, ttl, logger, consequence } = options;
+  try {
+    return { mapId, index: await loadMapTocIndex(http, cache, mapId, ttl) };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    logger?.warning(`ft-internal-link: TOC index unavailable for map ${mapId}, ${consequence}: ${reason}`);
+    return { mapId, index: undefined };
+  }
+}
+
+/**
+ * The index for `options.mapId`: the one the caller already settled when it is
+ * for that map, and otherwise loaded and settled here.
+ */
+async function settledIndexFor(
+  options: SettledTocIndexOptions,
+  loaded: SettledTocIndex | undefined,
+): Promise<MapTocIndex | undefined> {
+  if (loaded?.mapId === options.mapId) {
+    return loaded.index;
+  }
+  return (await loadSettledTocIndex(options)).index;
+}
+
 // ─── Resolver construction ─────────────────────────────────────
 
 export interface InternalLinkResolverOptions {
@@ -241,6 +365,12 @@ export interface InternalLinkResolverOptions {
   /** TTL for the cached index; `undefined` uses the cache default. */
   ttl?: number | undefined;
   logger?: Logger | undefined;
+  /**
+   * Indexes the caller has already settled with {@link loadSettledTocIndex}.
+   * A map among them is not loaded again, and one that failed is not reported
+   * again: its links stay plain text.
+   */
+  loaded?: readonly SettledTocIndex[] | undefined;
 }
 
 /**
@@ -252,7 +382,7 @@ export interface InternalLinkResolverOptions {
 export async function buildInternalLinkResolver(
   options: InternalLinkResolverOptions,
 ): Promise<InternalLinkResolver> {
-  const { http, cache, mapIds, ttl, logger } = options;
+  const { http, cache, mapIds, ttl, logger, loaded } = options;
 
   if (mapIds.length === 0) {
     return NO_INTERNAL_LINKS;
@@ -261,17 +391,15 @@ export async function buildInternalLinkResolver(
   const indexes = new Map<string, MapTocIndex>();
   await Promise.all(
     mapIds.map(async (mapId): Promise<void> => {
-      try {
-        indexes.set(mapId, await loadMapTocIndex(http, cache, mapId, ttl));
-      } catch (error) {
-        // A TOC that will not load costs its links, not the article. The map
-        // stays unindexed, every link into it stays plain text, and the rest
-        // of the topic is served exactly as before.
-        const reason = error instanceof Error ? error.message : String(error);
-        logger?.warning(
-          `ft-internal-link: TOC index unavailable for map ${mapId},` +
-          ` its internal links will render without a destination: ${reason}`,
-        );
+      // A TOC that will not load costs its links, not the article. The map
+      // stays unindexed, every link into it stays plain text, and the rest
+      // of the topic is served exactly as before.
+      const index = await settledIndexFor(
+        { http, cache, mapId, ttl, logger, consequence: 'its internal links will render without a destination' },
+        loaded?.find((settled) => settled.mapId === mapId),
+      );
+      if (index !== undefined) {
+        indexes.set(mapId, index);
       }
     }),
   );
@@ -290,9 +418,9 @@ export async function buildInternalLinkResolver(
  * reader shell — and the topic metadata endpoint has no ancestry field either
  * (it has `dita:topicPath`, which is a source-file path, not the published
  * hierarchy, and does not match what a reader sees). The map's TOC is the one
- * place the hierarchy exists, and it is already fetched and cached for
- * internal-link resolution, so this is a second lookup over the same index
- * rather than a second fetch.
+ * place the hierarchy exists, and an article fetch loads its index once and
+ * hands it to this lookup, the navigation and the internal links, so the
+ * breadcrumb costs a lookup over that index rather than a load of its own.
  *
  * Failure is an empty chain, never a partial or invented one: a breadcrumb
  * missing its middle would read as a real path to somewhere that does not
@@ -307,6 +435,12 @@ export interface TopicAncestryOptions {
   /** TTL for the cached index; `undefined` uses the cache default. */
   ttl?: number | undefined;
   logger?: Logger | undefined;
+  /**
+   * The index the caller has already settled with {@link loadSettledTocIndex}.
+   * Used when it is for `mapId`: nothing is loaded, and a failure is not
+   * reported again.
+   */
+  loaded?: SettledTocIndex | undefined;
 }
 
 /**
@@ -324,8 +458,8 @@ const MAX_NAV_LINKS = 8;
  *
  * The complement of {@link fetchTopicAncestors}: that answers "what is above
  * this page", this answers "what is beside and below it". Both read the same
- * cached index, so an article that already resolved a breadcrumb pays nothing
- * for this.
+ * index, which an article fetch loads once and hands to each, so an article
+ * that already resolved a breadcrumb pays nothing for this.
  *
  * It exists because the Fluid Topics API serves one topic per call while the
  * website concatenates a topic and its children into a single page. Nine of
@@ -342,17 +476,13 @@ const MAX_NAV_LINKS = 8;
 export async function fetchTopicNavigation(
   options: TopicAncestryOptions,
 ): Promise<ArticleNavigation | undefined> {
-  const { http, cache, mapId, contentId, ttl, logger } = options;
+  const { contentId, loaded } = options;
 
-  let index: MapTocIndex;
-  try {
-    index = await loadMapTocIndex(http, cache, mapId, ttl);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    logger?.warning(
-      `ft-internal-link: TOC index unavailable for map ${mapId},` +
-      ` this article will have no navigation: ${reason}`,
-    );
+  const index = await settledIndexFor(
+    { ...options, consequence: 'this article will have no navigation' },
+    loaded,
+  );
+  if (index === undefined) {
     return undefined;
   }
 
@@ -410,16 +540,10 @@ function isLink(value: ArticleNavigationLink | undefined): value is ArticleNavig
 export async function fetchTopicAncestors(
   options: TopicAncestryOptions,
 ): Promise<string[]> {
-  const { http, cache, mapId, contentId, ttl, logger } = options;
-  try {
-    const index = await loadMapTocIndex(http, cache, mapId, ttl);
-    return index.ancestorsByContentId[contentId] ?? [];
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    logger?.warning(
-      `ft-internal-link: TOC index unavailable for map ${mapId},` +
-      ` this article will have no breadcrumb: ${reason}`,
-    );
-    return [];
-  }
+  const { contentId, loaded } = options;
+  const index = await settledIndexFor(
+    { ...options, consequence: 'this article will have no breadcrumb' },
+    loaded,
+  );
+  return index?.ancestorsByContentId[contentId] ?? [];
 }

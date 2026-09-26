@@ -410,8 +410,9 @@ heading tags of any level. Without `navigation`, a client showing that page has
 the introduction and no route to the nine procedures the page consists of on the
 website. The viewer renders them as *In this section*.
 
-It is derived from the map's TOC index, which the breadcrumb lookup already
-fetches and caches, so an article pays no extra request for it.
+It is derived from the map's TOC index, the same index the breadcrumb and the
+internal links are resolved from. An article loads that index once and shares
+it between all three.
 
 ### Developing the viewer
 
