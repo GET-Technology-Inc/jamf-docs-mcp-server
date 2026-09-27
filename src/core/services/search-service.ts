@@ -34,7 +34,8 @@ import type { ServerContext } from '../types/context.js';
 import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl, buildDisplayUrlFromPrettyUrlMeta } from './topic-resolver.js';
-import { MapsProviderError, type MapsRegistry } from './maps-registry.js';
+import type { MapsRegistry } from './maps-registry.js';
+import { describeMapsListFailure } from './maps-list-failure.js';
 import { cleanSnippet, titleProductSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
@@ -43,11 +44,11 @@ import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { compareVersions } from '../utils/bundle.js';
 import {
   describeFetchFailure,
-  isRequestFailure,
   mayBeTemporary,
+  reasonGiven,
   MAY_BE_TEMPORARY,
+  UNEXPECTED_FAILURE_ADVICE,
 } from '../utils/fetch-failure.js';
-import { sanitizeErrorMessage } from '../utils/sanitize.js';
 import { dedupeResultsToLatestVersions } from './search-result-versions.js';
 import { readSearchProviderResults } from './provider-results.js';
 import { estimateTokens, buildPaginationNote } from './tokenizer.js';
@@ -1193,21 +1194,6 @@ const NOT_A_NO_RESULTS =
   'This is not a "no results": the search did not complete, so it cannot say whether the ' +
   'documentation has anything for this query.';
 
-/** The advice for a failure that was not a request, so no status says whether a retry helps. */
-const UNEXPECTED_FAILURE_ADVICE =
-  'Trying again may help. If it keeps failing, the server log says what went wrong.';
-
-/**
- * What `error` says went wrong, with file paths and stack traces removed, or
- * `undefined` when it says nothing. A provider can reject with a string, with
- * `undefined`, or with an Error whose message is empty.
- */
-function reasonGiven(error: unknown): string | undefined {
-  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-  const reason = sanitizeErrorMessage(raw).trim();
-  return reason === '' ? undefined : reason;
-}
-
 /**
  * A failed search, written for the caller: what failed and why, that this is
  * not a "no results", and whether trying again may help. The tool returns it
@@ -1231,7 +1217,8 @@ function reasonGiven(error: unknown): string | undefined {
  *   only the provider could give. Not learn.jamf.com, which was not asked.
  *   A MapsProvider is named only when it threw ({@link MapsProviderError}):
  *   one whose answer the registry could not use is replaced by learn.jamf.com,
- *   and a failure there is learn.jamf.com's.
+ *   and a failure there is learn.jamf.com's. The glossary words its own maps
+ *   list the same way: both take the words from {@link describeMapsListFailure}.
  * - Anything else: plain words, and the server log for what went wrong. The
  *   error itself is left out, because a raw JavaScript message ("clusters is
  *   not iterable") tells a caller nothing it can act on. A cache that fails
@@ -1253,21 +1240,12 @@ function searchFailureMessage(params: SearchParams, error: unknown): string {
         ? 'the configured search backend reported an error without saying what went wrong'
         : `the configured search backend reported an error (${reason})`;
       break;
-    case 'maps':
-      if (cause instanceof MapsProviderError) {
-        const given = reasonGiven(cause.failure);
-        const said = given === undefined ? ', which gave no reason' : ` (${given})`;
-        failed = `${mapsList} could not be read from the configured maps provider${said}`;
-      } else if (isRequestFailure(cause)) {
-        failed = `${mapsList} could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
-        advice = mayBeTemporary(cause) ? MAY_BE_TEMPORARY : undefined;
-      } else {
-        // A list in a shape the registry cannot read. Not the registry's
-        // cache, which it guards (cache-guard.ts).
-        failed = `${mapsList} could not be read`;
-        advice = UNEXPECTED_FAILURE_ADVICE;
-      }
+    case 'maps': {
+      const maps = describeMapsListFailure(cause);
+      failed = `${mapsList} ${maps.failed}`;
+      advice = maps.advice;
       break;
+    }
     case 'fluid-topics':
       failed = `the search results could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
       advice = mayBeTemporary(cause) ? MAY_BE_TEMPORARY : undefined;

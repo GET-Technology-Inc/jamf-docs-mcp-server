@@ -70,7 +70,8 @@ export const ProductListOutputSchema = z.object({
    * every product reported `['current']` as its versions (#335).
    *
    * `unavailable` names each source. `maps-registry` is learn.jamf.com's
-   * `/api/khub/maps`, which both halves read. Any of three things can then be
+   * `/api/khub/maps`, or a configured MapsProvider, which `message` then
+   * names, and both halves read it. Any of three things can then be
    * a stand-in, each cached on its own clock, and `message` says which: its
    * documents are missing from `publications`, the products' versions are
    * compiled-in defaults, or every product's `hasContent` is assumed true.

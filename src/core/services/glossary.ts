@@ -43,6 +43,7 @@ import { cacheKey } from './cache-key.js';
 import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
+import { describeMapsListFailure } from './maps-list-failure.js';
 import { readGlossaryProviderResult } from './provider-results.js';
 
 /**
@@ -78,22 +79,24 @@ function describeFetchFailures(errors: unknown[]): string {
  * A {@link GlossaryUnavailableError} for `term`.
  *
  * `failed` completes "Glossary lookup for "<term>" failed: …". `notChecked`
- * says why the reply is not a "no match". `temporary` says whether trying
- * again may help: {@link mayBeTemporary} of the requests that failed, which
- * the search's failure message asks too, or false where nothing was fetched
- * that could fail.
+ * says why the reply is not a "no match". `advice` is the paragraph the
+ * message ends with, or none: {@link MAY_BE_TEMPORARY} where
+ * {@link mayBeTemporary} holds for the requests that failed, which the
+ * search's failure message asks too; for the maps list,
+ * {@link describeMapsListFailure}'s, which gives a MapsProvider none; and
+ * none where nothing was fetched that could fail.
  */
 function glossaryUnavailable(
   term: string,
   failed: string,
   notChecked: string,
-  options: { temporary?: boolean; cause?: unknown } = {},
+  options: { advice: string | undefined; cause?: unknown },
 ): GlossaryUnavailableError {
   const paragraphs = [
     `Glossary lookup for "${term}" failed: ${failed}.`,
     `This is not a "no match": ${notChecked}.`,
   ];
-  if (options.temporary !== false) { paragraphs.push(MAY_BE_TEMPORARY); }
+  if (options.advice !== undefined) { paragraphs.push(options.advice); }
   return new GlossaryUnavailableError(
     paragraphs.join('\n\n'),
     options.cause !== undefined ? { cause: options.cause } : undefined,
@@ -814,7 +817,7 @@ function throwIfUnanswerable(
   const reason = describeFetchFailures(failures.map(f => f.error));
   const titles = failures.map(f => titleOf(f.node)).join(', ');
   const cause = failures[0]?.error;
-  const temporary = failures.some(f => mayBeTemporary(f.error));
+  const advice = failures.some(f => mayBeTemporary(f.error)) ? MAY_BE_TEMPORARY : undefined;
 
   if (failures.length === candidates) {
     const one = candidates === 1;
@@ -825,7 +828,7 @@ function throwIfUnanswerable(
         `and ${one ? 'its definition' : 'none of their definitions'} could be fetched from ` +
         `learn.jamf.com (${reason}): ${titles}`,
       `the ${one ? 'entry' : 'entries'} that might define it could not be read`,
-      { cause, temporary },
+      { cause, advice },
     );
   }
 
@@ -839,7 +842,7 @@ function throwIfUnanswerable(
       `${String(failures.length)} of the ${String(candidates)} glossary entries whose titles are ` +
         `close to it could not be fetched from learn.jamf.com (${reason}): ${titles}. ${others}`,
       'it was checked against only part of the glossary, and its entry may be one that could not be fetched',
-      { cause, temporary },
+      { cause, advice },
     );
   }
 
@@ -851,7 +854,7 @@ function throwIfUnanswerable(
       `the entry whose title names it, ${lead}, could not be fetched from learn.jamf.com ` +
         `(${reason})${more > 0 ? `, nor could ${countOf(more, 'other candidate', 'other candidates')}` : ''}`,
       'answering from the entries that were fetched would put another entry in its place',
-      { cause, temporary },
+      { cause, advice },
     );
   }
 }
@@ -907,30 +910,35 @@ export async function lookupGlossaryTerm(
   // GlossaryUnavailableError; only a glossary that was read can answer "no
   // match". See that class for why.
 
-  // Resolve glossary mapId dynamically via MapsRegistry
+  // Resolve glossary mapId dynamically via MapsRegistry. The message names
+  // the source that failed, learn.jamf.com or a configured MapsProvider, in
+  // the search's words: see describeMapsListFailure.
   let mapId: string | null;
   try {
     mapId = await ctx.mapsRegistry.resolveGlossaryMapId(locale);
   } catch (error) {
     log.error(`Failed to resolve glossary mapId: ${String(error)}`);
+    const maps = describeMapsListFailure(error);
     throw glossaryUnavailable(
       term,
-      'the list of documentation maps, which says where the glossary is, could not be ' +
-        `fetched from learn.jamf.com (${describeFetchFailure(error)})`,
+      `the list of documentation maps, which says where the glossary is, ${maps.failed}`,
       GLOSSARY_NOT_READ,
-      { cause: error, temporary: mayBeTemporary(error) },
+      { cause: error, advice: maps.advice },
     );
   }
 
   if (mapId === null) {
     // `resolveGlossaryMapId` already falls back to en-US, so this is a map
-    // list with no glossary in it at all, not a locale without one.
+    // list with no glossary in it at all, not a locale without one. The
+    // registry does not say where the list came from, so neither does this:
+    // until 2026-09-28 it was "learn.jamf.com's list", which a MapsProvider's
+    // list without a glossary is not.
     log.error(`No glossary map found for locale="${locale}"`);
     throw glossaryUnavailable(
       term,
-      "learn.jamf.com's list of documentation maps has no glossary in it",
+      'the list of documentation maps has no glossary in it',
       'there was no glossary to check the term against',
-      { temporary: false },
+      { advice: undefined },
     );
   }
 
@@ -947,7 +955,7 @@ export async function lookupGlossaryTerm(
       "the glossary's table of contents could not be fetched from learn.jamf.com " +
         `(${describeFetchFailure(error)})`,
       GLOSSARY_NOT_READ,
-      { cause: error, temporary: mayBeTemporary(error) },
+      { cause: error, advice: mayBeTemporary(error) ? MAY_BE_TEMPORARY : undefined },
     );
   }
 
@@ -957,6 +965,7 @@ export async function lookupGlossaryTerm(
       term,
       "the glossary's table of contents came back from learn.jamf.com with no terms in it",
       GLOSSARY_NOT_READ,
+      { advice: MAY_BE_TEMPORARY },
     );
   }
 

@@ -22,13 +22,16 @@ import {
   type StaticDocSource,
 } from '../constants/sources.js';
 import { listIntercomCollections } from '../services/intercom-service.js';
+import { describeMapsListFailure } from '../services/maps-list-failure.js';
+import { isRequestFailure } from '../utils/fetch-failure.js';
 import { getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
 
 /**
- * What `incomplete.unavailable` calls learn.jamf.com's `/api/khub/maps`.
+ * What `incomplete.unavailable` calls learn.jamf.com's `/api/khub/maps`, or
+ * the MapsProvider configured in its place.
  *
  * The one Fluid Topics read this tool depends on, and both halves of it do:
  * the publication axis is built from it, and so are the products' versions
@@ -92,13 +95,15 @@ Note: This is a read-only operation that does not modify any state.
 
 If a source could not be read, the reply lists what it could and says so. "incomplete" then
 names each unavailable source, its "message" says what that cost, and the Markdown reply
-says the same at the top. "${MAPS_REGISTRY}" is learn.jamf.com, where the publication list
-and the product versions both come from: either can then be missing or a compiled-in default.
+says the same at the top.
+"${MAPS_REGISTRY}" is the list of documentation maps, from learn.jamf.com or a configured
+maps provider, where the publication list and the product versions both come from: either
+can then be missing or a compiled-in default.
 ${DYNAMIC_SECTION_SOURCES.map(source =>
     `"${source.id}" is ${source.hostname}, whose ${sectionIdPattern(source)} publications are then missing, or, ` +
     'when only some of its languages could not be read, leave those out of their "locales".',
   ).join('\n')}
-This may be temporary: try again in a minute. No "incomplete" means every source answered.`;
+The message says whether trying again may help. No "incomplete" means every source answered.`;
 
 /**
  * One publication as `list_products` reports it.
@@ -137,6 +142,8 @@ interface PublicationListing {
    * single-locale.
    */
   localesUnknown: Set<string>;
+  /** What reading the maps registry threw, when {@link MAPS_REGISTRY} is unavailable. */
+  registryFailure?: unknown;
 }
 
 /** One dynamic source's rows, and the locales its rows could not be checked in. */
@@ -243,11 +250,16 @@ async function listDynamicSourcesQuietly(ctx: ServerContext): Promise<DynamicSou
   return listing;
 }
 
-/** The maps registry's publications, or null when it could not be read. */
-async function listRegistryPublicationsQuietly(ctx: ServerContext): Promise<PublicationRow[] | null> {
+/**
+ * The maps registry's publications, or null rows and what reading it threw
+ * when it could not be read.
+ */
+async function listRegistryPublicationsQuietly(
+  ctx: ServerContext,
+): Promise<{ rows: PublicationRow[] | null; failure?: unknown }> {
   try {
     const pubs = await ctx.mapsRegistry.listPublications();
-    return pubs.map(pub => ({
+    const rows = pubs.map(pub => ({
       id: pub.id,
       title: pub.title,
       ...(pub.portal.length > 0 ? { portal: pub.portal } : {}),
@@ -256,11 +268,12 @@ async function listRegistryPublicationsQuietly(ctx: ServerContext): Promise<Publ
       locales: pub.locales,
       versions: pub.versions,
     }));
+    return { rows };
   } catch (error) {
     ctx.logger.createLogger('list-products').warning(
       `Could not list publications: ${String(error)}`,
     );
-    return null;
+    return { rows: null, failure: error };
   }
 }
 
@@ -293,16 +306,17 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationL
     versions: [],
   }));
 
-  const [dynamic, registryRows] = await Promise.all([
+  const [dynamic, registry] = await Promise.all([
     listDynamicSourcesQuietly(ctx),
     listRegistryPublicationsQuietly(ctx),
   ]);
 
   return {
-    rows: [...staticRows, ...dynamic.rows, ...(registryRows ?? [])],
-    unavailable: [...(registryRows === null ? [MAPS_REGISTRY] : []), ...dynamic.unreadSources],
+    rows: [...staticRows, ...dynamic.rows, ...(registry.rows ?? [])],
+    unavailable: [...(registry.rows === null ? [MAPS_REGISTRY] : []), ...dynamic.unreadSources],
     unreadLocales: dynamic.unreadLocales,
     localesUnknown: dynamic.localesUnknown,
+    registryFailure: registry.failure,
   };
 }
 
@@ -325,6 +339,34 @@ interface ProductFallbacks {
 }
 
 /**
+ * The maps registry's sentences for the `incomplete` note: that it could not
+ * be read, then each part of the reply that is missing or a stand-in because
+ * of it. `maps` is how the registry's own failure is worded, when it is not a
+ * request to learn.jamf.com.
+ */
+function registrySentences(
+  publicationsMissing: boolean,
+  fallback: ProductFallbacks,
+  maps: ReturnType<typeof describeMapsListFailure> | undefined,
+): string[] {
+  const sentences = [maps !== undefined
+    ? `The maps registry ${maps.failed}.`
+    : 'The maps registry on learn.jamf.com could not be read.'];
+  if (publicationsMissing) {
+    sentences.push(maps !== undefined
+      ? 'The publication list has none of the documents the maps registry names.'
+      : 'The publication list has none of the documents published there.');
+  }
+  if (fallback.versions) {
+    sentences.push('Product versions are compiled-in defaults.');
+  }
+  if (fallback.availability) {
+    sentences.push('Every product is assumed to have a table of contents.');
+  }
+  return sentences;
+}
+
+/**
  * The `incomplete` note, or undefined when every source answered.
  *
  * The registry's sentences name only what is actually a stand-in, because the
@@ -332,10 +374,23 @@ interface ProductFallbacks {
  * a day, the availability map for an hour. When the registry's own entry
  * lapses (after 7 days on Node) and cannot be rebuilt, each of the two turns
  * into a fallback only as it expires in turn, the availability map first.
+ *
+ * A registry that threw in this call, other than by a request to
+ * learn.jamf.com, is worded as the search and the glossary word it
+ * ({@link describeMapsListFailure}). A MapsProvider that threw is named with
+ * its own reason, and learn.jamf.com, which was not asked, is not. Whether a
+ * retry helps only the provider could say, so the retry sentence is left out
+ * unless another source failed too. Anything else, such as a list that is
+ * not a list, is "could not be read", with the server log for what went
+ * wrong. Until 2026-09-28 the note said "The maps registry on learn.jamf.com
+ * could not be read" and "This may be temporary" whatever the registry threw.
+ * A request to learn.jamf.com that failed, including one that replaced a
+ * provider's answer the registry could not use, keeps that note.
  */
 function describeIncomplete(
   listing: Pick<PublicationListing, 'unavailable' | 'unreadLocales'>,
   fallback: ProductFallbacks,
+  registryFailure: unknown,
 ): Incomplete | undefined {
   const registryPublicationsMissing = listing.unavailable.includes(MAPS_REGISTRY);
   const registryUnavailable = registryPublicationsMissing || fallback.versions || fallback.availability;
@@ -345,25 +400,21 @@ function describeIncomplete(
     listing.unavailable.includes(s.id) || listing.unreadLocales.has(s.id));
   if (!registryUnavailable && unreadSources.length === 0) { return undefined; }
 
-  const sentences: string[] = [];
-  if (registryUnavailable) {
-    sentences.push('The maps registry on learn.jamf.com could not be read.');
-  }
-  if (registryPublicationsMissing) {
-    sentences.push('The publication list has none of the documents published there.');
-  }
-  if (fallback.versions) {
-    sentences.push('Product versions are compiled-in defaults.');
-  }
-  if (fallback.availability) {
-    sentences.push('Every product is assumed to have a table of contents.');
-  }
+  const maps = registryPublicationsMissing && !isRequestFailure(registryFailure)
+    ? describeMapsListFailure(registryFailure)
+    : undefined;
+  const sentences = registryUnavailable
+    ? registrySentences(registryPublicationsMissing, fallback, maps)
+    : [];
   for (const source of unreadSources) {
     sentences.push(listing.unavailable.includes(source.id)
       ? sectionsLost(source)
       : localesLost(source, listing.unreadLocales.get(source.id) ?? []));
   }
-  sentences.push('This may be temporary: try again in a minute.');
+  const advice = maps === undefined || (maps.advice === undefined && unreadSources.length > 0)
+    ? 'This may be temporary: try again in a minute.'
+    : maps.advice;
+  if (advice !== undefined) { sentences.push(advice); }
 
   return {
     unavailable: [...(registryUnavailable ? [MAPS_REGISTRY] : []), ...unreadSources.map(s => s.id)],
@@ -405,8 +456,10 @@ function localesLost(source: StaticDocSource, locales: readonly string[]): strin
  * reader needs to know that even the whole of it is partial. So the note is
  * charged to the budget but never cut. The reply stays within `maxTokens`
  * whenever the note leaves room for the truncation notice. When it does not,
- * which takes both sources down and a budget near the 100-token minimum, the
- * reply goes over by what the note needs rather than drop it, as
+ * which takes a budget near the 100-token minimum and a long note (both
+ * sources down, or a MapsProvider's reason, which the note quotes cut to 200
+ * characters), the reply goes over by what the note needs rather than drop
+ * it, as
  * `jamf_docs_glossary_lookup` keeps its own `incomplete` note out of its budget.
  */
 function truncateAfter(head: string, body: string, maxTokens: number): string {
@@ -626,7 +679,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         const incomplete = describeIncomplete(listing, {
           versions: versionsStatus.degraded,
           availability: availabilityStatus.degraded,
-        });
+        }, listing.registryFailure);
         const incompleteNote = incomplete !== undefined
           ? `> **This catalogue is incomplete.** ${incomplete.message}\n\n`
           : '';
