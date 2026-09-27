@@ -255,7 +255,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
 
-「No glossary entries found」表示已讀取術語表，但沒有符合的條目（使用 `responseFormat: "json"` 時，則是 `totalMatches: 0` 的 JSON 內容）。若有符合的條目，但連排在第一位的條目都超出 `maxTokens`，回應會說明符合的條目數，以及第一個條目所需的 `maxTokens`；`truncatedContent` 會列出每個被省略的條目及其估計 token 數。若無法讀取術語表（learn.jamf.com 無法連線、逾時或回應伺服器錯誤），工具會回傳錯誤（`isError: true`），說明是哪一步失敗，以及這可能只是暫時的狀況。若部分符合的條目無法取得，回應會以其餘條目作答並加以註明：`incomplete` 會列出可能缺少的條目。若其中有原本應排在回應第一位的條目（其名稱比所有已取得的條目都更貼近查詢術語），則改為回傳錯誤，不會以其他較不相關的條目代替作答。
+「No glossary entries found」表示已讀取術語表，但沒有符合的條目（使用 `responseFormat: "json"` 時，則是 `totalMatches: 0` 的 JSON 內容）。若有符合的條目，但連排在第一位的條目都超出 `maxTokens`，回應會說明符合的條目數，以及第一個條目所需的 `maxTokens`；`truncatedContent` 會列出每個被省略的條目及其估計 token 數。若無法讀取術語表（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的文件地圖清單來源 `MapsProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗，以及重試是否可能有幫助。若部分符合的條目無法取得，回應會以其餘條目作答並加以註明：`incomplete` 會列出可能缺少的條目。若其中有原本應排在回應第一位的條目（其名稱比所有已取得的條目都更貼近查詢術語），則改為回傳錯誤，不會以其他較不相關的條目代替作答。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
@@ -284,10 +284,11 @@ support.jamf.com 首頁有列出它的語系。以該網站的其他語系呼叫
 en-US 版本，並附上 `localeNote` 說明。
 
 若有來源無法讀取，回應會列出能取得的部分並加以註明：`incomplete` 會列出每個無法讀取的
-來源，Markdown 回應開頭也會有同樣的說明。`maps-registry` 指 learn.jamf.com，出版品清單與
-產品版本都來自這裡，因此兩者可能缺漏或改用內建的預設值。`jamf-support` 指
-support.jamf.com，此時會缺少 `jamf-support-*` 開頭的出版品；若只有部分語系無法讀取，這些出版品
-仍會列出，但其 `locales` 不會包含那些語系。沒有 `incomplete` 表示所有來源都有回應。
+來源，Markdown 回應開頭也會有同樣的說明。`maps-registry` 指文件地圖清單（來自
+learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本都來自這裡，因此兩者
+可能缺漏或改用內建的預設值。`jamf-support` 指 support.jamf.com，此時會缺少
+`jamf-support-*` 開頭的出版品；若只有部分語系無法讀取，這些出版品仍會列出，但其 `locales`
+不會包含那些語系。沒有 `incomplete` 表示所有來源都有回應。
 
 ## MCP Resources
 

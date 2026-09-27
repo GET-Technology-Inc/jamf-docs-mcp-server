@@ -4,7 +4,9 @@
  *
  * Written for the glossary's failure messages (#324) and shared with the
  * search's since 2026-09-28, so the two tools name the same failure the same
- * way and give the same advice about it.
+ * way and give the same advice about it. What a configured provider said, and
+ * the advice for a failure that was not a request, are here for the same
+ * reason.
  */
 
 import { HttpError } from '../http-client.js';
@@ -65,3 +67,36 @@ export function mayBeTemporary(error: unknown): boolean {
 
 /** The sentence a failure message ends with when {@link mayBeTemporary} holds. */
 export const MAY_BE_TEMPORARY = 'This may be temporary: try again in a moment.';
+
+/** The advice for a failure that was not a request, so no status says whether a retry helps. */
+export const UNEXPECTED_FAILURE_ADVICE =
+  'Trying again may help. If it keeps failing, the server log says what went wrong.';
+
+/** The most of a provider's reason a reply quotes, in characters, the ellipsis included. */
+const MAX_REASON_LENGTH = 200;
+
+/**
+ * What `error` says went wrong, with file paths and stack traces removed, on
+ * one line and cut to {@link MAX_REASON_LENGTH} characters, or `undefined`
+ * when it says nothing. A provider can reject with a string, with
+ * `undefined`, or with an Error whose message is empty.
+ *
+ * The provider, not this server, decides what the reason says, and the
+ * search, the glossary and `jamf_docs_list_products` quote it, the last in an
+ * incomplete note that no `maxTokens` cut takes and whose markdown blockquote
+ * a line break would end. Until 2026-09-28 the search and the glossary
+ * quoted it whole, line breaks and all: a provider that threw a
+ * 40,000-character message got a glossary error of 40,285 characters, and a
+ * search error of 40,216 from a SearchProvider.
+ */
+export function reasonGiven(error: unknown): string | undefined {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  // Stack traces first: sanitizeErrorMessage finds them by their line breaks.
+  const reason = sanitizeErrorMessage(raw).replace(/\s+/g, ' ').trim();
+  if (reason === '') { return undefined; }
+  // By code point, so a cut never splits a surrogate pair.
+  const chars = Array.from(reason);
+  return chars.length <= MAX_REASON_LENGTH
+    ? reason
+    : `${chars.slice(0, MAX_REASON_LENGTH - 1).join('').trimEnd()}…`;
+}

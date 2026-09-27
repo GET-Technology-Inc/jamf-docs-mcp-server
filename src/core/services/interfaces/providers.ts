@@ -228,6 +228,19 @@ export interface TocProvider {
  * out, is read as none: the registry fetches the maps from learn.jamf.com, as
  * it does without a MapsProvider. The registry keeps no logger, so none of
  * this is logged.
+ *
+ * A `getMaps` that throws or rejects is not answered from learn.jamf.com
+ * instead: a reply that needs the maps fails, `jamf_docs_list_products` lists
+ * what it can without them and says so, and `jamf://products` and
+ * `jamf://products/{productId}/versions` answer with the compiled-in product
+ * list and versions, with no message. `jamf_docs_search`,
+ * `jamf_docs_glossary_lookup` and `jamf_docs_list_products` name the
+ * configured maps provider and quote the error's message (or the string it
+ * rejected with), with file paths and stack traces removed, on one line and
+ * cut to 200 characters; the other tools and the TOC resource quote the
+ * message as it is. It reaches the MCP client, so it must not carry anything
+ * a client should not see. Until 2026-09-28 the glossary and
+ * `jamf_docs_list_products` named learn.jamf.com instead.
  */
 export interface MapsProvider {
   getMaps: () => Promise<FtMapInfo[]>;

@@ -153,6 +153,12 @@ const TOOL_NAME = 'jamf_docs_glossary_lookup';
  * `maxTokens: 100`, six of the 123 terms looked up by their own title, Apple
  * School Manager (134 tokens) among them. The note now says which reply that
  * is, and "truncatedContent" in Returns is where the budget comes from.
+ *
+ * The failed-read error names a configured maps provider when the maps list
+ * failed there. Until 2026-09-28 it named learn.jamf.com whatever failed, and
+ * the description said every such failure "may be temporary", which neither
+ * a provider's failure nor, since #354, a 404 is. The description now says
+ * the message decides.
  */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
@@ -193,9 +199,10 @@ Examples:
   - "What is Automated Device Enrollment (formerly DEP)?" → term="Automated Device Enrollment"
 
 Errors:
-  - "Glossary lookup for "<term>" failed: ..." (isError) if learn.jamf.com could not be read (a
-    network error, a timeout, or a server error), so the lookup cannot say whether the glossary
-    has the term. This is not a "no match". It may be temporary: try again.
+  - "Glossary lookup for "<term>" failed: ..." (isError) if the glossary could not be read:
+    learn.jamf.com could not be reached, timed out or answered with an error, or a configured
+    maps provider failed. The lookup cannot say whether the glossary has the term, so this is
+    not a "no match". The message says whether trying again may help.
   - "Invalid option: expected one of ..." (an input validation error) if product is not a known product ID
 
 Note: "No glossary entries found" is not an error. It means the glossary was read and no entry

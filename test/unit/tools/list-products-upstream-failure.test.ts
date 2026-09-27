@@ -111,15 +111,15 @@ beforeAll(async () => {
   // One context for the whole suite, as a running server has: what one call
   // caches, the next one reads.
   const cache = createMockCache();
-  const mapsRegistry = new MapsRegistry(cache, undefined, {
-    getMaps: async () => {
-      registryRequests++;
-      if (!registryUp) {
-        throw new HttpError(503, 'Service Unavailable', 'https://learn.jamf.com/api/khub/maps');
-      }
-      return await Promise.resolve(MAPS);
-    },
-  }, undefined, http);
+  // The registry's own fetch of learn.jamf.com's maps, not a MapsProvider:
+  // since 2026-09-28 a provider that throws is named as the provider.
+  const mapsRegistry = new MapsRegistry(cache, async () => {
+    registryRequests++;
+    if (!registryUp) {
+      throw new HttpError(503, 'Service Unavailable', 'https://learn.jamf.com/api/khub/maps');
+    }
+    return await Promise.resolve(MAPS);
+  }, undefined, undefined, http);
   ctx = createMockContext({ cache, http, mapsRegistry });
 
   server = new McpServer({ name: 'test', version: '0.0.1' });
