@@ -16,6 +16,7 @@ import { createHttpClient, type HttpClient } from '../http-client.js';
 import { createDefaultConfig } from '../config.js';
 import type { CacheProvider } from './interfaces/index.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
+import { guardCache } from './cache-guard.js';
 import { getMetaValue, FT_META } from '../utils/ft-metadata.js';
 import { isAllowedHostname } from '../utils/url.js';
 import {
@@ -168,16 +169,19 @@ export class TopicResolver {
   private readonly inflight = new Map<string, Promise<Map<string, string>>>();
   private readonly fetchMapTopicsFn: typeof fetchMapTopics;
   private readonly cacheTtl: number;
+  private readonly cache: CacheProvider;
 
   private readonly http: HttpClient;
 
   constructor(
     private readonly registry: MapsRegistry,
-    private readonly cache: CacheProvider,
+    cache: CacheProvider,
     fetchMapTopicsFn?: typeof fetchMapTopics,
     cacheTtl?: number,
     http?: HttpClient,
   ) {
+    // As the registry does: built before any server, so guarded here too.
+    this.cache = guardCache(cache);
     this.http = http ?? createHttpClient(createDefaultConfig().request);
     this.fetchMapTopicsFn = fetchMapTopicsFn ?? fetchMapTopics;
     this.cacheTtl = cacheTtl ?? DEFAULT_TOPICS_CACHE_TTL;

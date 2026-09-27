@@ -18,6 +18,11 @@ import type { MapsRegistry } from '../services/maps-registry.js';
 import type { TopicResolver } from '../services/topic-resolver.js';
 
 export interface ServerContext {
+  /**
+   * Read through `guardCache` by `createMcpServer`, so a provider that fails
+   * or answers a miss with `undefined` cannot fail a reply (see
+   * `CacheProvider`).
+   */
   cache: CacheProvider;
   logger: LoggerFactory;
   config: ServerConfig;
