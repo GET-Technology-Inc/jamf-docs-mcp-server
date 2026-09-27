@@ -165,6 +165,8 @@ Searches across all Jamf product documentation.
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; use `"compact"` for token-efficient output |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
 
+"No results found" means the search ran and nothing in the product documentation matched (with `responseFormat: "json"`, the JSON body with `total: 0`). The reply still lists what matched outside the product documentation (`otherSources`) and queries to try instead (`suggestions`). If the search cannot be completed (learn.jamf.com is unreachable, times out, or answers with an error, or a custom search backend, a `SearchProvider`, fails), the tool returns an error (`isError: true`) that says what failed, that this is not a "no results", and whether trying again may help. Pages outside the product documentation that matched follow it, in a second text block.
+
 ### jamf_docs_get_article
 
 Fetches and converts a documentation article to clean markdown or JSON. Address

@@ -6,11 +6,19 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
 import { appToolMeta } from '../apps/index.js';
-import { SearchInputSchema } from '../schemas/index.js';
+import { SearchInputSchema, type SearchInput } from '../schemas/index.js';
 import { SearchOutputSchema, type SearchStructuredOutput } from '../schemas/output.js';
 import type { ProductId, TopicId, DocTypeId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, JAMF_TOPICS, COMMON_TOPIC_IDS, TOPIC_IDS, TOKEN_CONFIG, CONTENT_LIMITS, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
-import type { ToolResult, SearchResponse, SearchResult, SearchRanker, PaginationInfo, TokenInfo } from '../types.js';
+import type {
+  ToolResult,
+  SearchResponse,
+  SearchResult,
+  SearchRanker,
+  SearchDocumentationResult,
+  PaginationInfo,
+  TokenInfo,
+} from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
@@ -278,6 +286,13 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * to carry it. The comment on it is the caveat the markdown prints under the
  * same matches (see renderOtherSources): the JSON reply's relevanceNote
  * speaks of "Results", and these are not ranked with them.
+ *
+ * "No results found" is listed as a note, not an error, because it never was
+ * one: `isError` was always unset. Until 2026-09-28 it was also the reply to a
+ * search that failed, so a client concluded the documentation had nothing on a
+ * query that was never checked; a failed search is now the error above it, as
+ * the glossary's failed read is (#324). `suggestions` joined the JSON shape
+ * the same day, when a no-results reply's JSON text became JSON.
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -320,7 +335,9 @@ Returns:
     // Pages outside the product documentation, matched on title and ranked
     // separately from "results", which carry no score to rank them against.
     // Omitted when none matched.
-    "otherSources"?: [{ "title": string, "url": string, "source": string }]
+    "otherSources"?: [{ "title": string, "url": string, "source": string }],
+    // Queries to try instead, when "results" is empty.
+    "suggestions"?: [string]
   }
 
   For Markdown format:
@@ -330,8 +347,15 @@ Examples (common query → recommended filters):
 ${EXAMPLES_BLOCK}
 
 Errors:
-  - "No results found" if search returns empty
+  - "Search for "<query>" failed: ..." (isError) if the search could not be completed:
+    learn.jamf.com could not be reached, timed out or answered with an error, or a configured
+    search backend failed. This is not a "no results": the search did not complete, so the reply
+    cannot say whether anything matches. The message says whether trying again may help. Pages
+    outside the product documentation that did match follow it, in a second text block.
   - "Invalid option: expected one of ..." (an input validation error) if product, topic, docType or language is not one of the values the input schema lists
+
+Note: "No results found" is not an error. It means the search ran and nothing in the product
+documentation matched; in JSON that is "total": 0, with "suggestions" and any "otherSources".
 
 Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
 Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article
@@ -379,21 +403,26 @@ function activeSearchFilters(params: {
 }
 
 /**
- * Render the other-source hits as a labelled trailer.
- *
- * Below the results and clearly separated, because these come from a
- * different ranking that shares no scale with the one above — and because
- * two of the three sources are not product documentation.
+ * What the other-source block says under its matches, by what the product
+ * documentation search came to. The block is the same in all three replies;
+ * only this line differs, because only it speaks of the results above it.
  */
-function renderOtherSources(hits: StaticSearchHit[]): string {
-  if (hits.length === 0) { return ''; }
+const OTHER_SOURCES_CAVEAT = {
+  ranked: '*Matched on title, ranked separately from the results above, '
+    + 'which carry no score to rank them against.*',
+  noResults: '*Matched on title. The product documentation had no results for this query.*',
+  failed: '*Matched on title. These sources were searched on their own; the product '
+    + 'documentation could not be searched (see above).*',
+} as const;
 
+/** The other-source hits under a heading, grouped by source, and `caveat`. */
+function otherSourcesBlock(hits: StaticSearchHit[], caveat: string): string {
   const bySource = new Map<string, StaticSearchHit[]>();
   for (const hit of hits) {
     bySource.set(hit.source, [...(bySource.get(hit.source) ?? []), hit]);
   }
 
-  let out = '\n---\n\n## Also found outside the product documentation\n\n';
+  let out = '## Also found outside the product documentation\n\n';
   for (const [source, sourceHits] of bySource) {
     out += `**${source}**\n\n`;
     for (const hit of sourceHits) {
@@ -401,9 +430,18 @@ function renderOtherSources(hits: StaticSearchHit[]): string {
     }
     out += '\n';
   }
-  out += '*Matched on title, ranked separately from the results above, '
-    + 'which carry no score to rank them against.*\n';
-  return out;
+  return `${out}${caveat}\n`;
+}
+
+/**
+ * Render the other-source hits as a labelled trailer.
+ *
+ * Below the results and clearly separated, because these come from a
+ * different ranking that shares no scale with the one above — and because
+ * two of the three sources are not product documentation.
+ */
+function renderOtherSources(hits: StaticSearchHit[], caveat: string = OTHER_SOURCES_CAVEAT.ranked): string {
+  return hits.length === 0 ? '' : `\n---\n\n${otherSourcesBlock(hits, caveat)}`;
 }
 
 /**
@@ -425,9 +463,10 @@ function renderOtherSources(hits: StaticSearchHit[]): string {
  * reached, so that branch says whose order it is and nothing about the
  * method. It is also the wording when nothing says who ranked: crediting
  * Fluid Topics needs Fluid Topics to have answered. The service leaves
- * `rankedBy` unset only on a failed search, which has no results and gets the
- * no-results reply before any note is built, so that default is for a result
- * built without the field, not a path the service reaches.
+ * `rankedBy` unset only on a failed search, which gets the error reply before
+ * any note is built, so that default is for a result built without the field,
+ * not a path the service reaches. A search with no results gets no note
+ * either: it would describe the order of nothing.
  */
 function relevanceNote(rankedBy: SearchRanker | undefined): string {
   return rankedBy === 'fluid-topics'
@@ -636,15 +675,31 @@ function buildSearchStructuredContent(
 }
 
 /**
- * Build no-results response with suggestions
+ * The reply to a search that ran and found nothing, in the format asked for.
+ *
+ * Until 2026-09-28 this was the markdown page below whatever the format, so a
+ * `responseFormat: "json"` caller's `JSON.parse` threw on it (live on 6.0.12,
+ * "xqzvbnmplk"), as the glossary's did until #346. It also dropped, on every
+ * channel, what the other sources had matched and a product filter that could
+ * not be applied. For a query the product documentation has nothing on, the
+ * other sources can be all that matched: live, Fluid Topics had no result for
+ * "jamformer", the title of a concepts.jamf.com page, and the reply did not
+ * mention the page. Now the JSON text is the body the description documents,
+ * with `total: 0`, and all three channels carry both.
+ *
+ * Not carried: `relevanceNote`, which would describe the order of nothing;
+ * `paginationNote`, which with no results can only say that a page past the
+ * end was clamped to "the last page" of none, as it always was; and
+ * `versionNote`, which the service sets only when a result is at another
+ * version than the one asked for, so never with no results.
  */
 function buildNoResultsResponse(
-  query: string,
-  hasProductFilter: boolean,
-  hasTopicFilter: boolean,
-  locale: LocaleId | undefined
+  params: SearchInput,
+  found: Pick<SearchDocumentationResult, 'pagination' | 'tokenInfo' | 'filterRelaxation'>,
+  otherSources: StaticSearchHit[],
 ): ToolResult {
-  const suggestions = generateSearchSuggestions(query, hasProductFilter, hasTopicFilter);
+  const { query } = params;
+  const suggestions = generateSearchSuggestions(query, params.product !== undefined, params.topic !== undefined);
 
   /**
    * Queries a client can run, and nothing else.
@@ -669,27 +724,85 @@ function buildNoResultsResponse(
     ...suggestions.alternativeKeywords
   ];
 
+  const { pagination, tokenInfo, filterRelaxation } = found;
+  const structuredContent = {
+    ...buildSearchStructuredContent(query, [], pagination, {
+      filters: activeSearchFilters(params),
+      limit: params.limit,
+      filterRelaxation,
+      otherSources,
+    }),
+    suggestions: suggestionTexts,
+  };
+
   // The locale caveat is advice, so it rides the text channel with the rest of
   // the advice rather than being mixed into the runnable list above.
   const localeNote =
-    locale !== undefined && locale !== DEFAULT_LOCALE
-      ? `\n\nNot all documentation is available in "${locale}". Try searching with language: "${DEFAULT_LOCALE}".`
-      : '';
+    params.language !== undefined && params.language !== DEFAULT_LOCALE
+      ? `Not all documentation is available in "${params.language}". Try searching with language: "${DEFAULT_LOCALE}".`
+      : undefined;
+
+  if (params.responseFormat === ResponseFormat.JSON) {
+    // The JSON body of a search with results, with no results in it, the
+    // runnable suggestions structuredContent carries, and the locale caveat:
+    // until 2026-09-28 this reply was the markdown, which ends with it, and it
+    // names another search to run. The rest of the prose advice stays in the
+    // markdown, as the glossary's no-match tip does (#346).
+    const body = {
+      total: pagination.totalItems,
+      query,
+      results: [],
+      filters: buildFilterSummary(params),
+      tokenInfo,
+      pagination,
+      ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+      ...otherSourcesField(otherSources),
+      suggestions: suggestionTexts,
+      ...(localeNote !== undefined ? { localeNote } : {}),
+    };
+    return {
+      content: [{ type: 'text', text: JSON.stringify(body, null, 2) }],
+      structuredContent,
+    };
+  }
+
+  const markdown = appendMarkdownNotices(
+    `${formatSearchSuggestions(query, suggestions)}${localeNote !== undefined ? `\n\n${localeNote}` : ''}`,
+    { filterRelaxation },
+  ) + renderOtherSources(otherSources, OTHER_SOURCES_CAVEAT.noResults);
 
   return {
-    content: [{
-      type: 'text',
-      text: `${formatSearchSuggestions(query, suggestions)}${localeNote}`
-    }],
-    structuredContent: {
-      query,
-      totalResults: 0,
-      page: 1,
-      totalPages: 0,
-      hasMore: false,
-      results: [],
-      suggestions: suggestionTexts
-    }
+    content: [{ type: 'text', text: markdown }],
+    structuredContent,
+  };
+}
+
+/**
+ * The reply to a search that could not be completed: the service's message,
+ * as an error, in every format.
+ *
+ * No structuredContent, as no error this server returns has any: a client
+ * does not check an error's structuredContent against the outputSchema, and
+ * the MCP App would draw it as a search that ran.
+ *
+ * What the other sources matched is kept, in a second text block. They are
+ * other sites, searched by requests of their own that did not fail, and a
+ * failure elsewhere is no reason to discard them. They are not an answer to
+ * the search, though, which is why the reply stays an error: the product
+ * documentation was not searched. The glossary draws the same line (#324): it
+ * answers from what it fetched only when that answers the question. The first
+ * block is the error alone, and it is the block a client that shows one
+ * message reads, the MCP App included.
+ */
+function buildSearchFailedResponse(message: string, otherSources: StaticSearchHit[]): ToolResult {
+  return {
+    isError: true,
+    content: [
+      { type: 'text', text: message },
+      ...(otherSources.length > 0
+        ? [{ type: 'text' as const, text: otherSourcesBlock(otherSources, OTHER_SOURCES_CAVEAT.failed) }]
+        : []),
+    ],
   };
 }
 
@@ -816,6 +929,14 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           return [];
         });
 
+        // A search that could not be completed is an error, in every format,
+        // and never "No results found": its empty `results` say nothing about
+        // what matches. See buildSearchFailedResponse.
+        if (searchResult.searchErrorMessage !== undefined) {
+          await reportProgress(extra, { progress: 3, total: 3 });
+          return buildSearchFailedResponse(searchResult.searchErrorMessage, otherSources);
+        }
+
         const {
           pagination, tokenInfo, filterRelaxation, versionNote,
           paginationNote, truncatedContent, rankedBy
@@ -840,15 +961,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
 
-        // Handle no results with suggestions
+        // The search ran, and the product documentation had nothing.
         if (results.length === 0 && pagination.totalItems === 0) {
           await reportProgress(extra, { progress: 3, total: 3 });
-          return buildNoResultsResponse(
-            params.query,
-            params.product !== undefined,
-            params.topic !== undefined,
-            params.language as LocaleId | undefined
-          );
+          return buildNoResultsResponse(params, searchResult, otherSources);
         }
 
         const structuredContent = buildSearchStructuredContent(

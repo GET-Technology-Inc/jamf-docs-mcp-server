@@ -39,6 +39,13 @@ import type { ProductId } from '../constants.js';
 import { extractBundleStemFromUrl } from '../utils/url.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { compareVersions } from '../utils/bundle.js';
+import {
+  describeFetchFailure,
+  isRequestFailure,
+  mayBeTemporary,
+  MAY_BE_TEMPORARY,
+} from '../utils/fetch-failure.js';
+import { sanitizeErrorMessage } from '../utils/sanitize.js';
 import { dedupeResultsToLatestVersions } from './search-result-versions.js';
 import {
   estimateTokens,
@@ -821,12 +828,16 @@ function applyAll(results: SearchResultWithMeta[], filters: ActiveFilter[]): Sea
  * Both reasons are named, because the first alone is no longer why: a
  * product Jamf classifies nothing under is filtered by its own publication,
  * and this is said only when the maps list has no map of that either.
+ *
+ * With nothing found, it speaks of the search, not of "these results": since
+ * 2026-09-28 a reply with no results carries the note too, and there are none
+ * for it to describe.
  */
-function unfilterableProductNote(product: ProductId): string {
+function unfilterableProductNote(product: ProductId, found: boolean): string {
   const { name, bundleId } = JAMF_PRODUCTS[product];
   return `The product filter "${product}" was not applied: Jamf classifies no `
     + `documentation as ${name}, and no map of its publication "${bundleId}" was `
-    + 'found to filter by instead, so these results are not limited to it. '
+    + `found to filter by instead, so ${found ? 'these results are' : 'the search was'} not limited to it. `
     + `Browse its documentation with jamf_docs_get_toc (product "${product}").`;
 }
 
@@ -864,7 +875,6 @@ function applyFiltersWithFallback(
   if (unfilterableProduct !== undefined) {
     removed.push('product');
     original.product = unfilterableProduct;
-    notes.push(unfilterableProductNote(unfilterableProduct));
   }
 
   let filtered = applyAll(allResults, activeFilters);
@@ -902,6 +912,10 @@ function applyFiltersWithFallback(
 
   if (removed.length === 0) {
     return { filtered };
+  }
+  if (unfilterableProduct !== undefined) {
+    // First, as it was before relaxation ran; worded by what it came to.
+    notes.unshift(unfilterableProductNote(unfilterableProduct, filtered.length > 0));
   }
   return { filtered, relaxation: { removed, original, message: notes.join(' ') } };
 }
@@ -1035,6 +1049,152 @@ function buildVersionNote(
     + 'The search backend returned articles from other versions; they are shown as-is.';
 }
 
+// ─── A Search That Could Not Be Completed ──────────────────────
+
+/** A part of a search that can fail. */
+type SearchStep =
+  /** The injected SearchProvider. */
+  | 'provider'
+  /** The maps list a classified product's filter is built from. */
+  | 'maps'
+  /** The request to the Fluid Topics clustered search. */
+  | 'fluid-topics'
+  /** Reading what the clustered search answered. */
+  | 'fluid-topics-response';
+
+/**
+ * What one step of a search threw, and which step it was.
+ *
+ * Thrown inside {@link resolveSearchResults} for {@link searchDocumentation}
+ * to catch, because the message has to say what failed and the error alone
+ * cannot: a network error from the maps list and one from the search are the
+ * same `TypeError('fetch failed')`.
+ */
+class SearchStepError extends Error {
+  readonly step: SearchStep;
+  readonly failure: unknown;
+
+  constructor(step: SearchStep, failure: unknown) {
+    super(String(failure));
+    this.name = 'SearchStepError';
+    this.step = step;
+    this.failure = failure;
+  }
+}
+
+/** A `.catch` handler that rethrows what `step` threw, tagged with the step. */
+function failedAt(step: SearchStep): (error: unknown) => never {
+  return (error: unknown) => {
+    throw new SearchStepError(step, error);
+  };
+}
+
+const NOT_A_NO_RESULTS =
+  'This is not a "no results": the search did not complete, so it cannot say whether the ' +
+  'documentation has anything for this query.';
+
+/** The advice for a failure that was not a request, so no status says whether a retry helps. */
+const UNEXPECTED_FAILURE_ADVICE =
+  'Trying again may help. If it keeps failing, the server log says what went wrong.';
+
+/**
+ * What `error` says went wrong, with file paths and stack traces removed, or
+ * `undefined` when it says nothing. A provider can reject with a string, with
+ * `undefined`, or with an Error whose message is empty.
+ */
+function reasonGiven(error: unknown): string | undefined {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const reason = sanitizeErrorMessage(raw).trim();
+  return reason === '' ? undefined : reason;
+}
+
+/**
+ * A failed search, written for the caller: what failed and why, that this is
+ * not a "no results", and whether trying again may help. The tool returns it
+ * as is, with `isError: true`, as the glossary does with its own (#324).
+ *
+ * Until 2026-09-28 the tool answered a failed search with the reply for a
+ * query nothing matches: "No results found", suggestions to change the query,
+ * and no `isError`. Reproduced on 6.0.12 over stdio with learn.jamf.com
+ * unreachable, and offline with the clustered search answering 503.
+ *
+ * What failed, and the advice for it:
+ *
+ * - A request to learn.jamf.com, for the search or for the maps list: the
+ *   reason the glossary gives ({@link describeFetchFailure}), and "may be
+ *   temporary" by the rule the glossary follows too ({@link mayBeTemporary}).
+ * - A clustered-search answer that is not in the shape this server reads:
+ *   learn.jamf.com is named, and it may be temporary, as the glossary says of
+ *   a table of contents that came back with no terms.
+ * - A SearchProvider, or a MapsProvider the maps list comes from: the error's
+ *   own message, which is all this server knows of it, and no advice, which
+ *   only the provider could give. Not learn.jamf.com, which was not asked.
+ * - Anything else, such as a cache that could not be read or written: plain
+ *   words, and the server log for what went wrong. The error itself is left
+ *   out, because a raw JavaScript message ("clusters is not iterable") tells
+ *   a caller nothing it can act on.
+ */
+function searchFailureMessage(ctx: ServerContext, params: SearchParams, error: unknown): string {
+  const step = error instanceof SearchStepError ? error.step : undefined;
+  const cause = error instanceof SearchStepError ? error.failure : error;
+  const reason = reasonGiven(cause);
+  const mapsList = 'the list of documentation maps, which the product filter ' +
+    `"${String(params.product)}" is built from,`;
+
+  let failed: string;
+  let advice: string | undefined;
+  switch (step) {
+    case 'provider':
+      failed = reason === undefined
+        ? 'the configured search backend reported an error without saying what went wrong'
+        : `the configured search backend reported an error (${reason})`;
+      break;
+    case 'maps':
+      if (ctx.mapsRegistry.hasMapsProvider) {
+        const said = reason === undefined ? ', which gave no reason' : ` (${reason})`;
+        failed = `${mapsList} could not be read from the configured maps provider${said}`;
+      } else if (isRequestFailure(cause)) {
+        failed = `${mapsList} could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
+        advice = mayBeTemporary(cause) ? MAY_BE_TEMPORARY : undefined;
+      } else {
+        // A cache that failed, or a list in a shape the registry cannot read.
+        failed = `${mapsList} could not be read`;
+        advice = UNEXPECTED_FAILURE_ADVICE;
+      }
+      break;
+    case 'fluid-topics':
+      failed = `the search results could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
+      advice = mayBeTemporary(cause) ? MAY_BE_TEMPORARY : undefined;
+      break;
+    case 'fluid-topics-response':
+      failed = 'learn.jamf.com answered the search with results in a form this server could not read';
+      advice = MAY_BE_TEMPORARY;
+      break;
+    case undefined:
+      failed = 'this server hit an unexpected error while searching';
+      advice = UNEXPECTED_FAILURE_ADVICE;
+  }
+
+  const paragraphs = [`Search for "${params.query}" failed: ${failed}.`, NOT_A_NO_RESULTS];
+  if (advice !== undefined) {
+    paragraphs.push(advice);
+  }
+  return paragraphs.join('\n\n');
+}
+
+/** What a search that could not be completed reports. */
+type SearchFailure = Required<Pick<SearchDocumentationResult, 'searchError' | 'searchErrorMessage'>>;
+
+/** {@link SearchFailure} for what a search threw. */
+function searchFailure(ctx: ServerContext, params: SearchParams, error: unknown): SearchFailure {
+  return {
+    // What was thrown, not the step it was tagged with, so `searchError` reads
+    // as it always has.
+    searchError: String(error instanceof SearchStepError ? error.failure : error),
+    searchErrorMessage: searchFailureMessage(ctx, params, error),
+  };
+}
+
 // ─── Main Search Function ──────────────────────────────────────
 
 /**
@@ -1046,6 +1206,11 @@ function buildVersionNote(
  *    - Client-side product/topic/docType filtering with progressive relaxation
  *    - Pagination
  *    - Token truncation
+ *
+ * Does not throw when the search cannot be completed: the result has no
+ * results, and `searchError` and `searchErrorMessage` say what failed (see
+ * {@link searchFailureMessage}). A caller must check them before reading no
+ * results as "nothing matches".
  */
 export async function searchDocumentation(
   ctx: ServerContext,
@@ -1061,7 +1226,7 @@ export async function searchDocumentation(
   let productUnfilterable = false;
   let productPublication: ReadonlySet<string> | undefined;
   let rankedBy: SearchDocumentationResult['rankedBy'];
-  let searchError: string | undefined;
+  let failure: SearchFailure | undefined;
 
   try {
     const resolved = await resolveSearchResults(ctx, params, log);
@@ -1079,10 +1244,9 @@ export async function searchDocumentation(
     }
     rankedBy = fromProvider ? 'provider' : 'fluid-topics';
   } catch (error) {
-    const message = String(error);
-    log.error(`Search error: ${message}`);
+    failure = searchFailure(ctx, params, error);
+    log.error(`Search error: ${failure.searchError}`);
     allResults = [];
-    searchError = message;
   }
 
   // Build and apply filters with progressive relaxation
@@ -1129,7 +1293,7 @@ export async function searchDocumentation(
     ...(versionNote !== undefined ? { versionNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
     ...(truncatedContent !== undefined ? { truncatedContent } : {}),
-    ...(searchError !== undefined ? { searchError } : {}),
+    ...failure,
     ...(rankedBy !== undefined ? { rankedBy } : {}),
   };
 }
@@ -1231,7 +1395,15 @@ async function resolveSearchResults(
 ): Promise<ResolvedSearchResults> {
   // 1. Try SearchProvider first (custom backend injection — no caching)
   if (ctx.searchProvider !== undefined) {
-    const provided = await ctx.searchProvider.search(params);
+    // Awaited inside a try, not tagged with `.catch` on what `search`
+    // returns: a provider on untyped code can return its answer, or throw,
+    // without a promise, and neither a plain answer nor a throw has `.catch`.
+    let provided: SearchResult[] | null;
+    try {
+      provided = await ctx.searchProvider.search(params);
+    } catch (error) {
+      throw new SearchStepError('provider', error);
+    }
     if (provided !== null) {
       return {
         // Versions collapsed as the Fluid Topics path collapses them below, so
@@ -1281,21 +1453,28 @@ async function resolveSearchResults(
       `locale=${locale}, filters=${JSON.stringify(filters)}`
     );
 
-    const ftResponse: FtClusteredSearchResponse = await ftSearch(ctx.http, request);
+    const ftResponse: FtClusteredSearchResponse = await ftSearch(ctx.http, request)
+      .catch(failedAt('fluid-topics'));
 
     // Collapse version snapshots to the latest per topic, then transform.
     // Deduping before transform avoids running cleanSnippet etc. over every
     // Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
     const out: SearchResultWithMeta[] = [];
-    for (const { entry, collapsedVersions } of dedupeToLatestVersions(ftResponse.results)) {
-      const searchResult = transformFtSearchResult(entry);
-      if (searchResult.url !== '') {
-        const metadata = entryMetadata(entry);
-        out.push(toSearchResultWithMeta(
-          { ...searchResult, ...(collapsedVersions.length > 0 ? { otherVersions: collapsedVersions } : {}) },
-          { labelKeys: docTypeLabelKeys(metadata), classification: classificationValues(metadata) },
-        ));
+    try {
+      for (const { entry, collapsedVersions } of dedupeToLatestVersions(ftResponse.results)) {
+        const searchResult = transformFtSearchResult(entry);
+        if (searchResult.url !== '') {
+          const metadata = entryMetadata(entry);
+          out.push(toSearchResultWithMeta(
+            { ...searchResult, ...(collapsedVersions.length > 0 ? { otherVersions: collapsedVersions } : {}) },
+            { labelKeys: docTypeLabelKeys(metadata), classification: classificationValues(metadata) },
+          ));
+        }
       }
+    } catch (error) {
+      // An answer that is not a clustered-search response, such as a 200 with
+      // `{}` for a body ("clusters is not iterable").
+      throw new SearchStepError('fluid-topics-response', error);
     }
 
     // Cache the raw results (before client-side filtering)
@@ -1304,7 +1483,8 @@ async function resolveSearchResults(
     return out;
   };
 
-  const productFilter = await resolveSearchProductFilter(ctx, params.product, log);
+  const productFilter = await resolveSearchProductFilter(ctx, params.product, log)
+    .catch(failedAt('maps'));
   // No upstream filter has two causes, and only one makes the product
   // unfilterable. A product with no classification value, whose publication
   // the registry has no map of either, cannot be filtered anywhere. A value

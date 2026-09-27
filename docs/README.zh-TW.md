@@ -189,6 +189,8 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
 
+「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
+
 ### jamf_docs_get_article
 
 取得特定 Jamf 文件文章的完整內容。可用 `url` 指定文章，或改用搜尋結果與目錄提供的
