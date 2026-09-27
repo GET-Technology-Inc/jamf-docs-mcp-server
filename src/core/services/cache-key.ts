@@ -109,7 +109,14 @@ export interface CacheKeySpaces {
   // namespace cannot serve one caller another's TOC. Kept as `product` rather
   // than renamed: the field name is part of the key material, so renaming it
   // would orphan every TOC entry on disk to buy nothing.
-  'ft-toc': { locale: LocaleId; product: string; version: string };
+  //
+  // v2 (2026-09-28): the value holds the tree with the `mapId` it was fetched
+  // from and that map's `resolvedLocale` (`CachedToc` in toc-service.ts), not
+  // the tree alone, which a hit had to name by asking the registry again and
+  // could name with a newer map than its entries came from. Nothing validates
+  // a payload on read, so the namespace moves and no build reads a v1 entry;
+  // those expire on their TTL (CACHE_TTL_ARTICLE, 24 hours by default).
+  'ft-toc-v2': { locale: LocaleId; product: string; version: string };
   'ft-tocindex-v3': { mapId: string };
   'ft-topic-index': { mapId: string };
   // `mapId` and nothing else. `fetchGlossaryToc` calls `fetchMapToc(mapId)`
@@ -216,7 +223,7 @@ const CACHE_NAMESPACE_REGISTRY: {
 } = {
   'ft-search-v2': true,
   'ft-article-v3': true,
-  'ft-toc': true,
+  'ft-toc-v2': true,
   'ft-tocindex-v3': true,
   'ft-topic-index': true,
   'glossary-toc': true,

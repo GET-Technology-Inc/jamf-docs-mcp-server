@@ -8,20 +8,20 @@ describe('cacheKey', () => {
   });
 
   it('is readable', () => {
-    expect(cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: '11.5' }))
-      .toBe('ft-toc:{"locale":"en-US","product":"jamf-pro","version":"11.5"}');
+    expect(cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: '11.5' }))
+      .toBe('ft-toc-v2:{"locale":"en-US","product":"jamf-pro","version":"11.5"}');
     expect(cacheKey('maps-registry-v3')).toBe('maps-registry-v3');
   });
 
   it('no value can forge a neighbouring key', () => {
-    const a = cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: '11.5' });
-    const b = cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: '11.5","product":"jamf-school' });
+    const a = cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: '11.5' });
+    const b = cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: '11.5","product":"jamf-school' });
     expect(a).not.toBe(b);
   });
 
   it('is insensitive to part order', () => {
-    expect(cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: 'current' }))
-      .toBe(cacheKey('ft-toc', { version: 'current', product: 'jamf-pro', locale: 'en-US' }));
+    expect(cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: 'current' }))
+      .toBe(cacheKey('ft-toc-v2', { version: 'current', product: 'jamf-pro', locale: 'en-US' }));
   });
 
   // Totality, not injectivity: a key that omits something the value depends on
@@ -46,12 +46,13 @@ describe('cacheKey', () => {
   });
 
   // A namespace that is a prefix of another would collide if the payload were
-  // appended without a separator: `ft-toc` + `index-v2:...` reads the same as
-  // `ft-tocindex-v3` + `...`. Both exist, so this is not hypothetical.
+  // appended without a separator: `ft-toc` + `index-v2:...` read the same as
+  // `ft-tocindex-v3` + `...` while both existed, until the TOC cache moved to
+  // `ft-toc-v2` on 2026-09-28. The two still share a prefix.
   it('keeps prefix-sharing namespaces apart', () => {
-    const toc = cacheKey('ft-toc', { locale: 'en-US', product: 'jamf-pro', version: 'current' });
+    const toc = cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: 'current' });
     const index = cacheKey('ft-tocindex-v3', { mapId: 'm1' });
-    expect(toc.startsWith('ft-toc:')).toBe(true);
+    expect(toc.startsWith('ft-toc-v2:')).toBe(true);
     expect(index.startsWith('ft-tocindex-v3:')).toBe(true);
     expect(toc).not.toBe(index);
   });

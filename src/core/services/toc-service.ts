@@ -54,35 +54,26 @@ export function transformFtTocToTocEntries(nodes: FtTocNode[]): TocEntry[] {
 
 // ─── Counting / serialisation helpers ──────────────────────────
 
-// ─── Map id resolution ─────────────────────────────────────────
+// ─── Cached tree ───────────────────────────────────────────────
 
 /**
- * Resolve the map for a product without letting the registry take the
- * request down with it.
+ * What the `ft-toc-v2` cache holds for one table of contents: the tree, and
+ * the map it was fetched from, with that map's locale.
  *
- * Used on the cache-hit path, where the TOC is already in hand: the cached
- * tree is stored without the id it was fetched under, so the id has to be
- * re-resolved, and a registry that cannot answer should cost the caller the
- * `mapId` field only — not the table of contents it already has.
+ * Until 2026-09-28 the cache (`ft-toc`) held the tree alone, and a hit named
+ * it by asking the registry again. The tree is kept for `cacheTtl.article`
+ * (CACHE_TTL_ARTICLE, 24 hours by default) and the registry's list of maps
+ * for the TTL it was built with (CACHE_TTL_PRODUCTS in the Node server, 7
+ * days by default). The two are written at different times, so once the
+ * registry named a newer map, after Jamf published a version, a tree fetched
+ * from the old one was named with the new one: a `mapId` its entries were not
+ * read from. A hit now names the map the tree was read from, and asks the
+ * registry nothing.
  */
-async function resolveMapQuietly(
-  ctx: ServerContext,
-  bundleId: string,
-  version: string,
-  locale: LocaleId,
-): Promise<{ mapId: string; resolvedLocale: string } | null> {
-  try {
-    return await ctx.mapsRegistry.resolveMap(
-      bundleId,
-      version !== 'current' ? version : undefined,
-      locale,
-    );
-  } catch (error) {
-    ctx.logger.createLogger('toc-service').warning(
-      `Could not resolve mapId for a cached TOC (${bundleId}/${version}/${locale}): ${String(error)}`,
-    );
-    return null;
-  }
+interface CachedToc {
+  toc: TocEntry[];
+  mapId: string;
+  resolvedLocale: string;
 }
 
 // ─── Main fetch function ───────────────────────────────────────
@@ -126,8 +117,9 @@ function bundleStemFor(source: TocSource): string {
  *   2. MapsRegistry → mapId → ft-client.fetchMapToc
  *   3. Transform FtTocNode[] → TocEntry[]
  *
- * Results are cached under the `ft-toc` namespace, keyed on locale, product
- * and version — see {@link CacheKeySpaces}.
+ * Results are cached under the `ft-toc-v2` namespace, keyed on locale, product
+ * and version — see {@link CacheKeySpaces} — with the map they were fetched
+ * from (see {@link CachedToc}).
  */
 export async function fetchTableOfContents(
   ctx: ServerContext,
@@ -147,17 +139,13 @@ export async function fetchTableOfContents(
   const page = options.page ?? PAGINATION_CONFIG.DEFAULT_PAGE;
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
   const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
-  const key = cacheKey('ft-toc', { locale, product: source, version });
+  const key = cacheKey('ft-toc-v2', { locale, product: source, version });
 
-  const bundleId = bundleStemFor(source);
+  let cached = await ctx.cache.get<CachedToc>(key);
 
-  let allToc = await ctx.cache.get<TocEntry[]>(key);
-  let mapId: string | null;
-  let resolvedLocale: string | null;
-
-  if (allToc === null) {
+  if (cached === null) {
     const resolved = await ctx.mapsRegistry.resolveMap(
-      bundleId,
+      bundleStemFor(source),
       version !== 'current' ? version : undefined,
       locale,
     );
@@ -168,30 +156,25 @@ export async function fetchTableOfContents(
         JamfDocsErrorCode.NOT_FOUND,
       );
     }
-    mapId = resolved.mapId;
-    resolvedLocale = resolved.resolvedLocale;
 
-    const ftNodes = await fetchMapToc(ctx.http, mapId);
+    const ftNodes = await fetchMapToc(ctx.http, resolved.mapId);
 
-    allToc = transformFtTocToTocEntries(ftNodes);
+    // The locale that answered is kept with the tree: a cached English tree
+    // served to a zh-TW request must still say it is English.
+    cached = {
+      toc: transformFtTocToTocEntries(ftNodes),
+      mapId: resolved.mapId,
+      resolvedLocale: resolved.resolvedLocale,
+    };
 
-    await ctx.cache.set(key, allToc, ctx.config.cacheTtl.article);
-  } else {
-    // The cache stores the tree, not the id it came from. Re-resolve so a
-    // caller reading a cached TOC gets the same `mapId` a cold one would —
-    // it is half of the pair `jamf_docs_get_article` documents. The locale
-    // that answered is re-resolved with it: a cached English tree served to a
-    // zh-TW request must still say it is English.
-    const resolved = await resolveMapQuietly(ctx, bundleId, version, locale);
-    mapId = resolved?.mapId ?? null;
-    resolvedLocale = resolved?.resolvedLocale ?? null;
+    await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
   }
 
   // ─── Pagination & token truncation ───────────────────────────
 
   return {
-    ...paginateTocEntries(allToc, page, maxTokens),
-    ...(mapId !== null ? { mapId } : {}),
-    ...(resolvedLocale !== null ? { resolvedLocale } : {}),
+    ...paginateTocEntries(cached.toc, page, maxTokens),
+    mapId: cached.mapId,
+    resolvedLocale: cached.resolvedLocale,
   };
 }

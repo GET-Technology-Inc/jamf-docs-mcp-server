@@ -28,7 +28,7 @@ import {
 } from '../../../src/core/services/toc-service.js';
 import { DOCS_BASE_URL, FT_API_BASE } from '../../../src/core/constants.js';
 import { createMockContext } from '../../helpers/mock-context.js';
-import { cacheKey } from '../../../src/core/services/cache-key.js';
+import { cacheKey, type CacheKey } from '../../../src/core/services/cache-key.js';
 import type { FtTocNode, FtMapInfo } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 
@@ -493,14 +493,16 @@ describe('fetchTableOfContents()', () => {
     expect(cached.mapId).toBe('map-cached-id');
   });
 
-  it('should serve a cached TOC without a mapId rather than fail when the registry cannot answer', async () => {
+  it('should serve a cached TOC with its mapId when the registry cannot answer', async () => {
     setupMapsResponse('map-transient', 'jamf-pro-documentation');
     currentTocResponse = SAMPLE_FT_NODES;
 
     await fetchTableOfContents(ctx, 'jamf-pro');
 
     // Force the registry to rebuild, and make that rebuild fail. The TOC is
-    // already in hand, so a broken registry should cost the id, not the page.
+    // already in hand with the id it was fetched under, so a hit needs
+    // nothing from the registry. Until 2026-09-28 a hit asked it again, and
+    // this cost the reply its mapId.
     ctx.mapsRegistry.reset();
     await ctx.cache.delete(cacheKey('maps-registry-v3'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
@@ -508,7 +510,64 @@ describe('fetchTableOfContents()', () => {
     const result = await fetchTableOfContents(ctx, 'jamf-pro');
 
     expect(result.toc).toHaveLength(2);
-    expect(result.mapId).toBeUndefined();
+    expect(result.mapId).toBe('map-transient');
+    expect(result.resolvedLocale).toBe('en-US');
+  });
+
+  // The tree is cached for CACHE_TTL_ARTICLE (24 hours by default), and the
+  // registry's maps for CACHE_TTL_PRODUCTS (7 days in the Node server), each
+  // written at its own time. Until 2026-09-28 a hit named the tree by asking
+  // the registry again, so once the registry named a newer map, after Jamf
+  // published a version, a tree fetched from the old one came back named
+  // with the new one: a mapId its entries were not read from.
+  it('should name a cached TOC with the map it was fetched from, not one the registry names later', async () => {
+    setupMapsResponse('map-fetched', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    await fetchTableOfContents(ctx, 'jamf-pro');
+
+    ctx.mapsRegistry.reset();
+    await ctx.cache.delete(cacheKey('maps-registry-v3'));
+    setupMapsResponse('map-published-since', 'jamf-pro-documentation');
+    expect(await ctx.mapsRegistry.resolveMapId('jamf-pro-documentation')).toBe('map-published-since');
+
+    const cached = await fetchTableOfContents(ctx, 'jamf-pro');
+
+    const tocUrls = mockedGetJson.mock.calls.map(([url]) => url).filter(url => url.endsWith('/toc'));
+    expect(tocUrls).toEqual([`${FT_API_BASE}/api/khub/maps/map-fetched/toc`]);
+    expect(cached.mapId).toBe('map-fetched');
+  });
+
+  it('should keep the locale that answered with a cached TOC', async () => {
+    // No zh-TW map, so the registry answers with the en-US one.
+    setupMapsResponse('map-en', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    const cold = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });
+
+    ctx.mapsRegistry.reset();
+    await ctx.cache.delete(cacheKey('maps-registry-v3'));
+    mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
+
+    const cached = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });
+
+    expect(cold).toMatchObject({ mapId: 'map-en', resolvedLocale: 'en-US' });
+    expect(cached).toMatchObject({ mapId: 'map-en', resolvedLocale: 'en-US' });
+  });
+
+  it('should not read a tree cached under the old ft-toc key, which holds no mapId', async () => {
+    // What a build before 2026-09-28 stored: the tree alone.
+    await ctx.cache.set(
+      'ft-toc:{"locale":"en-US","product":"jamf-pro","version":"current"}' as CacheKey,
+      transformFtTocToTocEntries([{ tocId: 'old', contentId: 'old', title: 'Stale', prettyUrl: '/r/en-US/x/Stale' }]),
+    );
+    setupMapsResponse('map-current', 'jamf-pro-documentation');
+    currentTocResponse = SAMPLE_FT_NODES;
+
+    const result = await fetchTableOfContents(ctx, 'jamf-pro');
+
+    expect(result.toc.map(entry => entry.title)).toEqual(['Overview', 'Installation']);
+    expect(result.mapId).toBe('map-current');
   });
 
   it('should cut pages to maxTokens without leaving any entry off every page', async () => {

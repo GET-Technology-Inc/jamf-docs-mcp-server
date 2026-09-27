@@ -295,7 +295,7 @@ support.jamf.com，此時會缺少 `jamf-support-*` 開頭的出版品。沒有 
 
 範本資源 (`jamf://products/{productId}/toc` 與 `jamf://products/{productId}/versions`) 支援 MCP 自動補全：輸入 `{productId}` 時會提供所有有效產品 ID 的建議選項。
 
-`jamf://products/{productId}/toc` 包含該產品目前版本 en-US 文件的完整目錄，巢狀結構與 `jamf_docs_get_toc` 的 JSON 回應相同，上限為 20000 token (與該工具計算 `maxTokens` 的方式相同，只計算項目標題)。這是標題的上限，不是 JSON 的大小；JSON 還包含每個項目的 URL 與 ID。2026-09-28 量測時所有產品都在上限內：最大的 Jamf Pro 約 8,400 token (794 個項目，JSON 為 267 KB)。`complete` 表示 `toc` 是否為完整目錄；若不完整，`shownEntries` 為其中的項目數，`missing` 會說明缺少哪些項目，以及在 `jamf_docs_get_toc` 能取得時該如何呼叫。
+`jamf://products/{productId}/toc` 包含該產品目前版本 en-US 文件的完整目錄，巢狀結構與 `jamf_docs_get_toc` 的 JSON 回應相同，上限為 20000 token (與該工具計算 `maxTokens` 的方式相同，只計算項目標題)。這是標題的上限，不是 JSON 的大小；JSON 還包含每個項目的 URL 與 ID。2026-09-28 量測時所有產品都在上限內：最大的 Jamf Pro 約 8,400 token (794 個項目，JSON 為 267 KB)。`complete` 表示 `toc` 是否為完整目錄；若不完整，`shownEntries` 為其中的項目數，`missing` 會說明缺少哪些項目，以及在 `jamf_docs_get_toc` 能取得時該如何呼叫。`mapId` 是這些項目所屬的 map，與項目的 `contentId` 組成 `jamf_docs_get_article` 取得該項目文章所用的 `mapId` + `contentId`。每個 map 已固定為單一版本與單一語系，因此不需另外指定版本或語系。無法確定這些項目屬於哪一個 map 時不會有 `mapId`，此時仍可用各項目的 `url` 取得文章。
 
 ## MCP Prompts
 

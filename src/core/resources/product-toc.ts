@@ -14,6 +14,14 @@
  * whole tree. A resource has no `page` to ask for the rest with, so when it
  * does not, `missing` says what is left out and, where one can, which
  * `jamf_docs_get_toc` call returns it.
+ *
+ * Until 2026-09-28 the body also held every entry's `contentId` (all 794 of
+ * Jamf Pro's, live) without the map they belong to, so none of them could be
+ * used: `jamf_docs_get_article` fetches by `mapId` + `contentId`, and a
+ * contentId does not name its map. Live that day, the one for "General
+ * Requirements" under Declarative Device Management is in the 11.31.0 map as
+ * well, and fetches the 11.31.0 article with it. The body now names the map
+ * its entries were read from, as `jamf_docs_get_toc` does.
  */
 
 import { JAMF_PRODUCTS, PAGINATION_CONFIG, TOKEN_CONFIG, type ProductId } from '../constants.js';
@@ -42,6 +50,13 @@ export const TOC_RESOURCE_MAX_TOKENS = 20000;
 /** What `jamf://products/{productId}/toc` answers with. */
 export interface ProductTocBody {
   product: string;
+  /**
+   * The map the entries were read from: with an entry's `contentId`, the pair
+   * `jamf_docs_get_article` fetches that entry by. A map is one version of
+   * the documentation in one language, so the pair needs nothing else.
+   * Absent when the pages held do not name one map (see `mapOf`).
+   */
+  mapId?: string;
   /** Entries in the whole tree, nested ones included. */
   totalEntries: number;
   /** Whether `toc` is the whole tree. */
@@ -80,6 +95,8 @@ type SourceStop =
 /** What reading the pages found, beyond the entries themselves. */
 interface ReadPages {
   toc: TocEntry[];
+  /** The `mapId` of each page held, in order; absent where a page named none. */
+  mapIds: (string | undefined)[];
   totalEntries: number;
   cuts: CutPage[];
   rest: RestOfToc | undefined;
@@ -128,6 +145,7 @@ async function readPages(ctx: ServerContext, productId: ProductId): Promise<Read
   let page = 1;
   let last = await read(page);
   const toc = [...last.toc];
+  const mapIds = [last.mapId];
   const held = new Set(toc.map(entryKey));
   const cuts = cutOn(page, last);
   let used = last.tokenInfo.tokenCount;
@@ -158,6 +176,7 @@ async function readPages(ctx: ServerContext, productId: ProductId): Promise<Read
       break;
     }
     toc.push(...next.toc);
+    mapIds.push(next.mapId);
     next.toc.forEach(entry => held.add(entryKey(entry)));
     cuts.push(...cutOn(page, next));
     used += next.tokenInfo.tokenCount;
@@ -166,7 +185,27 @@ async function readPages(ctx: ServerContext, productId: ProductId): Promise<Read
 
   // `paginateTocEntries` puts its note on every page of a tree, so the last
   // page held has it if any does.
-  return { toc, totalEntries: last.pagination.totalItems, cuts, rest, stop, paginationNote: last.paginationNote };
+  return {
+    toc, mapIds, totalEntries: last.pagination.totalItems, cuts, rest, stop, paginationNote: last.paginationNote,
+  };
+}
+
+/**
+ * The single map the pages held name, or undefined when they name none or
+ * several.
+ *
+ * On the Fluid Topics path every page names the map its tree was fetched
+ * from, cached or not (`fetchTableOfContents`). A `TocProvider` may name it
+ * on some pages only, and a page that names none leaves the others' answer
+ * standing. Pages that name two maps have no one map for all their entries,
+ * so the body offers no pair rather than a wrong one; each entry's `url`
+ * still fetches it. On the Fluid Topics path that takes the tree fetched
+ * again between two pages, its cache entry gone, with the registry naming
+ * another map by then.
+ */
+function mapOf(pages: ReadPages): string | undefined {
+  const named = new Set(pages.mapIds.filter(id => id !== undefined && id !== ''));
+  return named.size === 1 ? [...named][0] : undefined;
 }
 
 /** The sentence for one page held although it was cut to fit. */
@@ -273,8 +312,10 @@ export async function readProductToc(ctx: ServerContext, productId: ProductId): 
   const shownEntries = countTocEntries(pages.toc);
   const complete = shownEntries >= pages.totalEntries && pages.cuts.length === 0 &&
     pages.rest === undefined && pages.stop === undefined;
+  const mapId = mapOf(pages);
   return {
     product: JAMF_PRODUCTS[productId].name,
+    ...(mapId !== undefined ? { mapId } : {}),
     totalEntries: pages.totalEntries,
     complete,
     ...(complete ? {} : { shownEntries, missing: missingNote(productId, pages, shownEntries) }),
