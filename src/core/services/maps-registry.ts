@@ -19,6 +19,7 @@ import type { FtMapInfo, FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { cacheKey } from './cache-key.js';
+import { guardCache } from './cache-guard.js';
 import { readProviderMaps } from './provider-maps.js';
 import {
   compareVersions,
@@ -205,11 +206,12 @@ export class MapsRegistry {
   private readonly fetchMapsFn: typeof fetchMaps;
   private readonly mapsProvider: MapsProvider | undefined;
   private readonly cacheTtl: number;
+  private readonly cache: CacheProvider;
 
   private readonly http: HttpClient;
 
   constructor(
-    private readonly cache: CacheProvider,
+    cache: CacheProvider,
     fetchMapsFn?: typeof fetchMaps,
     mapsProvider?: MapsProvider,
     cacheTtl?: number,
@@ -217,6 +219,9 @@ export class MapsRegistry {
     // compile, and defaulted the same way fetchMapsFn is.
     http?: HttpClient,
   ) {
+    // Guarded here, not only by createMcpServer: a registry is built before
+    // any server, over the provider its caller holds (see cache-guard.ts).
+    this.cache = guardCache(cache);
     this.http = http ?? createHttpClient(createDefaultConfig().request);
     this.fetchMapsFn = fetchMapsFn ?? fetchMaps;
     this.mapsProvider = mapsProvider;

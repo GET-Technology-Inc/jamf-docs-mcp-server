@@ -1232,10 +1232,11 @@ function reasonGiven(error: unknown): string | undefined {
  *   A MapsProvider is named only when it threw ({@link MapsProviderError}):
  *   one whose answer the registry could not use is replaced by learn.jamf.com,
  *   and a failure there is learn.jamf.com's.
- * - Anything else, such as a cache that could not be read or written: plain
- *   words, and the server log for what went wrong. The error itself is left
- *   out, because a raw JavaScript message ("clusters is not iterable") tells
- *   a caller nothing it can act on.
+ * - Anything else: plain words, and the server log for what went wrong. The
+ *   error itself is left out, because a raw JavaScript message ("clusters is
+ *   not iterable") tells a caller nothing it can act on. A cache that fails
+ *   is one of these only for a caller that hands `searchDocumentation` a
+ *   context of its own: `createMcpServer` guards it (cache-guard.ts).
  */
 function searchFailureMessage(params: SearchParams, error: unknown): string {
   const step = error instanceof SearchStepError ? error.step : undefined;
@@ -1261,7 +1262,8 @@ function searchFailureMessage(params: SearchParams, error: unknown): string {
         failed = `${mapsList} could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
         advice = mayBeTemporary(cause) ? MAY_BE_TEMPORARY : undefined;
       } else {
-        // A cache that failed, or a list in a shape the registry cannot read.
+        // A list in a shape the registry cannot read. Not the registry's
+        // cache, which it guards (cache-guard.ts).
         failed = `${mapsList} could not be read`;
         advice = UNEXPECTED_FAILURE_ADVICE;
       }

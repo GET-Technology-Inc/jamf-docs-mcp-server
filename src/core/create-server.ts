@@ -9,6 +9,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from './types/context.js';
 import { SERVER_ICON, PRODUCT_ID_LIST, TOKEN_CONFIG } from './constants.js';
+import { guardCache } from './services/cache-guard.js';
 
 import { registerListProductsTool } from './tools/list-products.js';
 import { registerSearchTool } from './tools/search.js';
@@ -138,8 +139,23 @@ const SERVER_INSTRUCTIONS = `This server provides access to Jamf official docume
 
 /**
  * Create a fully-configured MCP server with all tools, resources, and prompts.
+ *
+ * Everything registered here reads the caller's `ctx`, live, except `cache`:
+ * that is {@link guardCache}'s guard of the provider `ctx.cache` held when the
+ * server was created, so a provider that fails, or answers a miss with
+ * `undefined`, cannot fail a reply. The caller's `ctx` is not changed.
  */
-export function createMcpServer(ctx: ServerContext, options?: CreateServerOptions): McpServer {
+export function createMcpServer(serverCtx: ServerContext, options?: CreateServerOptions): McpServer {
+  // Created from the caller's context, not copied from it, so each field is
+  // read from that object when a tool runs: a provider set on it afterwards
+  // is used, and a field defined as a getter is read through it, with this
+  // object as `this`. `cache` alone is this object's own: the guard of the
+  // provider the caller's context holds now. Nothing below may spread it:
+  // `{ ...ctx }` copies own fields, which is `cache` alone.
+  const ctx = Object.create(serverCtx, {
+    cache: { value: guardCache(serverCtx.cache, serverCtx.logger), enumerable: true },
+  }) as ServerContext;
+
   const server = new McpServer(
     {
       name: 'jamf-docs-mcp-server',
