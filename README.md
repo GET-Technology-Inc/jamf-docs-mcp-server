@@ -251,10 +251,12 @@ Static and dynamic reference data accessible without tool calls:
 |----------|-----|-------------|
 | Products list | `jamf://products` | All available Jamf products with IDs and version info (fetched dynamically from API) |
 | Topics list | `jamf://topics` | Topic categories for filtering documentation searches |
-| Product TOC | `jamf://products/{productId}/toc` | Table of contents for a specific product (template resource) |
+| Product TOC | `jamf://products/{productId}/toc` | The whole table of contents of a product's current documentation (template resource; see below) |
 | Product versions | `jamf://products/{productId}/versions` | Available documentation versions for a specific product (template resource) |
 
 Template resources support tab-completion on `productId` in compatible clients.
+
+`jamf://products/{productId}/toc` holds the whole table of contents of the product's current en-US documentation, nested as `jamf_docs_get_toc` returns it in JSON, up to 20000 tokens counted from entry titles as that tool counts `maxTokens`. That is a bound on the titles, not on the size of the JSON, which also carries each entry's URL and ids. On 2026-09-28 every product fitted: the largest, Jamf Pro, was about 8,400 such tokens (794 entries, 267 KB of JSON). `complete` says whether `toc` is the whole tree. When it is not, `shownEntries` counts the entries it holds and `missing` says what is left out and, where `jamf_docs_get_toc` can return it, which call does.
 
 ## MCP Prompts
 

@@ -288,10 +288,12 @@ support.jamf.com，此時會缺少 `jamf-support-*` 開頭的出版品。沒有 
 |----------|-----|------|
 | Jamf Products List | `jamf://products` | 所有支援產品的清單與版本資訊，從 API 動態取得 |
 | Jamf Documentation Topics | `jamf://topics` | 搜尋過濾用的主題分類 |
-| Product Table of Contents | `jamf://products/{productId}/toc` | 特定產品的文件目錄結構 (範本資源) |
+| Product Table of Contents | `jamf://products/{productId}/toc` | 特定產品目前版本文件的完整目錄結構 (範本資源，詳見下方) |
 | Product Documentation Versions | `jamf://products/{productId}/versions` | 特定產品的可用文件版本清單 (範本資源) |
 
 範本資源 (`jamf://products/{productId}/toc` 與 `jamf://products/{productId}/versions`) 支援 MCP 自動補全：輸入 `{productId}` 時會提供所有有效產品 ID 的建議選項。
+
+`jamf://products/{productId}/toc` 包含該產品目前版本 en-US 文件的完整目錄，巢狀結構與 `jamf_docs_get_toc` 的 JSON 回應相同，上限為 20000 token (與該工具計算 `maxTokens` 的方式相同，只計算項目標題)。這是標題的上限，不是 JSON 的大小；JSON 還包含每個項目的 URL 與 ID。2026-09-28 量測時所有產品都在上限內：最大的 Jamf Pro 約 8,400 token (794 個項目，JSON 為 267 KB)。`complete` 表示 `toc` 是否為完整目錄；若不完整，`shownEntries` 為其中的項目數，`missing` 會說明缺少哪些項目，以及在 `jamf_docs_get_toc` 能取得時該如何呼叫。
 
 ## MCP Prompts
 
