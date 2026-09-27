@@ -19,10 +19,12 @@
  * `jamf-pro-相關` and `jamf-帳號` there), and Jamf Connect for macOS in fr, de
  * and es (`jamf-connect-pour-macos`, `-fur-`, `-para-`).
  *
- * `list_products` offers each of its 9 ids in all six locales, and 32 of those
- * 54 pairs have no translation upstream. Those were "Unknown collection" too;
- * they now get the en-US edition with a `localeNote`, as an untranslated
- * Fluid Topics publication does.
+ * `get_toc` takes each of `list_products`' 9 ids in all six locales, and 32
+ * of those 54 pairs have no translation upstream. Those were "Unknown
+ * collection" too; they now get the en-US edition with a `localeNote`, as an
+ * untranslated Fluid Topics publication does. (`list_products` offered all
+ * 54 until 2026-09-28; list-products-support-locales.test.ts holds its
+ * `locales` to the 22 served without a note.)
  */
 
 import { vi, describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -32,7 +34,6 @@ import { registerGetTocTool } from '../../../src/core/tools/get-toc.js';
 import { registerListProductsTool } from '../../../src/core/tools/list-products.js';
 import { STATIC_DOC_SOURCES, canonicalStaticUrl, dynamicSectionId } from '../../../src/core/constants/sources.js';
 import type { CacheKey } from '../../../src/core/services/cache-key.js';
-import { HttpError, type HttpClient } from '../../../src/core/http-client.js';
 import { createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 import type { Logger } from '../../../src/core/services/interfaces/index.js';
@@ -40,6 +41,7 @@ import {
   SUPPORT_COLLECTIONS_BY_LOCALE,
   type SupportCollectionFixture,
 } from '../../fixtures/support-collections-by-locale.js';
+import { collectionIn, createSupportUpstream, homeUrl, listedUrl } from '../../helpers/support-upstream.js';
 
 interface TextContent { type: 'text'; text: string }
 
@@ -59,72 +61,8 @@ const LOCALES = Object.entries(SUPPORT.locales);
 
 const JAMF_PRO = '12369024';
 
-/** A page carrying `pageProps` the way Intercom's Next.js pages do. */
-function page(pageProps: unknown): string {
-  return `<html><body><script id="__NEXT_DATA__" type="application/json" nonce="n">${
-    JSON.stringify({ props: { pageProps } })}</script></body></html>`;
-}
-
-/** A collection's URL as its locale's home page lists it: the slug raw. */
-function listedUrl(code: string, collection: SupportCollectionFixture): string {
-  return `${ORIGIN}/${code}/collections/${collection.id}-${collection.slug}`;
-}
-
-/**
- * Listings a test serves in place of the live ones, by locale code. Only the
- * case that no live listing has sets one.
- */
-let listingOverrides: Partial<Record<string, readonly SupportCollectionFixture[]>> = {};
-
-function listingOf(code: string): readonly SupportCollectionFixture[] | undefined {
-  return listingOverrides[code] ?? SUPPORT_COLLECTIONS_BY_LOCALE[code];
-}
-
-function collectionIn(code: string, id: string): SupportCollectionFixture | undefined {
-  return listingOf(code)?.find(c => c.id === id);
-}
-
-/** Locale codes whose home page answers 503, as a site outage would. */
-let unreadableHomes = new Set<string>();
-
-/** The page for one locale's copy of a collection, holding its first entry. */
-function collectionPage(collection: SupportCollectionFixture): string {
-  const { kind, title, url } = collection.first;
-  return page({
-    collection: kind === 'article'
-      ? { articleSummaries: [{ title, url }] }
-      : { subcollections: [{ name: title, url, articleSummaries: [] }] },
-  });
-}
-
-/** Every url requested, in order. */
-const requests: string[] = [];
-
-const http: HttpClient = {
-  getText: async (url) => {
-    requests.push(url);
-    const segments = new URL(url).pathname.split('/').filter(Boolean);
-    const [code = '', kind = '', leaf = ''] = segments;
-    if (segments.length === 1 && unreadableHomes.has(code)) {
-      throw new HttpError(503, 'Service Unavailable', url);
-    }
-    const listing = listingOf(code);
-    if (listing !== undefined && segments.length === 1) {
-      return await Promise.resolve(page({
-        home: {
-          collections: listing.map(c => ({
-            id: c.id, slug: c.slug, name: c.name, description: '', url: listedUrl(code, c), articleCount: c.entries,
-          })),
-        },
-      }));
-    }
-    const collection = kind === 'collections' ? collectionIn(code, leaf.split('-')[0] ?? '') : undefined;
-    if (collection !== undefined) { return await Promise.resolve(collectionPage(collection)); }
-    throw new HttpError(404, 'Not Found', url);
-  },
-  getJson: async (url) => await Promise.reject(new HttpError(404, 'Not Found', url)),
-  postJson: async (url) => await Promise.reject(new HttpError(404, 'Not Found', url)),
-};
+const upstream = createSupportUpstream();
+const { requests } = upstream;
 
 let ctx: ServerContext;
 let server: McpServer;
@@ -133,7 +71,7 @@ let client: Client;
 beforeAll(async () => {
   // One context for the whole suite, as a running server has: what one call
   // caches, the next one reads.
-  ctx = createMockContext({ http, mapsRegistry: createStubMapsRegistry([]) });
+  ctx = createMockContext({ http: upstream.http, mapsRegistry: createStubMapsRegistry([]) });
   server = new McpServer({ name: 'test', version: '0.0.1' });
   registerGetTocTool(server, ctx);
   registerListProductsTool(server, ctx);
@@ -151,9 +89,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await ctx.cache.clear();
-  requests.length = 0;
-  listingOverrides = {};
-  unreadableHomes = new Set();
+  upstream.reset();
 });
 
 async function getToc(publication: string, language: string): Promise<CallResult> {
@@ -338,7 +274,7 @@ describe('jamf_docs_get_toc: the id jamf_docs_list_products gives a collection, 
     // `jamf-now`, `jamf-support-jamf-now` would still be Jamf Now, which fr
     // does not publish, so its en-US edition, and not that collection.
     const [jamfPro, ...rest] = SUPPORT_COLLECTIONS_BY_LOCALE.fr ?? [];
-    listingOverrides = { fr: [{ ...jamfPro, slug: 'jamf-now' }, ...rest] };
+    upstream.listings.set('fr', [{ ...jamfPro, slug: 'jamf-now' }, ...rest]);
 
     const result = await getToc('jamf-support-jamf-now', 'fr-FR');
 
@@ -373,7 +309,7 @@ describe('jamf_docs_get_toc: the id jamf_docs_list_products gives a collection, 
       id: '99999999', slug: 'jamf-ja-only', name: 'Jamf ja only', entries: 1,
       first: { kind: 'article', title: 'ja only', url: `${ORIGIN}/ja/articles/1-ja-only` },
     };
-    listingOverrides = { ja: [...(SUPPORT_COLLECTIONS_BY_LOCALE.ja ?? []), jaOnly] };
+    upstream.listings.set('ja', [...(SUPPORT_COLLECTIONS_BY_LOCALE.ja ?? []), jaOnly]);
 
     const unknown = await getToc('jamf-support-jamf-pro-docs', 'ja-JP');
     expect(offeredIn(textOf(unknown)).slice(0, 3)).toEqual([
@@ -384,15 +320,21 @@ describe('jamf_docs_get_toc: the id jamf_docs_list_products gives a collection, 
     expectOwnEdition(await getToc('jamf-support-jamf-ja-only', 'ja-JP'), 'ja', jaOnly);
   });
 
-  it('says the locale publishes nothing when neither its listing nor en\'s has a collection', async () => {
-    listingOverrides = { ja: [], en: [] };
+  it('names the en page it could not read when the locale publishes nothing and en lists nothing', async () => {
+    // Until 2026-09-28 this answered "publishes nothing in ja-JP", from an
+    // empty en listing cached as if en published nothing. An empty ja
+    // listing is ja publishing nothing, and every id is then served in
+    // en-US; en's listing is the one that failed. support-home-unreadable
+    // .test.ts has the rest of these cases.
+    upstream.listings.set('ja', []);
+    upstream.listings.set('en', []);
 
     const result = await getToc('jamf-support-jamf-pro', 'ja-JP');
 
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe(
-      'Unknown Jamf Support Knowledge Base collection: "jamf-support-jamf-pro".\n\n' +
-      'Jamf Support Knowledge Base publishes nothing in ja-JP.',
+      'Error fetching table of contents: Could not read the Jamf Support Knowledge Base collections at ' +
+      `${homeUrl('en')}: the page lists none.`,
     );
   });
 });
@@ -434,7 +376,7 @@ describe('jamf_docs_get_toc: what a support.jamf.com TOC requests', () => {
 
 describe('jamf_docs_get_toc: support.jamf.com\'s en home page unreadable', () => {
   beforeEach(() => {
-    unreadableHomes = new Set(['en']);
+    upstream.failing.set('en', '503');
     vi.mocked(ctx.logger.createLogger).mockClear();
   });
 

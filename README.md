@@ -140,12 +140,18 @@ This is the one tool without a `language` parameter. Every tool's input schema
 is strict, so an unrecognised key is rejected
 (`Unrecognized key: "language"`) rather than silently ignored.
 
+Each publication's `locales` are the languages Jamf publishes it in. For a
+`jamf-support-*` publication, they are the languages whose support.jamf.com home
+page lists it. `jamf_docs_get_toc` serves a publication in another of its site's
+languages as the en-US edition, with a `localeNote`.
+
 If a source cannot be read, the reply lists what it could and says so:
 `incomplete` names each unavailable source, and the markdown reply says the same
 at the top. `maps-registry` is learn.jamf.com, where the publication list and the
 product versions both come from, so either can then be missing or a compiled-in
 default. `jamf-support` is support.jamf.com, whose `jamf-support-*` publications
-are then missing. No `incomplete` means every source answered.
+are then missing, or, when only some of its languages cannot be read, leave
+those out of their `locales`. No `incomplete` means every source answered.
 
 ### jamf_docs_search
 

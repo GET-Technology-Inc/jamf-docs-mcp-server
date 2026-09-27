@@ -35,7 +35,9 @@ const TOOL_NAME = 'jamf_docs_list_products';
  * and `hasContent`. "maps registry" is also what this tool's contract has
  * always called it. Every other value is the id of a source in
  * {@link DYNAMIC_SECTION_SOURCES}, and the message names the publication ids
- * that source contributes, so a client can tell which rows are missing.
+ * that source contributes, so a client can tell which rows are missing, or,
+ * when only some of its locales could not be read, which locales its rows'
+ * `locales` leave out.
  */
 const MAPS_REGISTRY = 'maps-registry';
 
@@ -54,7 +56,7 @@ Returns two separate catalogues:
     courses, evaluation and configuration guides - grouped the way Jamf classifies
     them. Pass one of these IDs as the \`publication\` parameter of jamf_docs_get_toc.
     These are documents, not products, and the search \`product\` filter does not
-    take them.
+    take them. Each one's "locales" are the languages Jamf publishes it in.
 
 Also lists available topic and docType filters for search.
 
@@ -93,7 +95,8 @@ names each unavailable source, its "message" says what that cost, and the Markdo
 says the same at the top. "${MAPS_REGISTRY}" is learn.jamf.com, where the publication list
 and the product versions both come from: either can then be missing or a compiled-in default.
 ${DYNAMIC_SECTION_SOURCES.map(source =>
-    `"${source.id}" is ${source.hostname}, whose ${sectionIdPattern(source)} publications are then missing.`,
+    `"${source.id}" is ${source.hostname}, whose ${sectionIdPattern(source)} publications are then missing, or, ` +
+    'when only some of its languages could not be read, leave those out of their "locales".',
   ).join('\n')}
 This may be temporary: try again in a minute. No "incomplete" means every source answered.`;
 
@@ -122,6 +125,143 @@ interface PublicationListing {
    * when every source answered.
    */
   unavailable: string[];
+  /**
+   * For a dynamic source whose rows are listed, the locales whose own listing
+   * could not be read, by source id. Its rows' `locales` leave those out, so
+   * `incomplete` names the source too. No entry when every locale answered.
+   */
+  unreadLocales: Map<string, string[]>;
+  /**
+   * The ids of those rows: whether each is published in a locale in
+   * `unreadLocales` is not known, so the Markdown does not call one of them
+   * single-locale.
+   */
+  localesUnknown: Set<string>;
+}
+
+/** One dynamic source's rows, and the locales its rows could not be checked in. */
+interface DynamicSectionListing {
+  rows: PublicationRow[];
+  unreadLocales: string[];
+}
+
+/**
+ * A runtime-discovered source's sections, each with the locales it is
+ * published in.
+ *
+ * The rows are the default locale's listing, whose slugs the ids are built
+ * from, and they need it: when it cannot be read this throws, and the source
+ * costs its rows. Each row's locales are then the ones whose own listing names
+ * its collection, by the Intercom id every locale shares (see
+ * `IntercomCollection`), so a row lists a locale exactly where
+ * `jamf_docs_get_toc` serves that locale's own edition rather than the
+ * default one with a `localeNote`. Until 2026-09-28 every row carried every
+ * locale the source declares: 54 (collection, locale) pairs for
+ * support.jamf.com's nine collections, of which 22 exist, since six of the
+ * nine are published in en alone.
+ *
+ * The other listings are read after the default one answers, so a source that
+ * is down costs one request per call, as before, and together, so a cold call
+ * waits on the slowest of them and not on their sum. Each is cached for
+ * `cacheTtl.products`, the entries `get_toc` reads, so a warm call reads none.
+ * A listing that lists nothing is an answer: that locale publishes nothing.
+ * A listing that cannot be read costs its locale in every row and nothing
+ * else, and is returned in `unreadLocales` so that `incomplete` can say so.
+ * It is not asked for again for a minute (`rememberFailure`), so with
+ * support.jamf.com down and the default listing cached, a call waits on five
+ * failing requests at most once a minute rather than every time.
+ */
+async function listDynamicSections(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  defaultCode: string,
+): Promise<DynamicSectionListing> {
+  const collections = await listIntercomCollections(ctx, source, defaultCode);
+  const others = Object.entries(source.locales).filter(([locale]) => locale !== DEFAULT_LOCALE);
+  const listings = await Promise.all(others.map(async ([locale, code]) => {
+    try {
+      const listed = await listIntercomCollections(ctx, source, code, { rememberFailure: true });
+      const ids = new Set(listed.map(c => c.id));
+      return { locale, ids };
+    } catch (error) {
+      ctx.logger.createLogger('list-products').warning(
+        `Could not list ${source.name} collections in ${code}, so no section lists ${locale}: ${String(error)}`,
+      );
+      return { locale, ids: null };
+    }
+  }));
+
+  return {
+    rows: collections.map(collection => ({
+      id: dynamicSectionId(source, collection.slug),
+      title: `${source.name}: ${collection.name}`,
+      portal: [source.name],
+      locales: [
+        DEFAULT_LOCALE,
+        ...listings.filter(({ ids }) => ids?.has(collection.id) === true).map(({ locale }) => locale),
+      ].sort(),
+      versions: [],
+    })),
+    unreadLocales: listings.filter(({ ids }) => ids === null).map(({ locale }) => locale),
+  };
+}
+
+/** What the runtime-discovered sources gave, and what of them could not be read. */
+interface DynamicSourcesListing {
+  rows: PublicationRow[];
+  unreadSources: string[];
+  unreadLocales: Map<string, string[]>;
+  localesUnknown: Set<string>;
+}
+
+/**
+ * The rows of every source whose sections come from the source itself.
+ * Best-effort per source: an unreachable Help Center costs its own rows, not
+ * the list.
+ */
+async function listDynamicSourcesQuietly(ctx: ServerContext): Promise<DynamicSourcesListing> {
+  const listing: DynamicSourcesListing = {
+    rows: [], unreadSources: [], unreadLocales: new Map(), localesUnknown: new Set(),
+  };
+  for (const source of DYNAMIC_SECTION_SOURCES) {
+    const locale = source.locales[DEFAULT_LOCALE];
+    if (locale === undefined) { continue; }
+    try {
+      const { rows, unreadLocales } = await listDynamicSections(ctx, source, locale);
+      listing.rows.push(...rows);
+      if (unreadLocales.length > 0) {
+        listing.unreadLocales.set(source.id, unreadLocales);
+        for (const row of rows) { listing.localesUnknown.add(row.id); }
+      }
+    } catch (error) {
+      ctx.logger.createLogger('list-products').warning(
+        `Could not list ${source.name} collections: ${String(error)}`,
+      );
+      listing.unreadSources.push(source.id);
+    }
+  }
+  return listing;
+}
+
+/** The maps registry's publications, or null when it could not be read. */
+async function listRegistryPublicationsQuietly(ctx: ServerContext): Promise<PublicationRow[] | null> {
+  try {
+    const pubs = await ctx.mapsRegistry.listPublications();
+    return pubs.map(pub => ({
+      id: pub.id,
+      title: pub.title,
+      ...(pub.portal.length > 0 ? { portal: pub.portal } : {}),
+      ...(pub.app.length > 0 ? { app: pub.app } : {}),
+      ...(pub.utility.length > 0 ? { utility: pub.utility } : {}),
+      locales: pub.locales,
+      versions: pub.versions,
+    }));
+  } catch (error) {
+    ctx.logger.createLogger('list-products').warning(
+      `Could not list publications: ${String(error)}`,
+    );
+    return null;
+  }
 }
 
 /**
@@ -134,6 +274,12 @@ interface PublicationListing {
  * (#264) that means the list is never empty: the static sections are compiled
  * in. So the rows cannot say whether anything is missing, and `unavailable`
  * does.
+ *
+ * The two upstreams are read side by side: neither needs the other, and
+ * #345 needs only that both are read before the product half. Until
+ * 2026-09-28 support.jamf.com was read before the registry. It was one page
+ * then, and is six on a cold call now, which read in turn would add their
+ * time to the registry's.
  */
 async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationListing> {
   // Static sources are compiled in, so they list whether or not the maps
@@ -147,52 +293,16 @@ async function listPublicationsQuietly(ctx: ServerContext): Promise<PublicationL
     versions: [],
   }));
 
-  const unreadSources: string[] = [];
-
-  // Sources whose sections come from the source itself. Best-effort per
-  // source: an unreachable Help Center costs its own rows, not the list.
-  for (const source of DYNAMIC_SECTION_SOURCES) {
-    const locale = source.locales[DEFAULT_LOCALE];
-    if (locale === undefined) { continue; }
-    try {
-      for (const collection of await listIntercomCollections(ctx, source, locale)) {
-        staticRows.push({
-          id: dynamicSectionId(source, collection.slug),
-          title: `${source.name}: ${collection.name}`,
-          portal: [source.name],
-          locales: Object.keys(source.locales).sort(),
-          versions: [],
-        });
-      }
-    } catch (error) {
-      ctx.logger.createLogger('list-products').warning(
-        `Could not list ${source.name} collections: ${String(error)}`,
-      );
-      unreadSources.push(source.id);
-    }
-  }
-
-  let registryRows: PublicationRow[] | null = null;
-  try {
-    const pubs = await ctx.mapsRegistry.listPublications();
-    registryRows = pubs.map(pub => ({
-      id: pub.id,
-      title: pub.title,
-      ...(pub.portal.length > 0 ? { portal: pub.portal } : {}),
-      ...(pub.app.length > 0 ? { app: pub.app } : {}),
-      ...(pub.utility.length > 0 ? { utility: pub.utility } : {}),
-      locales: pub.locales,
-      versions: pub.versions,
-    }));
-  } catch (error) {
-    ctx.logger.createLogger('list-products').warning(
-      `Could not list publications: ${String(error)}`,
-    );
-  }
+  const [dynamic, registryRows] = await Promise.all([
+    listDynamicSourcesQuietly(ctx),
+    listRegistryPublicationsQuietly(ctx),
+  ]);
 
   return {
-    rows: [...staticRows, ...(registryRows ?? [])],
-    unavailable: [...(registryRows === null ? [MAPS_REGISTRY] : []), ...unreadSources],
+    rows: [...staticRows, ...dynamic.rows, ...(registryRows ?? [])],
+    unavailable: [...(registryRows === null ? [MAPS_REGISTRY] : []), ...dynamic.unreadSources],
+    unreadLocales: dynamic.unreadLocales,
+    localesUnknown: dynamic.localesUnknown,
   };
 }
 
@@ -224,12 +334,15 @@ interface ProductFallbacks {
  * into a fallback only as it expires in turn, the availability map first.
  */
 function describeIncomplete(
-  publicationsUnavailable: readonly string[],
+  listing: Pick<PublicationListing, 'unavailable' | 'unreadLocales'>,
   fallback: ProductFallbacks,
 ): Incomplete | undefined {
-  const registryPublicationsMissing = publicationsUnavailable.includes(MAPS_REGISTRY);
+  const registryPublicationsMissing = listing.unavailable.includes(MAPS_REGISTRY);
   const registryUnavailable = registryPublicationsMissing || fallback.versions || fallback.availability;
-  const unreadSources = DYNAMIC_SECTION_SOURCES.filter(s => publicationsUnavailable.includes(s.id));
+  // A dynamic source is named whether it cost its rows or some of their
+  // locales. Its sentence says which.
+  const unreadSources = DYNAMIC_SECTION_SOURCES.filter(s =>
+    listing.unavailable.includes(s.id) || listing.unreadLocales.has(s.id));
   if (!registryUnavailable && unreadSources.length === 0) { return undefined; }
 
   const sentences: string[] = [];
@@ -246,7 +359,9 @@ function describeIncomplete(
     sentences.push('Every product is assumed to have a table of contents.');
   }
   for (const source of unreadSources) {
-    sentences.push(sectionsLost(source));
+    sentences.push(listing.unavailable.includes(source.id)
+      ? sectionsLost(source)
+      : localesLost(source, listing.unreadLocales.get(source.id) ?? []));
   }
   sentences.push('This may be temporary: try again in a minute.');
 
@@ -260,6 +375,26 @@ function describeIncomplete(
 function sectionsLost(source: StaticDocSource): string {
   return `The ${source.name} on ${source.hostname} could not be read, so the publication list ` +
     `has none of its sections (\`${sectionIdPattern(source)}\`).`;
+}
+
+/** `a`, `a and b`, `a, b and c`, with `conjunction` for the "and". */
+function joined(items: readonly string[], conjunction: string): string {
+  const last = items.at(-1) ?? '';
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} ${conjunction} ${last}` : last;
+}
+
+/**
+ * The sentence for a runtime-discovered source whose sections are listed but
+ * some of whose locales could not be read.
+ *
+ * Every section is there, so the publication list is whole and says so; what
+ * is missing is whether each one is published in those locales, and its
+ * `locales` leave them out rather than guess.
+ */
+function localesLost(source: StaticDocSource, locales: readonly string[]): string {
+  return `The ${source.name} on ${source.hostname} could not be read in ${joined(locales, 'and')}, ` +
+    `so its sections (\`${sectionIdPattern(source)}\`) list no ${joined(locales, 'or')} edition ` +
+    'in `locales`, whether or not they have one.';
 }
 
 /**
@@ -343,8 +478,18 @@ function groupByClassification(
  * `partial` is set when a source could not be read. The rows are then some of
  * what Jamf publishes, and the preamble must not call them all of it: during
  * a registry outage that claim headed the two Jamf Concepts sections (#335).
+ *
+ * `localesUnknown` holds the rows whose `locales` leave out a locale that
+ * could not be read. None of them is marked single-locale: with the other
+ * five support.jamf.com listings down, Jamf Pro would otherwise read "en-US
+ * only", and it is in all six. The note at the top names those locales.
  */
-function renderPublications(publications: PublicationRow[], mode: OutputMode, partial: boolean): string {
+function renderPublications(
+  publications: PublicationRow[],
+  mode: OutputMode,
+  partial: boolean,
+  localesUnknown: ReadonlySet<string>,
+): string {
   if (publications.length === 0) { return ''; }
 
   const ordered = groupByClassification(publications);
@@ -377,7 +522,7 @@ function renderPublications(publications: PublicationRow[], mode: OutputMode, pa
       if (pub.versions.length > 0) {
         extras.push(`${String(pub.versions.length)} versions, latest ${pub.versions[0] ?? ''}`);
       }
-      if (pub.locales.length === 1) { extras.push(`${pub.locales[0] ?? ''} only`); }
+      if (pub.locales.length === 1 && !localesUnknown.has(pub.id)) { extras.push(`${pub.locales[0] ?? ''} only`); }
       out += `- **\`${pub.id}\`**: ${pub.title}`;
       out += extras.length > 0 ? ` *(${extras.join('; ')})*\n` : '\n';
     }
@@ -478,7 +623,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
 
         // `tools/call` has no cache or degradation channel, so the result body
         // is the only place a fallback can be reported.
-        const incomplete = describeIncomplete(listing.unavailable, {
+        const incomplete = describeIncomplete(listing, {
           versions: versionsStatus.degraded,
           availability: availabilityStatus.degraded,
         });
@@ -524,7 +669,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           for (const topic of topics) {
             markdown += `- \`${topic.id}\`: ${topic.name}\n`;
           }
-          markdown += renderPublications(publications, OutputMode.COMPACT, publicationsPartial);
+          markdown += renderPublications(publications, OutputMode.COMPACT, publicationsPartial, listing.localesUnknown);
 
           const compactText = truncateAfter(incompleteNote, markdown, maxTokens);
           await reportProgress(extra, { progress: 3, total: 3 });
@@ -555,7 +700,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           markdown += '\n';
         }
 
-        markdown += renderPublications(publications, OutputMode.FULL, publicationsPartial);
+        markdown += renderPublications(publications, OutputMode.FULL, publicationsPartial, listing.localesUnknown);
 
         markdown += '---\n\n';
         markdown += '# Available Topics for Filtering\n\n';

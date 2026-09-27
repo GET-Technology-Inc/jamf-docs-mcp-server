@@ -277,10 +277,15 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 這是唯一沒有 `language` 參數的工具。所有工具的輸入 schema 都是嚴格模式，無法辨識的
 參數會直接被拒絕 (`Unrecognized key: "language"`)，而不是默默忽略。
 
+每個出版品的 `locales` 列出 Jamf 以哪些語系發布它。`jamf-support-*` 開頭的出版品，則是
+support.jamf.com 首頁有列出它的語系。以該網站的其他語系呼叫 `jamf_docs_get_toc` 時，會提供
+en-US 版本，並附上 `localeNote` 說明。
+
 若有來源無法讀取，回應會列出能取得的部分並加以註明：`incomplete` 會列出每個無法讀取的
 來源，Markdown 回應開頭也會有同樣的說明。`maps-registry` 指 learn.jamf.com，出版品清單與
 產品版本都來自這裡，因此兩者可能缺漏或改用內建的預設值。`jamf-support` 指
-support.jamf.com，此時會缺少 `jamf-support-*` 開頭的出版品。沒有 `incomplete` 表示所有來源都有回應。
+support.jamf.com，此時會缺少 `jamf-support-*` 開頭的出版品；若只有部分語系無法讀取，這些出版品
+仍會列出，但其 `locales` 不會包含那些語系。沒有 `incomplete` 表示所有來源都有回應。
 
 ## MCP Resources
 
