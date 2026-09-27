@@ -567,47 +567,16 @@ export type DeclaredSearchResultFieldsAreEmitted = KeysWithin<
 >;
 
 /**
- * `result` without a `mapTitle` that is not a string or a `crossFiled` that is
- * not a boolean.
- *
- * `SearchResult` types both, but a SearchProvider's results are taken as
- * given, and a provider that builds them from untyped rows can hand over a
- * database `NULL` as `mapTitle: null`. Until 2026-09-26 neither field reached
- * structuredContent, so a value like that did no harm there. Published as is,
- * it fails the client's check against `SearchOutputSchema`, and the whole
- * search becomes an output validation error. Read as absent, it still says
- * what the provider said: no publication named, not marked cross-filed.
- *
- * Applied before any channel is built, so the markdown, the JSON text and
- * structuredContent agree, and the markdown's publication note is never asked
- * to escape a `null` title, which threw. A well-typed result is returned as it
- * came.
- */
-function withWellTypedPublication(result: SearchResult): SearchResult {
-  const { mapTitle, crossFiled }: { mapTitle?: unknown; crossFiled?: unknown } = result;
-  const mapTitleFits = mapTitle === undefined || typeof mapTitle === 'string';
-  const crossFiledFits = crossFiled === undefined || typeof crossFiled === 'boolean';
-  if (mapTitleFits && crossFiledFits) {
-    return result;
-  }
-  const kept = { ...result };
-  if (!mapTitleFits) {
-    delete kept.mapTitle;
-  }
-  if (!crossFiledFits) {
-    delete kept.crossFiled;
-  }
-  return kept;
-}
-
-/**
  * One result as the structured channel publishes it.
  *
  * A field the result does not have is left out, not filled in with an empty
  * value, so "the backend did not say" stays distinct from any value it could
  * have said: no `mapTitle: ''`, no `crossFiled: false`. A `publish` field the
- * result does have is sent as it is; {@link withWellTypedPublication} has
- * already dropped a mistyped `mapTitle` or `crossFiled`.
+ * result does have is sent as it is. It is of the type `SearchOutputSchema`
+ * declares: `buildSearchResult` builds a Fluid Topics result that way, taking
+ * `mapTitle` only when it is a string, and a SearchProvider's results are read
+ * against the same schema before the service does anything with them
+ * (`readSearchProviderResults`), which reads a mistyped field as absent.
  */
 function toStructuredResult(r: SearchResult): Record<string, unknown> {
   const published: Record<string, unknown> = {};
@@ -938,11 +907,9 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         }
 
         const {
-          pagination, tokenInfo, filterRelaxation, versionNote,
+          results, pagination, tokenInfo, filterRelaxation, versionNote,
           paginationNote, truncatedContent, rankedBy
         } = searchResult;
-        // Before any channel is built, so all three read the same fields.
-        const results = searchResult.results.map(withWellTypedPublication);
 
         // Build response
         const filters = buildFilterSummary(params);

@@ -8,6 +8,26 @@
  * Each provider method returns `T | null`:
  * - Non-null: the provider handled the request; core uses this result.
  * - null: fall through to the default implementation.
+ *
+ * What core tolerates. Each answer is checked against these types where it
+ * enters core (services/provider-results.ts, and provider-maps.ts for maps),
+ * before anything reads it: a provider built on untyped rows can return what
+ * TypeScript cannot see, such as a database `NULL`, or a number where a
+ * string belongs.
+ * - An optional field that is not of its declared type, `null` included, is
+ *   read as absent, on every channel.
+ * - A row of a list that lacks a field it needs is left out, and the rest are
+ *   used. Where a Fluid Topics row has a stand-in for the field, such as
+ *   "Untitled" for a title, the row gets that instead. Each interface below
+ *   says which, and which of the answer's counts describe the rows.
+ * - An answer core cannot use as a whole, `undefined` included, is read as
+ *   `null`, and the default implementation answers. So is a non-empty list
+ *   whose every row is left out; an empty one is the provider's own answer.
+ * None fails the reply; until 2026-09-28 one such field could fail it. Each
+ * is logged, except for maps (see {@link MapsProvider}): an optional field
+ * that is `null`, which is how a database row says "absent", at debug, and
+ * everything else as a warning. Keys a type does not declare are left as they
+ * are.
  */
 
 import type { ProductId, LocaleId } from '../../constants.js';
@@ -24,6 +44,14 @@ import type {
 
 /**
  * Custom search backend (e.g., Vectorize semantic search).
+ *
+ * A result without a `url` string is left out. One without a `title` string
+ * is titled "Untitled", one without a `snippet` string gets the title and
+ * product as its snippet, and one without a `product` string has none
+ * (`null`), as a Fluid Topics result would. A `docType` that is not one of
+ * the document type ids is read as absent. An answer that is not an array, or
+ * whose every result is left out, is read as `null`, so Fluid Topics answers;
+ * return `[]` for "no results". See the module comment for the rest.
  *
  * Return all matched results as a flat array, in the order you rank them:
  * the core keeps that order, and a JSON reply says the configured search
@@ -70,6 +98,10 @@ export interface SearchProvider {
 /**
  * Custom article provider (e.g., R2 local storage).
  * Return null to fall through to the default Fluid Topics API fetch.
+ *
+ * An article without a `title`, `content` or `url` string, or without a
+ * well-typed `tokenInfo` and `sections`, is read as `null`: `getArticle` is
+ * asked next, then Fluid Topics.
  *
  * Primary method is `getArticleByIds` — in the FT world, ID-based access
  * is the fast path (mapId + contentId are always resolved first).
@@ -153,6 +185,11 @@ export interface ArticleProviderOptions extends FetchArticleOptions {
 /**
  * Custom glossary provider (e.g., D1 database).
  * Return null to fall through to the default Fluid Topics API glossary.
+ *
+ * An entry without a `term`, `definition` and `url` string is left out, and
+ * `totalMatches` is reduced by the entries left out. An answer without an
+ * `entries` array, a numeric `totalMatches` and a well-typed `tokenInfo`, or
+ * whose every entry is left out, is read as `null`.
  */
 export interface GlossaryProvider {
   lookup: (params: {
@@ -166,6 +203,12 @@ export interface GlossaryProvider {
 /**
  * Custom table-of-contents provider (e.g., D1/R2 stored TOC).
  * Return null to fall through to the default TOC fetching.
+ *
+ * An entry without a `url` string is left out with its `children`, and
+ * `pagination.totalItems`, which counts nested entries too, is reduced by
+ * every entry left out; one without a `title` string is titled "Untitled".
+ * An answer without a `toc` array and a well-typed `pagination` and
+ * `tokenInfo`, or whose every top-level entry is left out, is read as `null`.
  */
 export interface TocProvider {
   getTableOfContents: (
@@ -178,6 +221,13 @@ export interface TocProvider {
 /**
  * Custom maps provider (e.g., KV storage on Workers).
  * When present, MapsRegistry uses this instead of the FT API fetchMaps().
+ *
+ * A map without an `id` string is left out, and so is a metadata entry
+ * without a `key` string and a `values` array of strings. An answer that is
+ * not an array, `null` and `undefined` included, or whose every map is left
+ * out, is read as none: the registry fetches the maps from learn.jamf.com, as
+ * it does without a MapsProvider. The registry keeps no logger, so none of
+ * this is logged.
  */
 export interface MapsProvider {
   getMaps: () => Promise<FtMapInfo[]>;

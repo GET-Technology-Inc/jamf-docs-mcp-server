@@ -30,6 +30,7 @@ import { parseArticle, type ParsedArticleContent } from './content-parser.js';
 import { staticSourceForUrl } from '../constants/sources.js';
 import { buildArticleView, withNote } from './article-view.js';
 import { fetchStaticArticle } from './static-article-service.js';
+import { readProviderArticle } from './provider-results.js';
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
@@ -386,6 +387,7 @@ export async function resolveAndFetchArticle(
   if (articleProvider !== undefined) {
     const article = await fetchFromProvider(
       articleProvider, { mapId, contentId, articleUrl, articleUrlNamesTopic }, { ...options, noteFor },
+      ctx.logger.createLogger('article-service'),
     );
     if (article !== null) {
       return withNote(article, noteFor(article), options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS);
@@ -423,17 +425,22 @@ interface ProviderRequest {
 /**
  * The article `provider` has for this call, or `null` to fetch it from Fluid
  * Topics. By the pair first; by the url only when that finds nothing.
+ *
+ * Each answer is read before anything here reads it (`readProviderArticle`):
+ * a mistyped optional field is absent, and an article core cannot use is
+ * `null`, so the call goes on as it would for a `null`.
  */
 async function fetchFromProvider(
   provider: ArticleProvider,
   request: ProviderRequest,
   options: ArticleProviderOptions,
+  log: Logger,
 ): Promise<FetchArticleResult | null> {
   const { mapId, contentId, articleUrl, articleUrlNamesTopic } = request;
-  let article = await provider.getArticleByIds(mapId, contentId, options);
+  let article = readProviderArticle(await provider.getArticleByIds(mapId, contentId, options), log);
 
   if (article === null && provider.getArticle !== undefined && articleUrl !== '') {
-    const byUrl = await provider.getArticle(articleUrl, options);
+    const byUrl = readProviderArticle(await provider.getArticle(articleUrl, options), log);
     // The url's page is used only when it is the article this call fetches
     // without a provider: the pair's, whether the caller gave the pair or the
     // url resolved to it. It used to be taken on trust, and a url does not

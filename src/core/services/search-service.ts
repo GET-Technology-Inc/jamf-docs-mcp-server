@@ -32,7 +32,7 @@ import type { ServerContext } from '../types/context.js';
 import type { Logger } from './interfaces/index.js';
 import { search as ftSearch } from './ft-client.js';
 import { buildDisplayUrl, buildDisplayUrlFromPrettyUrlMeta } from './topic-resolver.js';
-import type { MapsRegistry } from './maps-registry.js';
+import { MapsProviderError, type MapsRegistry } from './maps-registry.js';
 import { cleanSnippet, titleProductSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import type { ProductId } from '../constants.js';
@@ -47,6 +47,7 @@ import {
 } from '../utils/fetch-failure.js';
 import { sanitizeErrorMessage } from '../utils/sanitize.js';
 import { dedupeResultsToLatestVersions } from './search-result-versions.js';
+import { readSearchProviderResults } from './provider-results.js';
 import {
   estimateTokens,
   calculatePagination,
@@ -699,7 +700,11 @@ function buildSearchResult(fields: EntryFields): SearchResult {
   if (fields.breadcrumb !== undefined && fields.breadcrumb.length > 0) {
     result.breadcrumb = fields.breadcrumb;
   }
-  if (fields.mapTitle !== undefined && fields.mapTitle !== '') {
+  // A string only: the tool publishes it as `SearchOutputSchema` declares it,
+  // and `showUnderProduct` reads it as one. Fluid Topics has sent a string on
+  // every topic measured; until 2026-09-28 the tool itself dropped any other
+  // value (#348), for this path as for a SearchProvider's.
+  if (typeof fields.mapTitle === 'string' && fields.mapTitle !== '') {
     result.mapTitle = fields.mapTitle;
   }
 
@@ -1129,12 +1134,15 @@ function reasonGiven(error: unknown): string | undefined {
  * - A SearchProvider, or a MapsProvider the maps list comes from: the error's
  *   own message, which is all this server knows of it, and no advice, which
  *   only the provider could give. Not learn.jamf.com, which was not asked.
+ *   A MapsProvider is named only when it threw ({@link MapsProviderError}):
+ *   one whose answer the registry could not use is replaced by learn.jamf.com,
+ *   and a failure there is learn.jamf.com's.
  * - Anything else, such as a cache that could not be read or written: plain
  *   words, and the server log for what went wrong. The error itself is left
  *   out, because a raw JavaScript message ("clusters is not iterable") tells
  *   a caller nothing it can act on.
  */
-function searchFailureMessage(ctx: ServerContext, params: SearchParams, error: unknown): string {
+function searchFailureMessage(params: SearchParams, error: unknown): string {
   const step = error instanceof SearchStepError ? error.step : undefined;
   const cause = error instanceof SearchStepError ? error.failure : error;
   const reason = reasonGiven(cause);
@@ -1150,8 +1158,9 @@ function searchFailureMessage(ctx: ServerContext, params: SearchParams, error: u
         : `the configured search backend reported an error (${reason})`;
       break;
     case 'maps':
-      if (ctx.mapsRegistry.hasMapsProvider) {
-        const said = reason === undefined ? ', which gave no reason' : ` (${reason})`;
+      if (cause instanceof MapsProviderError) {
+        const given = reasonGiven(cause.failure);
+        const said = given === undefined ? ', which gave no reason' : ` (${given})`;
         failed = `${mapsList} could not be read from the configured maps provider${said}`;
       } else if (isRequestFailure(cause)) {
         failed = `${mapsList} could not be fetched from learn.jamf.com (${describeFetchFailure(cause)})`;
@@ -1186,12 +1195,12 @@ function searchFailureMessage(ctx: ServerContext, params: SearchParams, error: u
 type SearchFailure = Required<Pick<SearchDocumentationResult, 'searchError' | 'searchErrorMessage'>>;
 
 /** {@link SearchFailure} for what a search threw. */
-function searchFailure(ctx: ServerContext, params: SearchParams, error: unknown): SearchFailure {
+function searchFailure(params: SearchParams, error: unknown): SearchFailure {
   return {
     // What was thrown, not the step it was tagged with, so `searchError` reads
     // as it always has.
     searchError: String(error instanceof SearchStepError ? error.failure : error),
-    searchErrorMessage: searchFailureMessage(ctx, params, error),
+    searchErrorMessage: searchFailureMessage(params, error),
   };
 }
 
@@ -1244,7 +1253,7 @@ export async function searchDocumentation(
     }
     rankedBy = fromProvider ? 'provider' : 'fluid-topics';
   } catch (error) {
-    failure = searchFailure(ctx, params, error);
+    failure = searchFailure(params, error);
     log.error(`Search error: ${failure.searchError}`);
     allResults = [];
   }
@@ -1398,12 +1407,13 @@ async function resolveSearchResults(
     // Awaited inside a try, not tagged with `.catch` on what `search`
     // returns: a provider on untyped code can return its answer, or throw,
     // without a promise, and neither a plain answer nor a throw has `.catch`.
-    let provided: SearchResult[] | null;
+    let answer: unknown;
     try {
-      provided = await ctx.searchProvider.search(params);
+      answer = await ctx.searchProvider.search(params);
     } catch (error) {
       throw new SearchStepError('provider', error);
     }
+    const provided = readSearchProviderResults(answer, log);
     if (provided !== null) {
       return {
         // Versions collapsed as the Fluid Topics path collapses them below, so

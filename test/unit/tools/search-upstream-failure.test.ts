@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
-import type { SearchResult } from '../../../src/core/types.js';
+import type { FtMapInfo, SearchResult } from '../../../src/core/types.js';
 import {
   CONCEPTS_MATCH,
   MAPS_LIST,
@@ -180,6 +180,28 @@ describe('a search that could not be completed is an error, not "No results foun
       `(KV namespace unavailable).\n\n${NOT_A_NO_RESULTS}`,
     );
     expect(requests.filter(r => new URL(r.slice(r.indexOf(' ') + 1)).hostname === 'learn.jamf.com')).toEqual([]);
+  });
+
+  it('names learn.jamf.com, not the MapsProvider, when the provider\'s unusable answer was replaced by a fetch that failed', async () => {
+    // Every map the provider sends is left out (no id), so the registry reads
+    // the maps on learn.jamf.com instead, and that request fails.
+    const { ctx, requests } = searchUpstream({
+      mapsProvider: [{ title: 'No id' } as unknown as FtMapInfo],
+      maps: httpStatus(503, 'Service Unavailable', MAPS_LIST),
+      clusteredSearch: () => [PRESTAGE],
+    });
+
+    const text = expectFailed(
+      await callSearch(ctx, { query: 'setup manager', product: 'jamf-pro' }),
+      'setup manager',
+    );
+
+    expect(text).toContain(
+      'failed: the list of documentation maps, which the product filter "jamf-pro" is built ' +
+      'from, could not be fetched from learn.jamf.com (HTTP 503 Service Unavailable).',
+    );
+    expect(text).not.toContain('maps provider');
+    expect(requests).toContain(`GET ${MAPS_LIST}`);
   });
 
   it('says so when the MapsProvider gave no reason', async () => {
