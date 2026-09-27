@@ -16,6 +16,12 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 
+interface TocNode { url: string; children?: TocNode[] }
+
+function countEntries(nodes: TocNode[]): number {
+  return nodes.reduce((sum, node) => sum + 1 + countEntries(node.children ?? []), 0);
+}
+
 describe('Jamf Docs MCP Server', () => {
   let client: Client;
   let transport: StdioClientTransport;
@@ -263,6 +269,46 @@ describe('Jamf Docs MCP Server', () => {
       expect(data.product).toBe('Jamf Pro');
       expect(data.versions).toBeDefined();
       expect(Array.isArray(data.versions)).toBe(true);
+    });
+
+    it('should read the product TOC via template, whole or marked, as jamf_docs_get_toc pages it', async () => {
+      // It used to be page 1 alone: 10 of Jamf Pro's 20 top-level entries, with
+      // nothing to say so. What is asserted is what the resource promises for
+      // any size of tree, not that Jamf Pro fits (it did on 2026-09-28, at 8447
+      // of the 20000 tokens): its top-level entries are the tool's pages at
+      // maxTokens 20000 from the first, `complete` means every one of them and
+      // every entry, and a body that is not complete says what it left out.
+      const data = JSON.parse(resourceText((await client.readResource({
+        uri: 'jamf://products/jamf-pro/toc'
+      })).contents)) as {
+        totalEntries: number; complete: boolean; shownEntries?: number; missing?: string; toc: TocNode[];
+      };
+      const roots: string[] = [];
+      for (let page = 1; page <= 100; page++) {
+        const result = await client.callTool({
+          name: 'jamf_docs_get_toc',
+          arguments: { product: 'jamf-pro', maxTokens: 20000, page, responseFormat: 'json' }
+        });
+        const json = JSON.parse((result.content as { text: string }[])[0].text) as {
+          toc: TocNode[]; pagination: { hasNext: boolean };
+        };
+        roots.push(...json.toc.map(entry => entry.url));
+        if (!json.pagination.hasNext) { break; }
+      }
+      const held = data.toc.map(entry => entry.url);
+      const shown = countEntries(data.toc);
+
+      expect(held.length).toBeGreaterThan(0);
+      expect(held).toEqual(roots.slice(0, held.length));
+      // From Fluid Topics every cause leaves entries out, so the count decides.
+      expect(data.complete).toBe(shown === data.totalEntries);
+      if (data.complete) {
+        expect(held).toEqual(roots);
+        expect(data).not.toHaveProperty('missing');
+      } else {
+        expect(data.shownEntries).toBe(shown);
+        expect(data.missing).toMatch(/\S/);
+      }
     });
 
     it('should return error for invalid productId', async () => {

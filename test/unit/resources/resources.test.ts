@@ -506,7 +506,7 @@ describe('product-toc resource handler', () => {
     const handler = getHandler('product-toc');
     await handler(new URL('jamf://products/jamf-pro/toc'), { productId: 'jamf-pro' });
 
-    expect(fetchTableOfContents).toHaveBeenCalledWith(expect.anything(), 'jamf-pro', 'current', { maxTokens: 20000 });
+    expect(fetchTableOfContents).toHaveBeenCalledWith(expect.anything(), 'jamf-pro', 'current', { page: 1, maxTokens: 20000 });
   });
 
   it('should return error response for invalid product ID', async () => {

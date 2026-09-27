@@ -15,8 +15,8 @@ import {
   getTopicsResourceData,
   getAvailableVersions
 } from '../services/metadata.js';
-import { fetchTableOfContents } from '../services/toc-service.js';
 import { completeProduct } from '../completions.js';
+import { readProductToc, TOC_RESOURCE_MAX_TOKENS } from './product-toc.js';
 
 /**
  * Cache fields for a `resources/read` result that must not be reused.
@@ -73,7 +73,9 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
     'jamf://products',
     {
       title: 'Jamf Products List',
-      description: 'List of all available Jamf products (Jamf Pro, Jamf School, Jamf Connect, Jamf Protect) with their IDs and latest versions. Data is fetched dynamically from the API.',
+      // It named four products here, as though they were the list, over a
+      // body with every product in JAMF_PRODUCTS.
+      description: 'List of all available Jamf products with their IDs and latest versions. Data is fetched dynamically from the API.',
       mimeType: 'application/json'
     },
     async () => {
@@ -126,7 +128,11 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
     }),
     {
       title: 'Product Table of Contents',
-      description: 'Table of contents for a specific Jamf product documentation',
+      description: 'The whole table of contents of a Jamf product\'s current documentation (en-US), nested as '
+        + `jamf_docs_get_toc returns it in JSON. It holds up to ${String(TOC_RESOURCE_MAX_TOKENS)} tokens of it, counted `
+        + 'from entry titles as jamf_docs_get_toc counts maxTokens. That bound is not the size of this body: the JSON, '
+        + 'with each entry\'s url and ids, is several times larger. `complete` says whether `toc` is the whole tree; '
+        + 'when it is not, `missing` says what is left out and, where jamf_docs_get_toc can return it, which call does.',
       mimeType: 'application/json',
     },
     async (uri, { productId }) => {
@@ -135,18 +141,15 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
         return validation.errorResponse;
       }
 
-      const tocResult = await fetchTableOfContents(ctx, validation.id, 'current', {
-        maxTokens: 20000,
-      });
+      // Every page, not the first: see `readProductToc`. A body that is not
+      // the whole tree is still what this resource gives for that product
+      // until the documentation changes, so it keeps the configured hint.
+      const body = await readProductToc(ctx, validation.id);
       return {
         contents: [{
           uri: uri.href,
           mimeType: 'application/json',
-          text: JSON.stringify({
-            product: JAMF_PRODUCTS[validation.id].name,
-            totalEntries: tocResult.pagination.totalItems,
-            toc: tocResult.toc,
-          }, null, 2),
+          text: JSON.stringify(body, null, 2),
         }],
       };
     }
