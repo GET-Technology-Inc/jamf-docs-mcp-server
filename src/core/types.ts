@@ -207,7 +207,10 @@ export interface FetchTocResult {
    * of here rather than staying an implementation detail of the fetch.
    *
    * Optional because a `TocProvider` serving its own cache need not know it,
-   * and because a cached tree re-resolves it best-effort.
+   * and a sitemap or Intercom source has no map. A tree from the `ft-toc-v2`
+   * cache carries the id it was fetched under: until 2026-09-28 it was named
+   * by asking the registry again, which could name a newer map than the one
+   * its entries came from.
    */
   mapId?: string;
   /**

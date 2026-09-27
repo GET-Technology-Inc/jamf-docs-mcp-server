@@ -373,8 +373,10 @@ export const TocOutputSchema = z.object({
    * response, the content id one per entry, so the pair is only assemblable if
    * both are emitted — this is the half that lives up here.
    *
-   * Optional: a cached TOC re-resolves it best-effort, and a `TocProvider`
-   * serving from its own store may not know it.
+   * Optional: a sitemap or Intercom source (concepts.jamf.com,
+   * support.jamf.com) has no map, and a `TocProvider` serving from its own
+   * store may not know it. A cached Fluid Topics TOC names the map it was
+   * fetched from, as a cold one does.
    */
   mapId: z.string().optional(),
   totalEntries: z.number(),

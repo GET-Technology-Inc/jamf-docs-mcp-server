@@ -132,7 +132,10 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
         + `jamf_docs_get_toc returns it in JSON. It holds up to ${String(TOC_RESOURCE_MAX_TOKENS)} tokens of it, counted `
         + 'from entry titles as jamf_docs_get_toc counts maxTokens. That bound is not the size of this body: the JSON, '
         + 'with each entry\'s url and ids, is several times larger. `complete` says whether `toc` is the whole tree; '
-        + 'when it is not, `missing` says what is left out and, where jamf_docs_get_toc can return it, which call does.',
+        + 'when it is not, `missing` says what is left out and, where jamf_docs_get_toc can return it, which call does. '
+        + '`mapId` is the map the entries were read from: with an entry\'s `contentId` it is the pair '
+        + 'jamf_docs_get_article fetches that entry by, and a map is one version in one language, so the pair needs '
+        + 'nothing else. `mapId` is absent when no one map is known for the entries; each entry\'s `url` still fetches it.',
       mimeType: 'application/json',
     },
     async (uri, { productId }) => {

@@ -168,7 +168,7 @@ describe('a table of contents the resource holds whole', () => {
     const result = await client.readResource({ uri: URI });
     const { text } = result.contents[0] as { text: string };
 
-    expect(Object.keys(JSON.parse(text) as object)).toEqual(['product', 'totalEntries', 'complete', 'toc']);
+    expect(Object.keys(JSON.parse(text) as object)).toEqual(['product', 'mapId', 'totalEntries', 'complete', 'toc']);
   });
 
   it('fetches the tree once, however many pages it reads', async () => {
@@ -272,7 +272,7 @@ describe('a table of contents larger than the resource holds', () => {
     const { text } = result.contents[0] as { text: string };
 
     expect(Object.keys(JSON.parse(text) as object))
-      .toEqual(['product', 'totalEntries', 'complete', 'shownEntries', 'missing', 'toc']);
+      .toEqual(['product', 'mapId', 'totalEntries', 'complete', 'shownEntries', 'missing', 'toc']);
   });
 
   it('names a range of pages when the rest is on more than one', async () => {
