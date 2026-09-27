@@ -156,6 +156,14 @@ export interface CacheKeySpaces {
   /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
   /**
+   * A listing `intercom-collections` could not be read into, remembered for
+   * a minute for a caller that asks (`listIntercomCollections`'
+   * `rememberFailure`): the failure's message and code. `list_products` asks,
+   * so that with support.jamf.com down each call does not wait again on the
+   * five pages it reads only for its rows' `locales`.
+   */
+  'intercom-collections-failure': { source: string; locale: string };
+  /**
    * One Intercom collection's article tree, keyed on the page it is read
    * from. That page names the locale, `/ja/collections/12369024-jamf-pro`,
    * and the collection's id does not: Intercom gives a collection one id in
@@ -232,6 +240,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'static-sitemap': true,
   'static-search-index-v3': true,
   'intercom-collections': true,
+  'intercom-collections-failure': true,
   'intercom-collection-toc-v3': true,
   'maps-registry-v3': true,
   'metadata-products-v2': true,

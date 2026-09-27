@@ -8,7 +8,7 @@
  * read the payload and get nothing back without an error.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockHttpGetText = vi.fn<(url: string) => Promise<string>>();
 vi.mock('../../../src/core/http-client.js', () => ({
@@ -24,6 +24,7 @@ import {
   fetchIntercomCollectionToc,
 } from '../../../src/core/services/intercom-service.js';
 import { STATIC_DOC_SOURCES } from '../../../src/core/constants/sources.js';
+import { cacheKey } from '../../../src/core/services/cache-key.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
 const SUPPORT = STATIC_DOC_SOURCES['jamf-support'];
@@ -357,9 +358,143 @@ describe('listIntercomCollections', () => {
   });
 
   it('requests the locale it was given', async () => {
-    mockHttpGetText.mockResolvedValue(page({ home: { collections: [] } }));
+    mockHttpGetText.mockResolvedValue(page({
+      home: { collections: [{ id: '12369024', url: 'https://support.jamf.com/zh-TW/collections/12369024-jamf-pro-相關' }] },
+    }));
     await listIntercomCollections(createMockContext(), SUPPORT, 'zh-TW');
     expect(mockHttpGetText).toHaveBeenCalledWith('https://support.jamf.com/zh-TW/');
+  });
+
+  const JAMF_PRO = { id: '12369024', url: 'https://support.jamf.com/en/collections/12369024-jamf-pro' };
+  const MAINTENANCE = '<html><body><p>We will be back shortly.</p></body></html>';
+
+  it.each([
+    ['no __NEXT_DATA__', MAINTENANCE],
+    ['no home', page({})],
+    ['collections that are not a list', page({ home: { collections: {} } })],
+  ])('throws a PARSE_ERROR naming the page for one with %s, in any locale, and caches nothing', async (_, html) => {
+    mockHttpGetText.mockResolvedValue(html);
+
+    for (const code of ['en', 'ja']) {
+      const ctx = createMockContext();
+      const read = listIntercomCollections(ctx, SUPPORT, code);
+      await expect(read).rejects.toMatchObject({
+        name: 'JamfDocsError',
+        code: 'PARSE_ERROR',
+        url: `https://support.jamf.com/${code}/`,
+        message: `Could not read the ${SUPPORT.name} collections at https://support.jamf.com/${code}/: ` +
+          'the page carries no collection list.',
+      });
+      expect(ctx.cache.set).not.toHaveBeenCalled();
+    }
+  });
+
+  it('throws a PARSE_ERROR for an en page that lists none: the publication ids come from it', async () => {
+    mockHttpGetText.mockResolvedValue(page({ home: { collections: [] } }));
+    const ctx = createMockContext();
+
+    await expect(listIntercomCollections(ctx, SUPPORT, 'en')).rejects.toMatchObject({
+      name: 'JamfDocsError',
+      code: 'PARSE_ERROR',
+      url: 'https://support.jamf.com/en/',
+      message: `Could not read the ${SUPPORT.name} collections at https://support.jamf.com/en/: the page lists none.`,
+    });
+    expect(ctx.cache.set).not.toHaveBeenCalled();
+  });
+
+  it('takes another locale\'s page that lists none as publishing nothing, and caches it', async () => {
+    // What support.jamf.com serves for `nl` and `th` (2026-09-28).
+    mockHttpGetText.mockResolvedValue(page({ home: { collections: [] } }));
+    const ctx = createMockContext();
+
+    expect(await listIntercomCollections(ctx, SUPPORT, 'ja')).toEqual([]);
+    expect(await listIntercomCollections(ctx, SUPPORT, 'ja')).toEqual([]);
+
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+    expect(ctx.cache.set).toHaveBeenCalledWith(
+      cacheKey('intercom-collections', { source: SUPPORT.id, locale: 'ja' }), [], ctx.config.cacheTtl.products,
+    );
+  });
+
+  it('reads an empty en listing an earlier build cached as a miss, and another locale\'s as its answer', async () => {
+    // An earlier build cached [] for any page without a list. For en that is
+    // never an answer. For another locale it cannot be told from one.
+    mockHttpGetText.mockResolvedValue(page({ home: { collections: [JAMF_PRO] } }));
+    const ctx = createMockContext();
+    for (const locale of ['en', 'ja']) {
+      await ctx.cache.set(cacheKey('intercom-collections', { source: SUPPORT.id, locale }), []);
+    }
+
+    expect(await listIntercomCollections(ctx, SUPPORT, 'en')).toHaveLength(1);
+    expect(await listIntercomCollections(ctx, SUPPORT, 'ja')).toEqual([]);
+    expect(mockHttpGetText.mock.calls).toEqual([['https://support.jamf.com/en/']]);
+  });
+});
+
+describe('listIntercomCollections: a failure remembered for a caller that asks', () => {
+  beforeEach(() => { mockHttpGetText.mockReset(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const FR = 'https://support.jamf.com/fr/';
+  const LISTING = page({ home: { collections: [{ id: '12369024', url: `${FR}collections/12369024-jamf-pro` }] } });
+  /** An http-client failure. Its class is mocked away with the module, so only its message is kept. */
+  const UNAVAILABLE = `HTTP 503 Service Unavailable: ${FR}`;
+
+  it('throws it again without a request for a minute, then asks again', async () => {
+    const ctx = createMockContext();
+    mockHttpGetText.mockRejectedValue(new Error(UNAVAILABLE));
+
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true }))
+      .rejects.toThrow(UNAVAILABLE);
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true })).rejects.toMatchObject({
+      name: 'JamfDocsError',
+      code: 'NETWORK_ERROR',
+      url: FR,
+      message: `${UNAVAILABLE} (not asked again: it failed less than a minute ago)`,
+    });
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+
+    mockHttpGetText.mockResolvedValue(LISTING);
+    const later = Date.now() + 61_000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+
+    expect(await listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true })).toHaveLength(1);
+    expect(mockHttpGetText).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the code of a page it could not read', async () => {
+    const ctx = createMockContext();
+    mockHttpGetText.mockResolvedValue('<html><body>maintenance</body></html>');
+
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true }))
+      .rejects.toMatchObject({ code: 'PARSE_ERROR' });
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true }))
+      .rejects.toMatchObject({ code: 'PARSE_ERROR', url: FR });
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+  });
+
+  it('remembers nothing for a caller that does not ask, and asks every time', async () => {
+    const ctx = createMockContext();
+    mockHttpGetText.mockRejectedValue(new Error(UNAVAILABLE));
+
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr')).rejects.toThrow(UNAVAILABLE);
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true }))
+      .rejects.toThrow(UNAVAILABLE);
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr')).rejects.toThrow(UNAVAILABLE);
+
+    expect(mockHttpGetText).toHaveBeenCalledTimes(3);
+  });
+
+  it('serves a listing cached since the failure, rather than the failure', async () => {
+    const ctx = createMockContext();
+    mockHttpGetText.mockRejectedValueOnce(new Error(UNAVAILABLE));
+    await expect(listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true })).rejects.toThrow();
+
+    mockHttpGetText.mockResolvedValue(LISTING);
+    await listIntercomCollections(ctx, SUPPORT, 'fr');
+
+    expect(await listIntercomCollections(ctx, SUPPORT, 'fr', { rememberFailure: true })).toHaveLength(1);
+    expect(mockHttpGetText).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -392,7 +527,9 @@ describe('fetchIntercomCollectionToc', () => {
   });
 
   it('fetches the collection page once', async () => {
-    mockHttpGetText.mockResolvedValue(page({ collection: { articleSummaries: [], subcollections: [] } }));
+    mockHttpGetText.mockResolvedValue(page({
+      collection: { articleSummaries: [{ title: 'An article', url: 'https://support.jamf.com/en/articles/1-an-article' }] },
+    }));
     const ctx = createMockContext();
 
     await fetchIntercomCollectionToc(ctx, SUPPORT, COLLECTION);
@@ -410,6 +547,35 @@ describe('fetchIntercomCollectionToc', () => {
     await fetchIntercomCollectionToc(createMockContext(), SUPPORT, { ...COLLECTION, url: `${COLLECTION.url}/` });
 
     expect(mockHttpGetText.mock.calls).toEqual([[COLLECTION.url]]);
+  });
+
+  it.each([
+    ['no __NEXT_DATA__', '<html><body><p>We will be back shortly.</p></body></html>'],
+    ['no collection', page({})],
+  ])('throws a PARSE_ERROR naming the page for one with %s, and caches nothing', async (_, html) => {
+    mockHttpGetText.mockResolvedValue(html);
+    const ctx = createMockContext();
+
+    await expect(fetchIntercomCollectionToc(ctx, SUPPORT, COLLECTION)).rejects.toMatchObject({
+      name: 'JamfDocsError',
+      code: 'PARSE_ERROR',
+      url: COLLECTION.url,
+      message: `Could not read the ${SUPPORT.name} collection at ${COLLECTION.url}: the page carries no collection.`,
+    });
+    expect(ctx.cache.set).not.toHaveBeenCalled();
+  });
+
+  it('does not cache an empty tree, and reads one an earlier build cached as a miss', async () => {
+    mockHttpGetText.mockResolvedValue(page({ collection: { articleSummaries: [], subcollections: [] } }));
+    const ctx = createMockContext();
+    await ctx.cache.set(cacheKey('intercom-collection-toc-v3', { source: SUPPORT.id, url: COLLECTION.url }), []);
+    vi.mocked(ctx.cache.set).mockClear();
+
+    expect(await fetchIntercomCollectionToc(ctx, SUPPORT, COLLECTION)).toEqual([]);
+    expect(await fetchIntercomCollectionToc(ctx, SUPPORT, COLLECTION)).toEqual([]);
+
+    expect(mockHttpGetText).toHaveBeenCalledTimes(2);
+    expect(ctx.cache.set).not.toHaveBeenCalled();
   });
 });
 

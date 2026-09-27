@@ -15,8 +15,8 @@ import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
-import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
-import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
+import { JamfDocsError, JamfDocsErrorCode, type FetchTocOptions, type FetchTocResult, type TocEntry } from '../types.js';
+import { DEFAULT_LOCALE, PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
 
 // ─── __NEXT_DATA__ ──────────────────────────────────────────────
 
@@ -483,20 +483,103 @@ function slugFromUrl(url: string): string {
   return last.replace(/^\d+-/, '');
 }
 
-/** The Help Center's top-level collections for one locale. */
+/**
+ * How long {@link listIntercomCollections} remembers a listing it could not
+ * read, for a caller that asks it to ({@link ListCollectionsOptions}).
+ *
+ * A minute, as long as #345 keeps an answer the registry outage forced
+ * (`FALLBACK_TTL_MS` in metadata.ts), and for the same reason. Not longer,
+ * because a page that is back should be read again within the minute
+ * `incomplete` tells a client to wait. Not zero, because a burst of calls
+ * during an outage would each wait on a page that has just failed, up to the
+ * request timeout (15 s by default).
+ */
+const FAILED_LISTING_TTL_MS = 60 * 1000;
+
+/** How {@link listIntercomCollections} treats a listing it could not read. */
+export interface ListCollectionsOptions {
+  /**
+   * Remember a failure to read the listing for a minute
+   * ({@link FAILED_LISTING_TTL_MS}), and while it is remembered, throw it
+   * again without a request. A listing in the cache is served first either
+   * way, so one that another caller has read since is not reported unread.
+   *
+   * `jamf_docs_list_products` asks this of the listings it reads only for
+   * its rows' `locales`. `jamf_docs_get_toc` does not: a call in one locale
+   * needs that locale's page, and asks for it every time (#352).
+   */
+  rememberFailure?: boolean;
+}
+
+/** A listing that could not be read, as it is remembered. */
+interface FailedListing {
+  message: string;
+  code: JamfDocsErrorCode;
+}
+
+function isFailedListing(value: unknown): value is FailedListing {
+  if (typeof value !== 'object' || value === null) { return false; }
+  const { message, code } = value as { message?: unknown; code?: unknown };
+  return typeof message === 'string' && Object.values<unknown>(JamfDocsErrorCode).includes(code);
+}
+
+/**
+ * The Help Center's top-level collections for one locale.
+ *
+ * Throws, and caches nothing, when the home page carries no collection list:
+ * no `__NEXT_DATA__`, as on a maintenance page, or no `home` in it. That is
+ * how a 503 has always been treated, and each caller reports both alike. An
+ * empty list is an answer, that the locale publishes nothing, which is how
+ * support.jamf.com serves `nl` and `th` (2026-09-28), and it is cached like
+ * any other. Except in the default locale: `jamf_docs_list_products` builds
+ * its rows and their ids from that listing, so an empty one would list no
+ * section of the source without saying any is missing. There it throws too.
+ *
+ * Until 2026-09-28 any page without a collection list was cached as an empty
+ * list for `cacheTtl.products`, 7 days by default, and read as a locale that
+ * publishes nothing. For the en page, `list_products` listed no
+ * `jamf-support-*` publication and did not say any was missing, and
+ * `jamf_docs_get_toc` answered that the site publishes nothing in en-US. For
+ * another locale's page, `get_toc` served the en-US edition with a note that
+ * Jamf does not publish the collection in that locale. An empty default-locale
+ * entry an earlier build cached is read as a miss. Another locale's cannot be
+ * told from one that publishes nothing, so it is served until it expires.
+ */
 export async function listIntercomCollections(
   ctx: ServerContext,
   source: StaticDocSource,
   locale: string,
+  options: ListCollectionsOptions = {},
 ): Promise<IntercomCollection[]> {
+  const isDefault = locale === source.locales[DEFAULT_LOCALE];
   const key = cacheKey('intercom-collections', { source: source.id, locale });
   const cached = await ctx.cache.get<IntercomCollection[]>(key);
-  if (cached !== null) { return cached; }
+  if (cached !== null && (cached.length > 0 || !isDefault)) { return cached; }
 
-  const html = await ctx.http.getText(`${source.baseUrl}/${locale}/`);
-  const props = pageProps(html);
-  const home = props?.home as { collections?: RawCollection[] } | undefined;
-  const collections = (home?.collections ?? []).map((collection): IntercomCollection => {
+  const home = `${source.baseUrl}/${locale}/`;
+  const failureKey = cacheKey('intercom-collections-failure', { source: source.id, locale });
+  if (options.rememberFailure === true) {
+    const failed = await ctx.cache.get<unknown>(failureKey);
+    if (isFailedListing(failed)) {
+      throw new JamfDocsError(`${failed.message} (not asked again: it failed less than a minute ago)`, failed.code, home);
+    }
+  }
+
+  let listed: unknown[];
+  try {
+    listed = collectionsOn(await ctx.http.getText(home), source, home, isDefault);
+  } catch (error) {
+    if (options.rememberFailure === true) {
+      const failure: FailedListing = {
+        message: error instanceof Error ? error.message : String(error),
+        code: error instanceof JamfDocsError ? error.code : JamfDocsErrorCode.NETWORK_ERROR,
+      };
+      await ctx.cache.set(failureKey, failure, FAILED_LISTING_TTL_MS);
+    }
+    throw error;
+  }
+
+  const collections = (listed as RawCollection[]).map((collection): IntercomCollection => {
     const url = asString(collection.url);
     return {
       id: asString(collection.id),
@@ -515,6 +598,22 @@ export async function listIntercomCollections(
 }
 
 /**
+ * The collection list a home page carries, or a `PARSE_ERROR` naming the page
+ * when it carries none, or when `required` and it lists none (see
+ * {@link listIntercomCollections}).
+ */
+function collectionsOn(html: string, source: StaticDocSource, home: string, required: boolean): unknown[] {
+  const listed = (pageProps(html)?.home as { collections?: unknown } | undefined)?.collections;
+  if (Array.isArray(listed) && (listed.length > 0 || !required)) { return listed; }
+  throw new JamfDocsError(
+    `Could not read the ${source.name} collections at ${home}: the page ${
+      Array.isArray(listed) ? 'lists none' : 'carries no collection list'}.`,
+    JamfDocsErrorCode.PARSE_ERROR,
+    home,
+  );
+}
+
+/**
  * The article tree of one collection.
  *
  * A collection page's `__NEXT_DATA__` carries the whole subtree —
@@ -523,6 +622,16 @@ export async function listIntercomCollections(
  *
  * The tree is one locale's: the one `collection` was listed in, which its
  * `url` names. Its `id` is the same in every locale that publishes it.
+ *
+ * Throws a `PARSE_ERROR` naming the page, and caches nothing, when the page
+ * carries no `collection`, as a maintenance page does. Until 2026-09-28 that
+ * was cached as an empty tree for `cacheTtl.products`, 7 days by default, so
+ * `jamf_docs_get_toc` listed 0 entries without an error for that long. Since
+ * #352 serves the en-US edition for a locale without its own, one such page
+ * for an en-only collection emptied its TOC in all six locales. An empty
+ * tree is not cached, and one an earlier build cached is read as a miss. So
+ * a collection with no articles costs a request per call, and none of the 22
+ * locale editions support.jamf.com published on 2026-09-28 was empty.
  */
 export async function fetchIntercomCollectionToc(
   ctx: ServerContext,
@@ -532,11 +641,18 @@ export async function fetchIntercomCollectionToc(
   const url = canonicalStaticUrl(source, collection.url);
   const key = cacheKey('intercom-collection-toc-v3', { source: source.id, url });
   const cached = await ctx.cache.get<TocEntry[]>(key);
-  if (cached !== null) { return cached; }
+  if (cached !== null && cached.length > 0) { return cached; }
 
   const html = await ctx.http.getText(url);
-  const props = pageProps(html);
-  const raw = props?.collection as RawCollection | undefined;
+  const raw = pageProps(html)?.collection;
+  if (typeof raw !== 'object' || raw === null) {
+    throw new JamfDocsError(
+      `Could not read the ${source.name} collection at ${url}: the page carries no collection.`,
+      JamfDocsErrorCode.PARSE_ERROR,
+      url,
+    );
+  }
+  const { articleSummaries, subcollections } = raw as RawCollection;
 
   // Every URL in the tree goes out in the source's spelling, the one
   // `get_article` reports and fetches. Intercom already lists them slashless
@@ -554,8 +670,8 @@ export async function fetchIntercomCollectionToc(
     // Articles that sit directly in the collection come first: they are the
     // ones with no subcollection to file them under, and dropping them is
     // the easy mistake — Jamf Pro has 11 of them beside 24 subcollections.
-    ...toEntries(raw?.articleSummaries),
-    ...(raw?.subcollections ?? []).map((sub): TocEntry => {
+    ...toEntries(articleSummaries),
+    ...(subcollections ?? []).map((sub): TocEntry => {
       const children = toEntries(sub.articleSummaries);
       const entry: TocEntry = {
         title: asString(sub.name, 'Untitled'),
@@ -566,7 +682,7 @@ export async function fetchIntercomCollectionToc(
     }),
   ];
 
-  await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
+  if (entries.length > 0) { await ctx.cache.set(key, entries, ctx.config.cacheTtl.products); }
   return entries;
 }
 

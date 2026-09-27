@@ -50,6 +50,15 @@ export const ProductListOutputSchema = z.object({
     portal: z.array(z.string()).optional(),
     app: z.array(z.string()).optional(),
     utility: z.array(z.string()).optional(),
+    /**
+     * The languages Jamf publishes this document in, as this server's locale
+     * ids. For a Fluid Topics publication, the locales of its maps. For a
+     * support.jamf.com collection (`jamf-support-*`), the locales whose home
+     * page lists it: until 2026-09-28 every such row named all six locales
+     * the site publishes in, and 32 of those 54 pairs have no translation.
+     * `jamf_docs_get_toc` still serves either kind in its site's other
+     * languages, as the en-US edition with a `localeNote`.
+     */
     locales: z.array(z.string()),
     versions: z.array(z.string()),
   })).optional(),
@@ -67,7 +76,9 @@ export const ProductListOutputSchema = z.object({
    * compiled-in defaults, or every product's `hasContent` is assumed true.
    * Any other value is a static source whose sections are discovered at
    * runtime, such as `jamf-support`: its sections are then missing, and
-   * `message` names their publication ids (`jamf-support-*`).
+   * `message` names their publication ids (`jamf-support-*`). Or, when only
+   * some of its locales could not be read, its sections are listed, their
+   * `locales` leave those out, and `message` names them.
    *
    * Shaped like `jamf_docs_glossary_lookup`'s `incomplete`: a list of what is
    * missing, and a sentence saying so, which the markdown reply puts at the

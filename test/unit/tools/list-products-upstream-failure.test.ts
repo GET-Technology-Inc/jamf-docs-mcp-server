@@ -3,7 +3,7 @@
  * when an upstream they list from cannot be read: the registered tool and
  * resource over MCP, with the real metadata service, the real MapsRegistry and
  * the real Intercom reader. Only the two upstreams are stubbed: the
- * `/api/khub/maps` payload and the support.jamf.com home page.
+ * `/api/khub/maps` payload and the support.jamf.com home pages.
  *
  * Until #335 nothing a client could read said that a reply was a fallback.
  * With the maps registry down, `publications` held the two Jamf Concepts
@@ -22,7 +22,7 @@ import { registerResources } from '../../../src/core/resources/index.js';
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
 import { cacheKey } from '../../../src/core/services/cache-key.js';
 import { HttpError, type HttpClient } from '../../../src/core/http-client.js';
-import { STATIC_SECTIONS } from '../../../src/core/constants/sources.js';
+import { STATIC_DOC_SOURCES, STATIC_SECTIONS } from '../../../src/core/constants/sources.js';
 import { TOKEN_CONFIG } from '../../../src/core/constants.js';
 import { estimateTokens } from '../../../src/core/services/tokenizer.js';
 import { createMockContext, createMockCache } from '../../helpers/mock-context.js';
@@ -73,13 +73,20 @@ const MAPS: FtMapInfo[] = ['11.31.0', '11.30.0'].map((version, i) => ({
   ],
 }));
 
-/** support.jamf.com's home page, reduced to the data the collection reader takes. */
+/**
+ * support.jamf.com's home page, reduced to the data the collection reader
+ * takes. Served for every locale: `list_products` reads each one's listing
+ * for its rows' `locales`, and here they all list the one collection.
+ */
 const SUPPORT_HOME = `<html><body><script id="__NEXT_DATA__" type="application/json" nonce="n">${
   JSON.stringify({ props: { pageProps: { home: { collections: [{
     id: '12369024', slug: 'jamf-pro', name: 'Jamf Pro',
     url: 'https://support.jamf.com/en/collections/12369024-jamf-pro', articleCount: 3,
   }] } } } })
 }</script></body></html>`;
+
+const SUPPORT_HOMES = new Set(Object.values(STATIC_DOC_SOURCES['jamf-support'].locales)
+  .map(code => `https://support.jamf.com/${code}/`));
 
 let registryUp = true;
 let supportUp = true;
@@ -88,7 +95,7 @@ let registryRequests = 0;
 
 const http: HttpClient = {
   getText: async (url) => {
-    if (url !== 'https://support.jamf.com/en/') { throw new Error(`unexpected request: ${url}`); }
+    if (!SUPPORT_HOMES.has(url)) { throw new Error(`unexpected request: ${url}`); }
     if (!supportUp) { throw new HttpError(503, 'Service Unavailable', url); }
     return await Promise.resolve(SUPPORT_HOME);
   },

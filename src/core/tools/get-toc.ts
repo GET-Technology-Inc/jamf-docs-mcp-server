@@ -446,11 +446,16 @@ interface ResolvedTocSource {
  * locale. A source with no default-locale edition is not in
  * `jamf_docs_list_products` at all, and its ids come from `collections`.
  *
- * So do they when the default-locale listing cannot be read. An id built from
+ * So do they when the default-locale listing cannot be read, whether its
+ * request fails or its page carries no collections. (Until 2026-09-28 such a
+ * page was cached as the listing for `cacheTtl.products`, and ids were read
+ * from own slugs for that long, with no warning.) An id built from
  * `sourceLocale`'s own slug needs nothing from that listing and was served
  * before ids were resolved through it, so failing it because another
  * locale's home page is down would be a regression. Every id is then read by
- * `sourceLocale`'s own slugs, as it was before.
+ * `sourceLocale`'s own slugs, as it was before. Unless `sourceLocale`
+ * publishes nothing: no id names anything there, so the call fails with the
+ * reason the default-locale listing could not be read.
  */
 async function listedCollections(
   ctx: ServerContext,
@@ -463,6 +468,7 @@ async function listedCollections(
   try {
     return await listIntercomCollections(ctx, source, defaultLocale);
   } catch (error) {
+    if (collections.length === 0) { throw error; }
     ctx.logger.createLogger('get-toc').warning(
       `Could not list ${source.name} collections in ${defaultLocale}, so ids are ` +
         `read from its ${sourceLocale} slugs: ${String(error)}`,
@@ -491,10 +497,18 @@ async function listedCollections(
  * es: 5 of the 22 locale editions support.jamf.com publishes (2026-09-28). An
  * id built from `locale`'s own slug still names its collection.
  *
- * `jamf_docs_list_products` offers every collection in every locale the
- * source publishes, and 32 of those 54 pairs have no translation upstream.
- * Those get the default locale's edition, the way an untranslated Fluid
- * Topics publication gets its en-US map, and `localeNote` says so.
+ * An id is served in every locale the source declares, and 32 of those 54
+ * pairs have no translation upstream. Those get the default locale's
+ * edition, the way an untranslated Fluid Topics publication gets its en-US
+ * map, and `localeNote` says so. `jamf_docs_list_products` reads each
+ * collection's `locales` from the same listings, so the locales it names are
+ * the ones served without a note. (Until 2026-09-28 it named every locale the
+ * source declares.)
+ *
+ * `locale`'s own listing is needed, and when it cannot be read the call
+ * fails, as it always has for a 503. When it lists nothing, the locale
+ * publishes nothing, and every id gets the default locale's edition. Only
+ * the default locale's listing has a fallback, in `listedCollections`.
  *
  * Returns null when the id names no dynamic source, so the caller falls
  * through to the Fluid Topics path.
@@ -523,15 +537,16 @@ async function resolveDynamicSection(
     const named = listed.find(c => dynamicSectionId(source, c.slug) === publication)
       ?? collections.find(c => dynamicSectionId(source, c.slug) === publication);
     if (named === undefined) {
+      // Never empty: the default locale's listing lists something or throws,
+      // and `collections` stands in for it only when it lists something
+      // (see listIntercomCollections and listedCollections).
       const own = new Set(collections.map(c => c.id));
       const available = [
         ...collections.map(c => `- \`${idOf(c)}\``),
         ...listed.filter(c => !own.has(c.id)).map(c => `- \`${idOf(c)}\` (${DEFAULT_LOCALE} edition)`),
       ];
       return {
-        error: available.length > 0
-          ? `Unknown ${source.name} collection: "${publication}".\n\nAvailable in ${locale}:\n${available.join('\n')}`
-          : `Unknown ${source.name} collection: "${publication}".\n\n${source.name} publishes nothing in ${locale}.`,
+        error: `Unknown ${source.name} collection: "${publication}".\n\nAvailable in ${locale}:\n${available.join('\n')}`,
       };
     }
 

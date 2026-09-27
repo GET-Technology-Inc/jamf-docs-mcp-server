@@ -18,7 +18,7 @@
  * each), and SAMPLE_SIZE articles (~0.9s each), at CONCURRENCY at a time.
  * Roughly 40s wall clock against the job's 5-minute timeout. Since
  * 2026-09-28 the home page of each of the other five locales as well, for
- * the two assertions on what a collection is called across locales.
+ * the three assertions on what each locale lists.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -168,6 +168,8 @@ let collections: { url: string; name: unknown; id: unknown }[];
 let articles: Article[];
 /** Each locale's home collections, keyed by support.jamf.com's code for it. */
 let homes: Map<string, { url: unknown; id: unknown }[]>;
+/** What each locale's home page carries as `home.collections`, list or not. */
+let homeLists: Map<string, unknown>;
 
 beforeAll(async () => {
   const home = pageProps(await getHtml(`${SUPPORT_BASE}/${LOCALE}/`), 'home');
@@ -192,10 +194,12 @@ beforeAll(async () => {
   });
 
   const others = Object.values(SOURCE.locales).filter(code => code !== LOCALE);
-  homes = new Map([[LOCALE, collections], ...await mapLimit(others, async (code) => {
+  homeLists = new Map([[LOCALE, (home.home as { collections?: unknown } | undefined)?.collections], ...await mapLimit(others, async (code) => {
     const props = pageProps(await getHtml(`${SUPPORT_BASE}/${code}/`), `${code} home`);
-    return [code, (props.home as { collections?: { url: unknown; id: unknown }[] } | undefined)?.collections ?? []] as const;
+    return [code, (props.home as { collections?: unknown } | undefined)?.collections] as const;
   })]);
+  homes = new Map([...homeLists].map(([code, listed]) =>
+    [code, Array.isArray(listed) ? listed as { url: unknown; id: unknown }[] : []]));
 }, 300_000);
 
 describe('support.jamf.com contracts', () => {
@@ -371,6 +375,23 @@ describe('support.jamf.com contracts', () => {
         `${code} collections under an id the en home page does not list`,
       ).toEqual([]);
     }
+  });
+
+  /**
+   * The reader takes a home page without `home.collections` for one it
+   * could not read: nothing is cached, and on every call the locale costs
+   * its place in each row's `locales` (en: every `jamf-support-*` row), with
+   * `incomplete` saying so, and `get_toc` in that locale is an error. So the
+   * list has to be there in every declared locale. An empty one is an answer,
+   * the locale publishing nothing, as `nl` and `th` answer, except in en,
+   * whose listing the publication ids come from: that is read as unreadable
+   * too, so en's has to list some.
+   */
+  it('carries a collection list in every locale the source declares, and some in en', () => {
+    for (const code of Object.values(SOURCE.locales)) {
+      expect(Array.isArray(homeLists.get(code)), `${code} home.collections is a list`).toBe(true);
+    }
+    expect(homes.get(LOCALE)?.length ?? 0, `${LOCALE} home page collections`).toBeGreaterThan(0);
   });
 
   /**
