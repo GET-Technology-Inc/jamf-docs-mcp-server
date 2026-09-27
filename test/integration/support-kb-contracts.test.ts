@@ -16,7 +16,9 @@
  *
  * Cost, measured 2026-09-14: 1 home page (~1.2s), 9 collection pages (~2.6s
  * each), and SAMPLE_SIZE articles (~0.9s each), at CONCURRENCY at a time.
- * Roughly 40s wall clock against the job's 5-minute timeout.
+ * Roughly 40s wall clock against the job's 5-minute timeout. Since
+ * 2026-09-28 the home page of each of the other five locales as well, for
+ * the two assertions on what a collection is called across locales.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -164,6 +166,8 @@ function hasContent(block: Block): boolean {
 
 let collections: { url: string; name: unknown; id: unknown }[];
 let articles: Article[];
+/** Each locale's home collections, keyed by support.jamf.com's code for it. */
+let homes: Map<string, { url: unknown; id: unknown }[]>;
 
 beforeAll(async () => {
   const home = pageProps(await getHtml(`${SUPPORT_BASE}/${LOCALE}/`), 'home');
@@ -186,6 +190,12 @@ beforeAll(async () => {
     const content = props.articleContent as { blocks?: Block[]; title?: unknown } | undefined;
     return { url, title: content?.title, blocks: content?.blocks ?? [] };
   });
+
+  const others = Object.values(SOURCE.locales).filter(code => code !== LOCALE);
+  homes = new Map([[LOCALE, collections], ...await mapLimit(others, async (code) => {
+    const props = pageProps(await getHtml(`${SUPPORT_BASE}/${code}/`), `${code} home`);
+    return [code, (props.home as { collections?: { url: unknown; id: unknown }[] } | undefined)?.collections ?? []] as const;
+  })]);
 }, 300_000);
 
 describe('support.jamf.com contracts', () => {
@@ -341,6 +351,40 @@ describe('support.jamf.com contracts', () => {
         || (typeof summary === 'object' && summary !== null
           && typeof (summary as { text?: unknown }).text === 'string');
       expect(shape, `collapsibleSection summary in ${url}: ${JSON.stringify(summary)}`).toBe(true);
+    }
+  });
+
+  /**
+   * `jamf_docs_list_products` names each collection by its en slug, and
+   * `jamf_docs_get_toc` finds it in another locale by Intercom's id, because
+   * a slug is the locale's own: Jamf Pro is `jamf-pro-相關` in zh-TW. That
+   * reaches a collection only while its translations keep its id. One that a
+   * locale lists under an id en does not have is out of reach of every id
+   * list_products gives.
+   */
+  it('lists each locale\'s collections under ids the en listing has', () => {
+    expect([...homes.keys()].sort()).toEqual(Object.values(SOURCE.locales).sort());
+    const en = new Set((homes.get(LOCALE) ?? []).map(c => c.id));
+    for (const [code, listed] of homes) {
+      expect(
+        listed.filter(c => !en.has(c.id)).map(c => JSON.stringify(c)),
+        `${code} collections under an id the en home page does not list`,
+      ).toEqual([]);
+    }
+  });
+
+  /**
+   * The collection TOC cache is keyed on the collection page's URL, since
+   * Intercom's id is the same in every locale. That keeps one locale's tree
+   * from being served to another only while the URL a locale lists names
+   * that locale.
+   */
+  it('names the locale in the path of every collection URL a locale lists', () => {
+    for (const [code, listed] of homes) {
+      for (const collection of listed) {
+        const path = typeof collection.url === 'string' ? new URL(collection.url).pathname : '';
+        expect(path, `${code}: ${JSON.stringify(collection)}`).toMatch(new RegExp(`^/${code}/collections/`));
+      }
     }
   });
 });

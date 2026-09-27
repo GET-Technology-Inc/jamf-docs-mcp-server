@@ -429,8 +429,46 @@ interface ResolvedTocSource {
   intercomCollection?: {
     source: StaticDocSource;
     collection: IntercomCollection;
-    sourceLocale: string;
+    /**
+     * The locale of the edition `collection` is: the one asked for, or the
+     * default locale where that one does not publish the collection.
+     */
+    locale: string;
   };
+}
+
+/**
+ * The collections `jamf_docs_list_products` names its ids from: the source's
+ * default-locale listing, whose slugs the ids are built from.
+ *
+ * `collections` is `sourceLocale`'s own listing. When `sourceLocale` is the
+ * default locale it is that listing, so an en-US request reads no other
+ * locale. A source with no default-locale edition is not in
+ * `jamf_docs_list_products` at all, and its ids come from `collections`.
+ *
+ * So do they when the default-locale listing cannot be read. An id built from
+ * `sourceLocale`'s own slug needs nothing from that listing and was served
+ * before ids were resolved through it, so failing it because another
+ * locale's home page is down would be a regression. Every id is then read by
+ * `sourceLocale`'s own slugs, as it was before.
+ */
+async function listedCollections(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  sourceLocale: string,
+  collections: IntercomCollection[],
+): Promise<IntercomCollection[]> {
+  const defaultLocale = source.locales[DEFAULT_LOCALE];
+  if (defaultLocale === undefined || defaultLocale === sourceLocale) { return collections; }
+  try {
+    return await listIntercomCollections(ctx, source, defaultLocale);
+  } catch (error) {
+    ctx.logger.createLogger('get-toc').warning(
+      `Could not list ${source.name} collections in ${defaultLocale}, so ids are ` +
+        `read from its ${sourceLocale} slugs: ${String(error)}`,
+    );
+    return collections;
+  }
 }
 
 /**
@@ -441,6 +479,22 @@ interface ResolvedTocSource {
  * adds one — so they are looked up. Tried before the Fluid Topics registry
  * for the same reason the declared static sections are: that registry would
  * report them unknown and suggest a bundle family instead.
+ *
+ * One id names a collection in every language it is published in, and
+ * `locale` picks which copy is served. A collection's slug is the locale's own
+ * and its Intercom id is not (see {@link IntercomCollection}), and
+ * `jamf_docs_list_products` builds each id from the default locale's slug. So
+ * the id is looked up there, and the collection then found by its Intercom id
+ * among `locale`'s. It used to be looked up among `locale`'s own slugs, so
+ * `jamf-support-jamf-pro` named nothing in zh-TW, where the slug is
+ * `jamf-pro-相關`, and Jamf Connect for macOS was out of reach in fr, de and
+ * es: 5 of the 22 locale editions support.jamf.com publishes (2026-09-28). An
+ * id built from `locale`'s own slug still names its collection.
+ *
+ * `jamf_docs_list_products` offers every collection in every locale the
+ * source publishes, and 32 of those 54 pairs have no translation upstream.
+ * Those get the default locale's edition, the way an untranslated Fluid
+ * Topics publication gets its en-US map, and `localeNote` says so.
  *
  * Returns null when the id names no dynamic source, so the caller falls
  * through to the Fluid Topics path.
@@ -463,9 +517,17 @@ async function resolveDynamicSection(
     }
 
     const collections = await listIntercomCollections(ctx, source, sourceLocale);
-    const match = collections.find(c => dynamicSectionId(source, c.slug) === publication);
-    if (match === undefined) {
-      const available = collections.map(c => `- \`${dynamicSectionId(source, c.slug)}\``);
+    const listed = await listedCollections(ctx, source, sourceLocale, collections);
+    const listedIds = new Map(listed.map(c => [c.id, dynamicSectionId(source, c.slug)]));
+    const idOf = (c: IntercomCollection): string => listedIds.get(c.id) ?? dynamicSectionId(source, c.slug);
+    const named = listed.find(c => dynamicSectionId(source, c.slug) === publication)
+      ?? collections.find(c => dynamicSectionId(source, c.slug) === publication);
+    if (named === undefined) {
+      const own = new Set(collections.map(c => c.id));
+      const available = [
+        ...collections.map(c => `- \`${idOf(c)}\``),
+        ...listed.filter(c => !own.has(c.id)).map(c => `- \`${idOf(c)}\` (${DEFAULT_LOCALE} edition)`),
+      ];
       return {
         error: available.length > 0
           ? `Unknown ${source.name} collection: "${publication}".\n\nAvailable in ${locale}:\n${available.join('\n')}`
@@ -473,11 +535,16 @@ async function resolveDynamicSection(
       };
     }
 
+    // `locale`'s own copy, found by the Intercom id every locale shares.
+    // Without one, `named` is the default locale's: only an id from that
+    // listing can name a collection `collections` does not have.
+    const translated = collections.find(c => c.id === named.id);
+    const collection = translated ?? named;
     return {
       source: publication,
-      sourceLabel: `${source.name}: ${match.name}`,
+      sourceLabel: `${source.name}: ${collection.name}`,
       availableVersions: [],
-      intercomCollection: { source, collection: match, sourceLocale },
+      intercomCollection: { source, collection, locale: translated !== undefined ? locale : DEFAULT_LOCALE },
     };
   }
   return null;
@@ -594,8 +661,10 @@ async function fetchTocFor(
   options: FetchTocOptions,
 ): Promise<FetchTocResult> {
   if (resolved.intercomCollection !== undefined) {
-    const { source, collection } = resolved.intercomCollection;
-    return await fetchIntercomToc(ctx, source, collection, options);
+    const { source, collection, locale } = resolved.intercomCollection;
+    // Which edition answered, so `localeNote` says when it is not the one
+    // asked for.
+    return { ...await fetchIntercomToc(ctx, source, collection, options), resolvedLocale: locale };
   }
   if (resolved.staticSection !== undefined) {
     const { source, section, sourceLocale } = resolved.staticSection;

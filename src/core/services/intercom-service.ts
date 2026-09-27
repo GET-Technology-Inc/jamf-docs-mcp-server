@@ -447,6 +447,14 @@ export function parseIntercomArticle(html: string): IntercomArticle | null {
 
 // ─── Collections ────────────────────────────────────────────────
 
+/**
+ * One top-level collection, as one locale's home page lists it.
+ *
+ * `id` is Intercom's, and the same in every locale that publishes the
+ * collection. `slug`, `name` and `url` are the locale's own: Jamf Pro is
+ * 12369024 in all six of support.jamf.com's locales, and `jamf-pro-相關` in
+ * zh-TW.
+ */
 export interface IntercomCollection {
   id: string;
   slug: string;
@@ -512,17 +520,21 @@ export async function listIntercomCollections(
  * A collection page's `__NEXT_DATA__` carries the whole subtree —
  * subcollections and every article summary — so one request answers what
  * crawling 356 article pages would.
+ *
+ * The tree is one locale's: the one `collection` was listed in, which its
+ * `url` names. Its `id` is the same in every locale that publishes it.
  */
 export async function fetchIntercomCollectionToc(
   ctx: ServerContext,
   source: StaticDocSource,
   collection: IntercomCollection,
 ): Promise<TocEntry[]> {
-  const key = cacheKey('intercom-collection-toc-v2', { source: source.id, collection: collection.id });
+  const url = canonicalStaticUrl(source, collection.url);
+  const key = cacheKey('intercom-collection-toc-v3', { source: source.id, url });
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null) { return cached; }
 
-  const html = await ctx.http.getText(canonicalStaticUrl(source, collection.url));
+  const html = await ctx.http.getText(url);
   const props = pageProps(html);
   const raw = props?.collection as RawCollection | undefined;
 
