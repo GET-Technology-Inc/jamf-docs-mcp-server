@@ -54,6 +54,14 @@ import type {
  * are published there too.
  *
  * Return `null` to fall through to the default Fluid Topics API search.
+ *
+ * A `search` that throws or rejects fails the call instead: since 2026-09-28
+ * `jamf_docs_search` answers it with `isError`, and does not ask Fluid Topics
+ * in its place, because an answer from another backend would hide a broken
+ * one. Before, it answered "No results found". The reply quotes the error's
+ * message (or the string it rejected with), with file paths and stack traces
+ * removed. That message reaches the MCP client, where it was only logged
+ * before, so it must not carry anything a client should not see.
  */
 export interface SearchProvider {
   search: (params: SearchParams) => Promise<SearchResult[] | null>;

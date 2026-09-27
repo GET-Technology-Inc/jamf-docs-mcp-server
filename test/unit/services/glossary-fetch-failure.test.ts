@@ -43,6 +43,7 @@ import {
   serveGlossaryContent,
 } from '../../helpers/glossary-upstream.js';
 import type { FtMapInfo } from '../../../src/core/types.js';
+import { HttpError } from '../../../src/core/http-client.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 
 const mockedFetchMapToc = vi.mocked(fetchMapToc);
@@ -115,6 +116,50 @@ describe('the glossary could not be read at all', () => {
     expect(error.message).toContain('(HTTP 503 Service Unavailable)');
     expect(error.message).toContain('the glossary was not read');
     expect(mockedFetchTopicContent).not.toHaveBeenCalled();
+  });
+
+  it('says it may be temporary by the rule the search follows: not for a request refused', async () => {
+    // One rule for both tools since 2026-09-28 (mayBeTemporary). Before it,
+    // the glossary said "may be temporary" for any status, a 404 included,
+    // which sent again is refused again.
+    const toc = `https://learn.jamf.com/api/khub/maps/${MAP_ID}/toc`;
+
+    const ctx = makeCtx();
+    ctx.mapsRegistry.resolveGlossaryMapId = vi.fn().mockRejectedValue(
+      new HttpError(404, 'Not Found', 'https://learn.jamf.com/api/khub/maps'),
+    );
+    const noMaps = await unavailable(lookupGlossaryTerm(ctx, { term: 'MDM' }));
+    expect(noMaps.message).toContain('list of documentation maps');
+    expect(noMaps.message).not.toContain('temporary');
+
+    mockedFetchMapToc.mockRejectedValueOnce(new HttpError(404, 'Not Found', toc));
+    const refused = await unavailable(lookupGlossaryTerm(makeCtx(), { term: 'MDM' }));
+    expect(refused.message).toContain('(HTTP 404 Not Found)');
+    expect(refused.message).not.toContain('temporary');
+
+    mockedFetchMapToc.mockRejectedValueOnce(new HttpError(408, 'Request Timeout', toc));
+    const timedOut = await unavailable(lookupGlossaryTerm(makeCtx(), { term: 'MDM' }));
+    expect(timedOut.message).toContain('This may be temporary: try again in a moment.');
+  });
+
+  it('says a failed definition may be temporary when any of the failures may be', async () => {
+    const content = (status: () => number) => async (_http: unknown, mapId: string, contentId: string): Promise<string> => {
+      await Promise.resolve();
+      const url = `https://learn.jamf.com/api/khub/maps/${mapId}/topics/${contentId}/content`;
+      const code = status();
+      throw new HttpError(code, code === 404 ? 'Not Found' : 'Service Unavailable', url);
+    };
+
+    mockedFetchTopicContent.mockImplementation(content(() => 404));
+    const refused = await unavailable(lookupGlossaryTerm(makeCtx(), { term: 'MDM' }));
+    expect(refused.message).toContain('(HTTP 404 Not Found)');
+    expect(refused.message).not.toContain('temporary');
+
+    let calls = 0;
+    mockedFetchTopicContent.mockImplementation(content(() => (calls++ === 0 ? 404 : 503)));
+    const mixed = await unavailable(lookupGlossaryTerm(makeCtx(), { term: 'MDM' }));
+    expect(mixed.message).toContain('(HTTP 404 Not Found; HTTP 503 Service Unavailable)');
+    expect(mixed.message).toContain('This may be temporary: try again in a moment.');
   });
 
   it('names a network error and a timeout rather than "fetch failed"', async () => {

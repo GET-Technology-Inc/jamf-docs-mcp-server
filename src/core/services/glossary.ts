@@ -42,8 +42,7 @@ import type { Logger } from './interfaces/index.js';
 import { cacheKey } from './cache-key.js';
 import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
-import { HttpError } from '../http-client.js';
-import { sanitizeErrorMessage } from '../utils/sanitize.js';
+import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
 
 /**
  * The glossary could not be read, so the lookup has no answer to give. That
@@ -69,36 +68,19 @@ export class GlossaryUnavailableError extends Error {
   }
 }
 
-/** Why one request failed, in words a caller can act on. */
-function describeFetchFailure(error: unknown): string {
-  // Not `error.message`: an HttpError's ends in the request URL, which is
-  // noise in a message for the caller, and fetch reports every network
-  // failure as the bare "fetch failed", with the reason on `cause`.
-  if (error instanceof HttpError) {
-    return `HTTP ${String(error.status)}${error.statusText !== '' ? ` ${error.statusText}` : ''}`;
-  }
-  if (!(error instanceof Error)) { return 'an unknown error'; }
-  if (error.name === 'TimeoutError') { return 'the request timed out'; }
-  if (error instanceof SyntaxError) { return 'a response that was not valid JSON'; }
-  const code = (error.cause as { code?: unknown } | undefined)?.code;
-  if (typeof code === 'string') { return `a network error: ${code}`; }
-  if (error instanceof TypeError) { return 'a network error'; }
-  return sanitizeErrorMessage(error.message);
-}
-
 /** The distinct reasons behind several failures, in the order first seen. */
 function describeFetchFailures(errors: unknown[]): string {
   return [...new Set(errors.map(describeFetchFailure))].join('; ');
 }
 
-const MAY_BE_TEMPORARY = 'This may be temporary: try again in a moment.';
-
 /**
  * A {@link GlossaryUnavailableError} for `term`.
  *
  * `failed` completes "Glossary lookup for "<term>" failed: …". `notChecked`
- * says why the reply is not a "no match". `temporary` is false only where
- * nothing was fetched that could fail: trying again will not help there.
+ * says why the reply is not a "no match". `temporary` says whether trying
+ * again may help: {@link mayBeTemporary} of the requests that failed, which
+ * the search's failure message asks too, or false where nothing was fetched
+ * that could fail.
  */
 function glossaryUnavailable(
   term: string,
@@ -831,6 +813,7 @@ function throwIfUnanswerable(
   const reason = describeFetchFailures(failures.map(f => f.error));
   const titles = failures.map(f => titleOf(f.node)).join(', ');
   const cause = failures[0]?.error;
+  const temporary = failures.some(f => mayBeTemporary(f.error));
 
   if (failures.length === candidates) {
     const one = candidates === 1;
@@ -841,7 +824,7 @@ function throwIfUnanswerable(
         `and ${one ? 'its definition' : 'none of their definitions'} could be fetched from ` +
         `learn.jamf.com (${reason}): ${titles}`,
       `the ${one ? 'entry' : 'entries'} that might define it could not be read`,
-      { cause },
+      { cause, temporary },
     );
   }
 
@@ -855,7 +838,7 @@ function throwIfUnanswerable(
       `${String(failures.length)} of the ${String(candidates)} glossary entries whose titles are ` +
         `close to it could not be fetched from learn.jamf.com (${reason}): ${titles}. ${others}`,
       'it was checked against only part of the glossary, and its entry may be one that could not be fetched',
-      { cause },
+      { cause, temporary },
     );
   }
 
@@ -867,7 +850,7 @@ function throwIfUnanswerable(
       `the entry whose title names it, ${lead}, could not be fetched from learn.jamf.com ` +
         `(${reason})${more > 0 ? `, nor could ${countOf(more, 'other candidate', 'other candidates')}` : ''}`,
       'answering from the entries that were fetched would put another entry in its place',
-      { cause },
+      { cause, temporary },
     );
   }
 }
@@ -933,7 +916,7 @@ export async function lookupGlossaryTerm(
       'the list of documentation maps, which says where the glossary is, could not be ' +
         `fetched from learn.jamf.com (${describeFetchFailure(error)})`,
       GLOSSARY_NOT_READ,
-      { cause: error },
+      { cause: error, temporary: mayBeTemporary(error) },
     );
   }
 
@@ -962,7 +945,7 @@ export async function lookupGlossaryTerm(
       "the glossary's table of contents could not be fetched from learn.jamf.com " +
         `(${describeFetchFailure(error)})`,
       GLOSSARY_NOT_READ,
-      { cause: error },
+      { cause: error, temporary: mayBeTemporary(error) },
     );
   }
 

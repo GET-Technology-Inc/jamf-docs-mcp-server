@@ -31,6 +31,8 @@ import {
   tocBudgetNote,
 } from './toc.js';
 import { budgetNote, renderGlossaryList } from './glossary.js';
+import { otherSourceCount, renderElsewhere, renderNoResults } from './search.js';
+import { toolErrorText } from './tool-error.js';
 
 // ---------------------------------------------------------------------------
 // Tool result shapes (mirrors of src/core/schemas/output.ts)
@@ -886,23 +888,11 @@ function renderSearch(view: SearchView): string {
     </header>`;
 
   if (view.results.length === 0) {
-    // Suggestions are runnable queries, so they get the same shape as a
-    // result. The previous design rendered them as inline links in a sentence,
-    // which made prose advice ("try fewer keywords") look identical to a query.
-    const tips =
-      Array.isArray(view.suggestions) && view.suggestions.length > 0
-        ? `<ol class="list list-hits">${view.suggestions
-            .filter(renderableText)
-            .map(
-              (s) =>
-                `<li><button class="hit" data-search="${esc(s)}">`
-                + `<span class="hit-title">${esc(s)}</span></button></li>`,
-            )
-            .join('')}</ol>`
-        : '';
-    return `${header}
-      <p class="notice">Nothing matched. ${tips === '' ? 'Try a broader query.' : 'Try one of these:'}</p>
-      ${tips}`;
+    // Suggestions, and what other sites matched: see app-ui/search.ts. Inline,
+    // no more of those than of results, for the reason INLINE_HITS gives.
+    const cap = isFullscreen() ? Number.POSITIVE_INFINITY : INLINE_HITS;
+    return `${header}${renderNoResults(view, cap)}
+      ${expandAction(otherSourceCount(view.otherSources) - cap, 'link')}`;
   }
 
   const hit = (r: SearchResult): string => {
@@ -936,22 +926,9 @@ function renderSearch(view: SearchView): string {
   // Inline drops this entirely. It is a separate population the server refuses
   // to rank against the main one, so it is the least likely thing a reader
   // needs in a compact card — and it was costing a rule, a heading and two
-  // rows of the small budget an inline panel has.
-  const elsewhere =
-    isFullscreen() && Array.isArray(view.otherSources) && view.otherSources.length > 0
-      ? `<section class="group">
-          <h2 class="group-title">Elsewhere</h2>
-          <ol class="list list-hits">${view.otherSources
-            .map(
-              (s) => `
-              <li><a class="hit" href="${esc(s.url)}" data-external>
-                <span class="hit-title">${esc(s.title)}</span>
-                <span class="hit-meta">${esc(s.source)}</span>
-              </a></li>`,
-            )
-            .join('')}</ol>
-        </section>`
-      : '';
+  // rows of the small budget an inline panel has. (With no results it is
+  // shown in either mode: see renderNoResults.)
+  const elsewhere = isFullscreen() ? renderElsewhere(view.otherSources) : '';
 
   return `${header}
     <ol class="list list-hits">${shown.map(hit).join('')}</ol>
@@ -1348,7 +1325,7 @@ function paint(): void {
       ${history.length > 0 ? '<nav class="bar"><button class="txt" data-back>← Back</button></nav>' : ''}
       <header class="head">
         <h1 class="head-title">That didn’t load</h1>
-        <p class="head-sub">${esc(readableError(current.message))}</p>
+        <p class="head-sub head-error">${esc(readableError(current.message))}</p>
         ${current.retry !== undefined ? '<p class="notice"><button class="txt" data-retry>Try again</button></p>' : ''}
       </header>`;
     return;
@@ -1439,6 +1416,19 @@ async function call(
     if (mine !== seq) {
       return;
     }
+    // A failed call answers normally with `isError` set, and says what failed.
+    const failed = toolErrorText(result);
+    if (failed !== undefined) {
+      show(
+        {
+          kind: 'error',
+          message: failed,
+          retry: { name, args, ...(pendingLabel !== undefined ? { label: pendingLabel } : {}) },
+        },
+        push,
+      );
+      return;
+    }
     const view = classify(payloadOf(result), name);
     show(
       view ?? {
@@ -1516,6 +1506,16 @@ app.ontoolcancelled = () => {
 };
 
 app.ontoolresult = (result) => {
+  // The model's call failed. Without this the panel stayed on the loading
+  // view `ontoolinput` put up: see app-ui/tool-error.ts. No retry: the model
+  // made the call, and the model decides whether to make it again.
+  const failed = toolErrorText(result);
+  if (failed !== undefined) {
+    seq++;
+    history.length = 0;
+    show({ kind: 'error', message: failed }, false);
+    return;
+  }
   const toolName = app.getHostContext()?.toolInfo?.tool.name;
   const view = classify(payloadOf(result), toolName);
   if (view !== null) {

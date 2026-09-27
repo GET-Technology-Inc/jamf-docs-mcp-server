@@ -213,6 +213,14 @@ export class MapsRegistry {
   }
 
   /**
+   * Whether the maps list comes from an injected {@link MapsProvider} rather
+   * than from learn.jamf.com, for a message that names what failed.
+   */
+  get hasMapsProvider(): boolean {
+    return this.mapsProvider !== undefined;
+  }
+
+  /**
    * Build the registry from FT API (cached).
    * Uses in-flight deduplication to prevent thundering herd when
    * multiple concurrent callers invoke ensureBuilt() simultaneously.

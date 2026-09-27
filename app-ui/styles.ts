@@ -214,6 +214,10 @@ body {
   color: var(--color-text-tertiary);
 }
 .head-sub a, .prose a { color: var(--color-text-info); text-decoration: underline; text-underline-offset: 2px; }
+/* An error message can be several paragraphs, separated by blank lines: a
+   failed search says what failed, that it is not a "no results", and whether
+   to try again. Without this they ran together into one block. */
+.head-error { white-space: pre-line; overflow-wrap: anywhere; }
 
 /* An advisory is a line of text. No box, no icon, no fill — that is what stops
    it becoming another card type. The filled treatment is reserved for in-prose

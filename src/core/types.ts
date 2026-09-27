@@ -254,8 +254,24 @@ export interface SearchDocumentationResult {
   truncatedContent?: TruncatedContentInfo;
   /** Set when the requested page was clamped to the last available page. */
   paginationNote?: string;
-  /** Set when the upstream search call failed; results will be empty. */
+  /**
+   * Set when the search could not be completed, whatever stopped it: the
+   * SearchProvider threw, a request to learn.jamf.com failed or answered with
+   * something that could not be read, the maps list a product filter needs
+   * could not be read (from learn.jamf.com or a MapsProvider), or anything
+   * else threw on the way, such as the cache. `results` is then empty, and
+   * says nothing about what matches. The error as `String()` gives it, for
+   * logs.
+   */
   searchError?: string;
+  /**
+   * Set with `searchError`: the same failure, written for the caller. It says
+   * in plain words what failed and, where that is known, why ("HTTP 503
+   * Service Unavailable", "the request timed out", a provider's own message),
+   * that this is not a "no results", and whether trying again may help.
+   * `jamf_docs_search` returns it as its error.
+   */
+  searchErrorMessage?: string;
   /**
    * Which backend ranked `results`. The order is that backend's: filtering,
    * paging and token truncation all keep it.
