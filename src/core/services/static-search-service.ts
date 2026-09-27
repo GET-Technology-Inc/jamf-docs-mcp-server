@@ -15,7 +15,7 @@
  * ranked pointer needs.
  */
 
-import Fuse, { type IFuseOptions } from 'fuse.js';
+import Fuse, { type FuseIndex, type FuseOptionKey, type IFuseOptions } from 'fuse.js';
 import { cacheKey } from './cache-key.js';
 import { parseSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
@@ -97,7 +97,9 @@ export async function loadStaticIndex(
 // ─── Fuse index, per server ─────────────────────────────────────
 
 /**
- * Per-server Fuse indexes, keyed `sourceId:locale`.
+ * Per-server Fuse indexes, keyed `sourceId:locale`: one index of the titles,
+ * and a Fuse on it for each `minMatchCharLength` a query has asked for (see
+ * `fuseQueryFor`).
  *
  * Same shape as the glossary's: a WeakMap on the CacheProvider so each
  * ServerContext gets its own and it is collected with the context, rather
@@ -106,30 +108,111 @@ export async function loadStaticIndex(
  */
 const indexByServer = new WeakMap<CacheProvider, Map<string, {
   source: StaticSearchEntry[];
-  fuse: Fuse<StaticSearchEntry>;
+  index: FuseIndex<StaticSearchEntry>;
+  fuses: Map<number, Fuse<StaticSearchEntry>>;
 }>>();
 
+const FUSE_KEYS: FuseOptionKey<StaticSearchEntry>[] = [{ name: 'title', weight: 1 }];
+
+/**
+ * Carries no `minMatchCharLength`, so on its own it leaves Fuse's default of
+ * one: a Fuse built from these alone matches a single character. `fuseFor`
+ * adds the one `fuseQueryFor` chooses for the query.
+ */
 const FUSE_OPTIONS: IFuseOptions<StaticSearchEntry> = {
-  keys: [{ name: 'title', weight: 1 }],
+  keys: FUSE_KEYS,
   threshold: 0.35,
   includeScore: true,
   ignoreLocation: true,
-  minMatchCharLength: 3,
 };
 
-function fuseFor(ctx: ServerContext, key: string, entries: StaticSearchEntry[]): Fuse<StaticSearchEntry> {
+/** A Chinese, Japanese or Korean character: Han, Hiragana, Katakana or Hangul. */
+const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * The shortest run of matched characters, for a query with no Chinese,
+ * Japanese or Korean character in it, and the cap for one with.
+ */
+const MIN_MATCH_CHAR_LENGTH = 3;
+
+/**
+ * What Fuse is asked for `query`: the pattern, and its `minMatchCharLength`,
+ * the shortest run of characters in a row that a title must match.
+ *
+ * Three, for a query with no Chinese, Japanese or Korean character in it,
+ * which is every Latin one, and that query is passed on as typed. Fuse matches
+ * anywhere in a title, not word by word, and two Latin letters are mostly
+ * part of a longer word: `id` is in 78 of the 913 en titles and is the word
+ * ID in only 15. In the rest it is part of Provider, Android and the like
+ * (2026-09-28).
+ *
+ * A query with such a character in it is held to its own length, up to that
+ * three. Two of those characters are a word: 密碼 is "password", 憑證
+ * "certificate", 認証 "authentication". Such a word can only match as a run
+ * of two, so until 2026-09-28 every two-character query matched nothing, even
+ * a title that holds it verbatim. Measured live over `jamf_docs_search` that
+ * day, 20 of 20 two-character ja-JP and zh-TW queries returned no
+ * other-source match, while Fluid Topics answered 18 of them.
+ *
+ * Such a query is trimmed of whitespace first, the ideographic space (U+3000)
+ * a Chinese or Japanese keyboard types included. Padded, 密碼 is three
+ * characters long and so held to three, a run it has only where a title
+ * happens to have a space beside the word: live, `密碼 ` found nothing in
+ * zh-TW where 密碼 found one (2026-09-28). Lengths are UTF-16 code units, as
+ * Fuse and the tool's schema both count them. So one character such as 鎖,
+ * which `jamf_docs_search`'s schema lets through only padded, is held to one
+ * and matches the titles that hold it.
+ *
+ * Capped at the query's length, not lowered to two for every such query.
+ * Measured over the live titles on 2026-09-28, with queries taken from the ja
+ * and zh-TW ones: two for all of them also changed 96 of the 965 queries of
+ * three characters or more. Fuse allows a three-character pattern one error,
+ * so a run of two was enough, and what it added was mostly a shared ending
+ * (付ける found サポートを受ける) or, in a mixed query, two Latin letters
+ * (IDを found Android Enterprise).
+ *
+ * So, by construction rather than by measurement, two kinds of query get the
+ * pattern and options they got before, and so the same matches: one with no
+ * such character, and an unpadded one of three characters or more. A shorter
+ * one now matches; at two characters the threshold allows no error, so it
+ * matches exactly the titles that hold it. A padded one is searched without
+ * its padding.
+ */
+function fuseQueryFor(query: string): { pattern: string; minMatchCharLength: number } {
+  if (!CJK_CHARACTER.test(query)) {
+    return { pattern: query, minMatchCharLength: MIN_MATCH_CHAR_LENGTH };
+  }
+  const pattern = query.trim();
+  return { pattern, minMatchCharLength: Math.min(MIN_MATCH_CHAR_LENGTH, pattern.length) };
+}
+
+function fuseFor(
+  ctx: ServerContext,
+  key: string,
+  entries: StaticSearchEntry[],
+  minMatchCharLength: number,
+): Fuse<StaticSearchEntry> {
   let perServer = indexByServer.get(ctx.cache);
   if (perServer === undefined) {
     perServer = new Map();
     indexByServer.set(ctx.cache, perServer);
   }
-  const existing = perServer.get(key);
+  let indexed = perServer.get(key);
   // Rebuild when the underlying array is a different one — the cache TTL
-  // expiring is what replaces it.
-  if (existing?.source === entries) { return existing.fuse; }
-
-  const fuse = new Fuse(entries, FUSE_OPTIONS);
-  perServer.set(key, { source: entries, fuse });
+  // expiring is what replaces it. The index and every Fuse built on the old
+  // array go with it.
+  if (indexed?.source !== entries) {
+    indexed = { source: entries, index: Fuse.createIndex(FUSE_KEYS, entries), fuses: new Map() };
+    perServer.set(key, indexed);
+  }
+  // Fuse fixes its options when it is built, so each minimum has its own: one
+  // built for a two-character query must not answer a Latin one. They share
+  // the index, which only the keys shape.
+  let fuse = indexed.fuses.get(minMatchCharLength);
+  if (fuse === undefined) {
+    fuse = new Fuse(entries, { ...FUSE_OPTIONS, minMatchCharLength }, indexed.index);
+    indexed.fuses.set(minMatchCharLength, fuse);
+  }
   return fuse;
 }
 
@@ -147,6 +230,7 @@ export async function searchStaticSources(
 ): Promise<StaticSearchHit[]> {
   const log = ctx.logger.createLogger('static-search');
   const hits: StaticSearchHit[] = [];
+  const { pattern, minMatchCharLength } = fuseQueryFor(query);
 
   for (const source of Object.values(STATIC_DOC_SOURCES) as StaticDocSource[]) {
     const sourceLocale = source.locales[locale];
@@ -155,7 +239,8 @@ export async function searchStaticSources(
     try {
       const entries = await loadStaticIndex(ctx, source, sourceLocale);
       if (entries.length === 0) { continue; }
-      const results = fuseFor(ctx, `${source.id}:${sourceLocale}`, entries).search(query, { limit });
+      const results = fuseFor(ctx, `${source.id}:${sourceLocale}`, entries, minMatchCharLength)
+        .search(pattern, { limit });
       for (const result of results) {
         hits.push({ ...result.item, score: result.score ?? 1 });
       }
