@@ -77,9 +77,12 @@ export interface StaticDocSource {
    * Locale codes this source uses, mapped from this server's.
    *
    * concepts.jamf.com uses bare short codes (`en`, `ja`, `de`) and is
-   * case-sensitive; only `zh-TW` matches this server's form exactly. Locales
-   * absent from this map are not published by the source at all — th-TH is
-   * a hard gap, `/th` and `/th-TH` both 404.
+   * case-sensitive; only `zh-TW` and `zh-CN` match this server's form
+   * exactly. Locales absent from this map are not published by the source at
+   * all — th-TH is a hard gap, `/th` and `/th-TH` both 404.
+   *
+   * Each code appears at most once, because `fetchStaticToc` maps the code
+   * that answered back to this server's id through this table.
    */
   readonly locales: Readonly<Record<string, string>>;
   /**

@@ -279,12 +279,28 @@ export async function buildStaticToc(
 }
 
 /**
+ * This server's locale id for one of `source`'s own codes: `ja-JP` for `ja`.
+ *
+ * Read back through the source's locale table, which names each code once
+ * (see {@link StaticDocSource.locales}).
+ * Undefined for a code the table does not name, such as concepts.jamf.com's
+ * `ko`: no `language` value asks for it.
+ */
+function localeIdFor(source: StaticDocSource, sourceLocale: string): string | undefined {
+  return Object.entries(source.locales).find(([, code]) => code === sourceLocale)?.[0];
+}
+
+/**
  * A `FetchTocResult` for a static source's section.
  *
  * Pagination and token truncation are the same operations the Fluid Topics
  * path performs, applied to entries that came from a sitemap instead of a
  * map: a caller paging through a Concepts TOC must not get a different shape
  * from one paging through Jamf Pro's.
+ *
+ * @param sourceLocale the source's own locale code, e.g. `ja`. The result's
+ *   `resolvedLocale` is this server's id for it, e.g. `ja-JP`, or absent for
+ *   a code the source's locale table does not name.
  */
 export async function fetchStaticToc(
   ctx: ServerContext,
@@ -297,12 +313,23 @@ export async function fetchStaticToc(
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   const allToc = await buildStaticToc(ctx, source, section, sourceLocale);
+  const resolvedLocale = localeIdFor(source, sourceLocale);
 
   return {
     ...paginateTocEntries(allToc, page, maxTokens),
     // The locale that answered is the one asked for: unlike Fluid Topics,
     // where a family may exist in en-US only, a static section either
     // publishes the locale or `resolveTocSource` refused before reaching here.
-    resolvedLocale: sourceLocale,
+    // Live, each of concepts.jamf.com's ten locale codes lists the same 99
+    // pages (2026-09-28).
+    //
+    // Reported as this server's id, as every other path reports it, because
+    // `get_toc` compares it with the `language` it was asked in. Until
+    // 2026-09-28 this was the site's own code, so a request for a locale's
+    // own edition said the opposite: "Jamf does not publish this document in
+    // ja-JP. Showing the ja edition instead." Live, that was both sections
+    // in en-US, ja-JP, de-DE, es-ES, fr-FR and nl-NL, the six locales whose
+    // code the site spells differently; zh-TW and zh-CN were spared.
+    ...(resolvedLocale !== undefined ? { resolvedLocale } : {}),
   };
 }

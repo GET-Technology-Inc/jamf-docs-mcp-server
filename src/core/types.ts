@@ -232,6 +232,10 @@ export interface FetchTocResult {
    * `jamf-school-documentation` has no zh-TW map at all. The registry has
    * always fallen back to en-US; carrying the answer out is what lets the
    * caller say so rather than presenting English as a translation.
+   *
+   * This server's locale id (`ja-JP`), whichever source answered, since
+   * `get_toc` compares it with the `language` it was asked in. A static
+   * source's own code (`ja`) is not one: see `fetchStaticToc`.
    */
   resolvedLocale?: string;
 }
