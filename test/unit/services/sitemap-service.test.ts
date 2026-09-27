@@ -172,7 +172,40 @@ describe('fetchStaticToc', () => {
     // Two top-level entries, four counting the children.
     expect(result.toc).toHaveLength(2);
     expect(result.pagination.totalItems).toBe(4);
-    expect(result.resolvedLocale).toBe('en');
+    // This server's id for it, which `get_toc` compares with `language`,
+    // not the site's `en`.
+    expect(result.resolvedLocale).toBe('en-US');
+  });
+
+  it('reports every locale the source declares by this server\'s id for it', async () => {
+    const codes = Object.values(CONCEPTS.locales);
+    mockHttpGetText.mockResolvedValue(sitemapXml(codes.map(code => `/${code}/guides/a`)));
+    const ctx = createMockContext();
+
+    for (const [id, code] of Object.entries(CONCEPTS.locales)) {
+      const result = await fetchStaticToc(ctx, CONCEPTS, GUIDES, code);
+      expect(result.resolvedLocale, code).toBe(id);
+      expect(result.toc.map(entry => entry.url)).toEqual([`https://concepts.jamf.com/${code}/guides/a/`]);
+    }
+  });
+
+  it('can map every code back, because no static source names a code twice', () => {
+    // The table is read in reverse to report this server's id: a code that
+    // two ids shared would report whichever the table lists first.
+    for (const source of Object.values(STATIC_DOC_SOURCES)) {
+      const codes = Object.values(source.locales);
+      expect(new Set(codes).size, source.id).toBe(codes.length);
+    }
+  });
+
+  it('reports no locale for a site code that names none of this server\'s locales', async () => {
+    // concepts.jamf.com publishes `ko`, and no `language` value names it.
+    mockHttpGetText.mockResolvedValue(sitemapXml(['/ko/guides/a']));
+
+    const result = await fetchStaticToc(createMockContext(), CONCEPTS, GUIDES, 'ko');
+
+    expect(result.toc.map(entry => entry.url)).toEqual(['https://concepts.jamf.com/ko/guides/a/']);
+    expect(result).not.toHaveProperty('resolvedLocale');
   });
 
   it('cuts pages to the token budget like the Fluid Topics path, dropping nothing', async () => {

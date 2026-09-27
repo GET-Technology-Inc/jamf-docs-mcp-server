@@ -188,6 +188,24 @@ describe('concepts.jamf.com contracts', () => {
   });
 
   /**
+   * `get_toc` serves a section in the locale it was asked in and reports that
+   * locale as the one that answered, so it adds no `localeNote` (see
+   * `fetchStaticToc`). That is true only while every declared locale
+   * publishes every declared section: one without it would get an empty
+   * table of contents, and nothing would say why. Live, each of the site's
+   * ten locale codes lists the same 99 pages (2026-09-28).
+   */
+  it('publishes every declared section in every declared locale', () => {
+    for (const locale of Object.values(SOURCE.locales)) {
+      for (const section of SOURCE.sections) {
+        const pages = entries.filter(entry =>
+          entry.segments[0] === locale && entry.segments[1] === section.path && entry.segments.length > 2);
+        expect(pages.length, `sitemap pages under /${locale}/${section.path}/`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /**
    * The sitemap lists paths without a trailing slash and the site 301s to the
    * slashed form, which is why `canonicalStaticUrl` exists. A fetch of the
    * canonical URL must be the 200, not the redirect — otherwise every article
