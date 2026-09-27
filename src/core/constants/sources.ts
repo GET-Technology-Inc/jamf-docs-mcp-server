@@ -95,7 +95,8 @@ export interface StaticDocSource {
    * Set when sections come from the source at runtime rather than this table.
    *
    * The publication id is then `{prefix}-{slug}`, so a caller can still name
-   * one without knowing Intercom's numeric ids.
+   * one without knowing Intercom's numeric ids. See {@link dynamicSectionId}
+   * for which locale's slug.
    */
   readonly dynamicSections?: { readonly kind: 'intercom-collections'; readonly idPrefix: string };
 }
@@ -334,6 +335,13 @@ export const DYNAMIC_SECTION_SOURCES: readonly StaticDocSource[] =
  * Built from the slug rather than Intercom's numeric id so a caller can name
  * a collection from its URL, and so recreating a collection upstream does not
  * change the id this server publishes.
+ *
+ * A slug is one locale's, though: support.jamf.com's Jamf Pro collection is
+ * `jamf-pro` in five locales and `jamf-pro-相關` in zh-TW. The id published
+ * for a collection is the one its default-locale slug gives, and
+ * `jamf_docs_get_toc` resolves that id in every locale by the collection's
+ * Intercom id, which the locales share. A locale that does not publish the
+ * collection gets the default locale's edition, with a `localeNote`.
  */
 export function dynamicSectionId(source: StaticDocSource, slug: string): string {
   return `${source.dynamicSections?.idPrefix ?? source.id}-${slug}`;

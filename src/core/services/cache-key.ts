@@ -149,12 +149,23 @@ export interface CacheKeySpaces {
   /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
   /**
-   * One Intercom collection's article tree. Keyed on the collection, which is
-   * locale-specific. v2 since #338, for the same reason as the search index:
-   * v1 entries hold URLs as Intercom spells them, raw where a slug is not
-   * ASCII, rather than as `get_article` reports them.
+   * One Intercom collection's article tree, keyed on the page it is read
+   * from. That page names the locale, `/ja/collections/12369024-jamf-pro`,
+   * and the collection's id does not: Intercom gives a collection one id in
+   * every locale it is published in, so Jamf Pro is 12369024 in all six.
+   * v2 was keyed on the id, on the reading that a collection is
+   * locale-specific, so whichever language asked for a collection first was
+   * served to every other one for `cacheTtl.products`: live, ja-JP after
+   * en-US got the 384 English entries. v3 so that no build reads those
+   * entries again; they expire on their TTL. (v2 since #338: v1 entries hold
+   * URLs as Intercom spells them, raw where a slug is not ASCII, rather than
+   * as `get_article` reports them.)
+   *
+   * The URL rather than a `locale` part beside the id, because the URL is
+   * what the tree is read from: a key cannot then name one locale while the
+   * page it holds is another's.
    */
-  'intercom-collection-toc-v2': { source: string; collection: string };
+  'intercom-collection-toc-v3': { source: string; url: string };
   'maps-registry-v3': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
@@ -214,7 +225,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'static-sitemap': true,
   'static-search-index-v3': true,
   'intercom-collections': true,
-  'intercom-collection-toc-v2': true,
+  'intercom-collection-toc-v3': true,
   'maps-registry-v3': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
