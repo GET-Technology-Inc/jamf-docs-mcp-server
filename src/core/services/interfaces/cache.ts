@@ -33,6 +33,12 @@ export interface CacheStats {
  * {@link cacheKey}, or keeps its own store.
  */
 export interface CacheProvider {
+  /**
+   * `null` on a miss, and nothing else: core tests for `null`, and reads any
+   * other value as a hit. A store that answers `undefined` for a missing key
+   * (a `Map`, say) must turn it into `null`. Unlike a data provider's answer,
+   * what this returns is not checked: it is what core stored.
+   */
   get: <T>(key: CacheKey) => Promise<T | null>;
   set: (key: CacheKey, value: unknown, ttl?: number) => Promise<void>;
   delete: (key: CacheKey) => Promise<boolean>;

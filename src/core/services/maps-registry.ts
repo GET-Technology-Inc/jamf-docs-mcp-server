@@ -19,6 +19,7 @@ import type { FtMapInfo, FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { cacheKey } from './cache-key.js';
+import { readProviderMaps } from './provider-maps.js';
 import {
   compareVersions,
   extractVersionFromBundleId,
@@ -177,6 +178,26 @@ const CACHE_KEY = cacheKey('maps-registry-v3');
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GLOSSARY_BUNDLE_STEM = 'jamf-technical-glossary';
 
+/**
+ * What an injected {@link MapsProvider} threw while the registry was built,
+ * with the provider's own error as `failure`.
+ *
+ * The message is the provider's, so a caller that only reads `message` sees
+ * what it saw before. The tag is for a caller that names what failed: a
+ * provider whose answer the registry cannot use is replaced by learn.jamf.com
+ * (see readProviderMaps), so "a MapsProvider is configured" does not say
+ * which of the two a failure came from.
+ */
+export class MapsProviderError extends Error {
+  readonly failure: unknown;
+
+  constructor(failure: unknown) {
+    super(failure instanceof Error ? failure.message : String(failure));
+    this.name = 'MapsProviderError';
+    this.failure = failure;
+  }
+}
+
 export class MapsRegistry {
   private entries: MapEntry[] = [];
   private builtAt = 0;
@@ -213,14 +234,6 @@ export class MapsRegistry {
   }
 
   /**
-   * Whether the maps list comes from an injected {@link MapsProvider} rather
-   * than from learn.jamf.com, for a message that names what failed.
-   */
-  get hasMapsProvider(): boolean {
-    return this.mapsProvider !== undefined;
-  }
-
-  /**
    * Build the registry from FT API (cached).
    * Uses in-flight deduplication to prevent thundering herd when
    * multiple concurrent callers invoke ensureBuilt() simultaneously.
@@ -250,9 +263,23 @@ export class MapsRegistry {
       return;
     }
 
-    const maps = this.mapsProvider !== undefined
-      ? await this.mapsProvider.getMaps()
-      : await this.fetchMapsFn(this.http);
+    // A provider's maps are read before the registry reads them: see
+    // readProviderMaps. One bad map used to cost every publication. An
+    // answer the registry cannot use (null) is replaced by the maps on
+    // learn.jamf.com, as without a provider. What the provider throws is
+    // tagged, so a message can name the provider only when it was the
+    // provider that failed, and not learn.jamf.com asked in its place.
+    let provided: FtMapInfo[] | null = null;
+    if (this.mapsProvider !== undefined) {
+      let answer: unknown;
+      try {
+        answer = await this.mapsProvider.getMaps();
+      } catch (error) {
+        throw new MapsProviderError(error);
+      }
+      provided = readProviderMaps(answer);
+    }
+    const maps = provided ?? await this.fetchMapsFn(this.http);
     this.entries = maps.map(m => parseMap(m));
     this.builtAt = Date.now();
 

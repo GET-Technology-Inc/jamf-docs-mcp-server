@@ -43,6 +43,7 @@ import { cacheKey } from './cache-key.js';
 import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
+import { readGlossaryProviderResult } from './provider-results.js';
 
 /**
  * The glossary could not be read, so the lookup has no answer to give. That
@@ -886,11 +887,12 @@ export async function lookupGlossaryTerm(
     maxTokens?: number | undefined;
   }
 ): Promise<GlossaryLookupResult> {
+  const log = ctx.logger.createLogger('glossary');
   if (ctx.glossaryProvider !== undefined) {
-    const provided = await ctx.glossaryProvider.lookup(params);
+    // Read before anything here reads it: see readGlossaryProviderResult.
+    const provided = readGlossaryProviderResult(await ctx.glossaryProvider.lookup(params), log);
     if (provided !== null) {return provided;}
   }
-  const log = ctx.logger.createLogger('glossary');
   // `params.product` is deliberately not read past this point. Jamf publishes
   // one platform-wide glossary: the map and all 125 of its topics have empty
   // `jamf:portal`, `jamf:app` and `jamf:utility` (2026-09-24), so there is

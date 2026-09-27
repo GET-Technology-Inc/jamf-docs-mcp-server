@@ -26,8 +26,11 @@
  *
  * Publishing the two fields exposed one thing main never met: a SearchProvider
  * `mapTitle: null` or `crossFiled: null`, which untyped provider data can
- * carry, would fail the client's check and turn the search into an error. The
- * tool reads such a value as absent, on every channel.
+ * carry, would fail the client's check and turn the search into an error.
+ * Such a value is read as absent, on every channel. The tool did that until
+ * 2026-09-28; now the search service reads a provider's results before
+ * anything else does (`readSearchProviderResults`), and builds a Fluid Topics
+ * result with a `mapTitle` only when it is a string.
  *
  * Every case drives the registered tool over MCP with the real search
  * service, a real MapsRegistry and, for the second backend, a SearchProvider.
@@ -257,7 +260,7 @@ interface Harness {
   requests: string[];
 }
 
-function backends(provided?: SearchResult[]): Harness {
+function backends(provided?: SearchResult[], corpus: FtSearchEntry[] = CORPUS): Harness {
   const requests: string[] = [];
   const offline = (method: string, url: string): Error => new Error(`offline: no fixture for ${method} ${url}`);
 
@@ -274,7 +277,7 @@ function backends(provided?: SearchResult[]): Harness {
     postJson: async <T>(url: string, body?: unknown) => {
       requests.push(`POST ${url}`);
       if (url !== CLUSTERED_SEARCH) { throw offline('POST', url); }
-      const entries = CORPUS.filter(e => passes(body as FtSearchRequest, e));
+      const entries = corpus.filter(e => passes(body as FtSearchRequest, e));
       const response: FtClusteredSearchResponse = {
         facets: [],
         announcements: [],
@@ -469,6 +472,31 @@ describe('structuredContent carries every result field the outputSchema declares
     expect((JSON.parse(json.text) as { results: Row[] }).results).toEqual(expected(null));
     // A flag with no publication to name gets no note, rather than a crash.
     expect(publicationNotes(markdown.text)).toEqual({});
+  });
+
+  it("reads a Fluid Topics topic's mapTitle that is not a string as absent too", async () => {
+    // Fluid Topics has sent a string on every topic measured. The tool's own
+    // check covered this path as well until 2026-09-28; now the result is
+    // built without it. The Jamf Trust topic is the one a jamf-protect search
+    // relabels, which reads mapTitle to decide `crossFiled`.
+    const [sharedIpad] = SHARED_IPAD;
+    const corpus = [
+      entry({ ...sharedIpad, mapTitle: null as unknown as string }),
+      entry({ ...TRUST_WINDOWS, mapTitle: 42 as unknown as string }),
+    ];
+    const { ctx } = backends(undefined, corpus);
+
+    for (const args of [{ query: 'shared ipad', product: 'jamf-pro' }, { query: 'windows', product: 'jamf-protect' }]) {
+      const json = await callSearch(ctx, { ...args, responseFormat: 'json' });
+      const markdown = await callSearch(ctx, args);
+
+      expect(json.sc.results).toHaveLength(1);
+      for (const results of [json.sc.results, markdown.sc.results, (JSON.parse(json.text) as { results: Row[] }).results]) {
+        expect(results[0]).not.toHaveProperty('mapTitle');
+        expect(results[0]).not.toHaveProperty('crossFiled');
+      }
+      expect(publicationNotes(markdown.text)).toEqual({});
+    }
   });
 });
 
