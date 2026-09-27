@@ -31,7 +31,14 @@ import {
   tocBudgetNote,
 } from './toc.js';
 import { budgetNote, renderGlossaryList } from './glossary.js';
-import { otherSourceCount, renderElsewhere, renderNoResults } from './search.js';
+import {
+  type SearchTruncatedResult,
+  nextSearchPageArgs,
+  otherSourceCount,
+  renderElsewhere,
+  renderNoResults,
+  searchBudgetNote,
+} from './search.js';
 import { toolErrorText } from './tool-error.js';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +80,10 @@ interface SearchView {
   totalPages: number;
   /** Page size — carried forward so the next page is the same size as this one. */
   limit?: number;
+  /** False on the last page `page` accepts, even when `totalPages` is larger. */
+  hasMore?: boolean;
+  /** The budget this page was cut to; the next page is asked for with it. */
+  maxTokens?: number;
   results: SearchResult[];
   otherSources?: { title: string; url: string; source: string }[];
   suggestions?: string[];
@@ -80,7 +91,7 @@ interface SearchView {
   versionNote?: string;
   relevanceNote?: string;
   paginationNote?: string;
-  truncatedContent?: { omittedCount: number };
+  truncatedResult?: SearchTruncatedResult;
 }
 
 interface TocView {
@@ -841,15 +852,13 @@ function searchMore(view: SearchView, hidden: number): string {
     const more = hidden + (view.totalResults - view.results.length);
     return expandAction(more, 'result');
   }
-  if (view.page >= view.totalPages) {
+  // No count of what the next page holds: a page holds as many results as fit
+  // the budget, so it can be fewer than `limit`, and where this page starts
+  // is not `limit` times the pages before it.
+  if (view.page >= view.totalPages || nextSearchPageArgs(view) === null) {
     return '';
   }
-  const remaining = view.totalResults - view.page * (view.limit ?? view.results.length);
-  const label =
-    remaining > 0
-      ? `${String(Math.min(remaining, view.limit ?? 10))} more of ${String(view.totalResults)}`
-      : 'more';
-  return `<button class="more" data-more>Show ${esc(label)}</button>`;
+  return `<button class="more" data-more>Show more of ${String(view.totalResults)}</button>`;
 }
 
 function renderSearch(view: SearchView): string {
@@ -861,13 +870,10 @@ function renderSearch(view: SearchView): string {
     // two on every non-empty search — which backend ranked the results, written
     // for the model reading the text channel. On screen it is three lines of
     // grey prose above the first result, every single time.
-    view.truncatedContent !== undefined && view.truncatedContent.omittedCount > 0
-      ? notice(
-          `${String(view.truncatedContent.omittedCount)} long result${
-            view.truncatedContent.omittedCount === 1 ? '' : 's'
-          } omitted to fit the token budget.`,
-        )
-      : '',
+    // A page is cut to the budget whole results at a time, and a result
+    // larger than the budget on its own is alone on its page, with its
+    // snippet cut: see search.ts.
+    notice(searchBudgetNote(view)),
   ].join('');
 
   // The query stays in the <h1> in every state, empty included: it is the
@@ -1376,15 +1382,9 @@ function payloadOf(result: {
 /** The arguments that fetch the next page of whatever is on screen. */
 function pageArgs(view: View): { name: string; args: Record<string, unknown> } | null {
   if (view.kind === 'search') {
-    return {
-      name: 'jamf_docs_search',
-      args: {
-        ...view.data.filters,
-        ...(view.data.limit !== undefined ? { limit: view.data.limit } : {}),
-        query: view.data.query,
-        page: view.data.page + 1,
-      },
-    };
+    // The filters, and the page size and budget the page on screen was cut
+    // with: see search.ts.
+    return nextSearchPageArgs(view.data);
   }
   if (view.kind === 'toc') {
     // The id under the name the request used, and the version, language and

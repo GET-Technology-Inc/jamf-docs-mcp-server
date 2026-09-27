@@ -1037,8 +1037,10 @@ export async function lookupGlossaryTerm(
     matchedEntries.length,
   );
 
-  // What the budget left out, and what each would cost, the way
-  // `searchDocumentation` reports it. The cut stops at the first entry that
+  // What the budget left out, and what each would cost, in the shape
+  // `searchDocumentation` reported the results its pages left out until
+  // 2026-09-28. A glossary lookup has no pages, so here a larger `maxTokens`
+  // is the one way to them. The cut stops at the first entry that
   // does not fit and keeps no floor of one, so a leading entry over budget
   // leaves `entries` empty beside `totalMatches > 0`. Until 2026-09-26 that
   // was all the result said, and the tool read it as a no-match: live at

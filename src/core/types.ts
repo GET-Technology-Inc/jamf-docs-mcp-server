@@ -150,7 +150,28 @@ export interface SearchResponse {
   relevanceNote?: string;
   /** Set when the requested page was clamped to the last available page. */
   paginationNote?: string;
+  /**
+   * @deprecated Not sent since 2026-09-28: no result is left off every page
+   * any more. See {@link SearchDocumentationResult.truncatedContent}.
+   */
   truncatedContent?: TruncatedContentInfo;
+  /** See {@link SearchDocumentationResult.truncatedResult}. */
+  truncatedResult?: SearchTruncatedResult;
+}
+
+/**
+ * A search result larger than `maxTokens` on its own, as its page shows it:
+ * alone, with its snippet cut to the longest start that fits and ended with
+ * `…`. Its title and URL are shown whole.
+ */
+export interface SearchTruncatedResult {
+  title: string;
+  /**
+   * What the whole result costs: the smallest `maxTokens` at which it is
+   * shown whole. Pages are cut to `maxTokens`, so at that budget it may be on
+   * a different page.
+   */
+  estimatedTokens: number;
 }
 
 // Article fetch types
@@ -258,8 +279,36 @@ export interface SearchDocumentationResult {
   tokenInfo: TokenInfo;
   filterRelaxation?: FilterRelaxation;
   versionNote?: string;
+  /**
+   * How many results come before this page's first one, which is result
+   * `offset + 1` of `pagination.totalItems`. A page holds as many whole
+   * results as fit `maxTokens`, so this is not `(page - 1) * pageSize` in
+   * general. Absent from a result not built by `searchDocumentation`.
+   */
+  offset?: number;
+  /**
+   * Results left off this page by the token budget.
+   *
+   * @deprecated Not set since 2026-09-28. Until then a page was `pageSize`
+   * results cut to `maxTokens`, and this listed the ones cut, which were on no
+   * page at all: page N+1 began at result `pageSize`·N whatever the cut left
+   * out. Pages are now cut to `maxTokens` as they are walked, so every result
+   * is on some page and none is left out. See `truncatedResult` for the one
+   * cut that remains.
+   */
   truncatedContent?: TruncatedContentInfo;
-  /** Set when the requested page was clamped to the last available page. */
+  /**
+   * Set on a page that is one result larger than `maxTokens` on its own,
+   * shown with its snippet cut to fit. Only that page has
+   * `tokenInfo.truncated`: every other page holds whole results, as many as
+   * fit, and the rest are on the pages after it.
+   */
+  truncatedResult?: SearchTruncatedResult;
+  /**
+   * Set when the requested page was clamped to the last available page, or
+   * when the budget and page size make more pages than `page` accepts; it then
+   * says what reaches the rest.
+   */
   paginationNote?: string;
   /**
    * Set when the search could not be completed, whatever stopped it: the
