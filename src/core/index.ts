@@ -101,6 +101,7 @@ export type {
   SearchResponse,
   FilterRelaxation,
   TruncatedContentInfo,
+  SearchTruncatedResult,
   GetArticleParams,
   ParsedArticle,
   ArticleResponse,

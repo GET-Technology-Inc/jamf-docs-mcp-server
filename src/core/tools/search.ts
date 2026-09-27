@@ -16,6 +16,7 @@ import type {
   SearchResult,
   SearchRanker,
   SearchDocumentationResult,
+  SearchTruncatedResult,
   PaginationInfo,
   TokenInfo,
 } from '../types.js';
@@ -130,11 +131,69 @@ function formatSearchResult(result: SearchResult): string {
   return output;
 }
 
-function formatPaginationFooter(pagination: PaginationInfo, tokenInfo: TokenInfo, compact = false): string {
+/** One page of results, as the markdown renderers show it. */
+interface SearchPageView {
+  query: string;
+  results: SearchResult[];
+  filters: SearchFilters;
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+  /** How many results come before this page: see `SearchDocumentationResult.offset`. */
+  offset: number;
+  truncatedResult: SearchTruncatedResult | undefined;
+}
+
+/**
+ * The `limit` and `maxTokens` to name beside the next page, each only when it
+ * is not the default.
+ *
+ * A page holds as many whole results as fit `maxTokens`, and at most `limit`,
+ * so page N+1 follows page N only when it is asked for with both the same.
+ * Both footers used to say only which page came next. On 2026-09-28, page 1
+ * of `query: "enrollment"` at `maxTokens: 1000` held its first 8 results, and
+ * page 2 asked for as the footer said, at the default budget, starts at the
+ * 11th, so following the footer skipped two. At the defaults, leaving both
+ * out asks for the same pages, and the footer stays as it was.
+ */
+function pageShapeToResend(pagination: PaginationInfo, tokenInfo: TokenInfo): [string, number][] {
+  return [
+    ...(pagination.pageSize !== CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS
+      ? [['limit', pagination.pageSize] as [string, number]]
+      : []),
+    ...(tokenInfo.maxTokens !== TOKEN_CONFIG.DEFAULT_MAX_TOKENS
+      ? [['maxTokens', tokenInfo.maxTokens] as [string, number]]
+      : []),
+  ];
+}
+
+/**
+ * The line under a page that is one result cut to fit `maxTokens`.
+ *
+ * It used to read "Results truncated due to token limit. Use a smaller
+ * `limit` or increase `maxTokens`." under every page the budget shortened
+ * (`tokenInfo.truncated`), and `page` could not reach the results the cut
+ * dropped (see `paginateSearchResults`). Pages are now cut to the budget, so
+ * the only cut left is one result larger than `maxTokens` on its own, which
+ * `truncatedResult` names, and the line says which, and the budget that shows
+ * it whole — never one the schema rejects.
+ */
+function truncationLine(tokenInfo: TokenInfo, truncatedResult: SearchTruncatedResult): string {
+  const { title, estimatedTokens } = truncatedResult;
+  const cut = `"${sanitizeMarkdownText(title)}" is larger than \`maxTokens: ${String(tokenInfo.maxTokens)}\` on its own, ` +
+    'so its snippet is cut to fit.';
+  return estimatedTokens <= TOKEN_CONFIG.MAX_TOKENS_LIMIT
+    ? `${cut} Repeat with \`maxTokens: ${String(estimatedTokens)}\` or more to see it whole; ` +
+      'pages are cut to `maxTokens`, so it may then be on a different page.'
+    : `${cut} It needs ${String(estimatedTokens)} tokens, more than \`maxTokens\` allows (${String(TOKEN_CONFIG.MAX_TOKENS_LIMIT)}).`;
+}
+
+function formatPaginationFooter(view: SearchPageView, compact = false): string {
+  const { pagination, tokenInfo } = view;
+  const resend = pageShapeToResend(pagination, tokenInfo);
   if (compact) {
     let footer = `\n---\n*Page ${pagination.page}/${pagination.totalPages}`;
     if (pagination.hasNext) {
-      footer += ` | page=${pagination.page + 1} for more`;
+      footer += ` | page=${pagination.page + 1}${resend.map(([name, value]) => `, ${name}=${String(value)}`).join('')} for more`;
     }
     footer += '*\n';
     return footer;
@@ -142,10 +201,13 @@ function formatPaginationFooter(pagination: PaginationInfo, tokenInfo: TokenInfo
 
   let footer = `**Page ${pagination.page} of ${pagination.totalPages}** (${tokenInfo.tokenCount.toLocaleString()} tokens)`;
   if (pagination.hasNext) {
-    footer += ` | Use \`page=${pagination.page + 1}\` for more results`;
+    const shape = resend.length > 0
+      ? ` with ${resend.map(([name, value]) => `\`${name}: ${String(value)}\``).join(', ')}`
+      : '';
+    footer += ` | Use \`page=${pagination.page + 1}\`${shape} for more results`;
   }
-  if (tokenInfo.truncated) {
-    footer += '\n*Results truncated due to token limit. Use a smaller `limit` or increase `maxTokens`.*';
+  if (view.truncatedResult !== undefined) {
+    footer += `\n*${truncationLine(tokenInfo, view.truncatedResult)}*`;
   }
   footer += '\n\n*Use `jamf_docs_get_article` with any URL above — or with the `mapId` + `contentId` pair shown with a result — to read the full article.*\n';
   return footer;
@@ -165,22 +227,19 @@ function formatSearchResultCompact(result: SearchResult, index: number): string 
 /**
  * Format search results as compact markdown
  */
-function formatSearchResultsAsCompact(
-  query: string,
-  results: SearchResult[],
-  filters: SearchFilters,
-  pagination: PaginationInfo,
-  tokenInfo: TokenInfo
-): string {
+function formatSearchResultsAsCompact(view: SearchPageView): string {
+  const { query, results, filters, pagination } = view;
   let markdown = `## "${query}" (${pagination.totalItems} results)\n`;
   markdown += formatFiltersLine(filters);
   markdown += '\n\n';
 
+  // Numbered by rank across the whole result set. A page holds as many
+  // results as fit `maxTokens`, so page 2 does not start at `limit` + 1.
   results.forEach((result, idx) => {
-    markdown += formatSearchResultCompact(result, (pagination.page - 1) * pagination.pageSize + idx + 1);
+    markdown += formatSearchResultCompact(result, view.offset + idx + 1);
   });
 
-  markdown += formatPaginationFooter(pagination, tokenInfo, true);
+  markdown += formatPaginationFooter(view, true);
 
   // Compact is one line per result by design, so the mapId + contentId pair
   // stays out of it — printing both on every line roughly doubles the output
@@ -196,13 +255,8 @@ function formatSearchResultsAsCompact(
   return markdown;
 }
 
-function formatSearchResultsAsMarkdown(
-  query: string,
-  results: SearchResult[],
-  filters: SearchFilters,
-  pagination: PaginationInfo,
-  tokenInfo: TokenInfo
-): string {
+function formatSearchResultsAsMarkdown(view: SearchPageView): string {
+  const { query, results, filters, pagination, tokenInfo } = view;
   let markdown = `# Search Results for "${query}"\n\n`;
   markdown += `Found ${pagination.totalItems} result(s) | **Page ${pagination.page} of ${pagination.totalPages}** | ${tokenInfo.tokenCount.toLocaleString()} tokens`;
   markdown += formatFiltersLine(filters);
@@ -212,7 +266,7 @@ function formatSearchResultsAsMarkdown(
     markdown += formatSearchResult(result);
   }
 
-  markdown += formatPaginationFooter(pagination, tokenInfo);
+  markdown += formatPaginationFooter(view);
   return markdown;
 }
 
@@ -293,6 +347,13 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * query that was never checked; a failed search is now the error above it, as
  * the glossary's failed read is (#324). `suggestions` joined the JSON shape
  * the same day, when a no-results reply's JSON text became JSON.
+ *
+ * Also until 2026-09-28, a page was `limit` results cut to `maxTokens`
+ * afterwards, and the results the cut dropped were on no page (see
+ * `paginateSearchResults`). The Note on paging and `truncatedResult` in the
+ * JSON shape describe the pages that replaced them. That Note sends the reader
+ * to `paginationNote`, which the JSON shape did not list, so the notes a JSON
+ * reply can carry were listed the same day; each was already sent.
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -332,12 +393,26 @@ Returns:
       "hasNext": boolean,
       "hasPrev": boolean
     },
+    // Set when a filter matched nothing and was removed, or could not be applied.
+    "filterRelaxation"?: { "removed": [string], "original": { "<filter>": string }, "message": string },
+    // Set when a result is at a version other than the one asked for.
+    "versionNote"?: string,
+    // Set when page was past the last page, and the last is shown instead, or when
+    // limit and maxTokens make more pages than page accepts: it then says what
+    // reaches the rest.
+    "paginationNote"?: string,
+    // How "results" are ordered, and by whom. Absent when "results" is empty.
+    "relevanceNote"?: string,
     // Pages outside the product documentation, matched on title and ranked
     // separately from "results", which carry no score to rank them against.
     // Omitted when none matched.
     "otherSources"?: [{ "title": string, "url": string, "source": string }],
     // Queries to try instead, when "results" is empty.
-    "suggestions"?: [string]
+    "suggestions"?: [string],
+    // When "results" is empty and language is not ${DEFAULT_LOCALE}: not all documentation is in it.
+    "localeNote"?: string,
+    // Only on a page that is one result cut to fit; see the Note on paging.
+    "truncatedResult"?: { "title": string, "estimatedTokens": number }
   }
 
   For Markdown format:
@@ -358,6 +433,14 @@ Note: "No results found" is not an error. It means the search ran and nothing in
 documentation matched; in JSON that is "total": 0, with "suggestions" and any "otherSources".
 
 Note: Results are ranked by relevance. Use filters and pagination to navigate large result sets.
+A page holds up to limit results, as many as fit maxTokens, and the next page starts at the
+first that did not fit. Every result is on exactly one page, but which page depends on limit
+and maxTokens, so keep both the same while paging; the markdown footer names them beside the
+next page when they are not the default, and structuredContent carries limit and maxTokens.
+A result larger than maxTokens on its own is alone on its page with its snippet cut to fit;
+only that page has tokenInfo.truncated, and truncatedResult.estimatedTokens is what the whole
+result costs. If limit and maxTokens make more pages than page accepts (${PAGINATION_CONFIG.MAX_PAGE}), page ${PAGINATION_CONFIG.MAX_PAGE}
+offers no next page and paginationNote says what reaches the rest.
 Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article
 to fetch that article directly instead of resolving its URL. The pair is omitted
 when a result comes from a source that does not resolve one — fall back to the
@@ -619,8 +702,9 @@ function buildSearchStructuredContent(
   extras?: {
     filters?: ActiveSearchFilters | undefined;
     limit?: number | undefined;
+    maxTokens?: number | undefined;
     filterRelaxation?: { removed: string[]; original: Record<string, string>; message: string } | undefined;
-    truncatedContent?: { omittedCount: number; omittedItems: { title: string; estimatedTokens: number }[] } | undefined;
+    truncatedResult?: SearchTruncatedResult | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
     otherSources?: StaticSearchHit[] | undefined;
@@ -633,12 +717,15 @@ function buildSearchStructuredContent(
     page: pagination.page,
     totalPages: pagination.totalPages,
     ...(extras?.limit !== undefined ? { limit: extras.limit } : {}),
+    // The budget this page was cut to. The next page follows this one only
+    // when it is asked for with the same `limit` and `maxTokens`.
+    ...(extras?.maxTokens !== undefined ? { maxTokens: extras.maxTokens } : {}),
     hasMore: pagination.hasNext,
     results: results.map(toStructuredResult),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
     ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
-    ...(extras?.truncatedContent !== undefined ? { truncatedContent: extras.truncatedContent } : {}),
+    ...(extras?.truncatedResult !== undefined ? { truncatedResult: extras.truncatedResult } : {}),
     ...otherSourcesField(extras?.otherSources),
   };
 }
@@ -658,9 +745,11 @@ function buildSearchStructuredContent(
  *
  * Not carried: `relevanceNote`, which would describe the order of nothing;
  * `paginationNote`, which with no results can only say that a page past the
- * end was clamped to "the last page" of none, as it always was; and
+ * end was clamped to "the last page" of none, as it always was;
  * `versionNote`, which the service sets only when a result is at another
- * version than the one asked for, so never with no results.
+ * version than the one asked for, so never with no results; and
+ * `structuredContent.maxTokens`, which is there to ask for the next page with,
+ * and there is none.
  */
 function buildNoResultsResponse(
   params: SearchInput,
@@ -776,7 +865,14 @@ function buildSearchFailedResponse(message: string, otherSources: StaticSearchHi
 }
 
 /**
- * Append filter/version/pagination/truncation notices to markdown output
+ * Append filter/version/pagination notices to markdown output.
+ *
+ * Until 2026-09-28 this also printed "N additional result(s) omitted due to
+ * token limit." from `truncatedContent`, for results the budget left off a
+ * page, which were on no page at all. Pages are now cut to `maxTokens` as they
+ * are walked (see `paginateSearchResults`), the service no longer sets
+ * `truncatedContent`, and the one cut left is named under the page's footer
+ * (see truncationLine).
  */
 function appendMarkdownNotices(
   markdown: string,
@@ -784,7 +880,6 @@ function appendMarkdownNotices(
     filterRelaxation?: { message: string } | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
-    truncatedContent?: { omittedCount: number } | undefined;
   }
 ): string {
   let result = markdown;
@@ -797,10 +892,48 @@ function appendMarkdownNotices(
   if (notices.paginationNote !== undefined) {
     result += `\n> **Pagination Note:** ${notices.paginationNote}\n`;
   }
-  if (notices.truncatedContent !== undefined && notices.truncatedContent.omittedCount > 0) {
-    result += `\n*${notices.truncatedContent.omittedCount} additional result(s) omitted due to token limit.*\n`;
-  }
   return result;
+}
+
+/**
+ * The JSON text's body for a search with results: the page as the service cut
+ * it, with every note it carries. Not `truncatedContent`, which the service
+ * has not set since 2026-09-28 (see `SearchDocumentationResult`).
+ */
+function buildJsonBody(query: string, filters: SearchFilters, found: SearchDocumentationResult): SearchResponse {
+  const { results, pagination, tokenInfo, filterRelaxation, versionNote, paginationNote, truncatedResult } = found;
+  return {
+    total: pagination.totalItems,
+    query,
+    results,
+    filters,
+    tokenInfo,
+    pagination,
+    ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+    ...(versionNote !== undefined ? { versionNote } : {}),
+    ...(paginationNote !== undefined ? { paginationNote } : {}),
+    ...(truncatedResult !== undefined ? { truncatedResult } : {}),
+  };
+}
+
+/**
+ * One page as the markdown renderers show it.
+ *
+ * `offset` is absent only from a result `searchDocumentation` did not build;
+ * such a result's pages are then taken to be `pageSize` long, as all pages
+ * were until 2026-09-28.
+ */
+function pageView(query: string, filters: SearchFilters, found: SearchDocumentationResult): SearchPageView {
+  const { results, pagination, tokenInfo, truncatedResult } = found;
+  return {
+    query,
+    results,
+    filters,
+    pagination,
+    tokenInfo,
+    offset: found.offset ?? (pagination.page - 1) * pagination.pageSize,
+    truncatedResult,
+  };
 }
 
 /**
@@ -908,23 +1041,12 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         const {
           results, pagination, tokenInfo, filterRelaxation, versionNote,
-          paginationNote, truncatedContent, rankedBy
+          paginationNote, truncatedResult, rankedBy
         } = searchResult;
 
         // Build response
         const filters = buildFilterSummary(params);
-        const response: SearchResponse = {
-          total: pagination.totalItems,
-          query: params.query,
-          results,
-          filters,
-          tokenInfo,
-          pagination,
-          ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
-          ...(versionNote !== undefined ? { versionNote } : {}),
-          ...(paginationNote !== undefined ? { paginationNote } : {}),
-          ...(truncatedContent !== undefined ? { truncatedContent } : {})
-        };
+        const response = buildJsonBody(params.query, filters, searchResult);
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
 
@@ -939,10 +1061,11 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           {
             filters: activeSearchFilters(params),
             limit: params.limit,
+            maxTokens: tokenInfo.maxTokens,
             filterRelaxation,
             versionNote,
             paginationNote,
-            truncatedContent,
+            truncatedResult,
             otherSources,
           }
         );
@@ -976,8 +1099,8 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           ? formatSearchResultsAsCompact
           : formatSearchResultsAsMarkdown;
         const markdown = appendMarkdownNotices(
-          formatFn(params.query, results, filters, pagination, tokenInfo),
-          { filterRelaxation, versionNote, paginationNote, truncatedContent }
+          formatFn(pageView(params.query, filters, searchResult)),
+          { filterRelaxation, versionNote, paginationNote }
         ) + renderOtherSources(otherSources);
 
         await reportProgress(extra, { progress: 3, total: 3 });

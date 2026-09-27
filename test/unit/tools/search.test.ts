@@ -38,7 +38,7 @@ vi.mock('../../../src/core/services/search-suggestions.js', () => ({
 // Import AFTER mocks are set up
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { registerSearchTool } from '../../../src/core/tools/search.js';
-import type { SearchResult, PaginationInfo, TokenInfo } from '../../../src/core/types.js';
+import type { SearchResult, PaginationInfo, TokenInfo, SearchTruncatedResult } from '../../../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 
@@ -53,11 +53,13 @@ function buildSearchResponse(overrides?: {
   results?: ReturnType<typeof createSearchResult>[];
   pagination?: ReturnType<typeof createPaginationInfo>;
   tokenInfo?: ReturnType<typeof createTokenInfo>;
-}): { results: SearchResult[]; pagination: PaginationInfo; tokenInfo: TokenInfo } {
+  truncatedResult?: SearchTruncatedResult;
+}): { results: SearchResult[]; pagination: PaginationInfo; tokenInfo: TokenInfo; truncatedResult?: SearchTruncatedResult } {
   const results = overrides?.results ?? [createSearchResult()];
   const pagination = overrides?.pagination ?? createPaginationInfo({ totalItems: results.length, totalPages: 1, hasNext: false });
   const tokenInfo = overrides?.tokenInfo ?? createTokenInfo();
-  return { results, pagination, tokenInfo };
+  const truncatedResult = overrides?.truncatedResult;
+  return { results, pagination, tokenInfo, ...(truncatedResult !== undefined ? { truncatedResult } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -645,21 +647,28 @@ describe('jamf_docs_search tool', () => {
   // --- Token truncation ----------------------------------------------------
 
   describe('token truncation', () => {
-    it('should include truncation notice when tokenInfo.truncated is true', async () => {
+    // Since 2026-09-28 a page is cut to maxTokens as it is walked, and the one
+    // cut left is a result larger than maxTokens on its own, which the service
+    // names in truncatedResult. Until then every page the budget shortened
+    // read "Results truncated due to token limit. Use a smaller `limit` or
+    // increase `maxTokens`."
+    it('should name the result a page cut to fit, from truncatedResult', async () => {
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({
-          results: [createSearchResult()],
-          tokenInfo: createTokenInfo({ truncated: true, tokenCount: 5000, maxTokens: 5000 }),
+          results: [createSearchResult({ snippet: 'Configuration profiles let you…' })],
+          tokenInfo: createTokenInfo({ truncated: true, tokenCount: 98, maxTokens: 100 }),
+          truncatedResult: { title: 'Configuration Profiles', estimatedTokens: 115 },
         })
       );
 
-      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
+      const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test', maxTokens: 100 } });
 
       const text = getTextContent(result);
-      expect(text).toContain('truncated');
+      expect(text).toContain('*"Configuration Profiles" is larger than `maxTokens: 100` on its own, so its snippet is cut to fit.');
+      expect(text).not.toContain('Results truncated');
     });
 
-    it('should NOT include truncation notice when tokenInfo.truncated is false', async () => {
+    it('should NOT include truncation notice when no result was cut', async () => {
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({
           results: [createSearchResult()],
@@ -670,6 +679,7 @@ describe('jamf_docs_search tool', () => {
       const result = await client.callTool({ name: 'jamf_docs_search', arguments: { query: 'test' } });
 
       const text = getTextContent(result);
+      expect(text).not.toContain('is larger than `maxTokens');
       expect(text).not.toContain('Results truncated');
     });
   });
@@ -721,25 +731,24 @@ describe('jamf_docs_search tool', () => {
 
   describe('maxTokens behaviour', () => {
     it('should respect maxTokens limit by reflecting truncation in output', async () => {
-      // Simulate many results that would collectively exceed a small token budget.
-      // searchDocumentation is mocked, so we return a response where the service
-      // has already applied truncation (truncated: true) for a small maxTokens.
-      const manyResults = Array.from({ length: 10 }, (_, i) =>
-        createSearchResult({
-          title: `Article ${i + 1}: A Long Title About Apple Device Management`,
-          snippet: 'This is a detailed snippet about configuring devices and policies '
-            + 'for enterprise management including enrollment, profiles, and more.',
-          url: `https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Article_${i + 1}.html`,
-        })
-      );
+      // searchDocumentation is mocked, so we return a page as the service cuts
+      // it for a small maxTokens: its first result is larger than the budget
+      // on its own, so it is alone on its page with its snippet cut, and the
+      // other nine are on the pages after it.
+      const first = createSearchResult({
+        title: 'Article 1: A Long Title About Apple Device Management',
+        snippet: 'This is a detailed snippet about configuring devices and policies '
+          + 'for enterprise management including…',
+        url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Article_1.html',
+      });
 
       vi.mocked(searchDocumentation).mockResolvedValueOnce(
         buildSearchResponse({
-          results: manyResults,
+          results: [first],
           pagination: createPaginationInfo({
             totalItems: 10,
-            totalPages: 1,
-            hasNext: false,
+            totalPages: 10,
+            hasNext: true,
             pageSize: 10,
           }),
           tokenInfo: createTokenInfo({
@@ -747,6 +756,7 @@ describe('jamf_docs_search tool', () => {
             tokenCount: 100,
             maxTokens: 100,
           }),
+          truncatedResult: { title: first.title, estimatedTokens: 139 },
         })
       );
 
@@ -756,8 +766,10 @@ describe('jamf_docs_search tool', () => {
       });
 
       const text = getTextContent(result);
-      // The tool should render the truncation notice from tokenInfo.truncated
-      expect(text.toLowerCase()).toContain('truncated');
+      // The next page at the same budget, and the budget that shows the cut
+      // result whole.
+      expect(text).toContain('| Use `page=2` with `maxTokens: 100` for more results');
+      expect(text).toContain('Repeat with `maxTokens: 139` or more to see it whole');
     });
 
     it('should forward maxTokens to searchDocumentation', async () => {
@@ -794,6 +806,7 @@ describe('jamf_docs_search tool', () => {
       });
 
       const text = getTextContent(result);
+      expect(text).not.toContain('is larger than `maxTokens');
       expect(text).not.toContain('Results truncated');
     });
   });

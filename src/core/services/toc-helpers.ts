@@ -10,8 +10,9 @@
  */
 
 import type { TocEntry, TocTruncatedEntry, PaginationInfo, TokenInfo } from '../types.js';
-import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
+import { PAGINATION_CONFIG } from '../constants.js';
 import { estimateTokens, buildPaginationNote } from './tokenizer.js';
+import { pageStarts, pagesPastTheLastNote } from './budget-pages.js';
 
 /**
  * Count TOC entries including nested children.
@@ -42,32 +43,6 @@ export interface PaginatedToc {
   tokenInfo: TokenInfo;
   paginationNote?: string;
   truncatedEntry?: TocTruncatedEntry;
-}
-
-/**
- * Where each page starts, given what each top-level entry costs.
- *
- * A page takes its first entry whatever it costs, then each following entry
- * while it fits the budget and the page has room. So a page ends at the first
- * entry that does not fit, and that entry starts the next page. The pages
- * depend on `maxTokens` and on nothing else, so the same budget gives the same
- * pages on every request.
- */
-function pageStarts(costs: number[], maxTokens: number, pageSize: number): number[] {
-  const starts: number[] = [];
-  let next = 0;
-  while (next < costs.length) {
-    starts.push(next);
-    let used = costs[next] ?? 0;
-    let held = 1;
-    next++;
-    while (next < costs.length && held < pageSize && used + (costs[next] ?? 0) <= maxTokens) {
-      used += costs[next] ?? 0;
-      held++;
-      next++;
-    }
-  }
-  return starts;
 }
 
 /**
@@ -128,44 +103,6 @@ function cutToFit(
 }
 
 /**
- * The note for a budget whose pages run past the last one `page` accepts, or
- * nothing.
- *
- * `page` stops at `PAGINATION_CONFIG.MAX_PAGE`, and a page holds as many whole
- * top-level entries as fit `maxTokens`, so a small budget over a tree with
- * many large top-level entries can need more pages than that. The entries on
- * those pages are reachable only at a larger budget, so the note names the
- * smallest one that fits the whole tree in pages `page` can ask for. No Jamf
- * source comes close: live on 2026-09-26 the most pages any needed was 24, at
- * `maxTokens: 100`, and the most top-level entries any had was 40.
- */
-function pagesPastTheLastNote(costs: number[], maxTokens: number, totalPages: number): string | undefined {
-  const { MAX_PAGE, DEFAULT_PAGE_SIZE } = PAGINATION_CONFIG;
-  if (totalPages <= MAX_PAGE) {
-    return undefined;
-  }
-  // A larger budget never gives more pages, so the smallest that gives few
-  // enough can be found by halving.
-  let enough: number | undefined;
-  let low = maxTokens + 1;
-  let high: number = TOKEN_CONFIG.MAX_TOKENS_LIMIT;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (pageStarts(costs, mid, DEFAULT_PAGE_SIZE).length <= MAX_PAGE) {
-      enough = mid;
-      high = mid - 1;
-    } else {
-      low = mid + 1;
-    }
-  }
-  const over = `At \`maxTokens: ${String(maxTokens)}\` this table of contents needs ${String(totalPages)} pages, ` +
-    `but \`page\` stops at ${String(MAX_PAGE)}, so the entries after page ${String(MAX_PAGE)} cannot be reached at this budget.`;
-  return enough !== undefined
-    ? `${over} Repeat with \`maxTokens: ${String(enough)}\` or more to page through all of it.`
-    : `${over} Not even \`maxTokens: ${String(TOKEN_CONFIG.MAX_TOKENS_LIMIT)}\` fits it in ${String(MAX_PAGE)} pages.`;
-}
-
-/**
  * Page a fetched TOC to a token budget.
  *
  * Callers differ only in what they add on top — `toc-service` carries `mapId`
@@ -180,6 +117,8 @@ function pagesPastTheLastNote(costs: number[], maxTokens: number, totalPages: nu
  * reached 6 of its 20 top-level entries at `maxTokens: 1000` and 17 at the
  * default 5000, and the notice under each cut page advised `page`, which could
  * not reach them. Cutting while walking puts every entry on exactly one page.
+ * The walk is `pageStarts` in budget-pages.ts, which the search's pages have
+ * shared since 2026-09-28.
  *
  * A top-level entry that costs more than `maxTokens` on its own gets a page to
  * itself, cut to the entries of its subtree that fit, in document order. That
@@ -189,7 +128,8 @@ function pagesPastTheLastNote(costs: number[], maxTokens: number, totalPages: nu
  *
  * `hasNext` stops at the last page `page` accepts (`PAGINATION_CONFIG.MAX_PAGE`)
  * even when the budget makes more, and `paginationNote` then names a
- * `maxTokens` that fits the tree in pages it can ask for.
+ * `maxTokens` that fits the tree in pages it can ask for (see
+ * `pagesPastTheLastNote` in budget-pages.ts).
  *
  * The two counts are not the same number and must not be made one: pages are
  * cut from top-level entries, because a page of a tree is a page of its roots,
@@ -231,7 +171,15 @@ export function paginateTocEntries(
 
   const notes = [
     buildPaginationNote({ pageWasClamped: current !== page, requestedPage: page, totalPages }),
-    pagesPastTheLastNote(costs, maxTokens, totalPages),
+    // A small budget over a tree with many large top-level entries can need
+    // more pages than `page` accepts. No Jamf source comes close: live on
+    // 2026-09-26 the most pages any needed was 24, at `maxTokens: 100`, and
+    // the most top-level entries any had was 40.
+    pagesPastTheLastNote(
+      costs,
+      { maxTokens, pageSize, totalPages },
+      { name: 'this table of contents', plural: false, items: 'entries' },
+    ),
   ].filter((note): note is string => note !== undefined);
   const paginationNote = notes.length > 0 ? notes.join(' ') : undefined;
 

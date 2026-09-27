@@ -1280,7 +1280,7 @@ describe('searchDocumentation()', () => {
   // Token truncation — actual truncation of results under small maxTokens
   // ==========================================================================
 
-  it('should truncate results when maxTokens budget is exceeded', async () => {
+  it('should cut pages to maxTokens without leaving any result off every page', async () => {
     // Create 20 results with substantial content to exceed a small token budget
     const entries = Array.from({ length: 20 }, (_, i) =>
       makeTopicEntry({
@@ -1300,6 +1300,7 @@ describe('searchDocumentation()', () => {
         }),
       })
     );
+    // Once: the later pages are read from the cache, as they are live.
     mockedPostJson.mockResolvedValueOnce(
       makeFtResponse([makeCluster(entries)])
     );
@@ -1310,17 +1311,22 @@ describe('searchDocumentation()', () => {
       limit: 20,
     });
 
-    // With only 200 tokens budget, not all 20 results should fit
+    // With only 200 tokens budget, not all 20 results fit on page 1. Until
+    // 2026-09-28 the rest were listed in truncatedContent and were on no page;
+    // now the page ends where the budget does, whole, and the rest follow.
     expect(result.results.length).toBeLessThan(20);
     expect(result.results.length).toBeGreaterThan(0);
-    expect(result.tokenInfo.truncated).toBe(true);
+    expect(result.tokenInfo.truncated).toBe(false);
     expect(result.tokenInfo.tokenCount).toBeLessThanOrEqual(200);
+    expect(result.truncatedContent).toBeUndefined();
+    expect(result.pagination.hasNext).toBe(true);
 
-    // truncatedContent should describe the omitted items
-    expect(result.truncatedContent).toBeDefined();
-    expect(result.truncatedContent!.omittedCount).toBeGreaterThan(0);
-    expect(result.truncatedContent!.omittedCount).toBe(
-      20 - result.results.length
-    );
+    const seen = [...result.results];
+    for (let page = 2; page <= result.pagination.totalPages; page++) {
+      const next = await searchDocumentation(ctx, { query: 'device management', maxTokens: 200, limit: 20, page });
+      expect(next.tokenInfo.tokenCount).toBeLessThanOrEqual(200);
+      seen.push(...next.results);
+    }
+    expect(seen.map(r => r.contentId)).toEqual(entries.map(e => e.topic?.contentId));
   });
 });

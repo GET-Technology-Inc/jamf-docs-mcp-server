@@ -13,7 +13,9 @@ import type {
   FtClusteredSearchResponse,
   FtMetadataEntry,
   FilterRelaxation,
-  TruncatedContentInfo,
+  PaginationInfo,
+  TokenInfo,
+  SearchTruncatedResult,
 } from '../types.js';
 import type { DocTypeId, TopicId } from '../constants.js';
 import {
@@ -48,12 +50,8 @@ import {
 import { sanitizeErrorMessage } from '../utils/sanitize.js';
 import { dedupeResultsToLatestVersions } from './search-result-versions.js';
 import { readSearchProviderResults } from './provider-results.js';
-import {
-  estimateTokens,
-  calculatePagination,
-  truncateListByTokens,
-  buildPaginationNote,
-} from './tokenizer.js';
+import { estimateTokens, buildPaginationNote } from './tokenizer.js';
+import { pageStarts, pagesPastTheLastNote } from './budget-pages.js';
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -925,38 +923,135 @@ function applyFiltersWithFallback(
   return { filtered, relaxation: { removed, original, message: notes.join(' ') } };
 }
 
-// ─── Token Truncation ──────────────────────────────────────────
+// ─── Pages Cut to the Token Budget ─────────────────────────────
 
+/** What a result costs against `maxTokens`: its title, snippet and URL. */
 function resultToString(r: SearchResult): string {
   return `${r.title}\n${r.snippet}\n${r.url}`;
 }
 
-function truncateSearchResults(
-  paginatedResults: SearchResult[],
-  maxTokens: number
-): {
-  finalResults: SearchResult[];
-  finalTokenCount: number;
-  truncated: boolean;
-  truncatedContent?: TruncatedContentInfo;
-} {
-  const { items: finalResults, tokenCount: finalTokenCount, truncated } =
-    truncateListByTokens(paginatedResults, maxTokens, resultToString);
+/**
+ * One result larger than `maxTokens` on its own, with its snippet cut to the
+ * longest start that fits and ended with `…`.
+ *
+ * The title and URL are kept whole: they are what a caller reads the result
+ * by and fetches it with. If they alone are over budget the snippet is `…`,
+ * and the result is still shown: a page that shows nothing reaches nothing.
+ * Cut between code points, so no character is split. Adding a character never
+ * makes the result cheaper, so the longest start that fits is found by
+ * halving.
+ */
+function cutSnippetToFit(result: SearchResult, maxTokens: number): SearchResult {
+  const chars = Array.from(result.snippet);
+  const cutAt = (count: number): SearchResult => ({
+    ...result,
+    snippet: `${chars.slice(0, count).join('').trimEnd()}…`,
+  });
+  let best = 0;
+  let low = 1;
+  let high = chars.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (estimateTokens(resultToString(cutAt(mid))) <= maxTokens) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return cutAt(best);
+}
 
-  if (!truncated) {
-    return { finalResults, finalTokenCount, truncated: false };
+/** One page of a search, as {@link paginateSearchResults} cuts it. */
+interface SearchPage {
+  results: SearchResult[];
+  offset: number;
+  pagination: PaginationInfo;
+  tokenInfo: TokenInfo;
+  paginationNote?: string;
+  truncatedResult?: SearchTruncatedResult;
+}
+
+/**
+ * Page the results of a search to a token budget.
+ *
+ * A page is a run of whole results: as many as fit `maxTokens`, and at most
+ * `pageSize` (the `limit` parameter). The next page starts at the first result
+ * that did not fit. Until 2026-09-28 a page was `pageSize` results cut to the
+ * budget afterwards, and page N+1 still began at result `pageSize`·N, so a
+ * result the cut dropped was on no page. `truncatedContent` listed it, and the
+ * footer advised `page`, which could not reach it. Live on 2026-09-28,
+ * walking every page of `query: "enrollment"` (50 results of 37 to 139
+ * tokens) reached 45 of them at the default budget with `limit: 50`, 42 at
+ * `maxTokens: 1000` with the default `limit: 10`, and none at 100, where every
+ * page was empty. Cutting while walking puts every result on exactly one page.
+ * It is the walk the table of contents' pages take since #351, `pageStarts` in
+ * budget-pages.ts.
+ *
+ * A result that costs more than `maxTokens` on its own gets a page to itself,
+ * with its snippet cut to fit. That page is the only one with
+ * `tokenInfo.truncated`, and `truncatedResult` says which result it is and
+ * what it costs whole. At `maxTokens: 100` that is most of them: live, 38 to
+ * 47 of the 48 to 50 results of each of five queries. One with no snippet to
+ * cut is shown whole even over budget, as a table of contents' leaf is.
+ *
+ * `hasNext` stops at the last page `page` accepts (`PAGINATION_CONFIG.MAX_PAGE`)
+ * even when there are more, and `paginationNote` then says what reaches the
+ * rest (see {@link pagesPastTheLastNote}).
+ */
+function paginateSearchResults(
+  results: SearchResult[],
+  page: number,
+  pageSize: number,
+  maxTokens: number,
+): SearchPage {
+  const costs = results.map(r => estimateTokens(resultToString(r)));
+  const starts = pageStarts(costs, maxTokens, pageSize);
+  const totalPages = starts.length;
+  const current = Math.min(Math.max(1, page), Math.max(totalPages, 1));
+  const start = starts[current - 1] ?? 0;
+  const end = starts[current] ?? results.length;
+
+  let shown = results.slice(start, end);
+  let tokenCount = costs.slice(start, end).reduce((sum, cost) => sum + cost, 0);
+  let truncatedResult: SearchTruncatedResult | undefined;
+
+  const [only] = shown;
+  if (shown.length === 1 && only !== undefined && tokenCount > maxTokens && only.snippet !== '') {
+    const cut = cutSnippetToFit(only, maxTokens);
+    truncatedResult = { title: only.title, estimatedTokens: tokenCount };
+    shown = [cut];
+    tokenCount = estimateTokens(resultToString(cut));
   }
 
-  const omittedResults = paginatedResults.slice(finalResults.length);
-  const truncatedContent: TruncatedContentInfo = {
-    omittedCount: omittedResults.length,
-    omittedItems: omittedResults.map(r => ({
-      title: r.title,
-      estimatedTokens: estimateTokens(resultToString(r)),
-    })),
-  };
+  const notes = [
+    buildPaginationNote({ pageWasClamped: current !== page, requestedPage: page, totalPages }),
+    // The Fluid Topics path asks for 50 results at most, so it never needs
+    // more than 50 pages; only a SearchProvider can return enough for this.
+    pagesPastTheLastNote(
+      costs,
+      { maxTokens, pageSize, totalPages, widestPageSize: CONTENT_LIMITS.MAX_SEARCH_RESULTS },
+      { name: `these ${String(results.length)} results`, plural: true, items: 'results' },
+    ),
+  ].filter((note): note is string => note !== undefined);
 
-  return { finalResults, finalTokenCount, truncated: true, truncatedContent };
+  return {
+    results: shown,
+    offset: start,
+    pagination: {
+      page: current,
+      pageSize,
+      totalPages,
+      totalItems: results.length,
+      // Not past the last page `page` accepts: pointing there would send the
+      // caller to a request the input schema rejects.
+      hasNext: current < Math.min(totalPages, PAGINATION_CONFIG.MAX_PAGE),
+      hasPrev: current > 1,
+    },
+    tokenInfo: { tokenCount, truncated: truncatedResult !== undefined, maxTokens },
+    ...(notes.length > 0 ? { paginationNote: notes.join(' ') } : {}),
+    ...(truncatedResult !== undefined ? { truncatedResult } : {}),
+  };
 }
 
 // ─── Convert flat SearchResult to SearchResultWithMeta ─────────
@@ -1213,8 +1308,7 @@ function searchFailure(params: SearchParams, error: unknown): SearchFailure {
  * 2. Calls ft-client.search() with constructed filters.
  * 3. Transforms results and applies post-processing pipeline:
  *    - Client-side product/topic/docType filtering with progressive relaxation
- *    - Pagination
- *    - Token truncation
+ *    - Pages cut to `maxTokens` (see {@link paginateSearchResults})
  *
  * Does not throw when the search cannot be completed: the result has no
  * results, and `searchError` and `searchErrorMessage` say what failed (see
@@ -1270,38 +1364,24 @@ export async function searchDocumentation(
     ? undefined
     : params.product;
 
-  // Calculate pagination
-  const paginationInfo = calculatePagination(filteredResults.length, page, pageSize);
-
-  const paginatedResults = filteredResults
-    .slice(paginationInfo.startIndex, paginationInfo.endIndex)
+  // Priced as shown: showing a result under the product searched for can
+  // change a stand-in snippet, which names the product.
+  const shownResults = filteredResults
     .map(r => shownUnder === undefined ? r.result : showUnderProduct(r.result, shownUnder));
+  const { results, offset, pagination, tokenInfo, paginationNote, truncatedResult } =
+    paginateSearchResults(shownResults, page, pageSize, maxTokens);
 
-  const { finalResults, finalTokenCount, truncated, truncatedContent } =
-    truncateSearchResults(paginatedResults, maxTokens);
-
-  const paginationNote = buildPaginationNote(paginationInfo);
   const versionNote = buildVersionNote(params.version, fromProvider, filteredResults);
 
   return {
-    results: finalResults,
-    pagination: {
-      page: paginationInfo.page,
-      pageSize: paginationInfo.pageSize,
-      totalPages: paginationInfo.totalPages,
-      totalItems: filteredResults.length,
-      hasNext: paginationInfo.hasNext,
-      hasPrev: paginationInfo.hasPrev,
-    },
-    tokenInfo: {
-      tokenCount: finalTokenCount,
-      truncated,
-      maxTokens,
-    },
+    results,
+    offset,
+    pagination,
+    tokenInfo,
     ...(paginationNote !== undefined ? { paginationNote } : {}),
     ...(versionNote !== undefined ? { versionNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
-    ...(truncatedContent !== undefined ? { truncatedContent } : {}),
+    ...(truncatedResult !== undefined ? { truncatedResult } : {}),
     ...failure,
     ...(rankedBy !== undefined ? { rankedBy } : {}),
   };

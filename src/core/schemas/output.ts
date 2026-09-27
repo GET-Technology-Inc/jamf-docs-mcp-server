@@ -103,6 +103,13 @@ export const SearchOutputSchema = z.object({
   totalPages: z.number(),
   /** Page size, so a client asking for the next page keeps this one's. */
   limit: z.number().optional(),
+  /**
+   * The budget this page was cut to. A page holds as many whole results as
+   * fit it, at most `limit`, so the next page follows this one only when it
+   * is asked for with the same `limit` and `maxTokens`.
+   */
+  maxTokens: z.number().optional(),
+  /** False on the last page `page` accepts, even when `totalPages` is larger. */
   hasMore: z.boolean(),
   results: z.array(z.object({
     title: z.string(),
@@ -170,12 +177,30 @@ export const SearchOutputSchema = z.object({
    * and the client has no way to tell that its request was adjusted.
    */
   paginationNote: z.string().optional(),
+  /**
+   * @deprecated Not sent since 2026-09-28. It listed the results a page's
+   * token budget left out, and those were on no page: page N+1 began at result
+   * `limit`·N whatever the cut dropped. Pages are now cut to `maxTokens` as
+   * they are walked, so no result is left out, and `truncatedResult` names the
+   * one cut left. Still declared, so a payload that carries it still
+   * validates.
+   */
   truncatedContent: z.object({
     omittedCount: z.number(),
     omittedItems: z.array(z.object({
       title: z.string(),
       estimatedTokens: z.number(),
     })),
+  }).optional(),
+  /**
+   * Present on a page that is one result larger than `maxTokens` on its own:
+   * the page shows it alone, with its snippet cut to fit and ended with `…`.
+   * `estimatedTokens` is what the whole result costs, the smallest
+   * `maxTokens` that shows it whole (on whichever page it then falls).
+   */
+  truncatedResult: z.object({
+    title: z.string(),
+    estimatedTokens: z.number(),
   }).optional(),
 });
 

@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/client';
-import type { FilterRelaxation, TruncatedContentInfo, ArticleSection } from '../../src/core/types.js';
+import type { FilterRelaxation, SearchTruncatedResult, ArticleSection } from '../../src/core/types.js';
 import type { FetchArticleResult } from '../../src/core/types.js';
 
 // Mock services
@@ -178,33 +178,33 @@ describe('Integration: Search filter fallback flow', () => {
     expect(json.versionNote).toContain('not available');
   });
 
-  it('should include truncatedContent in JSON when search results truncated', async () => {
-    const truncatedInfo: TruncatedContentInfo = {
-      omittedCount: 3,
-      omittedItems: [
-        { title: 'Omitted 1', estimatedTokens: 100 },
-        { title: 'Omitted 2', estimatedTokens: 150 },
-        { title: 'Omitted 3', estimatedTokens: 120 },
-      ],
-    };
+  it('should include truncatedResult in JSON when a page is one result cut to fit', async () => {
+    // Until 2026-09-28 a page the budget shortened listed the results it left
+    // out in truncatedContent, and those were on no page. Pages are now cut to
+    // maxTokens as they are walked, so no result is left out, and the one cut
+    // left, a result larger than maxTokens on its own, is named in
+    // truncatedResult.
+    const truncatedResult: SearchTruncatedResult = { title: 'Included', estimatedTokens: 139 };
 
     vi.mocked(searchDocumentation).mockResolvedValue({
       results: [
-        { title: 'Included', url: 'https://learn.jamf.com/i.html', snippet: 'Included result content', product: 'Jamf Pro', version: 'current' },
+        { title: 'Included', url: 'https://learn.jamf.com/i.html', snippet: 'Included result…', product: 'Jamf Pro', version: 'current' },
       ],
-      pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 4, hasNext: true, hasPrev: false },
-      tokenInfo: { tokenCount: 50, truncated: true, maxTokens: 100 },
-      truncatedContent: truncatedInfo,
+      pagination: { page: 1, pageSize: 10, totalPages: 4, totalItems: 4, hasNext: true, hasPrev: false },
+      tokenInfo: { tokenCount: 98, truncated: true, maxTokens: 100 },
+      truncatedResult,
     });
 
     const result = await client.callTool({
       name: 'jamf_docs_search',
-      arguments: { query: 'test', responseFormat: 'json' },
+      arguments: { query: 'test', maxTokens: 100, responseFormat: 'json' },
     });
 
     const json = JSON.parse(getText(result));
-    expect(json.truncatedContent).toBeDefined();
-    expect(json.truncatedContent.omittedCount).toBe(3);
+    expect(json.truncatedResult).toEqual(truncatedResult);
+    expect(json.tokenInfo.truncated).toBe(true);
+    expect(json).not.toHaveProperty('truncatedContent');
+    expect(result.structuredContent).toMatchObject({ truncatedResult, maxTokens: 100, hasMore: true });
   });
 });
 
