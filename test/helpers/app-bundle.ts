@@ -152,6 +152,7 @@ export function bundledFunctionsContaining(text: string): string[] {
  * is taken on its own, not with the others declared beside it, which may
  * reach for the DOM. None of the functions the tests take this way touches
  * the DOM, so no browser is needed to run them, only to run the whole bundle.
+ * They are given the one web API they use, `URL` (since 2026-09-28).
  */
 export function bundledFunction(name: string): unknown {
   const file = bundleSource();
@@ -199,5 +200,37 @@ export function bundledFunction(name: string): unknown {
     .sort((a, b) => a.node.pos - b.node.pos)
     .map(declaration => declaration.source)
     .join('\n');
-  return vm.runInNewContext(`${source}\n${name}`);
+  // With `URL`, which a browser has and a context of its own does not: a
+  // function that reads a url would otherwise find none there.
+  return vm.runInNewContext(`${source}\n${name}`, { URL });
+}
+
+/**
+ * The bundle's name for `markdown` in app-ui/markdown.ts: the function
+ * `readQuote` renders a blockquote's lines with, `markdown(body.join('\n'),
+ * options)`. Throws, saying what it looked for, when there is none.
+ */
+export function markdownFunction(): string {
+  const quotes = bundledFunctionsContaining('<blockquote>');
+  const quote = quotes.length === 1 ? bundledDeclaration(quotes[0] ?? '') : undefined;
+  let name: string | undefined;
+  const walk = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+      && node.arguments.at(0)?.getText().includes('.join(') === true) {
+      name = node.expression.text;
+    }
+    ts.forEachChild(node, walk);
+  };
+  if (quote !== undefined) {
+    walk(quote);
+  }
+  if (name === undefined) {
+    throw new Error(
+      `The built bundle has ${String(quotes.length)} function(s) that write a <blockquote>, and none of one that `
+      + 'renders its lines with a call of `.join(…)` (app-ui/markdown.ts: `markdown(body.join(\'\\n\'), options)` '
+      + 'in `readQuote`). If markdown.ts or esbuild changed its shape, update markdownFunction in '
+      + 'test/helpers/app-bundle.ts.',
+    );
+  }
+  return name;
 }

@@ -32,7 +32,7 @@ import { bundleSource, bundledFunction } from '../../helpers/app-bundle.js';
 
 describe('the arguments that run a suggestion from a search with no results', () => {
   it('are the suggestion, in the language the search ran in', () => {
-    // The other filters are not sent: a suggestion is a broader search.
+    // Nor its product and version: see app-suggestion-filters.test.ts.
     expect(suggestionArgs(
       { filters: { product: 'jamf-pro', version: '10.1.0', language: 'zh-TW' } },
       '磁碟 加密 復原',

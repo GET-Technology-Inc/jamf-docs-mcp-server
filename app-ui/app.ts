@@ -31,6 +31,7 @@ import {
   tocBudgetNote,
 } from './toc.js';
 import { budgetNote, renderGlossaryList } from './glossary.js';
+import { inline, markdown, unescaped } from './markdown.js';
 import {
   type SearchTruncatedResult,
   articleArgs,
@@ -43,8 +44,9 @@ import {
   renderNoResults,
   searchBudgetNote,
   suggestionArgs,
+  urlLocale,
 } from './search.js';
-import { hostLanguage } from './language.js';
+import { hostLanguage, translationNote } from './language.js';
 import { toolErrorText } from './tool-error.js';
 
 // ---------------------------------------------------------------------------
@@ -178,7 +180,17 @@ interface GlossaryView {
 type View =
   | { kind: 'search'; data: SearchView }
   | { kind: 'toc'; data: TocView }
-  | { kind: 'article'; data: ArticleView }
+  | {
+    kind: 'article';
+    data: ArticleView;
+    /**
+     * The language the call that fetched it asked for, if it asked for one:
+     * what `contentLocale` is compared with (see `translationNote`). The
+     * payload does not say it, so it is taken from the call: see
+     * {@link asked}.
+     */
+    language?: string;
+  }
   | { kind: 'glossary'; data: GlossaryView }
   | { kind: 'pending'; label: string; rows: number; verb: string }
   | { kind: 'error'; message: string; retry?: { name: string; args: Record<string, unknown>; label?: string } };
@@ -224,6 +236,27 @@ function classify(payload: unknown, toolName?: string): View | null {
     return { kind: 'article', data: p as unknown as ArticleView };
   }
   return null;
+}
+
+/**
+ * `view`, with the language the call that fetched it asked for when it is
+ * an article and the call asked for one: `args` is what `call` sent, or what
+ * the host announced before the model's call ran (`ontoolinput`).
+ *
+ * That is its `language`, or, without one, the locale its url names, which
+ * the server serves the page in where Jamf publishes it: live on
+ * 2026-09-28, the support.jamf.com `/ja/` url of "Get Started with Jamf Now",
+ * which has no ja edition, came back in en-US. A call that names a `mapId` +
+ * `contentId` pair asks for neither: the pair is a topic of one map, in that
+ * map's one language, and the server says `language` has no effect on it.
+ */
+function asked(view: View, args: Record<string, unknown> | undefined): View {
+  if (view.kind !== 'article' || args === undefined
+    || (typeof args.mapId === 'string' && typeof args.contentId === 'string')) {
+    return view;
+  }
+  const language = typeof args.language === 'string' ? args.language : urlLocale(args.url);
+  return language !== undefined ? { ...view, language } : view;
 }
 
 // ---------------------------------------------------------------------------
@@ -339,8 +372,9 @@ function applyHostEnvironment(ctx: Partial<McpUiHostContext>): void {
 }
 
 /**
- * The `language` argument to forward, if the host's locale is one the tools
- * take. Only an article is opened in it: see app-ui/language.ts.
+ * The `language` argument to forward, if the host's locale is read as one the
+ * tools take (`hostLanguage`). Only an article is opened in it: see
+ * app-ui/language.ts.
  */
 function toolLanguage(): { language: string } | Record<string, never> {
   const language = hostLanguage(env.locale);
@@ -365,289 +399,12 @@ function renderableText(value: unknown): value is string {
   return typeof value === 'string' && value !== '';
 }
 
-/** Inline markdown: images, code spans, links, bold, italics. Operates on escaped text. */
-function inline(escaped: string): string {
-  return (
-    escaped
-      // Images first, and as links rather than as `<img>`: the host's sandbox
-      // CSP blocks external image loads, so an `<img>` is a guaranteed broken
-      // icon. Ahead of the link rule because `![a](b)` contains `[a](b)`, and
-      // matching that first would leave a stray `!` in the prose.
-      .replace(/!\[([^\]]*)\]\((https?:[^)\s]+)\)/g, (_m, alt: string, url: string) =>
-        `<a href="${url}" data-external>${alt === '' ? 'image' : alt}</a>`)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" data-external>$1</a>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
-  );
-}
-
-/** Paragraphs that Jamf writes as an advisory, and the kind each maps to. */
-const CALLOUT_KINDS: [RegExp, string, string][] = [
-  [/^(Warning|Caution)\s*:?\s*/i, 'warning', 'Warning'],
-  [/^(Important)\s*:?\s*/i, 'warning', 'Important'],
-  [/^(Note)\s*:?\s*/i, 'info', 'Note'],
-  [/^(Tip)\s*:?\s*/i, 'info', 'Tip'],
-];
-
-/** Split a markdown table row into cells, tolerating optional edge pipes. */
-function tableCells(line: string): string[] {
-  return line
-    .replace(/^\s*\|/, '')
-    .replace(/\|\s*$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
-}
-
-function isTableDivider(line: string | undefined): boolean {
-  return line !== undefined && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(line) && line.includes('-');
-}
-
-/** True for a line that starts a block a paragraph or callout must not absorb. */
-function startsBlock(line: string): boolean {
-  return /^(#{1,6}\s|\s*[-*+]\s|\s*\d+[.)]\s|\s*```|\s*>|\s*\|)/.test(line);
-}
-
-/**
- * What a block parser returns: the HTML it produced and the line to resume at.
- *
- * The parsers are separate functions rather than branches of one loop because
- * the loop that held all of them scored 47 on the complexity rule this repo
- * lints for — and, more to the point, because a table and a callout have
- * genuinely nothing to say to each other.
- */
-interface Block {
-  html: string;
-  next: number;
-}
-
-/** Fenced code, consumed whole so nothing inside is parsed as markdown. */
-function readFence(lines: string[], start: number): Block | null {
-  if (!/^\s*```/.test(lines[start] ?? '')) {
-    return null;
-  }
-  const body: string[] = [];
-  let index = start + 1;
-  while (index < lines.length && !/^\s*```/.test(lines[index] ?? '')) {
-    body.push(esc(lines[index] ?? ''));
-    index++;
-  }
-  // The button is gated on the host actually granting `clipboardWrite`. The
-  // resource asks for it in `_meta.ui.permissions`, but a host may decline, and
-  // `navigator.clipboard.writeText` in a sandboxed iframe without the grant
-  // rejects — so an ungated button would be one that silently does nothing.
-  const copy = env.canCopy ? '<button class="copy" data-copy type="button">Copy</button>' : '';
-  return {
-    html: `<div class="pre-wrap"><pre><code>${body.join('\n')}</code></pre>${copy}</div>`,
-    next: index + 1,
-  };
-}
-
-/**
- * An ATX heading, capped at `h4`.
- *
- * Left uncapped, `h5`/`h6` fall through to the user-agent's defaults, which are
- * *smaller than body text* — a heading that renders smaller than the paragraph
- * beneath it inverts the hierarchy in the middle of an article.
- */
-function readHeading(lines: string[], start: number): Block | null {
-  const match = /^(#{1,6})\s+(.*)$/.exec(lines[start] ?? '');
-  if (match === null) {
-    return null;
-  }
-  const level = Math.min((match[1] ?? '').length + 1, 4);
-  return {
-    html: `<h${String(level)}>${inline(esc(match[2] ?? ''))}</h${String(level)}>`,
-    next: start + 1,
-  };
-}
-
-/** A thematic break. Checked before lists, since `---` would read as a bullet. */
-function readRule(lines: string[], start: number): Block | null {
-  return /^\s*([-*_])\s*\1\s*\1[\s\-*_]*$/.test(lines[start] ?? '')
-    ? { html: '<hr>', next: start + 1 }
-    : null;
-}
-
-/**
- * A pipe table: a header row followed by a divider row.
- *
- * There was no table branch at all before this, despite the function's own
- * docstring claiming "tables collapsed to rows" — so a Jamf settings reference
- * rendered as a run of literal pipe characters.
- */
-function readTable(lines: string[], start: number): Block | null {
-  const header = (lines[start] ?? '').trim();
-  if (!header.includes('|') || !isTableDivider(lines[start + 1])) {
-    return null;
-  }
-  let index = start + 2;
-  const body: string[][] = [];
-  while (index < lines.length && (lines[index] ?? '').includes('|')) {
-    const row = (lines[index] ?? '').trim();
-    if (row === '') {
-      break;
-    }
-    body.push(tableCells(row));
-    index++;
-  }
-  const head = tableCells(header)
-    .map((cell) => `<th>${inline(esc(cell))}</th>`)
-    .join('');
-  const rows = body
-    .map((cells) => `<tr>${cells.map((c) => `<td>${inline(esc(c))}</td>`).join('')}</tr>`)
-    .join('');
-  return {
-    html:
-      `<div class="table-wrap"><table><thead><tr>${head}</tr></thead>`
-      + `<tbody>${rows}</tbody></table></div>`,
-    next: index,
-  };
-}
-
-function readQuote(lines: string[], start: number): Block | null {
-  if (!/^\s*>\s?/.test(lines[start] ?? '')) {
-    return null;
-  }
-  const body: string[] = [];
-  let index = start;
-  while (index < lines.length && /^\s*>\s?/.test(lines[index] ?? '')) {
-    body.push((lines[index] ?? '').replace(/^\s*>\s?/, ''));
-    index++;
-  }
-  return { html: `<blockquote>${markdown(body.join('\n'))}</blockquote>`, next: index };
-}
-
-/**
- * A `Note:` / `Important:` / `Warning:` / `Tip:` advisory.
- *
- * Jamf writes these as a bare label on its own line, then a blank line, then
- * the text — so the body is collected *across* one blank line rather than up to
- * it. Stopping at the blank line produced an advisory box with a heading and
- * nothing in it, and left the sentence it was meant to contain outside as an
- * unrelated paragraph.
- */
-function readCallout(lines: string[], start: number): Block | null {
-  const first = (lines[start] ?? '').trim();
-  const match = CALLOUT_KINDS.find(([pattern]) => pattern.test(first));
-  if (match === undefined) {
-    return null;
-  }
-  const [pattern, kind, label] = match;
-  const head = first.replace(pattern, '').trim();
-  const body: string[] = head === '' ? [] : [head];
-  let index = start + 1;
-
-  if (body.length === 0) {
-    while (index < lines.length && (lines[index] ?? '').trim() === '') {
-      index++;
-    }
-  }
-  while (index < lines.length && (lines[index] ?? '').trim() !== '') {
-    const line = (lines[index] ?? '').trim();
-    if (startsBlock(line)) {
-      break;
-    }
-    body.push(line);
-    index++;
-  }
-
-  const text = body.join(' ').trim();
-  // A label with nothing under it is not an advisory, it is a stray word.
-  if (text === '') {
-    return null;
-  }
-  return {
-    html:
-      `<div class="callout" data-kind="${kind}"><span class="callout-label">${label}</span>`
-      + `<p>${inline(esc(text))}</p></div>`,
-    next: index,
-  };
-}
-
-/** The block parsers, in the order they must be tried. */
-const BLOCKS = [readFence, readRule, readHeading, readTable, readQuote, readCallout];
-
-/**
- * A deliberately small markdown subset, matched to what Jamf articles contain.
- *
- * Beyond the original headings/code/lists/paragraphs it handles tables, nested
- * lists, blockquotes, thematic breaks and advisory callouts. Two of those are
- * corrections rather than additions — see {@link readTable}, and the nesting
- * note in the list branch below.
- */
-function markdown(source: string): string {
-  const out: string[] = [];
-  const lines = source.split('\n');
-  /** Open list elements, outermost first, with the indent column each began at. */
-  const lists: { tag: 'ul' | 'ol'; indent: number }[] = [];
-  let index = 0;
-
-  const closeLists = (toIndent = -1): void => {
-    while (lists.length > 0 && (lists[lists.length - 1]?.indent ?? 0) > toIndent) {
-      out.push(`</${lists.pop()?.tag ?? 'ul'}>`);
-    }
-  };
-
-  while (index < lines.length) {
-    const line = (lines[index] ?? '').replace(/\s+$/, '');
-
-    if (line.trim() === '') {
-      closeLists();
-      index++;
-      continue;
-    }
-
-    const bullet = /^(\s*)[-*+]\s+(.*)$/.exec(line);
-    const numbered = /^(\s*)\d+[.)]\s+(.*)$/.exec(line);
-    const item = bullet ?? numbered;
-    if (item !== null && readRule(lines, index) === null) {
-      const tag = bullet !== null ? 'ul' : 'ol';
-      const indent = (item[1] ?? '').length;
-      // Indentation is the only signal markdown gives for nesting, and ignoring
-      // it is what flattened every sub-step of a Jamf procedure into a sibling
-      // of the step above it.
-      closeLists(indent);
-      const innermost = lists[lists.length - 1];
-      if (innermost === undefined || indent > innermost.indent) {
-        out.push(`<${tag}>`);
-        lists.push({ tag, indent });
-      } else if (innermost.tag !== tag) {
-        out.push(`</${lists.pop()?.tag ?? 'ul'}>`);
-        out.push(`<${tag}>`);
-        lists.push({ tag, indent });
-      }
-      out.push(`<li>${inline(esc(item[2] ?? ''))}</li>`);
-      index++;
-      continue;
-    }
-
-    const block = BLOCKS.reduce<Block | null>(
-      (found, parse) => found ?? parse(lines, index),
-      null,
-    );
-    if (block !== null) {
-      closeLists();
-      out.push(block.html);
-      index = block.next;
-      continue;
-    }
-
-    closeLists();
-    out.push(`<p>${inline(esc(line.trim()))}</p>`);
-    index++;
-  }
-
-  closeLists();
-  return out.join('\n');
-}
-
 /**
  * Stamp the server's section ids onto the rendered headings.
  *
  * Positional but title-verified, because the zip is not safe on its own:
  * `extractSections()` on the server scans for ATX headings line by line with
- * no fenced-code tracking, while `markdown()` above consumes fences whole. A
+ * no fenced-code tracking, while `markdown()` consumes fences whole. A
  * `# comment` inside a code block is therefore a section server-side and code
  * text here, and every index after it is off by one — silently, producing a
  * navigation list whose links all land one heading early. Compact mode
@@ -923,11 +680,17 @@ function renderSearch(view: SearchView): string {
     if (opensOutside(r)) {
       return renderExternalHit(r, meta);
     }
+    // The snippet is text, not markdown, as it is on a result that opens
+    // outside: the excerpt of the page, decoded (#371). Until 2026-09-28 it
+    // was read as markdown: live that day, 6 of the 68 snippets of 7 searches
+    // lost two asterisks to an italic ("Use an asterisk (*) …"), and read with
+    // the escapes `inline` now honours, 15 would have lost an asterisk or a
+    // backslash ("Do not include a backslash "\" in your file path.").
     return `
       <li><a class="hit" href="${esc(r.url)}" data-url="${esc(r.url)}"${hitIdAttributes(r)}>
         ${crumbs(r.breadcrumb, 'hit-path', r.title)}
         <span class="hit-title">${esc(r.title)}</span>
-        ${renderableText(r.snippet) ? `<span class="hit-snippet">${inline(esc(r.snippet))}</span>` : ''}
+        ${renderableText(r.snippet) ? `<span class="hit-snippet">${esc(r.snippet)}</span>` : ''}
         ${meta.length > 0 ? `<span class="hit-meta">${esc(meta.join(' · '))}</span>` : ''}
       </a></li>`;
   };
@@ -1111,18 +874,19 @@ function articleFooter(previewed: boolean, budgeted: boolean): string {
   return `${expand}${truncated}`;
 }
 
-/** Breadcrumb, title, provenance line and the two article-level advisories. */
-function articleHeader(view: ArticleView, tree: ArticleView['navigation']): string {
+/**
+ * Breadcrumb, title, provenance line and the two article-level advisories.
+ * `language` is the one the page was asked for in, if it was asked for in
+ * one: see `translationNote`.
+ */
+function articleHeader(view: ArticleView, tree: ArticleView['navigation'], language: string | undefined): string {
   const version = versionLabel(view.version);
   const updated = formatDate(view.lastUpdated);
   const superseded =
     view.versionStatus === 'superseded'
       ? notice('This page documents a superseded release.', 'warning')
       : '';
-  const translated =
-    renderableText(view.contentLocale) && view.contentLocale !== env.locale
-      ? notice(`Shown in ${view.contentLocale} — Jamf publishes no translation for your locale.`)
-      : '';
+  const translated = notice(translationNote(view.contentLocale, language, env.locale));
   return `
     <header class="head">
       ${isFullscreen() ? crumbs(view.breadcrumb, 'head-path', view.title, tree?.parent?.title) : ''}
@@ -1137,9 +901,9 @@ function articleHeader(view: ArticleView, tree: ArticleView['navigation']): stri
     </header>`;
 }
 
-function renderArticle(view: ArticleView, canGoBack: boolean): string {
+function renderArticle(view: ArticleView, canGoBack: boolean, language: string | undefined): string {
   const prose = inlineProse(view.content);
-  const body = markdown(prose.text);
+  const body = markdown(prose.text, { copy: env.canCopy });
   const sections = Array.isArray(view.sections) ? view.sections : [];
   const { html, used } = stampIds(body, sections);
 
@@ -1153,8 +917,9 @@ function renderArticle(view: ArticleView, canGoBack: boolean): string {
       ? `<nav class="mini" aria-label="On this page">${nav
           .map(
             (s) =>
+              // The title with its escapes read, as the heading above reads them.
               `<a class="mini-item" href="#${esc(s.id)}" data-anchor="${esc(s.id)}"`
-              + ` style="--depth:${String(Math.max(0, Math.min(2, s.level - 2)))}">${esc(s.title)}</a>`,
+              + ` style="--depth:${String(Math.max(0, Math.min(2, s.level - 2)))}">${unescaped(esc(s.title))}</a>`,
           )
           .join('')}</nav>`
       : '';
@@ -1193,7 +958,7 @@ function renderArticle(view: ArticleView, canGoBack: boolean): string {
 
   return `
     ${bar}
-    ${articleHeader(view, tree)}
+    ${articleHeader(view, tree, language)}
     <div class="article-body">
       ${mini}
       <article class="prose" id="prose">${html}</article>
@@ -1237,7 +1002,7 @@ function renderGlossary(view: GlossaryView): string {
         ])}
       </header>
       ${incomplete}
-      <div class="prose">${markdown(only.definition)}</div>
+      <div class="prose">${markdown(only.definition, { copy: env.canCopy })}</div>
       ${omitted}`;
   }
 
@@ -1351,7 +1116,7 @@ function paint(): void {
       : current.kind === 'toc'
         ? renderToc(current.data)
         : current.kind === 'article'
-          ? renderArticle(current.data, history.length > 0)
+          ? renderArticle(current.data, history.length > 0, current.language)
           : current.kind === 'glossary'
             ? renderGlossary(current.data)
             : renderPending(current.label, current.rows, current.verb);
@@ -1453,7 +1218,7 @@ async function call(
     }
     const view = classify(payloadOf(result), name);
     show(
-      view ?? {
+      view !== null ? asked(view, args) : {
         kind: 'error',
         message: `${name} returned nothing renderable.`,
         retry: { name, args, ...(pendingLabel !== undefined ? { label: pendingLabel } : {}) },
@@ -1498,8 +1263,16 @@ app.onhostcontextchanged = (ctx) => {
   paint();
 };
 
+/**
+ * The arguments of the model's call, as the host announced them before it
+ * ran: the result that follows is read with them (see {@link asked}). Unset
+ * until a host announces some.
+ */
+let toolArguments: Record<string, unknown> | undefined;
+
 app.ontoolinput = (params) => {
   const args = params.arguments ?? {};
+  toolArguments = args;
   const label = renderableText(args.query)
     ? args.query
     : renderableText(args.term)
@@ -1543,7 +1316,7 @@ app.ontoolresult = (result) => {
   if (view !== null) {
     seq++;
     history.length = 0;
-    show(view, false);
+    show(asked(view, toolArguments), false);
   }
 };
 
@@ -1696,8 +1469,8 @@ root.addEventListener('click', (event) => {
   const suggestion = target.closest<HTMLElement>('[data-search]');
   if (suggestion?.dataset.search !== undefined) {
     // In the language of the search on screen, which the suggestion was made
-    // for (see search.ts), taken from the view as the paging arguments below
-    // are.
+    // for, and under its topic (see search.ts), taken from the view as the
+    // paging arguments below are.
     const { search } = suggestion.dataset;
     void call(
       'jamf_docs_search',

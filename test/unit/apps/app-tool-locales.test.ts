@@ -61,8 +61,10 @@ describe('the locales the App forwards', () => {
     }
   });
 
-  it('forward nothing for any other host locale, which would fail the call', () => {
-    for (const locale of ['ko-KR', 'en', 'en-GB', 'zh-Hant-TW', '', undefined, 7]) {
+  it('forward nothing for a host locale in no language they take, which would fail the call', () => {
+    // `en`, `en-GB` and `zh-Hant-TW` are read as en-US and zh-TW since
+    // 2026-09-28: see app-host-locale.test.ts.
+    for (const locale of ['ko-KR', '', undefined, 7]) {
       expect(hostLanguage(locale)).toBeUndefined();
     }
   });
