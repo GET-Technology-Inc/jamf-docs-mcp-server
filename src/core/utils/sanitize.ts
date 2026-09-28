@@ -73,7 +73,27 @@ export function sanitizeErrorMessage(message: string): string {
  *
  * A slug can spell any of them as an escape, which `titleFromSlug` keeps as
  * written. A title a static source lists for a page is stripped of them
- * (static-titles.ts), since 2026-09-28, when this moved here from
+ * ({@link listedTitle}), since 2026-09-28, when this moved here from
  * sitemap-service.ts. `sanitizeMarkdownText` removes none of them.
  */
 export const UNSAFE_IN_TITLE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A title as a listing gives it, fit to show: each run of whitespace, a
+ * newline or a no-break space among them, made one space; the characters no
+ * title may carry ({@link UNSAFE_IN_TITLE}) removed; and trimmed. Undefined
+ * for one that leaves nothing.
+ *
+ * `titleFromSlug` keeps such a character out of a title made from a slug, and
+ * a listed title must not bring one in. Of support.jamf.com's 820 en titles,
+ * 10 hold a double space and one ends in a no-break space (2026-09-28).
+ *
+ * Read by the search title index and concepts.jamf.com's tables of contents
+ * (static-titles.ts), and, since 2026-09-28, when this moved here from there,
+ * by a support.jamf.com collection's list of articles and an article's
+ * related articles (intercom-service.ts).
+ */
+export function listedTitle(text: string): string | undefined {
+  const title = text.replace(/\s+/g, ' ').replace(UNSAFE_IN_TITLE, '').replace(/ {2,}/g, ' ').trim();
+  return title === '' ? undefined : title;
+}

@@ -97,7 +97,7 @@ describe('renderBlock', () => {
     // ordinary paragraph turns "do not do this" into a suggestion.
     const out = renderBlock({
       type: 'callout',
-      style: 'warning',
+      style: { backgroundColor: '#fed9db80', borderColor: '#fd3a5733' },
       content: [{ type: 'paragraph', text: 'Do not do this.' }],
     });
     expect(out).toContain('> Do not do this.');
@@ -575,7 +575,10 @@ describe('fetchIntercomCollectionToc', () => {
     expect(await fetchIntercomCollectionToc(ctx, SUPPORT, COLLECTION)).toEqual([]);
 
     expect(mockHttpGetText).toHaveBeenCalledTimes(2);
-    expect(ctx.cache.set).not.toHaveBeenCalled();
+    // Only what jamf_docs_get_article reads from the page is kept of it
+    // (static-article-cache.ts), and no tree.
+    expect(vi.mocked(ctx.cache.set).mock.calls.map(([key]) => key.split(':')[0]))
+      .toEqual(['static-article-v3', 'static-article-v3']);
   });
 });
 

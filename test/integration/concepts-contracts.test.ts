@@ -32,7 +32,9 @@
  * Cost, measured 2026-09-14: one sitemap (~6 KB) plus SAMPLE_SIZE pages,
  * CONCURRENCY at a time — a few seconds against the job's 5-minute timeout.
  * Since 2026-09-28 each declared locale's two section index pages too, 16 of
- * 108 to 181 KB, where the titles are listed (static-titles.ts).
+ * 108 to 181 KB, where the titles are listed (static-titles.ts), one page
+ * by its path with no locale code, which is two requests of about 12 KB and
+ * the size of the page, and the en edition's root, about 300 KB.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -332,6 +334,44 @@ describe('concepts.jamf.com contracts', () => {
         ).toBeLessThanOrEqual(0.1);
       }
     }
+  });
+
+  /**
+   * The site answers a page's path with no locale code with a 200 that sends
+   * a browser to the en page (`<meta http-equiv="refresh">`), titled
+   * "Redirecting...", which `fetchStaticArticle` follows (`refreshTarget`).
+   * Live, it answered each of the 98 paths the sitemap lists under `en` so
+   * (2026-09-28). Were the site to redirect some other way, the stub, or the
+   * url it was asked by, would be served as the page again: so this asks
+   * the service, and pins that it serves the en page under its own url.
+   */
+  it('serves a page asked for by its path with no locale code as the en page', async () => {
+    const leaf = entries.find(entry => entry.segments[0] === 'en' && entry.segments.length >= 3);
+    if (leaf === undefined) { throw new Error('sitemap carries no en page to test'); }
+    const canonical = canonicalStaticUrl(SOURCE, leaf.url);
+    const { pathname } = new URL(canonical);
+
+    const article = await fetchStaticArticle(createMockContext(), SOURCE, `${SOURCE.baseUrl}${pathname.slice('/en'.length)}`);
+    expect(article.url, `${pathname} without its locale code`).toBe(canonical);
+    expect(article.title).not.toMatch(/^Redirecting/);
+    expect(article.content).not.toMatch(/^Redirecting to /);
+  });
+
+  /**
+   * The site root is not a page: a shell whose script picks an edition in the
+   * browser, whose only text is "Loading...". `fetchStaticArticle` reads it
+   * as the root of the en edition, without asking for it (`rootEdition`), or
+   * of the edition `language` asks for, which falls back to en where there is
+   * none. So this pins that the en edition's root is a page, served under its
+   * own url. Live, each of the ten codes' roots was (2026-09-28).
+   */
+  it('serves the site root as the en edition\'s root, a page of its own', async () => {
+    const article = await fetchStaticArticle(createMockContext(), SOURCE, `${SOURCE.baseUrl}/`);
+    expect(article.url).toBe(`${SOURCE.baseUrl}/en/`);
+    // What the page says, ahead of the provenance line every page ends with.
+    const [body = ''] = article.content.split('\n\n---\n\n');
+    expect(body.trim()).not.toBe('');
+    expect(body.trim()).not.toBe('Loading...');
   });
 
   it('reads the breadcrumb trail off the guides that publish one', () => {

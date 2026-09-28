@@ -23,7 +23,7 @@
  * the page asked for is served in its place, with a note.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
@@ -31,11 +31,13 @@ import { registerBatchGetArticlesTool } from '../../../src/core/tools/batch-get-
 import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../../src/core/constants/sources.js';
 import { SUPPORTED_LOCALE_IDS } from '../../../src/core/constants/locales.js';
 import { HttpError } from '../../../src/core/http-client.js';
+import { staticArticleKey } from '../../../src/core/services/static-article-cache.js';
 import { createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 import {
   ENGLISH_ONLY_PATH,
   aiGovernanceBody,
+  conceptsPage,
   conceptsUrl,
   createStaticEditionsUpstream,
   editionUrl,
@@ -203,8 +205,12 @@ describe('jamf_docs_get_article: `language` on a concepts.jamf.com url', () => {
     expect(requests).toEqual([AI_GOVERNANCE_EN]);
   });
 
-  it('says the language was not applied to a url whose path names no locale', async () => {
+  // No such page is live: the site answers every path the sitemap lists
+  // under `en`, without its code, with a page that sends a browser to the en
+  // one, which is read as that page (get-article-concepts-redirect.test.ts).
+  it('says the language was not applied to a url whose path names no locale, where the page is its own', async () => {
     const unprefixed = `${CONCEPTS.baseUrl}/${AI_GOVERNANCE}/`;
+    upstream.pages.set(unprefixed, conceptsPage('AI Governance', 'The unprefixed page.'));
 
     for (const channel of await everyChannel({ url: unprefixed, language: 'ja-JP' })) {
       expect(channel.url).toBe(unprefixed);
@@ -373,6 +379,21 @@ describe('jamf_docs_get_article: `language` on a support.jamf.com url', () => {
     for (const channel of await everyChannel({ url: fragment, language: 'ja-JP' })) {
       expect(channel.url).toBe(RENEW_JA);
     }
+  });
+
+  // Until 2026-09-28 the fragment went into the request and the cache key, so
+  // each fragment of one url was a request and an entry of its own.
+  it('reads two fragments of one url as one page: one request, and one entry', async () => {
+    vi.mocked(ctx.cache.set).mockClear();
+    for (const fragment of ['#h_b35069b35c', '#h_other']) {
+      for (const channel of await everyChannel({ url: `${RENEW_EN}${fragment}` })) {
+        expect(channel.url).toBe(`${RENEW_EN}${fragment}`);
+      }
+    }
+
+    expect(requests).toEqual([RENEW_EN]);
+    expect(vi.mocked(ctx.cache.set).mock.calls.map(([key]) => key).filter(key => key.startsWith('static-article-v3:')))
+      .toEqual([staticArticleKey(SUPPORT, RENEW_EN)]);
   });
 
   describe('on a page that does not list its editions', () => {

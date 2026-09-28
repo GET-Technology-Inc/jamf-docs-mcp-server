@@ -8,7 +8,11 @@
  *   the same 99 paths under each of its ten codes, and `/ja/guides/ai-governance/`
  *   is the Japanese edition of `/en/guides/ai-governance/`. A code it does not
  *   publish in (`th`, `it`, `pt-BR`) is a 404, and so is a path it does not
- *   have. `/guides/ai-governance/`, with no code, answers 200 too.
+ *   have. `/guides/ai-governance/`, with no code, answers 200 too, with a
+ *   page that only sends a browser to the en one ({@link conceptsRedirectStub}),
+ *   as each of the 98 paths the sitemap lists under `en` does without its
+ *   code. Each code's root, `/en/` or `/ja/`, is a page, and the site root
+ *   is a shell whose script picks one in the browser ({@link CONCEPTS_ROOT_SHELL}).
  * - support.jamf.com keeps an article's or a collection's Intercom id in every
  *   locale, and each page lists its editions in `localeLinks`
  *   (fixtures/support-editions.ts). `/<code>/articles/<id>-<any slug>` is a
@@ -46,6 +50,30 @@ export function aiGovernanceBody(code: string): string {
   return AI_GOVERNANCE_BODY[code] ?? `The ${code} edition of the AI Governance guide.`;
 }
 
+/** The opening line of the root of two of concepts.jamf.com's editions, as served. */
+export const CONCEPTS_ROOT_BODY: Readonly<Record<string, string>> = {
+  en: 'Jamf Concepts is our innovation lab, a space where employees build tools, apps, and integrations for emerging customer needs.',
+  ja: 'Jamf Conceptsは私たちのイノベーションラボです。',
+};
+
+/** The line the stub serves at the root of an edition: the live one where captured. */
+export function conceptsRootBody(code: string): string {
+  return CONCEPTS_ROOT_BODY[code] ?? `The ${code} edition of Jamf Concepts.`;
+}
+
+/**
+ * What concepts.jamf.com answers its root, `/`, with, as it did on
+ * 2026-09-28, trimmed: a 10 KB shell whose script picks an edition in the
+ * browser, titled "Jamf Concepts", whose only text is "Loading...", and with
+ * no refresh to follow.
+ */
+export const CONCEPTS_ROOT_SHELL = '<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/>' +
+  '<title>Jamf Concepts</title>' +
+  '<meta name="description" content="Jamf Concepts showcases innovative solutions, apps, and utilities built by Jamf employees."/>' +
+  '</head><body class="min-h-screen bg-bg-primary text-text-primary antialiased flex flex-col"><div hidden=""></div>' +
+  '<div class="min-h-screen flex items-center justify-center"><div class="animate-pulse text-text-secondary">Loading...</div></div>' +
+  '</body></html>';
+
 /** A concepts.jamf.com page, in its locale code `code`. */
 export function conceptsUrl(code: string, path: string): string {
   return `${CONCEPTS.baseUrl}/${code}/${path}/`;
@@ -54,7 +82,8 @@ export function conceptsUrl(code: string, path: string): string {
 /** A page this stub serves in en and in no other locale, as no live one is. */
 export const ENGLISH_ONLY_PATH = 'guides/english-only';
 
-function conceptsPage(title: string, body: string): string {
+/** A concepts.jamf.com page titled `title`, whose article is the one paragraph `body`. */
+export function conceptsPage(title: string, body: string): string {
   return `<!doctype html><html><head><title>${title} | Jamf Concepts</title>` +
     `<meta property="og:title" content="${title}"></head><body>` +
     '<header><nav><a href="/en/guides/">Guides</a></nav></header>' +
@@ -62,17 +91,39 @@ function conceptsPage(title: string, body: string): string {
     '</body></html>';
 }
 
+/**
+ * What concepts.jamf.com answers a page's path with no locale code with, as
+ * it answered `/guides/ai-governance/` on 2026-09-28, trimmed: a 200 whose
+ * `<meta http-equiv="refresh">` and `<link rel="canonical">` name the en page,
+ * spelled without its trailing slash, and whose title and body say only
+ * "Redirecting". `target` is that root-relative path.
+ */
+export function conceptsRedirectStub(target: string): string {
+  return '<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/>' +
+    `<meta http-equiv="refresh" content="0;url=${target}"/><link rel="canonical" href="${target}"/>` +
+    '<title>Redirecting...</title><title>Redirecting...</title>' +
+    '<meta name="description" content="Jamf Concepts showcases innovative solutions, apps, and utilities built by Jamf employees."/>' +
+    '<meta name="robots" content="noindex, follow"/></head>' +
+    '<body class="min-h-screen bg-bg-primary text-text-primary antialiased flex flex-col"><div hidden=""></div>' +
+    `<p>Redirecting to <a href="${target}">${target}</a>...</p></body></html>`;
+}
+
 function concepts(pathname: string): string {
   const segments = pathname.split('/').filter(Boolean);
-  const path = segments.join('/');
-  if (path === 'guides/ai-governance') {
-    return conceptsPage('AI Governance', 'The unprefixed page.');
-  }
   const [code = '', ...rest] = segments;
   const tail = rest.join('/');
+  if (segments.length === 0) { return CONCEPTS_ROOT_SHELL; }
   if ((CONCEPTS_SITE_CODES as readonly string[]).includes(code)) {
+    if (tail === '') { return conceptsPage('Jamf Concepts', conceptsRootBody(code)); }
     if (tail === 'guides/ai-governance') { return conceptsPage('AI Governance', aiGovernanceBody(code)); }
     if (tail === ENGLISH_ONLY_PATH && code === 'en') { return conceptsPage('English Only', 'Published in English only.'); }
+  } else {
+    // A path with no locale code: the stub, for a page the en edition has,
+    // and a 404 for any other, as `/guides/no-such-page/` is live.
+    const path = segments.join('/');
+    let enPage = true;
+    try { concepts(`/en/${path}/`); } catch { enPage = false; }
+    if (enPage) { return conceptsRedirectStub(`/en/${path}`); }
   }
   throw new HttpError(404, '', `${CONCEPTS.baseUrl}${pathname}`);
 }
@@ -101,7 +152,8 @@ function localeLinks(page: SupportPageFixture<unknown>, code: string): unknown[]
 function articlePage(page: SupportPageFixture<ArticleEditionFixture>, code: string): string {
   const edition = page.editions[code];
   return nextDataPage({
-    articleContent: { title: edition.title, blocks: edition.blocks, markdown: null },
+    // Every live article lists some; an edition with none captured lists none.
+    articleContent: { title: edition.title, blocks: edition.blocks, markdown: null, relatedArticles: edition.relatedArticles ?? [] },
     breadcrumbs: edition.breadcrumbs,
     localeLinks: localeLinks(page, code),
     intl: { locale: code },

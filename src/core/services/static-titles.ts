@@ -32,7 +32,7 @@ import { fetchIntercomCollectionToc, listIntercomCollections } from './intercom-
 import { canonicalStaticUrl, type StaticDocSource, type StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { TocEntry } from '../types.js';
-import { UNSAFE_IN_TITLE } from '../utils/sanitize.js';
+import { listedTitle } from '../utils/sanitize.js';
 
 /** The titles one locale of a source lists, and where they could not be read. */
 export interface ListedTitles {
@@ -97,21 +97,6 @@ export async function loadListedTitles(
     order,
     unread: read.flatMap(({ unread }) => unread === undefined ? [] : [unread]),
   };
-}
-
-/**
- * A title as a listing gives it, fit to show: each run of whitespace, a
- * newline or a no-break space among them, made one space; the characters no
- * title may carry ({@link UNSAFE_IN_TITLE}) removed; and trimmed. Undefined
- * for one that leaves nothing.
- *
- * `titleFromSlug` keeps such a character out of a title made from a slug, and
- * a listed title must not bring one in. Of support.jamf.com's 820 en titles,
- * 10 hold a double space and one ends in a no-break space (2026-09-28).
- */
-function listedTitle(text: string): string | undefined {
-  const title = text.replace(/\s+/g, ' ').replace(UNSAFE_IN_TITLE, '').replace(/ {2,}/g, ' ').trim();
-  return title === '' ? undefined : title;
 }
 
 /** Log a listing page that could not be read, as `list_products` logs a listing it could not. */
