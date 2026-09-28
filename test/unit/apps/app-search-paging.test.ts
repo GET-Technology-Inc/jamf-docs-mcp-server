@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 
 import { nextSearchPageArgs, searchBudgetNote, type SearchPaging } from '../../../app-ui/search.js';
 import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
+import { showMoreArgsFunction } from '../../helpers/app-bundle.js';
 
 describe('the next page of a search', () => {
   it('is asked for at the budget and page size the page on screen was cut to', () => {
@@ -114,10 +115,7 @@ describe('the built bundle', () => {
     const builder = /function ([\w$]+)\([\w$]+\)\{(?:(?!function ).)*$/s.exec(builds[0] ?? '')?.[1];
     expect(builder).toBeDefined();
 
-    const click = /"button\[data-more\]"\)!==null\)\{let ([\w$]+)=[\w$]+!==null\?([\w$]+)\([\w$]+\):null;\1!==null&&[\w$]+\(\1\.name,\1\.args,!0\)/
-      .exec(APP_HTML);
-    expect(click).not.toBeNull();
-    const pageArgs = literal(click?.[2] ?? '');
+    const pageArgs = literal(showMoreArgsFunction());
     expect(APP_HTML).toMatch(new RegExp(
       `function ${pageArgs}\\(([\\w$]+)\\)\\{return \\1\\.kind==="search"\\?${literal(builder ?? '')}\\(\\1\\.data\\):`,
     ));

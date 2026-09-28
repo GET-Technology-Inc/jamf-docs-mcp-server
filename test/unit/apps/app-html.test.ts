@@ -19,9 +19,10 @@
  * into it.
  *
  * Everything here scans with plain string operations over a lower-cased copy
- * rather than with regular expressions. HTML tag syntax has more slack than a
- * pattern comfortably expresses — `<SCRIPT>`, `</script >` — and a matcher
- * that quietly misses a spelling would report a well-formed document without
+ * rather than with regular expressions (`occurrences` and `inlinedScript`, in
+ * test/helpers/app-bundle.ts). HTML tag syntax has more slack than a pattern
+ * comfortably expresses — `<SCRIPT>`, `</script >` — and a matcher that
+ * quietly misses a spelling would report a well-formed document without
  * having looked at the one that matters.
  */
 
@@ -31,44 +32,7 @@ import { createHash } from 'node:crypto';
 
 import { APP_HTML, APP_HTML_HASH } from '../../../src/core/apps/generated/app-html.js';
 import { APP_RESOURCE_URI, appToolMeta } from '../../../src/core/apps/index.js';
-
-const LOWER = APP_HTML.toLowerCase();
-
-/** Every index at which `needle` occurs in the lower-cased document. */
-function occurrences(needle: string): number[] {
-  const found: number[] = [];
-  for (let i = LOWER.indexOf(needle); i !== -1; i = LOWER.indexOf(needle, i + 1)) {
-    found.push(i);
-  }
-  return found;
-}
-
-/**
- * The contents of the single inlined `<script>` element.
- *
- * The bundle escapes its own `</script>` occurrences as `<\/script>`, so the
- * document contains exactly one opening and one closing tag and the span
- * between them is the whole script.
- */
-function inlinedScript(): string {
-  const opens = occurrences('<script');
-  const closes = occurrences('</script');
-  if (opens.length !== 1 || closes.length !== 1) {
-    throw new Error(
-      `expected exactly one script element, found ${String(opens.length)} open `
-      + `and ${String(closes.length)} close tag(s)`,
-    );
-  }
-
-  // Skip past the rest of the opening tag, and stop at the start of the
-  // closing one — which may be spelled `</script >`.
-  const bodyStart = APP_HTML.indexOf('>', opens[0] ?? 0) + 1;
-  const bodyEnd = closes[0] ?? -1;
-  if (bodyStart === 0 || bodyEnd < bodyStart) {
-    throw new Error('APP_HTML script element is malformed');
-  }
-  return APP_HTML.slice(bodyStart, bodyEnd);
-}
+import { inlinedScript, occurrences } from '../../helpers/app-bundle.js';
 
 describe('generated MCP App bundle', () => {
   it('carries exactly one inlined script', () => {

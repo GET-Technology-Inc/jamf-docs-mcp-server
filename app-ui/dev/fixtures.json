@@ -18,23 +18,25 @@
       "page": 1,
       "totalPages": 5,
       "limit": 10,
+      "maxTokens": 5000,
       "hasMore": true,
       "results": [
         {
           "title": "Computer PreStage Enrollments",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_PreStage_Enrollments",
           "snippet": "PreStage enrollments allow you to configure and deploy the Automated Device Enrollment experience to devices. The scope of a PreStage enrollment specifies which devices...instance for the PreStage enrollment are eligible to be included in the scope. Note: If you clone a PreStage enrollment, the scope...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "zGNgfc54eSb4O0Kk864Pkg",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
             "11.29.0",
             "11.28.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Computers",
@@ -46,17 +48,18 @@
           "title": "Mobile Device PreStage Enrollments",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mobile_Device_PreStage_Enrollments",
           "snippet": "PreStage enrollments allow you to configure and deploy the Automated Device Enrollment experience to devices. The scope of a PreStage enrollment specifies which devices...instance for the PreStage enrollment are eligible to be included in the scope. Note: If you clone a PreStage enrollment, the scope...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "Hl8kl0VoKUt1_2TFW5Oj~w",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
             "11.29.0",
             "11.28.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Mobile Devices",
@@ -68,11 +71,11 @@
           "title": "Automated Device Enrollment Integration",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_Integration",
           "snippet": "...Pro with Automated Device Enrollment involves the following...and displays Automated Device Enrollment updates from Apple every two minutes. Note: Up to a two minute syncing delay may occur, which can cause outdated Automated Device Enrollment to display in...Enrollment and PreStage Enrollments Training...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "baBJgkbwWsX2X9emI4I7cQ",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -94,6 +97,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Global Management Settings",
             "Automated Device Enrollment Integration"
@@ -103,11 +107,11 @@
           "title": "PreStage Panes",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/PreStage_Panes",
           "snippet": "PreStage Panes are groups of settings that customize the screens that display during Automated Device Enrollment with Jamf Pro. The PreStage Panes display during the Setup Assistant after...can configure multiple Text PreStage Panes to suit your...enroll devices using the PreStage enrollment. You can add...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "xDvE4hyZU2xvC7Ny2nPI1A",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -129,6 +133,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Global Management Settings",
             "Enrollment Customization Settings",
@@ -139,11 +144,11 @@
           "title": "Automated Device Enrollment for Computers",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_for_Computers",
           "snippet": "...integrate with Automated Device Enrollment, which establishes communication between Jamf Pro and Apple Business or Apple School Manager. For more information, see Automated Device Enrollment Integration. When the integration is complete, you can then use a Jamf Pro PreStage enrollment to configure...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "rH8tuWcMS91TkwA9FTk1VA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -165,6 +170,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Computers",
@@ -175,11 +181,11 @@
           "title": "Creating or Editing a Computer PreStage Enrollment",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Computer_PreStage_Enrollment",
           "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "CKss94KreyPXT6wPrKvVOg",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -201,6 +207,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Computers",
@@ -212,11 +219,11 @@
           "title": "Creating or Editing a Mobile Device PreStage Enrollment",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Mobile_Device_PreStage_Enrollment",
           "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "I8Fvf7mokhFCMYU4PkNXeA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -238,6 +245,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Mobile Devices",
@@ -249,17 +257,18 @@
           "title": "Computer PreStage Enrollment Payload Reference",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_PreStage_Enrollment_Payload_Reference",
           "snippet": "When you create a PreStage enrollment, you can...a Computer PreStage Enrollment Configuring Remote...scope of the PreStage enrollment. Add only configuration profiles that are essential to the enrollment experience to a PreStage enrollment. Installing too...enrolled using a PreStage enrollment. Certificates...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "6nSatuwfoiIV6xzFcmh4ew",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
             "11.29.0",
             "11.28.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Computers",
@@ -271,11 +280,11 @@
           "title": "Automated Device Enrollment for Mobile Devices",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Automated_Device_Enrollment_for_Mobile_Devices",
           "snippet": "...integrate with Automated Device Enrollment, which establishes communication between Jamf Pro and Apple Business or Apple School Manager. For more information, see Automated Device Enrollment Integration. When the integration is complete, you can then use a Jamf Pro PreStage enrollment to configure...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "h~jOOwp~1qpI1YxEABhnHQ",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -297,6 +306,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Mobile Devices",
@@ -307,17 +317,18 @@
           "title": "Mobile Device PreStage Enrollment Payload Reference",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Mobile_Device_PreStage_Enrollment_Payload_Reference",
           "snippet": "...settings for the PreStage enrollment, specify...a Mobile Device PreStage Enrollment Configuring Remote...device enrolled using a PreStage enrollment. This is most useful when devices in scope of the PreStage are associated with a static...device enrolled using a PreStage enrollment. Certificates You can...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "r6OBx4MkK4JNOhdh~oxbNg",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
             "11.29.0",
             "11.28.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Enrollment",
             "Enrollment for Mobile Devices",
@@ -359,11 +370,33 @@
     },
     "structuredContent": {
       "query": "FileVault escrow",
+      "filters": {
+        "product": "jamf-pro",
+        "version": "10.1.0"
+      },
       "totalResults": 0,
       "page": 1,
       "totalPages": 0,
+      "limit": 10,
       "hasMore": false,
       "results": [],
+      "otherSources": [
+        {
+          "title": "Enabling Filevault Encryption Using Jamf Now",
+          "url": "https://support.jamf.com/en/articles/11030979-enabling-filevault-encryption-using-jamf-now",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Cancel Filevault Enablement",
+          "url": "https://support.jamf.com/en/articles/11016666-cancel-filevault-enablement",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Filevault Configuration Profile Certificate in Jamf Pro",
+          "url": "https://support.jamf.com/en/articles/11016691-filevault-configuration-profile-certificate-in-jamf-pro",
+          "source": "Jamf Support Knowledge Base"
+        }
+      ],
       "suggestions": [
         "encryption",
         "disk encryption",
@@ -386,16 +419,18 @@
       "page": 1,
       "totalPages": 5,
       "limit": 10,
+      "maxTokens": 5000,
       "hasMore": true,
       "results": [
         {
           "title": "Advanced Topics",
           "url": "https://learn.jamf.com/r/en-US/elevate-documentation/Advanced_Topics",
           "snippet": "Advanced Topics — Elevate",
-          "product": "Elevate",
           "docType": "documentation",
           "mapId": "ulGSurHfb386BC0K9bkNdw",
           "contentId": "vCahOkFP_zaaBboIpnY1kg",
+          "mapTitle": "Elevate Documentation",
+          "product": "Elevate",
           "breadcrumb": [
             "Advanced Topics"
           ]
@@ -404,11 +439,11 @@
           "title": "Supervision",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Supervision",
           "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "CnnOkiwxHgpZ~bsj7l4R7w",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -430,6 +465,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Managing Mobile Devices",
             "Settings and Security Management for Mobile Devices",
@@ -440,11 +476,11 @@
           "title": "Renewing the Push Certificate",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Push_Certificate",
           "snippet": "...the push certificate, and make note or take a screenshot of the topic bundle identifier. Click Renew . Choose a method for renewing the push...renew the push certificate in the Apple Push Certificates Portal, make sure the topic bundle identifier you noted earlier matches the identifier in the portal.",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "jhaRzrAeNYDDWe~3T8rdgw",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -466,6 +502,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Global Management Settings",
             "Push Certificates",
@@ -476,10 +513,11 @@
           "title": "Insights",
           "url": "https://learn.jamf.com/r/en-US/jamf-rapididentity-documentation/understanding-users-with-rapididentity-insights",
           "snippet": "...utilization tracking to identify unused or underutilized digital curriculum applications The Insights module includes the following topics, each providing distinct data perspectives: Topic Description Users Provides school usage analytics, including growth metrics, teacher-student ratios, and...",
-          "product": "RapidIdentity",
           "docType": "documentation",
           "mapId": "z4D9NauuOznmw4bcf~x1iw",
           "contentId": "PzfnG8f8BvneT7GM0DOwAA",
+          "mapTitle": "RapidIdentity Platform Documentation",
+          "product": "RapidIdentity",
           "breadcrumb": [
             "Identity Solutions",
             "Identity Lifecycle Management",
@@ -490,10 +528,11 @@
           "title": "Supervision",
           "url": "https://learn.jamf.com/r/en-US/jamf-now-documentation/Supervision",
           "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
-          "product": "Jamf Now",
           "docType": "documentation",
           "mapId": "VtT2s4tzZgWnlMWVuiQI2A",
           "contentId": "7T7OujfZg0xn5Yx6M8gQ~Q",
+          "mapTitle": "Jamf Now Documentation",
+          "product": "Jamf Now",
           "breadcrumb": [
             "Device Management",
             "Supervision"
@@ -503,10 +542,11 @@
           "title": "Additional Information",
           "url": "https://learn.jamf.com/r/en-US/technical-articles/Additional_Information",
           "snippet": "For more information about the bootstrap token on macOS, see the following topics in Apple Platform Deployment: Use secure token, bootstrap token, and volume ownership in deployments Manage FileVault with mobile device management For more information about using the bootstrap token to manage...",
-          "product": "",
           "docType": "documentation",
           "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
           "contentId": "2Vbcimug0DgiBU7lrTn9YQ",
+          "mapTitle": "Technical Articles",
+          "product": "",
           "breadcrumb": [
             "Device Management",
             "Leveraging Apple's Bootstrap Token Functionality",
@@ -517,10 +557,11 @@
           "title": "Security Overview",
           "url": "https://learn.jamf.com/r/en-US/jamf-auto-update-documentation/Security_Overview",
           "snippet": "Jamf Auto Update uses encrypted communications, signed software, and minimal data collection throughout. The following topics describe the security measures that apply to the service infrastructure, communications, data handling, software packaging, and client components: Service Infrastructure...",
-          "product": "",
           "docType": "documentation",
           "mapId": "6JXG~38SifVdyJKsU1MyVQ",
           "contentId": "6RWh4sm_nClxJoeKX_9w3g",
+          "mapTitle": "Jamf Auto Update Documentation",
+          "product": "",
           "breadcrumb": [
             "Security Overview"
           ]
@@ -529,10 +570,11 @@
           "title": "General Requirements",
           "url": "https://learn.jamf.com/r/en-US/jamf-connect-documentation-current/General-Requirements",
           "snippet": "...to devices under management Familiarity with your device management platform, and the ability to adapt the generic configurations provided in the following topics for your specific device management solution An activation profile that enables Zero Trust Network Access (ZTNA). For more information,...",
-          "product": "",
           "version": "Enter the latest product version for which the topic was revised.",
           "mapId": "bjs61pwUXJK9FzeINitaJA",
           "contentId": "NMAuPbiWjDpOkr52PFoL3Q",
+          "mapTitle": "Jamf Connect Documentation",
+          "product": "",
           "breadcrumb": [
             "Zero Trust Network Access",
             "Deploying Zero Trust Network Access",
@@ -545,10 +587,11 @@
           "title": "Administrator Management",
           "url": "https://learn.jamf.com/r/en-US/jamf-safe-internet-documentation/Administrator_Management",
           "snippet": "This topic explains how administrator accounts are configured in Safe Internet. To access the Administration section, click Settings &gt; Administrators.",
-          "product": "Jamf Safe Internet",
           "docType": "documentation",
           "mapId": "o~jRfY0909ZcujCBWOLBsw",
           "contentId": "ji6koA5dmEEn3Bsyp7SAxg",
+          "mapTitle": "Jamf Safe Internet Documentation",
+          "product": "Jamf Safe Internet",
           "breadcrumb": [
             "Safe Internet Portal Settings",
             "Administrator Management"
@@ -558,10 +601,11 @@
           "title": "Overview",
           "url": "https://learn.jamf.com/r/en-US/technical-paper-venafi-current/Overview",
           "snippet": "...experience, follow the topics in order using the Contents panel on the left (mobile users: tap Table of Contents). Each topic builds on the previous one to guide you through the complete workflow. You can also use the search box in the top-right corner to find specific topics quickly. This guide is...",
-          "product": "Jamf Pro",
           "docType": "documentation",
           "mapId": "X0VStIoDYxFoH1CVMZ12CA",
           "contentId": "9CIeeEm3z72PN7quYuJ8oA",
+          "mapTitle": "Technical Paper: Integrating with Venafi Using Jamf Pro",
+          "product": "Jamf Pro",
           "breadcrumb": [
             "Overview"
           ]
@@ -585,17 +629,18 @@
       "page": 1,
       "totalPages": 5,
       "limit": 10,
+      "maxTokens": 5000,
       "hasMore": true,
       "results": [
         {
           "title": "FIDO2 Authentication",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/FIDO2_Authentication",
           "snippet": "...the FIDO2 authentication method for single...It enables passwordless authentication, including passkeys, local biometric access, and hardware keys. FIDO2 must be configured through your IdP and enabled in Jamf Pro. When FIDO2 authentication is enabled,...are required when FIDO2 authentication is active.",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "_yc94GpIG45H~CTwJlRJ3w",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -617,6 +662,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "Single Sign-On (SSO)",
@@ -628,11 +674,11 @@
           "title": "Enabling FIDO2 Authentication in Jamf Pro",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_FIDO2_Authentication_in_Jamf_Pro",
           "snippet": "...for Self Service for macOS must be enabled in Jamf Pro. FIDO2 authentication must be configured through your IdP. In Jamf Pro, click Settings in the sidebar. In the Self Service section, click macOS . Click Edit . Under Login, select Single Sign-On. Select Enable FIDO2 authentication. Click Save .",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "ZTd1oQvvYoJowFWdgifT8A",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -654,6 +700,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "Single Sign-On (SSO)",
@@ -666,10 +713,11 @@
           "title": "API Authentication and Base URL",
           "url": "https://learn.jamf.com/r/en-US/fluidid-documentation/API_Authentication_and_Base_URL",
           "snippet": "Authentication Headers Every API request must include two custom HTTP headers: Header Value FusionID-ClientID The Client ID from the FusionIDAPI credential object. FusionID-Key The API Key from the FusionIDAPI credential object. Base URL All FusionID API endpoints share this base URL prefix: /...",
-          "product": "FusionID",
           "docType": "documentation",
           "mapId": "ipa1nnT_VKXEPGVGiGJxTA",
           "contentId": "Uhp0vlfqXiD~uu_Oayr5~g",
+          "mapTitle": "FusionID Documentation",
+          "product": "FusionID",
           "breadcrumb": [
             "FusionID API Overview",
             "API Authentication and Base URL"
@@ -679,11 +727,11 @@
           "title": "Multi-factor Authentication",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Multi-factor_Authentication",
           "snippet": "When Entra ID with multi-factor authentication (MFA) enabled is added as the cloud identity provider, some authentication workflows in Jamf Pro (e.g....SSO in Jamf Pro, see Single Sign...how multi-factor authentication (MFA) status in Entra ID affects Jamf Pro authentication workflows for Entra ID cloud...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "vfKRkuy2~ilSw83h0TSeWA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -705,6 +753,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "Cloud Identity Providers",
@@ -716,11 +765,11 @@
           "title": "Enabling OIDC Authentication in Jamf Pro",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Enabling_OIDC_Authentication_in_Jamf_Pro",
           "snippet": "...not currently support authentication with Jamf ID. If administrators will log in to Jamf Pro using a cloud-...select Use SAML authentication for end users (using IdP settings from Jamf Pro). To configure SAML authentication, follow the instructions...process. After OIDC authentication is enabled, you will...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "05~5DUKnEeyNY_7RImg~gw",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -742,6 +791,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "Single Sign-On (SSO)",
@@ -753,11 +803,11 @@
           "title": "API Roles and Clients",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/API_Roles_and_Clients",
           "snippet": "The API Roles and Clients functionality in Jamf Pro provides a dedicated interface for controlling access to the Jamf Pro API and the Classic API. You can create custom privilege sets as API roles and then assign them as needed, ensuring API clients have only the necessary capabilities for their...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "8~Su3s5iIX75mNlMixbcBg",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -779,6 +829,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "API Roles and Clients"
@@ -788,11 +839,11 @@
           "title": "Disabling an API Client",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Disabling_an_API_Client",
           "snippet": "...an API client that you no longer want to use to generate access tokens for Jamf Pro. Note: Deleting or disabling a client does not disable access for previously generated access tokens that are still valid. In Jamf Pro, navigate to the API client you want to disable. Click Disable API Client....",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "~e2jubHFkJ6BZqfbwopB2Q",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -814,6 +865,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "API Roles and Clients",
@@ -824,11 +876,11 @@
           "title": "Configuring the SMTP Server Settings for Google Authentication",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_the_SMTP_Server_Settings_for_Google_Authentication",
           "snippet": "...Pro. In Jamf Pro, click Settings in the sidebar. In the System section, click SMTP server . Click Edit . Use the Enable SMTP server switch to enable SMTP server. Choose Google Auth from the Authentication method pop-up...the Google authentication workflow. To.... Click Save . Jamf Pro is now configured to...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "5yov0G6IAmAZsLScP~p_5w",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -850,6 +902,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "SMTP Server Integration",
@@ -860,11 +913,11 @@
           "title": "Creating an API Role",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Role",
           "snippet": "...to an API client in Jamf Pro, you must first create an API role that defines.... In Jamf Pro, click Settings in the sidebar. In the System section, click API Roles and Clients ....for the API role. In the Jamf Pro API role privileges field...of those apps. Jamf Pro will not allow any API roles to be deleted...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "cEv3adB0SK6QIYGzDGweuA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -886,6 +939,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "API Roles and Clients",
@@ -896,11 +950,11 @@
           "title": "Creating an API Client",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Client",
           "snippet": "You can create an API client in Jamf Pro to generate a client secret, which can then be used by the Jamf Pro API to generate access tokens. Requirements At least one API role created in Jamf Pro In Jamf Pro, click Settings in the sidebar. In the System section, click API roles and clients. Click the...",
-          "product": "Jamf Pro",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
           "contentId": "Gzm_I7vshd9eh3SQH~T88w",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
           "otherVersions": [
             "11.31.0",
             "11.30.0",
@@ -922,6 +976,7 @@
             "11.14.0",
             "11.13.0"
           ],
+          "product": "Jamf Pro",
           "breadcrumb": [
             "System Settings",
             "API Roles and Clients",
