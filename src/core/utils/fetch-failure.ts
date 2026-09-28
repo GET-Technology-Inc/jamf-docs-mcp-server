@@ -6,7 +6,8 @@
  * search's since 2026-09-28, so the two tools name the same failure the same
  * way and give the same advice about it. What a configured provider said, and
  * the advice for a failure that was not a request, are here for the same
- * reason.
+ * reason. The other tools' catch-alls word a failure from these too (see
+ * services/failure-reason.ts).
  */
 
 import { HttpError } from '../http-client.js';
@@ -76,27 +77,52 @@ export const UNEXPECTED_FAILURE_ADVICE =
 const MAX_REASON_LENGTH = 200;
 
 /**
- * What `error` says went wrong, with file paths and stack traces removed, on
- * one line and cut to {@link MAX_REASON_LENGTH} characters, or `undefined`
- * when it says nothing. A provider can reject with a string, with
- * `undefined`, or with an Error whose message is empty.
- *
- * The provider, not this server, decides what the reason says, and the
- * search, the glossary and `jamf_docs_list_products` quote it, the last in an
- * incomplete note that no `maxTokens` cut takes and whose markdown blockquote
- * a line break would end. Until 2026-09-28 the search and the glossary
- * quoted it whole, line breaks and all: a provider that threw a
- * 40,000-character message got a glossary error of 40,285 characters, and a
- * search error of 40,216 from a SearchProvider.
+ * What `error` says went wrong, with file paths and stack traces removed and
+ * on one line, or `undefined` when it says nothing. Not cut: see
+ * {@link reasonGiven} for a reason a provider gave.
  */
-export function reasonGiven(error: unknown): string | undefined {
+export function reasonStated(error: unknown): string | undefined {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   // Stack traces first: sanitizeErrorMessage finds them by their line breaks.
   const reason = sanitizeErrorMessage(raw).replace(/\s+/g, ' ').trim();
-  if (reason === '') { return undefined; }
-  // By code point, so a cut never splits a surrogate pair.
-  const chars = Array.from(reason);
-  return chars.length <= MAX_REASON_LENGTH
-    ? reason
-    : `${chars.slice(0, MAX_REASON_LENGTH - 1).join('').trimEnd()}…`;
+  return reason === '' ? undefined : reason;
+}
+
+/**
+ * What a cut keeps or drops whole: a percent-encoded UTF-8 character (its
+ * lead byte's escape and its continuation bytes'), any other `%XX` escape, or
+ * one code point, so a surrogate pair is never split either.
+ */
+const UNCUT = /%[C-Fc-f][0-9A-Fa-f](?:%[89ABab][0-9A-Fa-f])+|%[0-9A-Fa-f]{2}|[\s\S]/gu;
+
+/**
+ * {@link reasonStated}, cut to {@link MAX_REASON_LENGTH} characters. A
+ * provider can reject with a string, with `undefined`, or with an Error whose
+ * message is empty.
+ *
+ * The provider, not this server, decides what the reason says, and every
+ * tool quotes it, `jamf_docs_list_products` in an incomplete note that no
+ * `maxTokens` cut takes and whose markdown blockquote a line break would end.
+ * Until 2026-09-28 each tool that quoted it quoted it whole, line breaks and
+ * all: a provider that threw a 40,000-character message got a glossary error
+ * of 40,285 characters, a search error of 40,216 from a SearchProvider, and a
+ * `jamf_docs_get_toc` error of 40,091 from a TocProvider.
+ *
+ * The cut never falls inside a `%XX` escape, or between the escapes of one
+ * encoded character (see {@link UNCUT}), so a url a reason quotes ends on
+ * something a reader can decode. Cut by code point alone, a support.jamf.com
+ * url's `%E9%96%A2` could end as `%E9%96%A`, or `%E9%96`.
+ */
+export function reasonGiven(error: unknown): string | undefined {
+  const reason = reasonStated(error);
+  if (reason === undefined || Array.from(reason).length <= MAX_REASON_LENGTH) { return reason; }
+  let kept = '';
+  let length = 0;
+  for (const [unit] of reason.matchAll(UNCUT)) {
+    const size = Array.from(unit).length;
+    if (length + size > MAX_REASON_LENGTH - 1) { break; }
+    kept += unit;
+    length += size;
+  }
+  return `${kept.trimEnd()}…`;
 }

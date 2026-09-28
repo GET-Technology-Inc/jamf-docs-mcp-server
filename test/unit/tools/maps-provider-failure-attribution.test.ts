@@ -24,10 +24,11 @@
  * learn.jamf.com, and none names the provider.
  *
  * `jamf_docs_get_toc`, `jamf_docs_get_article`, `jamf_docs_batch_get_articles`
- * and `jamf://products/{productId}/toc` quote the error's own message, which
+ * and `jamf://products/{productId}/toc` quoted the error's own message, which
  * is the provider's for a MapsProviderError and carries learn.jamf.com's
  * address for a request that failed. They named no wrong source on main
- * either, and are here so that stays true.
+ * either, and are here so that stays true. Since 2026-09-28 they name the
+ * provider as well (failure-reason-in-replies.test.ts).
  *
  * The glossary and list_products now word a failure that is neither the
  * provider's nor a request's as the search has since #354: "could not be
@@ -594,7 +595,7 @@ describe('jamf_docs_list_products says which source the maps registry failed at'
     );
   });
 
-  it('a stand-in with no registry failure in this call keeps the note it had', async () => {
+  it('a stand-in the product half\'s read forced, when learn.jamf.com failed it, keeps the note it had', async () => {
     // learn.jamf.com answers the publication list, then fails the product
     // half's read in the same call. The registry keeps nothing (a TTL of 0
     // and a cache that stores nothing), so each read asks again.

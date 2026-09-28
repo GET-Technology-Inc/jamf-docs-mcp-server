@@ -24,7 +24,7 @@ import {
 import { listIntercomCollections } from '../services/intercom-service.js';
 import { describeMapsListFailure } from '../services/maps-list-failure.js';
 import { isRequestFailure } from '../utils/fetch-failure.js';
-import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { failureReason } from '../services/failure-reason.js';
 import { reportProgress } from '../utils/progress.js';
 
 const TOOL_NAME = 'jamf_docs_list_products';
@@ -375,17 +375,21 @@ function registrySentences(
  * lapses (after 7 days on Node) and cannot be rebuilt, each of the two turns
  * into a fallback only as it expires in turn, the availability map first.
  *
- * A registry that threw in this call, other than by a request to
- * learn.jamf.com, is worded as the search and the glossary word it
- * ({@link describeMapsListFailure}). A MapsProvider that threw is named with
- * its own reason, and learn.jamf.com, which was not asked, is not. Whether a
- * retry helps only the provider could say, so the retry sentence is left out
- * unless another source failed too. Anything else, such as a list that is
- * not a list, is "could not be read", with the server log for what went
- * wrong. Until 2026-09-28 the note said "The maps registry on learn.jamf.com
- * could not be read" and "This may be temporary" whatever the registry threw.
- * A request to learn.jamf.com that failed, including one that replaced a
- * provider's answer the registry could not use, keeps that note.
+ * `registryFailure` is what the registry threw in this call: in the
+ * publication half's read, or, when that answered, in the product half's,
+ * which then rebuilt its stand-ins (see `MetadataReadOptions`). Other than by
+ * a request to learn.jamf.com, it is worded as the search and the glossary
+ * word it ({@link describeMapsListFailure}). A MapsProvider that threw is
+ * named with its own reason, and learn.jamf.com, which was not asked, is not.
+ * Whether a retry helps only the provider could say, so the retry sentence is
+ * left out unless another source failed too. Anything else, such as a list
+ * that is not a list, is "could not be read", with the server log for what
+ * went wrong. Until 2026-09-28 the note said "The maps registry on
+ * learn.jamf.com could not be read" and "This may be temporary" whatever the
+ * registry threw in either half's read, and so named learn.jamf.com for a
+ * MapsProvider that threw although no request had been sent there. A request
+ * to learn.jamf.com that failed, including one that replaced a provider's
+ * answer the registry could not use, keeps that note.
  */
 function describeIncomplete(
   listing: Pick<PublicationListing, 'unavailable' | 'unreadLocales'>,
@@ -400,7 +404,7 @@ function describeIncomplete(
     listing.unavailable.includes(s.id) || listing.unreadLocales.has(s.id));
   if (!registryUnavailable && unreadSources.length === 0) { return undefined; }
 
-  const maps = registryPublicationsMissing && !isRequestFailure(registryFailure)
+  const maps = registryUnavailable && !isRequestFailure(registryFailure)
     ? describeMapsListFailure(registryFailure)
     : undefined;
   const sentences = registryUnavailable
@@ -675,11 +679,17 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         }));
 
         // `tools/call` has no cache or degradation channel, so the result body
-        // is the only place a fallback can be reported.
+        // is the only place a fallback can be reported. The note says what the
+        // registry threw in this call: in the publication half's read, or,
+        // when that answered, in the product half's, which then rebuilt the
+        // stand-ins it reports.
+        const registryFailure = listing.unavailable.includes(MAPS_REGISTRY)
+          ? listing.registryFailure
+          : versionsStatus.failure ?? availabilityStatus.failure;
         const incomplete = describeIncomplete(listing, {
           versions: versionsStatus.degraded,
           availability: availabilityStatus.degraded,
-        }, listing.registryFailure);
+        }, registryFailure);
         const incompleteNote = incomplete !== undefined
           ? `> **This catalogue is incomplete.** ${incomplete.message}\n\n`
           : '';
@@ -796,7 +806,7 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
           isError: true,
           content: [{
             type: 'text',
-            text: `Error listing products: ${getSafeErrorMessage(error)}`
+            text: `Error listing products: ${failureReason(error)}`
           }]
         };
       }

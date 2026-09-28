@@ -18,7 +18,10 @@ export class HttpError extends Error {
     url: string,
     retryAfter?: string | null
   ) {
-    super(`HTTP ${status} ${statusText}: ${url}`);
+    // No status text, no space for it. Until 2026-09-28 a response without
+    // one read "HTTP 404 : <url>", and learn.jamf.com's 404s have none (live,
+    // 2026-09-28).
+    super(`HTTP ${status}${statusText !== '' ? ` ${statusText}` : ''}: ${url}`);
     this.name = 'HttpError';
     this.status = status;
     this.statusText = statusText;

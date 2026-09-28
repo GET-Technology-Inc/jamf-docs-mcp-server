@@ -285,6 +285,31 @@ describe('a search that could not be completed is an error, not "No results foun
     expect(searchRequests(requests)).toEqual([]);
   });
 
+  // A SearchProvider's throw is tagged where the search calls it (step
+  // `provider`), so one that failed a request of its own is quoted, not
+  // described as a request of this server's. Pinned with #362's one-line,
+  // 200-character cut, which never falls inside a `%XX` escape.
+  it.each([
+    ['a SyntaxError', new SyntaxError('Unexpected token u in JSON at position 0'), 'Unexpected token u in JSON at position 0'],
+    ['a TimeoutError', timedOut(), 'The operation was aborted due to timeout'],
+    ['fetch\'s TypeError', connectionRefused(), 'fetch failed'],
+    [
+      'an HttpError',
+      httpStatus(503, '', `https://vectorize.example.test/q/${'%E9%96%A2'.repeat(30)}`),
+      `HTTP 503: https://vectorize.example.test/q/${'%E9%96%A2'.repeat(17)}…`,
+    ],
+  ])('quotes a SearchProvider that throws %s as its own reason', async (_label, provider, reason) => {
+    const { ctx, requests } = searchUpstream({ provider, clusteredSearch: () => [PRESTAGE] });
+
+    const text = expectFailed(await callSearch(ctx, { query: 'setup manager' }), 'setup manager');
+
+    expect(text).toBe(
+      `Search for "setup manager" failed: the configured search backend reported an error (${reason}).` +
+      `\n\n${NOT_A_NO_RESULTS}`,
+    );
+    expect(searchRequests(requests)).toEqual([]);
+  });
+
   it('names Fluid Topics when a SearchProvider declined and the search it handed on failed', async () => {
     const { ctx, providerCalls } = searchUpstream({
       provider: null,

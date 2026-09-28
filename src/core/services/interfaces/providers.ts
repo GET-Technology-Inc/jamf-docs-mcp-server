@@ -28,6 +28,19 @@
  * that is `null`, which is how a database row says "absent", at debug, and
  * everything else as a warning. Keys a type does not declare are left as they
  * are.
+ *
+ * A TocProvider, ArticleProvider or GlossaryProvider that throws or rejects
+ * fails the call, and the reply quotes the error's message (or the string it
+ * rejected with), with file paths and stack traces removed, on one line and
+ * cut to 200 characters, or says no reason was given. That holds whatever it
+ * throws: an HttpError, a SyntaxError or a TimeoutError of the provider's own
+ * is quoted by its message, not described as a request of this server's, and
+ * an HttpError's url is cut with the rest. A GlossaryUnavailableError is
+ * quoted the same way, not as the glossary's own outage message. It reaches
+ * the MCP client, so it must not carry anything a client should not see.
+ * Until 2026-09-28 the reply quoted it whole, line breaks included, and the
+ * TOC resource with file paths and stack lines too. {@link SearchProvider}
+ * and {@link MapsProvider} say what a throw of theirs does.
  */
 
 import type { ProductId, LocaleId } from '../../constants.js';
@@ -88,8 +101,10 @@ import type {
  * in its place, because an answer from another backend would hide a broken
  * one. Before, it answered "No results found". The reply quotes the error's
  * message (or the string it rejected with), with file paths and stack traces
- * removed. That message reaches the MCP client, where it was only logged
- * before, so it must not carry anything a client should not see.
+ * removed, on one line and cut to 200 characters, whatever it throws, an
+ * HttpError or a SyntaxError of its own included. That message reaches the
+ * MCP client, where it was only logged before, so it must not carry anything
+ * a client should not see.
  */
 export interface SearchProvider {
   search: (params: SearchParams) => Promise<SearchResult[] | null>;
@@ -233,14 +248,16 @@ export interface TocProvider {
  * instead: a reply that needs the maps fails, `jamf_docs_list_products` lists
  * what it can without them and says so, and `jamf://products` and
  * `jamf://products/{productId}/versions` answer with the compiled-in product
- * list and versions, with no message. `jamf_docs_search`,
- * `jamf_docs_glossary_lookup` and `jamf_docs_list_products` name the
- * configured maps provider and quote the error's message (or the string it
- * rejected with), with file paths and stack traces removed, on one line and
- * cut to 200 characters; the other tools and the TOC resource quote the
- * message as it is. It reaches the MCP client, so it must not carry anything
- * a client should not see. Until 2026-09-28 the glossary and
- * `jamf_docs_list_products` named learn.jamf.com instead.
+ * list and versions, with no message. The failed reply, the TOC resource's
+ * error, and `jamf_docs_list_products`' note name the configured maps
+ * provider and quote the error's message (or the string it rejected with),
+ * with file paths and stack traces removed, on one line and cut to 200
+ * characters, or say it gave no reason. It reaches the MCP client, so it
+ * must not carry anything a client should not see. Until 2026-09-28 the
+ * glossary and `jamf_docs_list_products` named learn.jamf.com instead, and
+ * `jamf_docs_get_toc`, `jamf_docs_get_article`,
+ * `jamf_docs_batch_get_articles` and the TOC resource quoted the message as
+ * it was, the resource with file paths and stack lines included.
  */
 export interface MapsProvider {
   getMaps: () => Promise<FtMapInfo[]>;

@@ -40,6 +40,7 @@ import type { ServerContext } from '../types/context.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/index.js';
 import { cacheKey } from './cache-key.js';
+import { askProvider } from './provider-error.js';
 import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
 import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
@@ -891,9 +892,14 @@ export async function lookupGlossaryTerm(
   }
 ): Promise<GlossaryLookupResult> {
   const log = ctx.logger.createLogger('glossary');
-  if (ctx.glossaryProvider !== undefined) {
-    // Read before anything here reads it: see readGlossaryProviderResult.
-    const provided = readGlossaryProviderResult(await ctx.glossaryProvider.lookup(params), log);
+  const { glossaryProvider } = ctx;
+  if (glossaryProvider !== undefined) {
+    // Read before anything here reads it: see readGlossaryProviderResult. What
+    // it throws is tagged as its own: see ProviderError.
+    const provided = readGlossaryProviderResult(
+      await askProvider('glossary', async () => await glossaryProvider.lookup(params)),
+      log,
+    );
     if (provided !== null) {return provided;}
   }
   // `params.product` is deliberately not read past this point. Jamf publishes

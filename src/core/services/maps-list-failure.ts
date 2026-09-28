@@ -3,7 +3,8 @@
  * be read, so that the tools that say so name the same failure the same way:
  * the search and the glossary in their errors, and `jamf_docs_list_products`
  * in its incomplete note, where a request to learn.jamf.com keeps the note it
- * has always had.
+ * has always had. The other tools' catch-alls and the TOC resource use it for
+ * a MapsProvider that threw (see failure-reason.ts).
  *
  * The list comes from learn.jamf.com, or from a MapsProvider when one is
  * configured. What the provider throws reaches a caller as a

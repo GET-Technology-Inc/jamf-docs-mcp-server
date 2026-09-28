@@ -22,7 +22,8 @@ import type {
 } from '../types.js';
 import { searchDocumentation } from '../services/search-service.js';
 import { generateSearchSuggestions, formatSearchSuggestions } from '../services/search-suggestions.js';
-import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl } from '../utils/sanitize.js';
+import { failureReason } from '../services/failure-reason.js';
 import { reportProgress } from '../utils/progress.js';
 import {
   searchStaticSources,
@@ -1116,7 +1117,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           isError: true,
           content: [{
             type: 'text',
-            text: `Search error: ${getSafeErrorMessage(error)}\n\nPlease try again or use different search terms.`
+            text: `Search error: ${failureReason(error)}\n\nPlease try again or use different search terms.`
           }]
         };
       }

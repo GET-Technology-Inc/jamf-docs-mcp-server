@@ -31,6 +31,7 @@ import { staticSourceForUrl } from '../constants/sources.js';
 import { buildArticleView, withNote } from './article-view.js';
 import { fetchStaticArticle } from './static-article-service.js';
 import { readProviderArticle } from './provider-results.js';
+import { askProvider } from './provider-error.js';
 import {
   buildInternalLinkResolver,
   collectInternalLinkMapIds,
@@ -437,10 +438,18 @@ async function fetchFromProvider(
   log: Logger,
 ): Promise<FetchArticleResult | null> {
   const { mapId, contentId, articleUrl, articleUrlNamesTopic } = request;
-  let article = readProviderArticle(await provider.getArticleByIds(mapId, contentId, options), log);
+  // What either method throws is tagged as the provider's: see ProviderError.
+  let article = readProviderArticle(
+    await askProvider('article', async () => await provider.getArticleByIds(mapId, contentId, options)),
+    log,
+  );
 
-  if (article === null && provider.getArticle !== undefined && articleUrl !== '') {
-    const byUrl = readProviderArticle(await provider.getArticle(articleUrl, options), log);
+  const { getArticle } = provider;
+  if (article === null && getArticle !== undefined && articleUrl !== '') {
+    const byUrl = readProviderArticle(
+      await askProvider('article', async () => await getArticle.call(provider, articleUrl, options)),
+      log,
+    );
     // The url's page is used only when it is the article this call fetches
     // without a provider: the pair's, whether the caller gave the pair or the
     // url resolved to it. It used to be taken on trust, and a url does not

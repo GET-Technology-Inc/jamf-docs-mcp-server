@@ -18,6 +18,7 @@ import type { ServerContext } from '../types/context.js';
 import { cacheKey } from './cache-key.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { readTocProviderResult } from './provider-results.js';
+import { askProvider } from './provider-error.js';
 import type { FtTocNode, TocEntry, FetchTocOptions, FetchTocResult } from '../types.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 
@@ -127,10 +128,12 @@ export async function fetchTableOfContents(
   version = 'current',
   options: FetchTocOptions = {},
 ): Promise<FetchTocResult> {
-  if (ctx.tocProvider !== undefined) {
-    // Read before anything reads it: see readTocProviderResult.
+  const { tocProvider } = ctx;
+  if (tocProvider !== undefined) {
+    // Read before anything reads it: see readTocProviderResult. What it throws
+    // is tagged as its own: see ProviderError.
     const provided = readTocProviderResult(
-      await ctx.tocProvider.getTableOfContents(source as ProductId, version, options),
+      await askProvider('toc', async () => await tocProvider.getTableOfContents(source as ProductId, version, options)),
       ctx.logger.createLogger('toc-service'),
     );
     if (provided !== null) { return provided; }
