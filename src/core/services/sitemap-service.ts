@@ -8,7 +8,8 @@
  * locale and parsing each one's navigation.
  */
 
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { canonicalStaticUrl, type StaticDocSource, type StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
@@ -73,21 +74,30 @@ export function parseSitemap(sourceOrXml: StaticDocSource | string, maybeXml?: s
 }
 
 /**
- * Fetch and cache a source's sitemap.
+ * Fetch and cache a source's sitemap, in one request however many calls want
+ * it at once (load-once.ts). It is what a concepts.jamf.com table of contents
+ * and each locale's search title index are built from.
  *
- * The entry is read only for the source's tables of contents
- * ({@link buildStaticToc}), so it is kept for `cacheTtl.toc`, as a Fluid
- * Topics map's and a support.jamf.com collection's are. Until 2026-09-28 it
+ * The entry is kept for `cacheTtl.toc`, as a Fluid Topics map's and a
+ * support.jamf.com collection's tables of contents are. Until 2026-09-28 it
  * was kept for `cacheTtl.products`, 7 days by default, while CACHE_TTL_TOC,
  * documented as the TTL of a table of contents, did nothing. The title index
- * search builds is an entry of its own, read from its own download of the
- * same sitemap, and kept for `cacheTtl.products` as before.
+ * search builds from it is an entry of its own, kept for `cacheTtl.products`.
  */
 export async function loadSitemap(
   ctx: ServerContext,
   source: StaticDocSource,
 ): Promise<SitemapEntry[]> {
   const key = cacheKey('static-sitemap', { source: source.id });
+  return await loadOnce(ctx.cache, key, async () => await readSitemap(ctx, source, key));
+}
+
+/** The cached sitemap, or the source's, fetched and stored: what {@link loadSitemap} shares. */
+async function readSitemap(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  key: CacheKey,
+): Promise<SitemapEntry[]> {
   const cached = await ctx.cache.get<SitemapEntry[]>(key);
   if (cached !== null) { return cached; }
 

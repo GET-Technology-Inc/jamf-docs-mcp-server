@@ -18,8 +18,9 @@
  */
 
 import Fuse, { type FuseIndex, type FuseOptionKey, type IFuseOptions } from 'fuse.js';
-import { cacheKey } from './cache-key.js';
-import { parseSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
+import { loadSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
 import { CJK_CHARACTER } from '../utils/cjk.js';
 import type { CacheProvider } from './interfaces/cache.js';
@@ -69,13 +70,35 @@ function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string):
   return { title: titleFromSlug(slug, source.slugLocale ?? locale), url: entry.url, source: source.name };
 }
 
-/** Build one source's title index for a locale. */
+/**
+ * Build one source's title index for a locale, once however many searches in
+ * that locale want it at once (load-once.ts).
+ *
+ * Built from the source's sitemap as `loadSitemap` caches it, which lists
+ * every locale and which concepts.jamf.com's tables of contents are built
+ * from too. So one request for it serves every locale's index and those
+ * tables of contents until the entry expires. Until 2026-09-28 each locale's
+ * index requested the whole sitemap for itself: searches in en-US, ja-JP and
+ * de-DE and then a concepts.jamf.com `get_toc`, one after another, requested
+ * concepts.jamf.com's sitemap four times and support.jamf.com's three,
+ * offline and live. Live, those are 208 KB and 253 KB (2026-09-28).
+ */
 export async function loadStaticIndex(
   ctx: ServerContext,
   source: StaticDocSource,
   locale: string,
 ): Promise<StaticSearchEntry[]> {
   const key = cacheKey('static-search-index-v4', { source: source.id, locale });
+  return await loadOnce(ctx.cache, key, async () => await readStaticIndex(ctx, source, locale, key));
+}
+
+/** The cached index, or one built from the sitemap and stored: what {@link loadStaticIndex} shares. */
+async function readStaticIndex(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  locale: string,
+  key: CacheKey,
+): Promise<StaticSearchEntry[]> {
   const cached = await ctx.cache.get<StaticSearchEntry[]>(key);
   if (cached !== null) { return cached; }
 
@@ -86,9 +109,8 @@ export async function loadStaticIndex(
   // itself and hand out each value as listed — slashless, which
   // concepts.jamf.com answers with a 301 — so a concepts page had one URL
   // here and another everywhere else.
-  const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries: StaticSearchEntry[] = [];
-  for (const sitemapEntry of parseSitemap(source, xml)) {
+  for (const sitemapEntry of await loadSitemap(ctx, source)) {
     const entry = entryFor(source, sitemapEntry, locale);
     if (entry !== null) { entries.push(entry); }
   }
