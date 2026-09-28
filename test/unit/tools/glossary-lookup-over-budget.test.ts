@@ -262,13 +262,19 @@ describe('a GlossaryProvider result with no entries and matches', () => {
     expect(text).not.toContain('`maxTokens: 60000`');
   });
 
-  it('advises the schema limit itself when that is what the entry needs', async () => {
+  it('advises the schema limit itself when that is what the entry needs, as the largest there is', async () => {
+    // Until 2026-09-28: "Repeat the lookup with `maxTokens: 50000` or more",
+    // and no budget the schema accepts is more.
     overBudget(1, {
       truncatedContent: { omittedCount: 1, omittedItems: [{ title: 'Long Entry', estimatedTokens: 50000 }] },
     });
 
     const text = textOf(await lookup({ term: 'MDM', maxTokens: 100 }));
-    expect(text).toContain('Repeat the lookup with `maxTokens: 50000`');
+    expect(text).toContain(
+      'The one matching entry, Long Entry, does not fit in `maxTokens: 100`. ' +
+      'Repeat the lookup with `maxTokens: 50000` (the largest it can be) to get it.*',
+    );
+    expect(text).not.toContain('or more');
     expect(text).not.toContain('more than `maxTokens` allows');
   });
 
