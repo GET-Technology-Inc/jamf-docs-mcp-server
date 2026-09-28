@@ -192,7 +192,12 @@ when the `url` you passed does not match it. Only if neither has the address
 does the result keep the `url` you passed. A concepts.jamf.com or
 support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
 A support.jamf.com collection URL, which `jamf_docs_get_toc` lists each
-subcollection by, returns the collection's list of articles.
+subcollection by, returns the collection's list of articles. A concepts.jamf.com
+URL whose path starts with no locale code, which the site answers with a page
+that only redirects to the en page, returns that page, under its own URL. The
+site root, `https://concepts.jamf.com/`, which picks a language in the browser,
+returns the en home page, `/en/`. With `language`, either returns that
+language's edition where the site has one.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -633,6 +638,10 @@ What each TTL covers:
   an article's `navigation` is read from. The glossary's term list is read
   from a map's table of contents too, and is kept with the glossary, for
   `CACHE_TTL_ARTICLE`.
+
+A support.jamf.com collection page is requested once for both of its uses:
+whichever of `jamf_docs_get_article` and a table of contents or title index
+reads it first keeps what the other reads from it too, each for its own TTL.
 
 An article's breadcrumb and internal links are built from the map TOC index
 when the article is fetched, and kept with it for `CACHE_TTL_ARTICLE`. Its

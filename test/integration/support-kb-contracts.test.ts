@@ -20,8 +20,8 @@
  * 2026-09-28 the home page of each of the other five locales as well, for
  * the three assertions on what each locale lists, and the sitemap (~253 KB),
  * for the one on where the search index finds its articles' titles. The
- * `localeLinks` assertion reads pages fetched for the others, and costs no
- * request.
+ * `localeLinks` and `relatedArticles` assertions read pages fetched for the
+ * others, and cost no request.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -69,6 +69,7 @@ interface Article {
   title?: unknown;
   blocks: Block[];
   localeLinks?: unknown;
+  relatedArticles?: unknown;
 }
 
 /** A page the reader takes `localeLinks` from: an article, or a collection. */
@@ -210,8 +211,14 @@ beforeAll(async () => {
 
   articles = await mapLimit(sample, async (url) => {
     const props = pageProps(await getHtml(url), url);
-    const content = props.articleContent as { blocks?: Block[]; title?: unknown } | undefined;
-    return { url, title: content?.title, blocks: content?.blocks ?? [], localeLinks: props.localeLinks };
+    const content = props.articleContent as { blocks?: Block[]; title?: unknown; relatedArticles?: unknown } | undefined;
+    return {
+      url,
+      title: content?.title,
+      blocks: content?.blocks ?? [],
+      localeLinks: props.localeLinks,
+      relatedArticles: content?.relatedArticles,
+    };
   });
 
   const others = Object.values(SOURCE.locales).filter(code => code !== LOCALE);
@@ -449,6 +456,29 @@ describe('support.jamf.com contracts', () => {
       for (const collection of listed) {
         const path = typeof collection.url === 'string' ? new URL(collection.url).pathname : '';
         expect(path, `${code}: ${JSON.stringify(collection)}`).toMatch(new RegExp(`^/${code}/collections/`));
+      }
+    }
+  });
+
+  /**
+   * `includeRelated` lists an article's related articles from
+   * `articleContent.relatedArticles`, each by its `title` and `url`, and an
+   * article without that list lists none, without a word. So this pins that
+   * each article page carries the list there, each entry with a title and a
+   * url the reader can resolve against the page. Live, every one of 40
+   * articles sampled across en, ja and zh-TW listed 2 to 5, each at an
+   * absolute support.jamf.com url in the article's own locale (2026-09-28).
+   * Neither how many nor which host is pinned: an empty list is an answer,
+   * and the reader resolves a relative url and keeps one on another host.
+   */
+  it('lists each article\'s related articles where includeRelated reads them', () => {
+    for (const article of articles) {
+      expect(Array.isArray(article.relatedArticles), `${article.url} relatedArticles`).toBe(true);
+      for (const related of article.relatedArticles as { title?: unknown; url?: unknown }[]) {
+        const what = `${article.url}: ${JSON.stringify(related)}`;
+        expect(typeof related.title === 'string' && related.title.trim() !== '', what).toBe(true);
+        expect(typeof related.url === 'string' && related.url.trim() !== '', what).toBe(true);
+        expect(() => new URL(String(related.url), article.url), what).not.toThrow();
       }
     }
   });

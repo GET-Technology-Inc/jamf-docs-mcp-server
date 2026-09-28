@@ -28,6 +28,9 @@ import {
   type StaticDocSource,
 } from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
+import { nextDataPage } from '../../helpers/support-upstream.js';
+import type { ServerContext } from '../../../src/core/types/context.js';
+import type { Logger } from '../../../src/core/services/interfaces/index.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 import { CONCEPTS_STRAY_H1_HTML, CONCEPTS_STRAY_H1_URL } from '../../fixtures/concepts-guide-stray-h1-page.js';
 
@@ -285,6 +288,49 @@ describe('fetchStaticArticle: related links', () => {
     expect(without.relatedArticles).toBeUndefined();
     expect(withRelated.relatedArticles).toEqual(RELATED);
     expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchStaticArticle: a support.jamf.com article whose blocks cannot all be read', () => {
+  beforeEach(() => { mockHttpGetText.mockReset(); });
+
+  const PAGE = 'https://support.jamf.com/en/articles/1-odd';
+
+  /** Every line logged at debug through `ctx`. */
+  function debugLines(ctx: ServerContext): unknown[] {
+    return vi.mocked(ctx.logger.createLogger).mock.results
+      .flatMap(result => vi.mocked((result.value as Logger).debug).mock.calls.map(([line]) => line));
+  }
+
+  // Until 2026-09-28 either of these failed the call: "Cannot read
+  // properties of null (reading 'type')", then "(reading 'content')".
+  it('serves what it can read, and logs at debug how much it left out', async () => {
+    mockHttpGetText.mockResolvedValue(nextDataPage({
+      articleContent: {
+        title: 'Odd',
+        blocks: [null, { type: 'paragraph', text: 'Kept.' }, { type: 'orderedNestedList', items: [null] }],
+      },
+    }));
+    const ctx = createMockContext();
+
+    const result = await fetchStaticArticle(ctx, SUPPORT, PAGE);
+
+    expect(result.title).toBe('Odd');
+    expect(result.content).toContain('Kept.');
+    expect(debugLines(ctx)).toEqual([
+      `${PAGE}: left out 2 of the article's blocks, list items, table rows and cells, or fields of them, that could not be read`,
+    ]);
+  });
+
+  it('logs nothing of an article it reads whole', async () => {
+    mockHttpGetText.mockResolvedValue(nextDataPage({
+      articleContent: { title: 'Whole', blocks: [{ type: 'paragraph', text: 'Kept.' }] },
+    }));
+    const ctx = createMockContext();
+
+    await fetchStaticArticle(ctx, SUPPORT, PAGE);
+
+    expect(debugLines(ctx)).toEqual([]);
   });
 });
 

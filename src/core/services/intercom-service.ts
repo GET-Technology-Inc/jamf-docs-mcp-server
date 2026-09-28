@@ -14,11 +14,12 @@ import * as cheerio from 'cheerio';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
+import { intercomPageEntry, staticArticleKey } from './static-article-cache.js';
 import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import { JamfDocsError, JamfDocsErrorCode, type FetchTocOptions, type FetchTocResult, type TocEntry } from '../types.js';
 import { DEFAULT_LOCALE, PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
-import { sanitizeMarkdownText, sanitizeMarkdownUrl } from '../utils/sanitize.js';
+import { listedTitle, sanitizeMarkdownText, sanitizeMarkdownUrl } from '../utils/sanitize.js';
 
 // ─── __NEXT_DATA__ ──────────────────────────────────────────────
 
@@ -75,13 +76,20 @@ interface IntercomBlock {
    */
   summary?: string | IntercomBlock;
   url?: string;
-  style?: string;
+  /**
+   * `callout` — its colours, `{ backgroundColor, borderColor }`. Typed as a
+   * string here until 2026-09-28, and an object on every live callout that
+   * day. Presentation only, and not read, so {@link blocksFrom} does not
+   * keep it.
+   */
+  style?: Record<string, string>;
   /** `table` — one entry per row, each holding its own cells. */
   rows?: IntercomTableRow[];
   /**
    * `table` — presentation flags, declared because they are on the payload
    * and not read because Markdown has no equivalent. Every one of the 36 live
    * tables sends `container: false, responsive: false, stacked: true`.
+   * {@link blocksFrom} does not keep them.
    */
   container?: boolean;
   responsive?: boolean;
@@ -407,6 +415,101 @@ export function renderBlocks(blocks: IntercomBlock[], depth = 0): string {
   return blocks.map(block => renderBlock(block, depth)).join('');
 }
 
+// ─── Blocks off the wire ────────────────────────────────────────
+
+/** How much of a page's blocks {@link blocksFrom} left out. */
+interface Unread { count: number }
+
+/**
+ * An article's `blocks`, read into the shapes the renderer above takes: a
+ * block, list item, table row or cell that is not an object is left out, a
+ * list of them that is not an array is read as none, and a field that is
+ * neither a string nor a number is read as absent (a number as its digits,
+ * as {@link asString} reads one). Each such thing is counted in `unread`.
+ * `null` is absent, and not counted. A field the renderer does not read,
+ * such as `style`, is not kept, and not counted.
+ *
+ * Until 2026-09-28 the renderer read the payload as given, as the collection
+ * reader did, so any of these failed `jamf_docs_get_article` on the page:
+ * `blocks` as an object ("blocks.map is not a function"), a `null` block
+ * ("Cannot read properties of null (reading 'type')"), a list with a `null`
+ * item ("… (reading 'content')"), or a `code` block whose `text` is a number
+ * ("html.replace is not a function"). No live page had any that day.
+ */
+function blocksFrom(value: unknown, unread: Unread): IntercomBlock[] {
+  return entriesFrom(value, unread).map(entry => blockFrom(entry, unread));
+}
+
+/** The objects in a list off the wire, counting in `unread` what is not one. */
+function entriesFrom(value: unknown, unread: Unread): Record<string, unknown>[] {
+  if (value === undefined || value === null) { return []; }
+  if (!Array.isArray(value)) {
+    unread.count += 1;
+    return [];
+  }
+  const entries: Record<string, unknown>[] = [];
+  for (const entry of value as unknown[]) {
+    if (typeof entry === 'object' && entry !== null) {
+      entries.push(entry as Record<string, unknown>);
+    } else {
+      unread.count += 1;
+    }
+  }
+  return entries;
+}
+
+/** A string field off the wire, or undefined, counting in `unread` one of another type. */
+function textFrom(value: unknown, unread: Unread): string | undefined {
+  if (value === undefined || value === null) { return undefined; }
+  if (typeof value === 'string' || typeof value === 'number') { return asString(value); }
+  unread.count += 1;
+  return undefined;
+}
+
+/** The string fields the renderer reads. Only what it reads is kept, and counted where it cannot be. */
+const BLOCK_TEXT_FIELDS = ['type', 'text', 'url', 'language', 'provider', 'id'] as const;
+
+function blockFrom(raw: Record<string, unknown>, unread: Unread): IntercomBlock {
+  const block: IntercomBlock = {};
+  for (const field of BLOCK_TEXT_FIELDS) {
+    const text = textFrom(raw[field], unread);
+    if (text !== undefined) { block[field] = text; }
+  }
+  if (raw.items !== undefined && raw.items !== null) { block.items = blocksFrom(raw.items, unread); }
+  if (raw.content !== undefined && raw.content !== null) { block.content = blocksFrom(raw.content, unread); }
+  if (raw.rows !== undefined && raw.rows !== null) {
+    block.rows = entriesFrom(raw.rows, unread).map(row => ({ cells: cellsFrom(row.cells, unread) }));
+  }
+  const { summary } = raw;
+  if (typeof summary === 'object' && summary !== null) {
+    block.summary = blockFrom(summary as Record<string, unknown>, unread);
+  } else {
+    const label = textFrom(summary, unread);
+    if (label !== undefined) { block.summary = label; }
+  }
+  return block;
+}
+
+/**
+ * A table row's cells. A cell that is not an object is an empty one, not
+ * left out: the cells after it keep their columns.
+ */
+function cellsFrom(value: unknown, unread: Unread): IntercomTableCell[] {
+  if (value === undefined || value === null) { return []; }
+  if (!Array.isArray(value)) {
+    unread.count += 1;
+    return [];
+  }
+  return value.map((cell: unknown): IntercomTableCell => {
+    if (typeof cell !== 'object' || cell === null) {
+      unread.count += 1;
+      return {};
+    }
+    const { content } = cell as { content?: unknown };
+    return content === undefined || content === null ? {} : { content: blocksFrom(content, unread) };
+  });
+}
+
 // ─── Articles ───────────────────────────────────────────────────
 
 export interface IntercomArticle {
@@ -420,6 +523,30 @@ export interface IntercomArticle {
    * lists none, or does not say which edition it is.
    */
   editions?: IntercomEditions;
+  /**
+   * The articles an article page lists as related, in its order, each url
+   * as the page spells it. Absent on a page that lists none, as a collection
+   * page does.
+   */
+  relatedArticles?: IntercomRelatedArticle[];
+  /**
+   * How many of the article's blocks, list items, table rows and cells, and
+   * fields of them, could not be read and were left out (`blocksFrom`), for
+   * a debug line ({@link logUnreadBlocks}). Absent where none was.
+   */
+  unreadBlocks?: number;
+}
+
+/** One article an article page lists as related. */
+export interface IntercomRelatedArticle {
+  /** As a listing gives it, fit to show (`listedTitle`). */
+  title: string;
+  /**
+   * As the page spells it: absolute on every live page, and raw where the
+   * slug is not ASCII (2026-09-28). The article service resolves it against
+   * the page and puts it in its source's spelling (static-article-cache.ts).
+   */
+  url: string;
 }
 
 /**
@@ -487,11 +614,17 @@ export function parseIntercomArticle(html: string): IntercomArticle | null {
 }
 
 function articleFrom(props: Record<string, unknown>): IntercomArticle | null {
-  const article = props.articleContent as Record<string, unknown> | undefined;
-  if (article === undefined) { return null; }
+  // Read as absent unless it is an object: until 2026-09-28 a `null` here
+  // failed on `.blocks` rather than reading the page as a collection, and
+  // `jamf_docs_get_toc` now reads a collection page through this too.
+  const raw = props.articleContent;
+  if (typeof raw !== 'object' || raw === null) { return null; }
+  const article = raw as Record<string, unknown>;
 
-  const blocks = (article.blocks ?? []) as IntercomBlock[];
+  const unread: Unread = { count: 0 };
+  const blocks = blocksFrom(article.blocks, unread);
   const editions = editionsFrom(props);
+  const related = relatedFrom(article);
 
   return {
     title: asString(article.title, 'Untitled'),
@@ -504,12 +637,52 @@ function articleFrom(props: Record<string, unknown>): IntercomArticle | null {
     // key of it.
     breadcrumb: breadcrumbsFrom(props),
     ...(editions !== undefined ? { editions } : {}),
+    ...(related.length > 0 ? { relatedArticles: related } : {}),
+    ...(unread.count > 0 ? { unreadBlocks: unread.count } : {}),
   };
+}
+
+/**
+ * Log, at debug, what of the page read from `url` could not be read
+ * ({@link IntercomArticle.unreadBlocks}): nothing where all of it was.
+ */
+export function logUnreadBlocks(ctx: ServerContext, url: string, page: IntercomArticle): void {
+  if (page.unreadBlocks === undefined) { return; }
+  ctx.logger.createLogger('intercom').debug(
+    `${url}: left out ${String(page.unreadBlocks)} of the article's blocks, list items, table rows and cells, ` +
+    'or fields of them, that could not be read',
+  );
+}
+
+/**
+ * `articleContent.relatedArticles`: the articles the page lists under
+ * "Related Articles", each as a title and a url. One without either is left
+ * out, as the related links of any other source are (`parseArticle`).
+ *
+ * Until 2026-09-28 they were not read, and `includeRelated` returned none for
+ * a support.jamf.com article. Every one of 40 articles sampled across the
+ * en, ja and zh-TW collections that day listed some: 37 listed 5, two 3 and
+ * one 2, all on support.jamf.com, in the article's own locale.
+ */
+function relatedFrom(article: Record<string, unknown>): IntercomRelatedArticle[] {
+  return listOf(article.relatedArticles as { title?: unknown; url?: unknown }[] | undefined)
+    .flatMap(related => {
+      const title = listedTitle(asString(related.title));
+      const url = asString(related.url).trim();
+      return title !== undefined && url !== '' ? [{ title, url }] : [];
+    });
 }
 
 /** A Help Center page {@link parseIntercomPage} read, and which kind of page it is. */
 export interface IntercomPage extends IntercomArticle {
   kind: 'article' | 'collection';
+  /**
+   * A collection's table of contents, as `jamf_docs_get_toc` lists it
+   * ({@link collectionToc}). Set on a page that carries a collection, even
+   * one read as an article: `jamf_docs_get_toc` reads the tree of any page
+   * that carries one, as it did before it read pages through this.
+   */
+  toc?: TocEntry[];
 }
 
 /**
@@ -523,18 +696,30 @@ export interface IntercomPage extends IntercomArticle {
  * only an article page was read, so every such URL in a TOC whose footer says
  * "Use `jamf_docs_get_article` with any URL above" was an error.
  *
+ * A page that carries a collection is read as that collection unless it also
+ * carries an article with something to show. None read on 2026-09-28 carried
+ * both: none of 40 sampled article pages has a `collection`, and none of the
+ * 9 en collection pages an `articleContent`. Until that day the article was
+ * read first whatever it held, so a collection page with an `articleContent`
+ * of `{}` beside its collection was served as "Untitled", with nothing in it.
+ *
  * Returns null for a page that is neither, as a maintenance page is.
  */
 export function parseIntercomPage(html: string, source: StaticDocSource): IntercomPage | null {
   const props = pageProps(html);
   if (props === null) { return null; }
   const article = articleFrom(props);
-  if (article !== null) { return { ...article, kind: 'article' }; }
   const collection = collectionFrom(props, source);
+  if (article !== null && (collection === null || article.content !== '')) {
+    return { ...article, kind: 'article', ...(collection !== null ? { toc: collection.toc } : {}) };
+  }
   return collection !== null ? { ...collection, kind: 'collection' } : null;
 }
 
-function collectionFrom(props: Record<string, unknown>, source: StaticDocSource): IntercomArticle | null {
+function collectionFrom(
+  props: Record<string, unknown>,
+  source: StaticDocSource,
+): (IntercomArticle & { toc: TocEntry[] }) | null {
   const raw = props.collection;
   if (typeof raw !== 'object' || raw === null) { return null; }
   const collection = raw as RawCollection;
@@ -543,11 +728,12 @@ function collectionFrom(props: Record<string, unknown>, source: StaticDocSource)
   const listing = renderCollection(collection, source, 2).trim();
 
   return {
-    title: asString(collection.name, 'Untitled'),
+    title: listedTitle(asString(collection.name)) ?? 'Untitled',
     content: listing !== '' ? listing : 'This collection lists no articles.',
     ...(description !== '' ? { description } : {}),
     breadcrumb: breadcrumbsFrom(props),
     ...(editions !== undefined ? { editions } : {}),
+    toc: collectionToc(collection, source),
   };
 }
 
@@ -564,14 +750,21 @@ function listOf<T extends object>(value: T[] | undefined): T[] {
  * one level down, so that `section` reads one of them. Each article is a
  * link to the address `jamf_docs_get_toc` gives it, which
  * `jamf_docs_get_article` reads.
+ *
+ * Each title and name is fit to show, as the search title index shows the
+ * same titles (`listedTitle`). Until 2026-09-28 an article's title was listed
+ * as Intercom gives it: of the 894 titles on the 22 collection pages, 10 hold
+ * a double space and one ends in a no-break space, all en, 5 of them in Jamf
+ * Pro's list. A collection page was titled by its name as given too, and two
+ * en subcollections, Licensing and Menu Bar, end their names in a space.
  */
 function renderCollection(collection: RawCollection, source: StaticDocSource, depth: number): string {
   const description = asString(collection.description).trim();
   const articles = listOf(collection.articleSummaries).map(summary =>
-    `- [${sanitizeMarkdownText(asString(summary.title, 'Untitled'))}](${
+    `- [${sanitizeMarkdownText(listedTitle(asString(summary.title)) ?? 'Untitled')}](${
       sanitizeMarkdownUrl(canonicalStaticUrl(source, asString(summary.url)))})`);
   const subcollections = listOf(collection.subcollections).map(sub =>
-    `${'#'.repeat(Math.min(depth, 6))} ${asString(sub.name, 'Untitled').replace(/\s+/g, ' ').trim()}\n\n${
+    `${'#'.repeat(Math.min(depth, 6))} ${listedTitle(asString(sub.name)) ?? 'Untitled'}\n\n${
       renderCollection(sub, source, depth + 1)}`);
   return [
     ...(description !== '' ? [description] : []),
@@ -838,14 +1031,51 @@ export async function fetchIntercomCollectionToc(
   collection: IntercomCollection,
 ): Promise<TocEntry[]> {
   const url = canonicalStaticUrl(source, collection.url);
-  const key = cacheKey('intercom-collection-toc-v3', { source: source.id, url });
+  const key = collectionTocKey(source, url);
   // One request for the page however many calls want it at once (load-once.ts).
   return await loadOnce(ctx.cache, key, async () => await readCollectionToc(ctx, source, url, key));
+}
+
+/** The key the tree read from the collection page at `url`, in the source's spelling, is kept under. */
+function collectionTocKey(source: StaticDocSource, url: string): CacheKey {
+  return cacheKey('intercom-collection-toc-v3', { source: source.id, url });
+}
+
+/**
+ * Keep the tree of the collection page at `url`, in the source's spelling,
+ * for {@link fetchIntercomCollectionToc}: what `jamf_docs_get_article` stores
+ * when it reads a collection page, so that `jamf_docs_get_toc` and the search
+ * title index do not request it again. An empty tree is not kept (see
+ * {@link fetchIntercomCollectionToc}).
+ *
+ * Only the tree of a collection a home page lists is ever read back: those
+ * are the ones a table of contents is read from. A subcollection's page, which
+ * a TOC lists each subcollection by, carries one too, and it is kept as well,
+ * since nothing on the page says which it is. That is up to 62 en entries
+ * no one reads, each the size of its subcollection's tree.
+ */
+export async function rememberCollectionToc(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  url: string,
+  entries: TocEntry[],
+): Promise<void> {
+  if (entries.length === 0) { return; }
+  await ctx.cache.set(collectionTocKey(source, url), entries, ctx.config.cacheTtl.toc);
 }
 
 /**
  * The cached tree, or the one the page at `url` carries, read and stored: the
  * load {@link fetchIntercomCollectionToc} shares between calls.
+ *
+ * What `jamf_docs_get_article` reads from the same page is stored too, for
+ * `cacheTtl.article`, as it stores what it reads (static-article-cache.ts),
+ * and it stores this tree when it reads the page first
+ * ({@link rememberCollectionToc}). So a collection page is requested once,
+ * whichever reads it first. Until 2026-09-28 each read it for itself: live,
+ * `jamf_docs_get_toc` on `jamf-support-jamf-pro` and then
+ * `jamf_docs_get_article` on the collection's url requested its 551 KB page
+ * twice.
  */
 async function readCollectionToc(
   ctx: ServerContext,
@@ -856,47 +1086,64 @@ async function readCollectionToc(
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null && cached.length > 0) { return cached; }
 
-  const html = await ctx.http.getText(url);
-  const raw = pageProps(html)?.collection;
-  if (typeof raw !== 'object' || raw === null) {
+  const page = parseIntercomPage(await ctx.http.getText(url), source);
+  if (page?.toc === undefined) {
     throw new JamfDocsError(
       `Could not read the ${source.name} collection at ${url}: the page carries no collection.`,
       JamfDocsErrorCode.PARSE_ERROR,
       url,
     );
   }
-  const { articleSummaries, subcollections } = raw as RawCollection;
+  logUnreadBlocks(ctx, url, page);
+  await ctx.cache.set(staticArticleKey(source, url), intercomPageEntry(page, source, url), ctx.config.cacheTtl.article);
 
-  // Every URL in the tree goes out in the source's spelling, the one
-  // `get_article` reports and fetches. Intercom already lists them slashless
-  // (0 of 849 article URLs in en, ja and zh-TW end in `/`, 2026-09-26), but
-  // it lists a non-ASCII slug raw, so until #338 those pages — 29 ja and
-  // zh-TW articles — had one URL here and a percent-encoded one in the
-  // article.
-  const toEntries = (summaries: { title?: unknown; url?: unknown }[] | undefined): TocEntry[] =>
-    (summaries ?? []).map(summary => ({
-      title: asString(summary.title, 'Untitled'),
-      url: canonicalStaticUrl(source, asString(summary.url)),
-    }));
-
-  const entries: TocEntry[] = [
-    // Articles that sit directly in the collection come first: they are the
-    // ones with no subcollection to file them under, and dropping them is
-    // the easy mistake — Jamf Pro has 11 of them beside 24 subcollections.
-    ...toEntries(articleSummaries),
-    ...(subcollections ?? []).map((sub): TocEntry => {
-      const children = toEntries(sub.articleSummaries);
-      const entry: TocEntry = {
-        title: asString(sub.name, 'Untitled'),
-        url: canonicalStaticUrl(source, asString(sub.url)),
-      };
-      if (children.length > 0) { entry.children = children; }
-      return entry;
-    }),
-  ];
-
+  const entries = page.toc;
   if (entries.length > 0) { await ctx.cache.set(key, entries, ctx.config.cacheTtl.toc); }
   return entries;
+}
+
+/**
+ * A collection's table of contents, as `jamf_docs_get_toc` lists it: the
+ * articles filed in it directly, then each subcollection, with its own
+ * entries under it, however deep.
+ *
+ * Articles that sit directly in the collection come first: they are the ones
+ * with no subcollection to file them under, and dropping them is the easy
+ * mistake — Jamf Pro has 11 of them beside 24 subcollections.
+ *
+ * Every URL in the tree goes out in the source's spelling, the one
+ * `get_article` reports and fetches. Intercom already lists them slashless
+ * (0 of 849 article URLs in en, ja and zh-TW end in `/`, 2026-09-26), but it
+ * lists a non-ASCII slug raw, so until #338 those pages — 29 ja and zh-TW
+ * articles — had one URL here and a percent-encoded one in the article.
+ *
+ * Read as the collection's list of articles is ({@link renderCollection}):
+ * an entry that is not an object, or a list that is not an array, is left
+ * out, and a title or url that is neither a string nor a number is read as
+ * none ({@link asString}). Until
+ * 2026-09-28 this read the page's fields as given, so a `null` among a
+ * page's subcollections failed `jamf_docs_get_toc` with "Cannot read
+ * properties of null (reading 'articleSummaries')" where
+ * `jamf_docs_get_article` listed the page. And a subcollection's own
+ * subcollections were not read, so their articles were in no entry. None of
+ * the 97 subcollections on support.jamf.com's 22 collection pages had any
+ * that day.
+ */
+function collectionToc(collection: RawCollection, source: StaticDocSource): TocEntry[] {
+  return [
+    ...listOf(collection.articleSummaries).map((summary): TocEntry => ({
+      title: asString(summary.title, 'Untitled'),
+      url: canonicalStaticUrl(source, asString(summary.url)),
+    })),
+    ...listOf(collection.subcollections).map((sub): TocEntry => {
+      const children = collectionToc(sub, source);
+      return {
+        title: asString(sub.name, 'Untitled'),
+        url: canonicalStaticUrl(source, asString(sub.url)),
+        ...(children.length > 0 ? { children } : {}),
+      };
+    }),
+  ];
 }
 
 /**

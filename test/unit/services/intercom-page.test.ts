@@ -106,14 +106,132 @@ describe('parseIntercomPage: a collection', () => {
     expect(holes?.content).toBe(`- [Kept](${ORIGIN}/en/articles/4-kept)`);
   });
 
-  it('reads an article before a collection, and neither from a page with neither', () => {
+  it('reads an article with something to show before a collection, and neither from a page with neither', () => {
     const both = parseIntercomPage(nextDataPage({
-      articleContent: { title: 'Article', blocks: [] },
-      collection: { name: 'Collection' },
+      articleContent: { title: 'Article', blocks: [{ type: 'paragraph', text: 'Body.' }] },
+      collection: { name: 'Collection', articleSummaries: [{ title: 'Filed', url: `${ORIGIN}/en/articles/2-filed` }] },
     }), SUPPORT);
     expect(both?.title).toBe('Article');
     expect(both?.kind).toBe('article');
+    expect(both?.content).toBe('Body.');
+    // The tree is read all the same, as `jamf_docs_get_toc` always read it.
+    expect(both?.toc).toEqual([{ title: 'Filed', url: `${ORIGIN}/en/articles/2-filed` }]);
     expect(parseIntercomPage(nextDataPage({ home: { collections: [] } }), SUPPORT)).toBeNull();
     expect(parseIntercomPage('<html><body>We will be back shortly.</body></html>', SUPPORT)).toBeNull();
+  });
+
+  // Until 2026-09-28 the article was read first whatever it held, and such a
+  // page was served as "Untitled", with nothing in it. No page read that day
+  // carried both.
+  it.each([
+    ['{}', {}],
+    ['no blocks', { title: 'Article', blocks: [] }],
+    ['blocks that are not a list', { title: 'Article', blocks: { type: 'paragraph', text: 'Body.' } }],
+    ['blocks that render to nothing', { title: 'Article', blocks: [{ type: 'paragraph', text: '' }] }],
+  ])('reads a page carrying a collection, and an articleContent of %s, as the collection', (_label, articleContent) => {
+    const page = parseIntercomPage(nextDataPage({
+      articleContent,
+      collection: { name: 'Collection', articleSummaries: [{ title: 'Filed', url: `${ORIGIN}/en/articles/2-filed` }] },
+    }), SUPPORT);
+
+    expect(page?.kind).toBe('collection');
+    expect(page?.title).toBe('Collection');
+    expect(page?.content).toBe(`- [Filed](${ORIGIN}/en/articles/2-filed)`);
+  });
+});
+
+describe('parseIntercomPage: an article\'s blocks as they come off the wire', () => {
+  const article = (blocks: unknown): ReturnType<typeof parseIntercomPage> =>
+    parseIntercomPage(nextDataPage({ articleContent: { title: 'Article', blocks } }), SUPPORT);
+
+  // Each of these failed `jamf_docs_get_article` until 2026-09-28. No live
+  // page had any that day.
+  it.each([
+    ['an object', { type: 'paragraph', text: 'Body.' }],
+    ['a string', 'Body.'],
+  ])('reads blocks that are %s as none, where it failed with "blocks.map is not a function"', (_label, blocks) => {
+    const page = article(blocks);
+
+    expect(page?.kind).toBe('article');
+    expect(page?.content).toBe('');
+    expect(page?.unreadBlocks).toBe(1);
+  });
+
+  it('leaves out a block that is not an object, where a null failed with "(reading \'type\')"', () => {
+    const page = article([null, 7, 'Body.', { type: 'paragraph', text: 'Kept.' }]);
+
+    expect(page?.content).toBe('Kept.');
+    expect(page?.unreadBlocks).toBe(3);
+  });
+
+  it('leaves out a list item that is not an object, where a null failed with "(reading \'content\')"', () => {
+    const page = article([
+      { type: 'orderedNestedList', items: [null, { content: [{ type: 'paragraph', text: 'First' }] }, 'x'] },
+      { type: 'unorderedNestedList', items: { content: [] } },
+      { type: 'orderedNestedList', items: [{ content: [null, { type: 'paragraph', text: 'Second' }] }] },
+    ]);
+
+    // The list whose items are not a list renders as an empty one.
+    expect(page?.content.split(/\n+/)).toEqual(['1. First', '1. Second']);
+    expect(page?.unreadBlocks).toBe(4);
+  });
+
+  it('reads a text that is not a string as none, and a number as its digits', () => {
+    const page = article([
+      { type: 'paragraph', text: { html: 'x' } },
+      { type: 'code', text: 42 },
+      { type: 'heading', text: ['Top'] },
+      { type: 7, text: 'Typed as a number.' },
+      { type: 'collapsibleSection', summary: 5, content: 'none' },
+      { type: 'image', url: null },
+    ]);
+
+    expect(page?.content).toBe([
+      '```\n42\n```',
+      '## ',
+      'Typed as a number.',
+      '**5**',
+    ].join('\n\n'));
+    // The paragraph's text, the heading's, and the section's content.
+    expect(page?.unreadBlocks).toBe(3);
+  });
+
+  it('keeps a table\'s columns where a cell cannot be read, and leaves out a row that is not an object', () => {
+    const cell = (text: string): unknown => ({ content: [{ type: 'paragraph', text }] });
+    const page = article([{
+      type: 'table',
+      rows: [
+        { cells: [cell('A'), cell('B'), cell('C')] },
+        null,
+        { cells: [null, cell('b'), { content: 'x' }] },
+        { cells: 'none' },
+      ],
+    }]);
+
+    expect(page?.content).toBe('| A | B | C |\n| --- | --- | --- |\n|  | b |  |');
+    expect(page?.unreadBlocks).toBe(4);
+  });
+
+  // A callout's `style` is an object on every live callout, and a table
+  // carries its flags (2026-09-28). Neither is read, so neither is counted.
+  it('counts nothing on a page it reads whole, fields it does not read included', () => {
+    const page = article([
+      { type: 'paragraph', text: 'Body.' },
+      {
+        type: 'callout',
+        style: { backgroundColor: '#d7efdc80', borderColor: '#1bb15733' },
+        content: [{ type: 'paragraph', text: 'Note.' }],
+      },
+      {
+        type: 'table',
+        container: false,
+        responsive: false,
+        stacked: true,
+        rows: [{ cells: [{ content: [{ type: 'paragraph', text: 'A' }], style: { backgroundColor: '#eee' } }] }],
+      },
+    ]);
+
+    expect(page?.content).toBe('Body.\n\n> Note.\n\n| A |\n| --- |');
+    expect(page?.unreadBlocks).toBeUndefined();
   });
 });

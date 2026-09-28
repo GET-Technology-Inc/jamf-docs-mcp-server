@@ -335,13 +335,13 @@ const READERS: Reader[] = [
   },
   {
     name: 'fetchStaticArticle (a concepts.jamf.com page)',
-    entry: namespaceIs('static-article-v2'),
+    entry: namespaceIs('static-article-v3'),
     page: CONCEPTS_GUIDE_URL,
     read: async ctx => await fetchStaticArticle(ctx, CONCEPTS, CONCEPTS_GUIDE_URL),
   },
   {
     name: 'fetchStaticArticle (a support.jamf.com article)',
-    entry: namespaceIs('static-article-v2'),
+    entry: namespaceIs('static-article-v3'),
     page: SUPPORT_ARTICLE,
     read: async ctx => await fetchStaticArticle(ctx, SUPPORT, SUPPORT_ARTICLE),
   },

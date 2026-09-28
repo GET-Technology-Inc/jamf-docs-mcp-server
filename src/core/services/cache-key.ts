@@ -161,8 +161,19 @@ export interface CacheKeySpaces {
    * entries hold neither, and would have served a support.jamf.com article
    * in the language its url names for 24 hours after an upgrade whatever
    * `language` said. A support.jamf.com collection page is an entry now too.
+   *
+   * v3 (2026-09-28): a support.jamf.com article's entry holds its related
+   * articles, and a page that only redirects, as concepts.jamf.com answers a
+   * url with no locale code, is held as where it redirects to
+   * (`CachedStaticRedirect`). v2 entries hold no related articles and hold
+   * such a page as an article titled "Redirecting...", and would have gone on
+   * serving both for 24 hours. v2 was in no release (6.0.13 has v1), so from
+   * 6.0.13 this is one move. `jamf_docs_get_toc` stores an entry here too,
+   * for a collection page it reads (static-article-cache.ts). The `url` has
+   * no fragment since the same day: one with a fragment was an entry of its
+   * own, which is not read again, and one without holds what it held.
    */
-  'static-article-v2': { source: string; url: string };
+  'static-article-v3': { source: string; url: string };
   /** A static source's sitemap, whole. One per source, so no per-locale part. */
   'static-sitemap': { source: string };
   /**
@@ -218,7 +229,10 @@ export interface CacheKeySpaces {
    *
    * The URL rather than a `locale` part beside the id, because the URL is
    * what the tree is read from: a key cannot then name one locale while the
-   * page it holds is another's.
+   * page it holds is another's. `jamf_docs_get_article` stores an entry here
+   * too, for a collection page it reads, under the address the page gives as
+   * its own, which is the one its locale's home page lists it by (22 of 22,
+   * 2026-09-28).
    */
   'intercom-collection-toc-v3': { source: string; url: string };
   /**
@@ -281,7 +295,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-topic-index-v2': true,
   'glossary-toc': true,
   'glossary-content': true,
-  'static-article-v2': true,
+  'static-article-v3': true,
   'static-sitemap': true,
   'static-search-index-v5': true,
   'static-section-titles': true,

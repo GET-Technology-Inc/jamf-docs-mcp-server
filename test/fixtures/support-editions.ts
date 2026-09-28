@@ -17,6 +17,9 @@
  * - `SELF_SERVICE_PLUS` is one of the 24 subcollections of Jamf Pro, which
  *   `jamf_docs_get_toc` lists by their collection page's URL. Its en edition
  *   lists 27 articles, and its ja edition 1.
+ *
+ * Where an edition has `relatedArticles`, they are its
+ * `articleContent.relatedArticles`, as the page listed them the same day.
  */
 
 /** A page's own list of its editions, as its `localeLinks` gives it. */
@@ -35,6 +38,8 @@ export interface ArticleEditionFixture {
   title: string;
   blocks: readonly { type: string; text: string }[];
   breadcrumbs: readonly CrumbFixture[];
+  /** Each url raw, as the page spells it. */
+  relatedArticles?: readonly { title: string; url: string }[];
 }
 
 export interface CollectionEditionFixture {
@@ -103,6 +108,12 @@ export const RENEW_PUSH_CERTIFICATE: SupportPageFixture<ArticleEditionFixture> =
         { name: 'Jamf Pro', url: 'https://support.jamf.com/ja/collections/12369024-jamf-pro' },
         { name: 'プッシュ証明書', url: 'https://support.jamf.com/ja/collections/12468624-プッシュ証明書' },
       ],
+      relatedArticles: [
+        { title: 'プッシュ証明書の作成に使用されたAppleアカウントの確認', url: 'https://support.jamf.com/ja/articles/11016585-プッシュ証明書の作成に使用されたappleアカウントの確認' },
+        { title: 'Jamf ID で Jamf アカウントにログインできない場合', url: 'https://support.jamf.com/ja/articles/11645274-jamf-id-で-jamf-アカウントにログインできない場合' },
+        { title: 'Jamf ID の多要素認証（MFA）が機能しない場合', url: 'https://support.jamf.com/ja/articles/11647778-jamf-id-の多要素認証-mfa-が機能しない場合' },
+        { title: 'ID プロバイダの認証情報で Jamf アカウントにログインできない場合', url: 'https://support.jamf.com/ja/articles/11657440-id-プロバイダの認証情報で-jamf-アカウントにログインできない場合' },
+      ],
     },
     es: {
       title: 'Renueve su Certificado de Notificaciones Push MDM en Jamf Pro',
@@ -147,6 +158,13 @@ export const JC_LOGIN_BLACK_SCREEN: SupportPageFixture<ArticleEditionFixture> = 
       ],
       breadcrumbs: [
         { name: 'Jamf Connect for macOS', url: 'https://support.jamf.com/en/collections/12380144-jamf-connect-for-macos' },
+      ],
+      relatedArticles: [
+        { title: 'MacOS 14.2 and Jamf Connect 2.27 or 2.28 Results in a Black Screen for Jamf Connect Login', url: 'https://support.jamf.com/en/articles/11003396-macos-14-2-and-jamf-connect-2-27-or-2-28-results-in-a-black-screen-for-jamf-connect-login' },
+        { title: 'Jamf Connect Menu Bar Password Change Window not Passing Device Compliance with Entra ID', url: 'https://support.jamf.com/en/articles/11003428-jamf-connect-menu-bar-password-change-window-not-passing-device-compliance-with-entra-id' },
+        { title: 'Creating Jamf Connect Configuration Profiles using Jamf Pro', url: 'https://support.jamf.com/en/articles/11003523-creating-jamf-connect-configuration-profiles-using-jamf-pro' },
+        { title: 'Standardized Introduction Workflow for Jamf Connect Login', url: 'https://support.jamf.com/en/articles/11003611-standardized-introduction-workflow-for-jamf-connect-login' },
+        { title: 'Log in at Jamf Connect login window if password was forgotten and reset in the identity provider', url: 'https://support.jamf.com/en/articles/11869912-log-in-at-jamf-connect-login-window-if-password-was-forgotten-and-reset-in-the-identity-provider' },
       ],
     },
   },

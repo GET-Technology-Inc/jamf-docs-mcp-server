@@ -206,6 +206,10 @@ Jamf 的搜尋也會把 Jamf Training Catalog (trainingcatalog.jamf.com) 的課�
 沒有這個網址時，才會沿用傳入的 `url`。concepts.jamf.com 與 support.jamf.com 的網址則依 `url` 取得，並附註說明
 `mapId` + `contentId` 已被忽略。`jamf_docs_get_toc` 以 collection 頁面的網址列出
 support.jamf.com 的每個子 collection，傳入這種網址會回傳該 collection 的文章清單。
+concepts.jamf.com 路徑開頭沒有語系代碼的網址，網站只會回應一個轉址到英文版頁面的頁面，
+因此會回傳該英文版頁面，並使用它本身的網址。網站根目錄 `https://concepts.jamf.com/`
+是在瀏覽器中選擇語言的頁面，會回傳英文版首頁 `/en/`。指定 `language` 時，兩者都會在
+網站有該語言版本時回傳該版本。
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
@@ -426,6 +430,10 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
   support.jamf.com 的 collection 頁面讀出；concepts.jamf.com 各區段索引頁列出的標題
   （其目錄與標題索引所用）；以及文章 `navigation` 所依據的 map TOC 索引。術語表的
   詞條清單雖然也是從 map 的目錄讀出，但隨術語表沿用 `CACHE_TTL_ARTICLE`。
+
+support.jamf.com 的 collection 頁面只會為兩種用途請求一次：`jamf_docs_get_article`
+與目錄或標題索引，誰先讀取該頁面，就會一併保存另一方從中讀取的內容，各自沿用自己的
+快取時間。
 
 文章的 breadcrumb 與內部連結是在取得文章時由 map TOC 索引建立，隨文章保存
 `CACHE_TTL_ARTICLE` 的時間；`navigation` 則每次呼叫都從索引讀取。因此
