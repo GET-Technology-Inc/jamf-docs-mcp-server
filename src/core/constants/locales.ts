@@ -35,6 +35,11 @@ export const DEFAULT_LOCALE = 'en-US';
  * reason th-TH does — those two guides are published in 11 locales, the
  * widest in the library, while everything else tops out at seven (the Jamf
  * Parent, Jamf Teacher and Jamf School Blueprints configuration guides).
+ *
+ * The MCP App bundles this list, names and all (app-ui/language.ts, since
+ * 2026-09-28), so editing it means regenerating
+ * src/core/apps/generated/app-html.ts with `npm run build:app-ui`: CI's "App
+ * UI bundle is up to date" check fails until then.
  */
 export const SUPPORTED_LOCALES = {
   'en-US': { name: 'English' },

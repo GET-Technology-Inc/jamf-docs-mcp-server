@@ -141,7 +141,9 @@ jobs:
 
       # src/core/apps/generated/app-html.ts is committed but generated. Rebuild
       # it and fail if the result differs, so the artifact can never drift from
-      # app-ui/ + scripts/build-app-ui.mjs.
+      # app-ui/ + scripts/build-app-ui.mjs + src/core/constants/locales.ts,
+      # which app-ui/language.ts imports (since 2026-09-28): a change to the
+      # locales under src/ alone needs the bundle regenerated too.
       #
       # This must stay ahead of the Build step below: `npm run build` runs
       # `build:app-ui` too, and would overwrite the evidence before it is read.

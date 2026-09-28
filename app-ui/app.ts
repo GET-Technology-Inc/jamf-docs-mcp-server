@@ -40,7 +40,9 @@ import {
   renderElsewhere,
   renderNoResults,
   searchBudgetNote,
+  suggestionArgs,
 } from './search.js';
+import { hostLanguage } from './language.js';
 import { toolErrorText } from './tool-error.js';
 
 // ---------------------------------------------------------------------------
@@ -113,6 +115,8 @@ interface TocView {
   version: string;
   /** The language asked for, if any; the next page is asked for in it. */
   language?: string;
+  /** The map the entries came from: with an entry's `contentId`, the pair that opens it. */
+  mapId?: string;
   totalEntries: number;
   page: number;
   totalPages: number;
@@ -226,18 +230,6 @@ const el = document.documentElement;
 const RTL = /^(ar|he|fa|ur|ps|ckb|yi)\b/i;
 
 /**
- * The locales the tools accept.
- *
- * `hostContext.locale` is BCP 47 and can be anything; the tool parameter is a
- * closed enum. Forwarding an unlisted locale is a validation error that fails
- * the call, so the app forwards only what the server can accept and otherwise
- * says nothing — which is what it did for every locale before.
- */
-const TOOL_LOCALES = new Set([
-  'en-US', 'ja-JP', 'zh-TW', 'de-DE', 'es-ES', 'fr-FR', 'nl-NL', 'th-TH',
-]);
-
-/**
  * How much of each view an *inline* panel renders.
  *
  * Claude's design guidelines put a hard constraint on inline apps: they fit
@@ -342,9 +334,13 @@ function applyHostEnvironment(ctx: Partial<McpUiHostContext>): void {
   }
 }
 
-/** The `language` argument to forward, if the host's locale is one the tools take. */
+/**
+ * The `language` argument to forward, if the host's locale is one the tools
+ * take. Only an article is opened in it: see app-ui/language.ts.
+ */
 function toolLanguage(): { language: string } | Record<string, never> {
-  return TOOL_LOCALES.has(env.locale) ? { language: env.locale } : {};
+  const language = hostLanguage(env.locale);
+  return language !== undefined ? { language } : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -954,7 +950,8 @@ function renderToc(view: TocView): string {
   el.style.setProperty('--cap', String(indentCap(env.width, indentPx)));
 
   const shown = isFullscreen() ? view.entries : view.entries.slice(0, INLINE_ROWS);
-  const items = renderTocItems(shown);
+  // With the map, so a row opens its own entry: see toc.ts.
+  const items = renderTocItems(shown, view.mapId);
   const more = !isFullscreen()
     ? expandAction(view.totalEntries - shown.length, 'entry')
     : view.page < view.totalPages && nextTocPageArgs(view) !== null
@@ -1399,6 +1396,19 @@ function pageArgs(view: View): { name: string; args: Record<string, unknown> } |
   return null;
 }
 
+/**
+ * Call a tool with `args` as they are, and show what it answers.
+ *
+ * Until 2026-09-28 the host's language was added to every call, over any
+ * `language` in `args`. So "Show more" asked for the next page of a search or
+ * a table of contents in the host's language rather than the page's, which is
+ * another language's search or tree: live that day, the Jamf Pro contents in
+ * ja-JP at `maxTokens: 1000` went on, on an en-US host, to the English
+ * "System Settings", which page 1 had already listed as "システム設定". A call
+ * now carries the language it is made in: the page's for the next page (see
+ * search.ts and toc.ts), the search's for a suggestion, and the host's where
+ * an article is opened (`openArticle`).
+ */
 async function call(
   name: string,
   args: Record<string, unknown>,
@@ -1417,7 +1427,7 @@ async function call(
   }, 120);
 
   try {
-    const result = await app.callServerTool({ name, arguments: { ...args, ...toolLanguage() } });
+    const result = await app.callServerTool({ name, arguments: args });
     if (mine !== seq) {
       return;
     }
@@ -1611,8 +1621,9 @@ async function openArticle(event: MouseEvent, target: HTMLElement): Promise<void
   event.preventDefault();
   target.setAttribute('aria-current', 'true');
 
-  // A search result also carries its `mapId` + `contentId` pair, which is
-  // what opens it when another result shares its url: see `articleArgs`.
+  // A search result or a table-of-contents row also carries its `mapId` +
+  // `contentId` pair, which is what opens it when another shares its url:
+  // see `articleArgs`.
   const { url, mapId, contentId } = target.dataset;
   if (url === undefined) {
     return;
@@ -1629,11 +1640,11 @@ async function openArticle(event: MouseEvent, target: HTMLElement): Promise<void
       // Fall through: the article is still worth opening.
     }
   }
-  // `call` adds the same `language` to the arguments.
+  // In the host's language, for the reader: the one call it is added to.
   const forwarded: { language?: string } = toolLanguage();
   await call(
     'jamf_docs_get_article',
-    articleArgs({ url, mapId, contentId }, forwarded.language),
+    { ...articleArgs({ url, mapId, contentId }, forwarded.language), ...forwarded },
     true,
     label === '' ? 'Article' : label,
   );
@@ -1677,8 +1688,16 @@ root.addEventListener('click', (event) => {
 
   const suggestion = target.closest<HTMLElement>('[data-search]');
   if (suggestion?.dataset.search !== undefined) {
+    // In the language of the search on screen, which the suggestion was made
+    // for (see search.ts), taken from the view as the paging arguments below
+    // are.
     const { search } = suggestion.dataset;
-    void call('jamf_docs_search', { query: search }, true, search);
+    void call(
+      'jamf_docs_search',
+      suggestionArgs(current?.kind === 'search' ? current.data : {}, search),
+      true,
+      search,
+    );
     return;
   }
 

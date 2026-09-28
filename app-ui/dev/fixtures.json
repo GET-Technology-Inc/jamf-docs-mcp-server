@@ -349,7 +349,7 @@
           "source": "Jamf Support Knowledge Base"
         },
         {
-          "title": "Restoring Icloud Backup During Automated Device Enrollment Ade",
+          "title": "Restoring iCloud Backup During Automated Device Enrollment ADE",
           "url": "https://support.jamf.com/en/articles/11571202-restoring-icloud-backup-during-automated-device-enrollment-ade",
           "source": "Jamf Support Knowledge Base"
         }
@@ -360,7 +360,416 @@
   {
     "key": "search-relaxed",
     "label": "Search — filter relaxed",
-    "why": "A version filter nothing matched, so the server dropped it and said so in filterRelaxation. The viewer must surface that, or the user reads results for the wrong version.",
+    "why": "A topic filter none of the results matched, so the server dropped it and said so in filterRelaxation. The viewer must surface that, or the user reads results the filter was meant to exclude as though it held. Until 2026-09-28 this asked for Jamf Pro 10.1.0, but a version filter goes upstream and is never relaxed: that search has no results.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "FileVault escrow",
+      "product": "jamf-pro",
+      "topic": "printers",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "FileVault escrow",
+      "filters": {
+        "product": "jamf-pro",
+        "topic": "printers"
+      },
+      "totalResults": 49,
+      "page": 1,
+      "totalPages": 5,
+      "limit": 10,
+      "maxTokens": 5000,
+      "hasMore": true,
+      "results": [
+        {
+          "title": "Generating and Escrowing a New Personal Recovery Key Using Terminal",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Generating_and_Escrowing_a_New_Personal_Recovery_Key_Using_Terminal",
+          "snippet": "...circumstances: FileVault is enabled and a valid key is not escrowed. You are switching from an institutional recovery key to a PRK. FileVault was enabled on...and escrow a new key without user interaction, see Issuing a New FileVault Recovery Key...a-tool-for-escrowing-missing-filevault-recovery-keys-jnuc...",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "8eh_r9Yb54M0xlEKSlQEJA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "FileVault Management",
+            "Generating and Escrowing a New Personal Recovery Key Using Terminal"
+          ]
+        },
+        {
+          "title": "Preparation for FileVault Enablement",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Preparing_for_FileVault_Deployment",
+          "snippet": "...key to be automatically escrowed by Jamf Pro during the enablement process. Note: While FileVault can be enabled on...PRK is immediately escrowed by the Jamf binary when FileVault is enabled on the computer. For computers with macOS 26 or later, if a FileVault recovery key escrow profile is installed...",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "feSmoUH~oJLnnfa2rhwxxA",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "Preparation for FileVault Enablement"
+          ]
+        },
+        {
+          "title": "FileVault Encryption",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/FileVault",
+          "snippet": "...encryption, FileVault can escrow a personal recovery...their PRKs escrowed in Jamf Pro. You can turn on FileVault using the following...user to turn on FileVault either at login or logout. If configured to use a PRK, the computer escrows the key with Jamf Pro...user to turn on FileVault either at login or...",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "iFwHWxE2~hu6gknsDyiUWw",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption"
+          ]
+        },
+        {
+          "title": "Turning on FileVault Disk Encryption Using a Configuration Profile",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Activating_FileVault_Disk_Encryption_using_a_Configuration_Profile",
+          "snippet": "...to prompt FileVault enablement setting,...Pro. Click Escrow Personal Recovery Key to.... Click Save . The FileVault settings are deployed immediately to computers in the scope. Volumes are encrypted after users authenticate to macOS upon logging out. Related content Turning On FileVault with Jamf Connect",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "BsIIJtfsIN8yWGQzpIlK7A",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "Turning on FileVault",
+            "Turning on FileVault Disk Encryption Using a Configuration Profile"
+          ]
+        },
+        {
+          "title": "FileVault Management",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Managing_FileVault_on_Encrypted_Computers",
+          "snippet": "After FileVault has been activated on target computers and encryption has completed, you can use Jamf Pro to view the recovery key and issue a new one. You can also query the Jamf Pro database to see information about each time FileVault data in Jamf Pro has been viewed or interacted with.",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "gAh1wMvGFEN9VY_MxqjX_A",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "FileVault Management"
+          ]
+        },
+        {
+          "title": "Turning on FileVault",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Activating_FileVault_Disk_Encryption_on_managed_computers",
+          "snippet": "You can use Jamf Pro to turn on FileVault on managed computers using one of the following methods: Configuration profile Disk encryption configuration and policy Note: Choose only one method to turn on FileVault. Using more than one method per target computer can result in unexpected behaviors.",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "zzI_bwBnnh7~uWEHhEUAhw",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "Turning on FileVault"
+          ]
+        },
+        {
+          "title": "FileVault Information Access Auditing",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/jss_audit",
+          "snippet": "...of the object that was accessed. audit_where —Where it was accessed in the Jamf Pro server. This allows you to monitor access to FileVault information in Jamf Pro by querying the Jamf Pro database. If you need assistance with querying your Jamf Pro database, or if your environment is hosted in...",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "vML7B5v8L0x44T44MgTh3g",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "FileVault Management",
+            "FileVault Information Access Auditing"
+          ]
+        },
+        {
+          "title": "Enabling FileVault Disk Encryption Using a Policy",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Activating_FileVault_Disk_Encryption_via_Policy",
+          "snippet": "Enabling FileVault disk encryption using a policy involves the following steps: Creating a disk encryption configuration Deploying the disk encryption configuration to target computers using a policy",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "96vNQzmQRjk6FlOMwlCw9g",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Settings and Security Management for Computers",
+            "FileVault Encryption",
+            "Turning on FileVault",
+            "Enabling FileVault Disk Encryption Using a Policy"
+          ]
+        },
+        {
+          "title": "Disk Encryption Category",
+          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Disk_Encryption_Category",
+          "snippet": "...Validation (&quot;FileVault 2 Individual Key Validation&quot; criteria) Displays whether the personal (also known as &quot;individual&quot;) recovery key on a computer matches the personal recovery key escrowed for that computer in...If the PRK was escrowed using a Jamf Pro...a specified FileVault disk encryption...",
+          "version": "11.32.0",
+          "docType": "documentation",
+          "mapId": "A4LI4vM0BILraYeOD89WGg",
+          "contentId": "d5xGGzG4y_r~UQ5DR6Ri3Q",
+          "mapTitle": "Jamf Pro Documentation 11.32.0",
+          "otherVersions": [
+            "11.31.0",
+            "11.30.0",
+            "11.29.0",
+            "11.28.0",
+            "11.27.0",
+            "11.26.0",
+            "11.25.0",
+            "11.24.0",
+            "11.23.0",
+            "11.22.0",
+            "11.21.0",
+            "11.20.0",
+            "11.19.0",
+            "11.18.0",
+            "11.17.0",
+            "11.16.0",
+            "11.15.0",
+            "11.14.0",
+            "11.13.0"
+          ],
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Managing Computers",
+            "Inventory for Computers",
+            "Computer Inventory and Criteria Reference",
+            "Disk Encryption Category"
+          ]
+        },
+        {
+          "title": "Lesson 2: Security Settings for Apple Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-170-course-current/Lesson_2",
+          "snippet": "...FileVault enablement, select the At Login toggle button. Enable Escrow Personal Recovery Key and enter a location for the Escrow Location Description. Scope the profile to a test computer and click Save. Log in to the test computer and complete the FileVault process. View the escrowed recovery...",
+          "docType": "training",
+          "mapId": "YGPeGpLY~GqSgHNadbBCUA",
+          "contentId": "MJ6xYY1jg7U2_Q2_6e1sNg",
+          "mapTitle": "Jamf 170 Course",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Section 1: Apple Security",
+            "Lesson 2: Security Settings for Apple Devices"
+          ]
+        }
+      ],
+      "filterRelaxation": {
+        "removed": [
+          "topic"
+        ],
+        "original": {
+          "topic": "printers"
+        },
+        "message": "No results with all filters applied. Removed filter(s): topic. Try broader search terms or fewer filters."
+      },
+      "otherSources": [
+        {
+          "title": "Enabling FileVault Encryption Using Jamf Now",
+          "url": "https://support.jamf.com/en/articles/11030979-enabling-filevault-encryption-using-jamf-now",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Cancel FileVault Enablement",
+          "url": "https://support.jamf.com/en/articles/11016666-cancel-filevault-enablement",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "FileVault Configuration Profile Certificate in Jamf Pro",
+          "url": "https://support.jamf.com/en/articles/11016691-filevault-configuration-profile-certificate-in-jamf-pro",
+          "source": "Jamf Support Knowledge Base"
+        }
+      ],
+      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
+    }
+  },
+  {
+    "key": "search-empty",
+    "label": "Search — no results",
+    "why": "Exercises the empty state and the suggestions list, and the other-source matches it shows in either display mode: no documentation is at version 10.1.0, so nothing matched. Until 2026-09-28 this was \"zzzqqq nonexistent topic\", which had 50 results, such as \"Advanced Topics\".",
     "tool": "jamf_docs_search",
     "arguments": {
       "query": "FileVault escrow",
@@ -382,17 +791,17 @@
       "results": [],
       "otherSources": [
         {
-          "title": "Enabling Filevault Encryption Using Jamf Now",
+          "title": "Enabling FileVault Encryption Using Jamf Now",
           "url": "https://support.jamf.com/en/articles/11030979-enabling-filevault-encryption-using-jamf-now",
           "source": "Jamf Support Knowledge Base"
         },
         {
-          "title": "Cancel Filevault Enablement",
+          "title": "Cancel FileVault Enablement",
           "url": "https://support.jamf.com/en/articles/11016666-cancel-filevault-enablement",
           "source": "Jamf Support Knowledge Base"
         },
         {
-          "title": "Filevault Configuration Profile Certificate in Jamf Pro",
+          "title": "FileVault Configuration Profile Certificate in Jamf Pro",
           "url": "https://support.jamf.com/en/articles/11016691-filevault-configuration-profile-certificate-in-jamf-pro",
           "source": "Jamf Support Knowledge Base"
         }
@@ -402,216 +811,6 @@
         "disk encryption",
         "recovery key"
       ]
-    }
-  },
-  {
-    "key": "search-empty",
-    "label": "Search — no results",
-    "why": "Exercises the empty state and the suggestions list.",
-    "tool": "jamf_docs_search",
-    "arguments": {
-      "query": "zzzqqq nonexistent topic",
-      "responseFormat": "json"
-    },
-    "structuredContent": {
-      "query": "zzzqqq nonexistent topic",
-      "totalResults": 50,
-      "page": 1,
-      "totalPages": 5,
-      "limit": 10,
-      "maxTokens": 5000,
-      "hasMore": true,
-      "results": [
-        {
-          "title": "Advanced Topics",
-          "url": "https://learn.jamf.com/r/en-US/elevate-documentation/Advanced_Topics",
-          "snippet": "Advanced Topics — Elevate",
-          "docType": "documentation",
-          "mapId": "ulGSurHfb386BC0K9bkNdw",
-          "contentId": "vCahOkFP_zaaBboIpnY1kg",
-          "mapTitle": "Elevate Documentation",
-          "product": "Elevate",
-          "breadcrumb": [
-            "Advanced Topics"
-          ]
-        },
-        {
-          "title": "Supervision",
-          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Supervision",
-          "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
-          "version": "11.32.0",
-          "docType": "documentation",
-          "mapId": "A4LI4vM0BILraYeOD89WGg",
-          "contentId": "CnnOkiwxHgpZ~bsj7l4R7w",
-          "mapTitle": "Jamf Pro Documentation 11.32.0",
-          "otherVersions": [
-            "11.31.0",
-            "11.30.0",
-            "11.29.0",
-            "11.28.0",
-            "11.27.0",
-            "11.26.0",
-            "11.25.0",
-            "11.24.0",
-            "11.23.0",
-            "11.22.0",
-            "11.21.0",
-            "11.20.0",
-            "11.19.0",
-            "11.18.0",
-            "11.17.0",
-            "11.16.0",
-            "11.15.0",
-            "11.14.0",
-            "11.13.0"
-          ],
-          "product": "Jamf Pro",
-          "breadcrumb": [
-            "Managing Mobile Devices",
-            "Settings and Security Management for Mobile Devices",
-            "Supervision"
-          ]
-        },
-        {
-          "title": "Renewing the Push Certificate",
-          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Renewing_the_Push_Certificate",
-          "snippet": "...the push certificate, and make note or take a screenshot of the topic bundle identifier. Click Renew . Choose a method for renewing the push...renew the push certificate in the Apple Push Certificates Portal, make sure the topic bundle identifier you noted earlier matches the identifier in the portal.",
-          "version": "11.32.0",
-          "docType": "documentation",
-          "mapId": "A4LI4vM0BILraYeOD89WGg",
-          "contentId": "jhaRzrAeNYDDWe~3T8rdgw",
-          "mapTitle": "Jamf Pro Documentation 11.32.0",
-          "otherVersions": [
-            "11.31.0",
-            "11.30.0",
-            "11.29.0",
-            "11.28.0",
-            "11.27.0",
-            "11.26.0",
-            "11.25.0",
-            "11.24.0",
-            "11.23.0",
-            "11.22.0",
-            "11.21.0",
-            "11.20.0",
-            "11.19.0",
-            "11.18.0",
-            "11.17.0",
-            "11.16.0",
-            "11.15.0",
-            "11.14.0",
-            "11.13.0"
-          ],
-          "product": "Jamf Pro",
-          "breadcrumb": [
-            "Global Management Settings",
-            "Push Certificates",
-            "Renewing the Push Certificate"
-          ]
-        },
-        {
-          "title": "Insights",
-          "url": "https://learn.jamf.com/r/en-US/jamf-rapididentity-documentation/understanding-users-with-rapididentity-insights",
-          "snippet": "...utilization tracking to identify unused or underutilized digital curriculum applications The Insights module includes the following topics, each providing distinct data perspectives: Topic Description Users Provides school usage analytics, including growth metrics, teacher-student ratios, and...",
-          "docType": "documentation",
-          "mapId": "z4D9NauuOznmw4bcf~x1iw",
-          "contentId": "PzfnG8f8BvneT7GM0DOwAA",
-          "mapTitle": "RapidIdentity Platform Documentation",
-          "product": "RapidIdentity",
-          "breadcrumb": [
-            "Identity Solutions",
-            "Identity Lifecycle Management",
-            "Insights"
-          ]
-        },
-        {
-          "title": "Supervision",
-          "url": "https://learn.jamf.com/r/en-US/jamf-now-documentation/Supervision",
-          "snippet": "...restrictions or sending management commands) are available only for supervised computers and devices. For more information, see the following topics in Apple Platform Deployment: Review MDM payloads for Apple devices MDM restrictions for supervised Apple devices MDM commands for Apple devices",
-          "docType": "documentation",
-          "mapId": "VtT2s4tzZgWnlMWVuiQI2A",
-          "contentId": "7T7OujfZg0xn5Yx6M8gQ~Q",
-          "mapTitle": "Jamf Now Documentation",
-          "product": "Jamf Now",
-          "breadcrumb": [
-            "Device Management",
-            "Supervision"
-          ]
-        },
-        {
-          "title": "Additional Information",
-          "url": "https://learn.jamf.com/r/en-US/technical-articles/Additional_Information",
-          "snippet": "For more information about the bootstrap token on macOS, see the following topics in Apple Platform Deployment: Use secure token, bootstrap token, and volume ownership in deployments Manage FileVault with mobile device management For more information about using the bootstrap token to manage...",
-          "docType": "documentation",
-          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
-          "contentId": "2Vbcimug0DgiBU7lrTn9YQ",
-          "mapTitle": "Technical Articles",
-          "product": "",
-          "breadcrumb": [
-            "Device Management",
-            "Leveraging Apple's Bootstrap Token Functionality",
-            "Additional Information"
-          ]
-        },
-        {
-          "title": "Security Overview",
-          "url": "https://learn.jamf.com/r/en-US/jamf-auto-update-documentation/Security_Overview",
-          "snippet": "Jamf Auto Update uses encrypted communications, signed software, and minimal data collection throughout. The following topics describe the security measures that apply to the service infrastructure, communications, data handling, software packaging, and client components: Service Infrastructure...",
-          "docType": "documentation",
-          "mapId": "6JXG~38SifVdyJKsU1MyVQ",
-          "contentId": "6RWh4sm_nClxJoeKX_9w3g",
-          "mapTitle": "Jamf Auto Update Documentation",
-          "product": "",
-          "breadcrumb": [
-            "Security Overview"
-          ]
-        },
-        {
-          "title": "General Requirements",
-          "url": "https://learn.jamf.com/r/en-US/jamf-connect-documentation-current/General-Requirements",
-          "snippet": "...to devices under management Familiarity with your device management platform, and the ability to adapt the generic configurations provided in the following topics for your specific device management solution An activation profile that enables Zero Trust Network Access (ZTNA). For more information,...",
-          "version": "Enter the latest product version for which the topic was revised.",
-          "mapId": "bjs61pwUXJK9FzeINitaJA",
-          "contentId": "NMAuPbiWjDpOkr52PFoL3Q",
-          "mapTitle": "Jamf Connect Documentation",
-          "product": "",
-          "breadcrumb": [
-            "Zero Trust Network Access",
-            "Deploying Zero Trust Network Access",
-            "Optimizing Zero Trust Network Access Deployment for Managed Devices",
-            "Bootstrapping Jamf Trust App Activation via Managed App Configuration",
-            "General Requirements"
-          ]
-        },
-        {
-          "title": "Administrator Management",
-          "url": "https://learn.jamf.com/r/en-US/jamf-safe-internet-documentation/Administrator_Management",
-          "snippet": "This topic explains how administrator accounts are configured in Safe Internet. To access the Administration section, click Settings &gt; Administrators.",
-          "docType": "documentation",
-          "mapId": "o~jRfY0909ZcujCBWOLBsw",
-          "contentId": "ji6koA5dmEEn3Bsyp7SAxg",
-          "mapTitle": "Jamf Safe Internet Documentation",
-          "product": "Jamf Safe Internet",
-          "breadcrumb": [
-            "Safe Internet Portal Settings",
-            "Administrator Management"
-          ]
-        },
-        {
-          "title": "Overview",
-          "url": "https://learn.jamf.com/r/en-US/technical-paper-venafi-current/Overview",
-          "snippet": "...experience, follow the topics in order using the Contents panel on the left (mobile users: tap Table of Contents). Each topic builds on the previous one to guide you through the complete workflow. You can also use the search box in the top-right corner to find specific topics quickly. This guide is...",
-          "docType": "documentation",
-          "mapId": "X0VStIoDYxFoH1CVMZ12CA",
-          "contentId": "9CIeeEm3z72PN7quYuJ8oA",
-          "mapTitle": "Technical Paper: Integrating with Venafi Using Jamf Pro",
-          "product": "Jamf Pro",
-          "breadcrumb": [
-            "Overview"
-          ]
-        }
-      ],
-      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
     }
   },
   {
@@ -986,7 +1185,7 @@
       ],
       "otherSources": [
         {
-          "title": "Adfs Federation and Jamf Connect Authentication Errors",
+          "title": "ADFS Federation and Jamf Connect Authentication Errors",
           "url": "https://support.jamf.com/en/articles/11003570-adfs-federation-and-jamf-connect-authentication-errors",
           "source": "Jamf Support Knowledge Base"
         }
@@ -3232,7 +3431,7 @@
   {
     "key": "article-zh",
     "label": "Article — zh-TW request",
-    "why": "Jamf publishes no translation for most pages, so this returns en-US with a localeNote. Also the RTL/CJK line-breaking case.",
+    "why": "A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. It does not reach the notice for an untranslated page, which reads contentLocale, and only an ArticleProvider sets that; until 2026-09-28 this said it returned en-US with a localeNote.",
     "tool": "jamf_docs_get_article",
     "arguments": {
       "url": "https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html",

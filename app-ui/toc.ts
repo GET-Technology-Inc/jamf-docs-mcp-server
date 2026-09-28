@@ -16,10 +16,16 @@
  */
 
 import { esc } from './escape.js';
+import { hitIdAttributes } from './search.js';
 
 export interface TocEntry {
   title: string;
   url: string;
+  /**
+   * With the TOC's `mapId`, the pair that opens this entry: see
+   * {@link renderTocItems}. Absent from a TOC that is not a Fluid Topics map.
+   */
+  contentId?: string;
   /**
    * Nesting level, 0 for a top-level entry. Optional because the field only
    * arrived in server 4.2.0: against an older server every entry renders
@@ -101,8 +107,18 @@ export function indentSteps(depth: unknown): number {
  * The step travels as a custom property rather than as a `padding-left` so the
  * one place that decides how wide a level is stays in the stylesheet, beside
  * the padding it adds to.
+ *
+ * A row also carries `mapId`, the TOC's map, and its entry's `contentId`, the
+ * pair a click opens it by, as a search result does (see `articleArgs` in
+ * search.ts). Until 2026-09-28 a row was opened by its url alone. Jamf
+ * publishes some different topics at one url, and the url fetches only one:
+ * live that day, "Use LAPS" in the LAPS paper's contents opened "Using LAPS
+ * in the Jamf Pro API", listed under it at the same url, and the Technical
+ * Articles contents list 178 entries at 46 such urls. And `jamf_docs_get_article`
+ * found no topic at all at some urls that the pair opens, such as Jamf Pro's
+ * `…/Configuring-the-Branding-Settings`.
  */
-export function renderTocItems(entries: TocEntry[]): string {
+export function renderTocItems(entries: TocEntry[], mapId?: unknown): string {
   return entries
     .map((entry) => {
       const steps = indentSteps(entry.depth);
@@ -112,7 +128,8 @@ export function renderTocItems(entries: TocEntry[]): string {
       const top = steps === 0 ? ' data-top' : '';
       return (
         `<li><a class="row"${top} href="${esc(entry.url)}" data-url="${esc(entry.url)}"`
-        + ` style="--depth:${String(steps)}">${esc(entry.title)}</a></li>`
+        + `${hitIdAttributes({ mapId, contentId: entry.contentId })} style="--depth:${String(steps)}">`
+        + `${esc(entry.title)}</a></li>`
       );
     })
     .join('');

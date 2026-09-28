@@ -19,12 +19,20 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import vm from 'node:vm';
-import ts from 'typescript';
 
 import { nextTocPageArgs, tocBudgetNote, type TocPaging } from '../../../app-ui/toc.js';
 import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
-import { inlinedScript, showMoreArgsFunction } from '../../helpers/app-bundle.js';
+import {
+  bundledDeclaration,
+  bundledFunction,
+  bundledFunctionsContaining,
+  showMoreArgsFunction,
+} from '../../helpers/app-bundle.js';
+
+/** An identifier from the bundle, escaped for a RegExp. */
+function literal(identifier: string): string {
+  return identifier.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
 
 describe('the next page of a table of contents', () => {
   it('is asked for at the budget the page on screen was cut to', () => {
@@ -119,62 +127,20 @@ describe('the built bundle', () => {
   });
 
   it('shows "Show more" only when there is a next page to ask for', () => {
-    expect(APP_HTML).toMatch(/\.hasMore===!1\)return null/);
-    expect(APP_HTML).toMatch(/\.page<[\w$]+\.totalPages&&[\w$]+\([\w$]+\)!==null\?`<button class="more" data-more>Show more of/);
+    // In the TOC's own builder, found by the tool it asks. Until 2026-09-28
+    // the `hasMore` check was matched anywhere in the bundle, and the search
+    // builder has the same one, so the TOC's could go unnoticed.
+    const builders = bundledFunctionsContaining('name:"jamf_docs_get_toc"');
+    expect(builders).toHaveLength(1);
+    const builder = builders[0] ?? '';
+    expect(bundledDeclaration(builder)?.getText()).toMatch(/\|\|[\w$]+\.hasMore===!1\)return null;/);
+    expect(APP_HTML).toMatch(new RegExp(
+      `\\.page<[\\w$]+\\.totalPages&&${literal(builder)}\\([\\w$]+\\)!==null\\?\`<button class="more" data-more>Show more of`,
+    ));
   });
 });
 
 type PageArgs = (view: unknown) => { name: string; args: Record<string, unknown> } | null;
-
-/**
- * The function the bundle declares as `name`, run from the bundle itself: its
- * declaration and those of the functions it names, from the scope it is
- * declared in, evaluated in a context of their own. None of them touches the
- * DOM, so no browser is needed to run them, only to run the whole bundle.
- */
-function bundledFunction(name: string): PageArgs {
-  const file = ts.createSourceFile('app.js', inlinedScript(), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-  let scope: readonly ts.Statement[] | undefined;
-  const findScope = (node: ts.Node): void => {
-    if (scope !== undefined) { return; }
-    if ((ts.isBlock(node) || ts.isSourceFile(node))
-      && node.statements.some(s => ts.isFunctionDeclaration(s) && s.name?.text === name)) {
-      scope = node.statements;
-      return;
-    }
-    ts.forEachChild(node, findScope);
-  };
-  findScope(file);
-  if (scope === undefined) {
-    throw new Error(
-      `The built bundle has no function declaration named ${name}, the name the "Show more" click handler `
-      + 'calls: esbuild may now emit pageArgs as an expression or inline it.',
-    );
-  }
-  const declared = new Map<string, ts.FunctionDeclaration>();
-  for (const statement of scope) {
-    if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
-      declared.set(statement.name.text, statement);
-    }
-  }
-  // Every function of that scope the body names, and every one those name.
-  // A name that is only a property or a shadowing local adds a declaration
-  // nothing calls, which is harmless.
-  const needed = new Set<string>();
-  const need = (fn: string): void => {
-    const declaration = declared.get(fn);
-    if (declaration === undefined || needed.has(fn)) { return; }
-    needed.add(fn);
-    const walk = (node: ts.Node): void => {
-      if (ts.isIdentifier(node)) { need(node.text); }
-      ts.forEachChild(node, walk);
-    };
-    walk(declaration);
-  };
-  need(name);
-  const source = [...needed].map(fn => declared.get(fn)?.getText(file) ?? '').join('\n');
-  return vm.runInNewContext(`${source}\n${name}`) as PageArgs;
-}
 
 describe('a click on "Show more" in the built bundle', () => {
   // The regex above matches the body of nextTocPageArgs, which the label also
@@ -185,7 +151,7 @@ describe('a click on "Show more" in the built bundle', () => {
   // on a TOC view.
   let pageArgs: PageArgs | undefined;
   const onScreen = (data: Record<string, unknown>): ReturnType<PageArgs> => {
-    pageArgs ??= bundledFunction(showMoreArgsFunction());
+    pageArgs ??= bundledFunction(showMoreArgsFunction()) as PageArgs;
     // Through JSON: the objects were made in another context, and this
     // compares what goes over the wire.
     return JSON.parse(JSON.stringify(pageArgs({ kind: 'toc', data }))) as ReturnType<PageArgs>;
