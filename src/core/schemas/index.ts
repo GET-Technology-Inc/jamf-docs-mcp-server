@@ -21,6 +21,7 @@ import {
 import { completeProduct, completeTopic, completeVersion, completeLanguage } from '../completions.js';
 import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
+import { CJK_CHARACTER } from '../utils/cjk.js';
 
 // Response format enum
 const ResponseFormatSchema = z.nativeEnum(ResponseFormat);
@@ -121,14 +122,35 @@ export const ListProductsInputSchema = z.object({
 
 export type ListProductsInput = z.infer<typeof ListProductsInputSchema>;
 
+const QUERY_TOO_SHORT = 'Query must be at least 2 characters, or one Chinese, Japanese or Korean character';
+
 /**
  * Schema for jamf_docs_search
  */
 export const SearchInputSchema = z.object({
+  // Two characters, or one Chinese, Japanese or Korean one. One Latin letter
+  // is not a word, but one Han character can be: 鎖 is "lock", 鍵 "key".
+  // Until 2026-09-28 every query needed two characters, so those were refused
+  // before anything was searched, though Fluid Topics answers them: live and
+  // read-only that day, 鎖 had 337 results in zh-TW and 鍵 384 in ja-JP, and
+  // each of the first ten highlighted the character.
+  //
+  // JSON Schema could say "one, if it is one of these scripts" only with a
+  // `pattern`: a `\p{...}` class needs the `u` flag, which not every
+  // validator reads, and spelling the scripts out as code-point ranges would
+  // be an unwieldy pattern to publish. So the published schema carries
+  // `minLength: 1`, the lower bound that holds, and the description states
+  // the rule. Lengths are UTF-16 code units, as `.min()` counts them; the
+  // refinement looks only at a query of one, which leaves every query of two
+  // or more as it was.
   query: z.string()
-    .min(2, 'Query must be at least 2 characters')
+    .min(1, QUERY_TOO_SHORT)
     .max(200, 'Query must not exceed 200 characters')
-    .describe('Search keywords to find in Jamf documentation'),
+    .refine(query => query.length !== 1 || CJK_CHARACTER.test(query), QUERY_TOO_SHORT)
+    .describe(
+      'Search keywords to find in Jamf documentation: 2-200 characters, or one Chinese, ' +
+      'Japanese or Korean character'
+    ),
 
   product: completable(
     z.enum(PRODUCT_IDS)

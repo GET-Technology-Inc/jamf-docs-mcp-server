@@ -37,7 +37,8 @@ describe('SEARCH_EXAMPLES', () => {
   });
 
   it('every query satisfies SearchInputSchema length bounds', () => {
-    // SearchInputSchema enforces 2..200 characters on query
+    // Every example is 2..200 characters, the bounds SearchInputSchema sets
+    // for a Latin query (one Chinese, Japanese or Korean character is enough)
     for (const ex of SEARCH_EXAMPLES) {
       expect(ex.query.length, `example "${ex.label}" has query too short`).toBeGreaterThanOrEqual(2);
       expect(ex.query.length, `example "${ex.label}" has query too long`).toBeLessThanOrEqual(200);
