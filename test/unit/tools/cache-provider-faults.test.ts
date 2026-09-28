@@ -46,6 +46,7 @@ import { GLOSSARY_MAP_ID, LIVE_GLOSSARY_TOC, serveGlossaryContent } from '../../
 import { CLUSTERED_SEARCH, CONCEPTS_SITEMAP, MAPS_LIST, PRESTAGE } from '../../helpers/search-upstream.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
 import { SUPPORT_COLLECTIONS_BY_LOCALE } from '../../fixtures/support-collections-by-locale.js';
+import { conceptsIndexPage, conceptsIndexUrl } from '../../helpers/concepts-index-pages.js';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,11 @@ function upstream(): HttpClient {
           return sitemap('https://concepts.jamf.com/en/concepts/setup-manager', CONCEPTS_GUIDE_URL);
         case CONCEPTS_GUIDE_URL:
           return CONCEPTS_GUIDE_HTML;
+        // Where concepts.jamf.com lists its pages' titles (static-titles.ts).
+        case conceptsIndexUrl('en', 'guides'):
+          return conceptsIndexPage('en', 'guides');
+        case conceptsIndexUrl('en', 'concepts'):
+          return conceptsIndexPage('en', 'concepts');
         case `${SUPPORT_ORIGIN}/sitemap.xml`:
           return sitemap(collection.first.url);
         case collectionUrl:

@@ -15,6 +15,7 @@ import { loadOnce } from '../../../src/core/services/load-once.js';
 import { fetchIntercomCollectionToc, listIntercomCollections } from '../../../src/core/services/intercom-service.js';
 import { loadSitemap } from '../../../src/core/services/sitemap-service.js';
 import { loadStaticIndex } from '../../../src/core/services/static-search-service.js';
+import { loadListedTitles } from '../../../src/core/services/static-titles.js';
 import { fetchStaticArticle } from '../../../src/core/services/static-article-service.js';
 import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
 import { cacheKey, type CacheKey } from '../../../src/core/services/cache-key.js';
@@ -26,6 +27,7 @@ import type { FtTocNode } from '../../../src/core/types.js';
 import { createMockCache, createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 import { collectionIn, createSupportUpstream, homeUrl, listedUrl, nextDataPage } from '../../helpers/support-upstream.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
+import { conceptsIndexPage, conceptsIndexUrl } from '../../helpers/concepts-index-pages.js';
 
 const KEY = cacheKey('static-sitemap', { source: 'jamf-concepts' });
 const OTHER_KEY = cacheKey('static-sitemap', { source: 'jamf-support' });
@@ -204,6 +206,8 @@ function held(): Held {
       return `<urlset><url><loc>${CONCEPTS.baseUrl}/en/concepts/jamformer</loc></url></urlset>`;
     }
     if (url === CONCEPTS_GUIDE_URL) { return CONCEPTS_GUIDE_HTML; }
+    if (url === conceptsIndexUrl('en', 'guides')) { return conceptsIndexPage('en', 'guides'); }
+    if (url === conceptsIndexUrl('en', 'concepts')) { return conceptsIndexPage('en', 'concepts'); }
     if (url === SUPPORT_ARTICLE) {
       return nextDataPage({
         articleContent: { title: 'Grant Secure Token', blocks: [{ type: 'paragraph', text: 'Body.' }] },
@@ -257,6 +261,8 @@ interface Reader {
   entry: (key: CacheKey) => boolean;
   /** The one page a cold read requests. */
   page: string;
+  /** Pages a cold read requests besides, through readers of their own. */
+  alsoRequests?: string[];
   read: (ctx: ServerContext) => Promise<unknown>;
 }
 
@@ -284,12 +290,20 @@ const READERS: Reader[] = [
     read: async ctx => await loadSitemap(ctx, CONCEPTS),
   },
   {
-    // Built from the sitemap loadSitemap caches, so a second build requests
-    // nothing, and only the index's second write tells it from one build.
+    // Built from the sitemap loadSitemap caches and the titles the section
+    // index pages list, so a second build requests nothing, and only the
+    // index's second write tells it from one build.
     name: 'loadStaticIndex (a locale\'s search title index)',
     entry: key => key.startsWith('static-search-index-'),
     page: CONCEPTS_SITEMAP,
+    alsoRequests: [conceptsIndexUrl('en', 'guides'), conceptsIndexUrl('en', 'concepts')],
     read: async ctx => await loadStaticIndex(ctx, CONCEPTS, 'en'),
+  },
+  {
+    name: 'loadListedTitles (a concepts.jamf.com section\'s index page)',
+    entry: namespaceIs('static-section-titles'),
+    page: conceptsIndexUrl('en', 'guides'),
+    read: async ctx => await loadListedTitles(ctx, CONCEPTS, 'en', CONCEPTS.sections.slice(0, 1)),
   },
   {
     name: 'fetchStaticArticle (a concepts.jamf.com page)',
@@ -318,7 +332,7 @@ describe('each reader that shares a load reads its entry inside the load', () =>
   // second call starts while the first is waiting on its page, and any read
   // of the entry it makes outside a load is answered, with the miss it read,
   // only after the first call has settled.
-  it.each(READERS)('$name', async ({ entry, page, read }) => {
+  it.each(READERS)('$name', async ({ entry, page, alsoRequests = [], read }) => {
     const { ctx, requests, reads, writes, requested, answer, holdReads } = held();
 
     const first = read(ctx);
@@ -333,7 +347,7 @@ describe('each reader that shares a load reads its entry inside the load', () =>
     firstSettled.resolve();
 
     expect(await second).toEqual(answered);
-    expect(requests).toEqual([page]);
+    expect([...requests].sort()).toEqual([page, ...alsoRequests].sort());
     expect(writes.filter(written => written === key)).toHaveLength(1);
   });
 });

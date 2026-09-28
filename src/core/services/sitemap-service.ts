@@ -5,16 +5,20 @@
  * not — but concepts.jamf.com publishes a sitemap whose paths already encode
  * the hierarchy (`{locale}/guides/{category}/{article}`), so the tree can be
  * derived from 990 URLs in one request instead of crawling 99 pages per
- * locale and parsing each one's navigation.
+ * locale and parsing each one's navigation. Its titles, and the guides'
+ * order, are read from one more page per section and locale, the section's
+ * index (static-titles.ts).
  */
 
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
+import { loadListedTitles, type ListedTitles } from './static-titles.js';
 import { canonicalStaticUrl, staticLocaleId, type StaticDocSource, type StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
+import { UNSAFE_IN_TITLE } from '../utils/sanitize.js';
 
 /** One `<url>` of a sitemap, reduced to what a TOC needs. */
 export interface SitemapEntry {
@@ -233,20 +237,56 @@ export const ORDINARY_WORDS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
   ['fr', new Set(['ai', 'gui', 'laps', 'mime', 'oie', 'os', 'pin', 'soc'])],
 ]);
 
-/** Words that stay lowercase unless they open the title. */
-const TITLE_MINOR_WORDS = new Set([
-  'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or',
-  'the', 'to', 'via', 'with',
+/**
+ * Words that stay lowercase unless they open the title, by the locale code of
+ * the language a slug is written in: its articles, its coordinating
+ * conjunctions and its short prepositions, and the words it contracts from
+ * them (`du`, `al`, `zum`). A slug in any other language gets en's: a ja or
+ * zh-TW slug spells only English words in Latin letters (see
+ * {@link ORDINARY_WORDS}), and concepts.jamf.com's slugs are the en ones.
+ *
+ * Until 2026-09-28 en's were applied to every slug, so a French one read
+ * "Mettre a Jour La Licence Jamf Connect Apres Le Renouvellement": `a` is
+ * English, `la` and `le` are not. Measured against the titles Intercom's
+ * collection pages give support.jamf.com's 45 de, es and fr articles, the
+ * first letter of 289 of their 433 words is cased as the page has it, where
+ * it was for 188; with every word capitalised, it would be for 181. The rest
+ * are words a slug cannot tell apart: a German noun, capitalised, from any
+ * other word, and a French or Spanish one, in lower case in their
+ * sentence-case titles. Accented forms are listed too, though Intercom's
+ * slugs drop the accents (`für` is `fur`).
+ */
+const MINOR_WORDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['en', new Set([
+    'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or',
+    'the', 'to', 'via', 'with',
+  ])],
+  ['de', new Set([
+    'der', 'die', 'das', 'des', 'dem', 'den', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines',
+    'und', 'oder', 'aber',
+    'an', 'auf', 'aus', 'bei', 'durch', 'für', 'fur', 'gegen', 'in', 'mit', 'nach', 'ohne',
+    'über', 'uber', 'um', 'unter', 'von', 'vor', 'zu',
+    'am', 'beim', 'im', 'vom', 'zum', 'zur',
+  ])],
+  ['es', new Set([
+    'el', 'la', 'los', 'las', 'lo', 'un', 'una', 'unos', 'unas',
+    'y', 'e', 'o', 'u', 'pero',
+    'a', 'con', 'de', 'desde', 'en', 'entre', 'hacia', 'hasta', 'para', 'por', 'sin', 'sobre',
+    'al', 'del',
+  ])],
+  ['fr', new Set([
+    // `l` and `d` are `l’` and `d’`, which a slug writes as words of their own.
+    'le', 'la', 'les', 'l', 'un', 'une', 'des',
+    'et', 'ou', 'mais',
+    'à', 'a', 'avec', 'chez', 'd', 'dans', 'de', 'en', 'par', 'pour', 'sans', 'sous', 'sur', 'vers',
+    'au', 'aux', 'du',
+  ])],
 ]);
 
-/**
- * Characters a title must not carry, though a slug can spell any of them as
- * an escape: the controls, of which a newline would end the Markdown list
- * item a title is written into; the line and paragraph separators; and the
- * bidi marks, embeddings, overrides and isolates, which reorder the text
- * around them when it is displayed.
- */
-const UNSAFE_IN_TITLE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+/** The minor words of a slug in `language`: see {@link MINOR_WORDS}. */
+function minorWordsFor(language: string | undefined): ReadonlySet<string> {
+  return MINOR_WORDS.get(language ?? 'en') ?? MINOR_WORDS.get('en') ?? new Set();
+}
 
 /**
  * A path segment with its percent-escapes decoded, where they decode.
@@ -291,15 +331,20 @@ function mixesScripts(word: string): boolean {
   return LATIN_LETTER.test(word) && NON_LATIN_LETTER.test(word);
 }
 
-/**
- * One word of a heading, cased; `opensTitle` exempts it from the minor-word
- * rule, and `ordinary` names the keys of {@link TITLE_CASE_TERMS} to pass over.
- */
-function titleCaseWord(word: string, opensTitle: boolean, ordinary: ReadonlySet<string> | undefined): string {
+/** How the words of one slug are cased, by the language it is written in. */
+interface SlugLanguage {
+  /** The keys of {@link TITLE_CASE_TERMS} to pass over (see {@link ORDINARY_WORDS}). */
+  ordinary: ReadonlySet<string> | undefined;
+  /** The words kept in lower case unless they open the title (see {@link MINOR_WORDS}). */
+  minor: ReadonlySet<string>;
+}
+
+/** One word of a heading, cased; `opensTitle` exempts it from the minor-word rule. */
+function titleCaseWord(word: string, opensTitle: boolean, { ordinary, minor }: SlugLanguage): string {
   const lower = word.toLowerCase();
   const known = ordinary?.has(lower) === true ? undefined : TITLE_CASE_TERMS.get(lower);
   if (known !== undefined) { return known; }
-  if (!opensTitle && TITLE_MINOR_WORDS.has(lower)) { return lower; }
+  if (!opensTitle && minor.has(lower)) { return lower; }
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
@@ -349,17 +394,26 @@ function titleCaseWord(word: string, opensTitle: boolean, ordinary: ReadonlySet<
  *
  * `language` is the locale code of the language `slug` is written in, such as
  * `es`, so that a word the table spells as a term is not, where it is an
- * ordinary word in that language: see {@link ORDINARY_WORDS}. Without it,
- * every entry applies.
+ * ordinary word in that language (see {@link ORDINARY_WORDS}), and so that
+ * the language's own minor words are the ones kept in lower case (see
+ * {@link MINOR_WORDS}). Without it, every entry applies, and en's minor words.
+ *
+ * Since 2026-09-28 a page is shown by a title made here only where the
+ * source does not list its own (`loadListedTitles`, static-titles.ts). Where
+ * it does, the search index still searches this one, beside it
+ * (`StaticSearchEntry.slugTitle`).
  */
 export function titleFromSlug(slug: string, language?: string): string {
-  const ordinary = language === undefined ? undefined : ORDINARY_WORDS.get(language);
+  const casing: SlugLanguage = {
+    ordinary: language === undefined ? undefined : ORDINARY_WORDS.get(language),
+    minor: minorWordsFor(language),
+  };
   const words = decodeSlug(slug).split('-').filter(Boolean);
   return words
     .map((word, index) => mixesScripts(word)
       ? word.replace(LATIN_RUN, (run: string, offset: number) =>
-        titleCaseWord(run, index === 0 && offset === 0, ordinary))
-      : titleCaseWord(word, index === 0, ordinary))
+        titleCaseWord(run, index === 0 && offset === 0, casing))
+      : titleCaseWord(word, index === 0, casing))
     .join(' ');
 }
 
@@ -369,16 +423,35 @@ interface TreeNode {
   children: Map<string, TreeNode>;
 }
 
-/** @param language the locale code of the language the slugs are written in */
-function toTocEntries(nodes: Iterable<TreeNode>, titles: Map<string, string>, language: string): TocEntry[] {
+/**
+ * The entries under one node, in the order the source lists them where it
+ * gives one (`ListedTitles.order`), and the rest after them by slug.
+ *
+ * Until 2026-09-28 every entry went by its slug, so concepts.jamf.com's
+ * guides were listed from "AI Governance" to "Threat and Risk Management"
+ * where the site's sidebar opens on its overview and the category it orders
+ * first, Device Trust Identity and Deployment, and lists AI Governance last.
+ * Its tools index gives no order, so the tools still go by slug.
+ *
+ * @param listed each page's title as the source lists it, by URL, and its
+ *   place in the source's order; a page it does not list is titled from its
+ *   slug
+ * @param language the locale code of the language the slugs are written in
+ */
+function toTocEntries(nodes: Iterable<TreeNode>, listed: ListedTitles, language: string): TocEntry[] {
+  const place = (node: TreeNode): number => listed.order.get(node.url ?? '') ?? Number.POSITIVE_INFINITY;
   return [...nodes]
-    // By its words, not its escapes, which would sort every non-ASCII slug
-    // ahead of every ASCII one.
-    .sort((a, b) => decodeSlug(a.slug).localeCompare(decodeSlug(b.slug)))
+    .sort((a, b) => {
+      const [x, y] = [place(a), place(b)];
+      if (x !== y) { return x < y ? -1 : 1; }
+      // By its words, not its escapes, which would sort every non-ASCII slug
+      // ahead of every ASCII one.
+      return decodeSlug(a.slug).localeCompare(decodeSlug(b.slug));
+    })
     .map(node => {
-      const children = toTocEntries(node.children.values(), titles, language);
+      const children = toTocEntries(node.children.values(), listed, language);
       const entry: TocEntry = {
-        title: titles.get(node.url ?? '') ?? titleFromSlug(node.slug, language),
+        title: listed.titles.get(node.url ?? '') ?? titleFromSlug(node.slug, language),
         url: node.url ?? '',
       };
       if (children.length > 0) { entry.children = children; }
@@ -389,6 +462,15 @@ function toTocEntries(nodes: Iterable<TreeNode>, titles: Map<string, string>, la
 /**
  * Build a TOC for one section of a static source, in one locale.
  *
+ * The tree is the sitemap's, and each entry is titled as the section's index
+ * page lists it in that locale (`loadListedTitles`), or else from its slug,
+ * and ordered as that page lists it, where it gives an order (see
+ * {@link toTocEntries}). Until 2026-09-28 every entry was titled from its
+ * slug, and since concepts.jamf.com keeps its en slugs in every locale, a
+ * ja-JP table of contents listed "Threat and Risk Management" where the site
+ * titles the page 脅威とリスク管理. The two are read side by side; an index
+ * page that cannot be read costs its titles and its order, not the tree.
+ *
  * @param locale the source's own locale code, e.g. `en` — not `en-US`
  */
 export async function buildStaticToc(
@@ -397,7 +479,10 @@ export async function buildStaticToc(
   section: StaticSection,
   locale: string,
 ): Promise<TocEntry[]> {
-  const entries = await loadSitemap(ctx, source);
+  const [entries, listed] = await Promise.all([
+    loadSitemap(ctx, source),
+    loadListedTitles(ctx, source, locale, [section]),
+  ]);
   const root = new Map<string, TreeNode>();
 
   for (const entry of entries) {
@@ -419,7 +504,7 @@ export async function buildStaticToc(
     if (node !== undefined) { node.url = entry.url; }
   }
 
-  return toTocEntries(root.values(), new Map(), source.slugLocale ?? locale);
+  return toTocEntries(root.values(), listed, source.slugLocale ?? locale);
 }
 
 /**

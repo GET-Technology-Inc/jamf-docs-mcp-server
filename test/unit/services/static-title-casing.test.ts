@@ -17,6 +17,10 @@
  * to determine if…"), unless it opens the title; and a minor word this writes
  * in lower case that the page capitalises ("Via", "The"). Title case never
  * lower-cases any other word, so one that the page capitalises is a miss.
+ *
+ * Since 2026-09-28 the index titles a page as the site lists it, and from its
+ * slug only where that listing cannot be read (static-titles.ts). Nothing
+ * here serves a listing, so every title is made from its slug.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -227,9 +231,10 @@ describe('a term that is also an ordinary word in the slug\'s language', () => {
     const titles = async (source: StaticDocSource, locale: string): Promise<string[]> =>
       (await loadStaticIndex(ctx, source, locale)).map(entry => entry.title);
 
-    expect(await titles(SUPPORT, 'es')).toEqual(['Os Recomendamos Reiniciar El Mac']);
-    expect(await titles(SUPPORT, 'de')).toEqual(['Mut Zur Lucke']);
-    expect(await titles(SUPPORT, 'fr')).toEqual(['J Ai Perdu Mon Mot De Passe']);
+    // And with the language's own minor words in lower case: `el`, `zur`, `de`.
+    expect(await titles(SUPPORT, 'es')).toEqual(['Os Recomendamos Reiniciar el Mac']);
+    expect(await titles(SUPPORT, 'de')).toEqual(['Mut zur Lucke']);
+    expect(await titles(SUPPORT, 'fr')).toEqual(['J Ai Perdu Mon Mot de Passe']);
     expect(await titles(SUPPORT, 'en')).toEqual(['PIN Code for the OS Update']);
     // concepts.jamf.com lists the en slugs in every locale.
     expect(await titles(CONCEPTS, 'fr')).toEqual(['AI Governance']);

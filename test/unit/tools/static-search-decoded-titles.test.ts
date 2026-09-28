@@ -13,6 +13,11 @@
  *
  * The URLs are not what is wrong. core hands out the percent-encoded form on
  * purpose (see `canonicalStaticUrl`), and these cases keep it.
+ *
+ * Since 2026-09-28 both tools title a page as the site lists it, and from its
+ * slug only where that listing cannot be read (static-titles.ts;
+ * static-listed-titles.test.ts). Nothing here serves a listing, so every
+ * title is made from its slug.
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';

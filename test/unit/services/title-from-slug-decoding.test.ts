@@ -9,6 +9,11 @@
  * are every ja and zh-TW article support.jamf.com lists, so a search in either
  * language never matched a support article on its own words: only a query
  * that shared an ASCII word with the slug, such as "Jamf ID", matched at all.
+ *
+ * Since 2026-09-28 the index titles an article as its collection page lists
+ * it (static-titles.ts), and from its slug only where that page cannot be
+ * read. The index cases here serve no collection page, so every title in
+ * them is made from its slug.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

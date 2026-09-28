@@ -641,9 +641,11 @@ export interface ListCollectionsOptions {
    * way, so one that another caller has read since is not reported unread.
    *
    * `jamf_docs_list_products` asks this of the listings it reads only for
-   * its rows' `locales`. `jamf_docs_get_toc` does not: a call in one locale
-   * needs that locale's page, and asks for it every time (#352), unless a
-   * request for it is already in flight, which it shares.
+   * its rows' `locales`, and a search title index of the listing it reads
+   * only for its articles' titles (static-titles.ts). `jamf_docs_get_toc`
+   * does not: a call in one locale needs that locale's page, and asks for it
+   * every time (#352), unless a request for it is already in flight, which
+   * it shares.
    */
   rememberFailure?: boolean;
 }

@@ -12,6 +12,11 @@
  * 203 of the 987 titles that could be checked against the page's own held
  * such a word, and 347 of the 1,638 titles the two sources' indexes hold, in
  * the eight locales, now change.
+ *
+ * Since 2026-09-28 both tools title a page as the site lists it, and from its
+ * slug only where that listing cannot be read (static-titles.ts;
+ * static-listed-titles.test.ts). Nothing here serves a listing, so every
+ * title is made from its slug.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';

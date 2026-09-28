@@ -3,7 +3,9 @@
  *
  * A static source has no TOC endpoint. Its hierarchy is in the shape of its
  * sitemap paths, so these cover the parse, the tree, and the slug-to-heading
- * step that stands in for titles the sitemap does not carry.
+ * step that stands in for titles the sitemap does not carry, where the
+ * section's index page does not list them either (static-titles.ts). None
+ * is served here.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -147,15 +149,20 @@ describe('buildStaticToc', () => {
     expect(toc.map(e => e.title)).toEqual(['A']);
   });
 
-  it('fetches the sitemap once per source', async () => {
+  it('fetches the sitemap once per source, and the section\'s index page once', async () => {
+    // The index page is where the titles are listed (static-titles.ts). Here
+    // it is served the sitemap too, which lists none, and that is remembered
+    // for a minute, so the second call does not ask again.
     mockHttpGetText.mockResolvedValue(sitemapXml(['/en/guides/a']));
     const ctx = createMockContext();
 
     await buildStaticToc(ctx, CONCEPTS, GUIDES, 'en');
     await buildStaticToc(ctx, CONCEPTS, GUIDES, 'en');
 
-    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
-    expect(mockHttpGetText).toHaveBeenCalledWith('https://concepts.jamf.com/sitemap.xml');
+    expect(mockHttpGetText.mock.calls.map(([url]) => url).sort()).toEqual([
+      'https://concepts.jamf.com/en/guides/',
+      'https://concepts.jamf.com/sitemap.xml',
+    ]);
   });
 });
 

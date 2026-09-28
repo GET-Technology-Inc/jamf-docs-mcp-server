@@ -18,6 +18,7 @@ import {
 } from './search-upstream.js';
 import { createSupportUpstream, nextDataPage } from './support-upstream.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../fixtures/concepts-guide-page.js';
+import { conceptsIndexPage, conceptsIndexUrl } from './concepts-index-pages.js';
 
 /**
  * A concepts.jamf.com sitemap with two guides and one tool, as the live one
@@ -62,9 +63,12 @@ export interface EverySourceUpstream {
 
 /**
  * learn.jamf.com (the maps list, Jamf Pro's map, its TOC and topics, the
- * glossary and the clustered search), concepts.jamf.com's sitemap and one
- * guide, and support.jamf.com's pages and one article. Anything else is a
- * 404, which every tool survives.
+ * glossary and the clustered search), concepts.jamf.com's sitemap, its en
+ * section index pages and one guide, and support.jamf.com's pages and one
+ * article. Anything else is a 404, which every tool survives. The index
+ * pages are served so that a search index is built with every title listed,
+ * and so kept for CACHE_TTL_PRODUCTS rather than the minute one built
+ * without them is.
  */
 export function everySourceUpstream(): EverySourceUpstream {
   const requests: string[] = [];
@@ -84,6 +88,9 @@ export function everySourceUpstream(): EverySourceUpstream {
       requests.push(url);
       if (url === CONCEPTS_SITEMAP) { return await Promise.resolve(CONCEPTS_SITEMAP_XML); }
       if (url === CONCEPTS_GUIDE_URL) { return await Promise.resolve(CONCEPTS_GUIDE_HTML); }
+      for (const section of ['guides', 'concepts'] as const) {
+        if (url === conceptsIndexUrl('en', section)) { return await Promise.resolve(conceptsIndexPage('en', section)); }
+      }
       const { hostname, pathname } = new URL(url);
       if (hostname === 'support.jamf.com') {
         if (pathname.replace(/\/$/, '') === new URL(SUPPORT_ARTICLE_URL).pathname) { return SUPPORT_ARTICLE_HTML; }

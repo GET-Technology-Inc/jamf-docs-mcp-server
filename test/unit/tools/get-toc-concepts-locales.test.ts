@@ -183,13 +183,17 @@ describe('jamf_docs_get_toc: a concepts.jamf.com section in a language the site 
   });
 
   it('serves each language its own edition when they are asked for in turn, from one sitemap request', async () => {
-    const [publication] = SECTIONS[0];
+    const [publication, path] = SECTIONS[0];
     for (const [language, code] of PUBLISHED) {
       const json = await getToc(publication, language, 'json');
       expect(editionsOf(json)).toEqual([code]);
       expect(json.structuredContent?.localeNote).toBeUndefined();
     }
-    expect(requests).toEqual([`${ORIGIN}/sitemap.xml`]);
+    const sitemap = `${ORIGIN}/sitemap.xml`;
+    expect(requests.filter(url => url === sitemap)).toEqual([sitemap]);
+    // And each edition's index page, where its titles are listed
+    // (static-titles.ts), once: here a 404, which costs only the titles.
+    expect(requests.filter(url => url !== sitemap)).toEqual(PUBLISHED.map(([, code]) => `${ORIGIN}/${code}/${path}/`));
   });
 });
 
@@ -220,8 +224,9 @@ describe('jamf_docs_get_toc: a concepts.jamf.com section in a language the site 
     expect((JSON.parse(textOf(json)) as Record<string, unknown>).localeNote).toBe(note);
     expect(markdown.structuredContent?.localeNote).toBe(note);
     expect(textOf(markdown)).toContain(`> **Language Note:** ${note}`);
-    // Read from the sitemap an en-US request reads, once.
-    expect(requests).toEqual([`${ORIGIN}/sitemap.xml`]);
+    // Read from the sitemap an en-US request reads, and titled from the en
+    // index page, once each.
+    expect([...requests].sort()).toEqual([`${ORIGIN}/en/${path}/`, `${ORIGIN}/sitemap.xml`]);
   });
 
   it.each(cases)('lists %s in %s exactly as it lists it in en-US', async (publication, language) => {

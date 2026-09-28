@@ -9,18 +9,19 @@
  * and is not. A labelled second block says exactly what it is: other places
  * this query matched.
  *
- * The index is titles, recovered from each source's sitemap. That is one
- * request per source, for 820 support.jamf.com articles in en (894 over its
- * six locales) and 93 concepts.jamf.com pages in each locale (2026-09-28),
- * against a request per concepts.jamf.com page to read the real headings, or
- * one per Intercom home and collection page for support.jamf.com's (28 for
- * its six locales) — and a title is what a ranked pointer needs.
+ * The index is titles: every page each source's sitemap lists, 820
+ * support.jamf.com articles in en (894 over its six locales) and 93
+ * concepts.jamf.com pages in each locale (2026-09-28), under the title the
+ * source lists it by (static-titles.ts), or else the one its slug gives. A
+ * title is what a ranked pointer needs, and the listings are a few requests
+ * per locale, against one per page to read each page's own.
  */
 
 import Fuse, { type FuseIndex, type FuseOptionKey, type IFuseOptions } from 'fuse.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { loadOnce } from './load-once.js';
 import { loadSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
+import { loadListedTitles, UNREAD_LISTING_TTL_MS } from './static-titles.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
 import { CJK_CHARACTER } from '../utils/cjk.js';
 import type { CacheProvider } from './interfaces/cache.js';
@@ -28,14 +29,24 @@ import type { ServerContext } from '../types/context.js';
 
 /** One page of a static source, as the index holds it. */
 export interface StaticSearchEntry {
+  /** The title the source lists the page by, or else the one its slug gives. */
   title: string;
   url: string;
   /** Display name of the source it belongs to. */
   source: string;
+  /**
+   * The title the page's slug gives, where the source lists it by another:
+   * searched too, at half the weight of `title`, so that a query in the
+   * slug's words finds the page it found before its listed title was read.
+   * Those words are English in every locale of concepts.jamf.com, and
+   * support.jamf.com's without their accents. Where it is unset, `title` is
+   * searched in its place (see `FUSE_KEYS`). See `loadStaticIndex`.
+   */
+  slugTitle?: string;
 }
 
-/** A hit, with the source that produced it. */
-export interface StaticSearchHit extends StaticSearchEntry {
+/** A hit, with the source that produced it. It carries the title it is shown by, not the slug's. */
+export interface StaticSearchHit extends Omit<StaticSearchEntry, 'slugTitle'> {
   /** Fuse's distance, 0 = exact. Comparable within this block only. */
   score: number;
 }
@@ -51,13 +62,19 @@ export interface StaticSearchHit extends StaticSearchEntry {
 const NON_ARTICLE_SEGMENTS = new Set(['browse', 'about', 'ecosystem', 'collections']);
 
 /**
- * Turn a sitemap entry into an index entry.
+ * Turn a sitemap entry into an index entry, titled as `titles` lists it.
  *
- * Intercom article slugs are prefixed with the numeric id
- * (`10631322-get-started-with-jamf-now`), which is stripped before casing —
- * leaving it in produces "10631322 Get Started With Jamf Now".
+ * A page `titles` does not list is titled from its slug. Intercom article
+ * slugs are prefixed with the numeric id (`10631322-get-started-with-jamf-now`),
+ * which is stripped before casing — leaving it in produces "10631322 Get
+ * Started With Jamf Now".
  */
-function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string): StaticSearchEntry | null {
+function entryFor(
+  source: StaticDocSource,
+  entry: SitemapEntry,
+  locale: string,
+  titles: ReadonlyMap<string, string>,
+): StaticSearchEntry | null {
   const [entryLocale, section, ...rest] = entry.segments;
   if (entryLocale !== locale) { return null; }
   if (section === undefined || NON_ARTICLE_SEGMENTS.has(section)) { return null; }
@@ -65,9 +82,17 @@ function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string):
   if (rest.length === 0) { return null; }
 
   const slug = (rest[rest.length - 1] ?? '').replace(/^\d+-/, '');
-  if (slug === '') { return null; }
-
-  return { title: titleFromSlug(slug, source.slugLocale ?? locale), url: entry.url, source: source.name };
+  const fromSlug = slug === '' ? undefined : titleFromSlug(slug, source.slugLocale ?? locale);
+  const listed = titles.get(entry.url);
+  if (listed === undefined) {
+    return fromSlug === undefined ? null : { title: fromSlug, url: entry.url, source: source.name };
+  }
+  return {
+    title: listed,
+    url: entry.url,
+    source: source.name,
+    ...(fromSlug !== undefined && fromSlug !== listed ? { slugTitle: fromSlug } : {}),
+  };
 }
 
 /**
@@ -82,17 +107,29 @@ function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string):
  * de-DE and then a concepts.jamf.com `get_toc`, one after another, requested
  * concepts.jamf.com's sitemap four times and support.jamf.com's three,
  * offline and live. Live, those are 208 KB and 253 KB (2026-09-28).
+ *
+ * Each page is titled as the source lists it in that locale
+ * (`loadListedTitles`): support.jamf.com's from the locale's listing and
+ * collection pages, which `jamf_docs_get_toc` and `jamf_docs_list_products`
+ * read and cache too, and concepts.jamf.com's from its two section index
+ * pages. Until 2026-09-28 every title was made from the page's slug, which
+ * wrote support.jamf.com's de, es and fr titles without their accents,
+ * "Verknupft" for "verknüpft", and concepts.jamf.com's in every locale in
+ * English, "Threat and Risk Management" for ja-JP's 脅威とリスク管理.
  */
 export async function loadStaticIndex(
   ctx: ServerContext,
   source: StaticDocSource,
   locale: string,
 ): Promise<StaticSearchEntry[]> {
-  const key = cacheKey('static-search-index-v4', { source: source.id, locale });
+  const key = cacheKey('static-search-index-v5', { source: source.id, locale });
   return await loadOnce(ctx.cache, key, async () => await readStaticIndex(ctx, source, locale, key));
 }
 
-/** The cached index, or one built from the sitemap and stored: what {@link loadStaticIndex} shares. */
+/**
+ * The cached index, or one built from the sitemap and the listed titles and
+ * stored: what {@link loadStaticIndex} shares.
+ */
 async function readStaticIndex(
   ctx: ServerContext,
   source: StaticDocSource,
@@ -108,14 +145,27 @@ async function readStaticIndex(
   // `get_article` report for the same page. This used to scan for `<loc>`
   // itself and hand out each value as listed — slashless, which
   // concepts.jamf.com answers with a 301 — so a concepts page had one URL
-  // here and another everywhere else.
+  // here and another everywhere else. The listed titles are keyed by the
+  // same canonical URL.
+  //
+  // Read side by side, so a cold index waits on the slower of the two, not
+  // on both. The listings never throw; a sitemap that cannot be read fails
+  // the index, as it always has.
+  const [sitemap, listed] = await Promise.all([
+    loadSitemap(ctx, source),
+    loadListedTitles(ctx, source, locale),
+  ]);
   const entries: StaticSearchEntry[] = [];
-  for (const sitemapEntry of await loadSitemap(ctx, source)) {
-    const entry = entryFor(source, sitemapEntry, locale);
+  for (const sitemapEntry of sitemap) {
+    const entry = entryFor(source, sitemapEntry, locale, listed.titles);
     if (entry !== null) { entries.push(entry); }
   }
 
-  await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
+  // An index built while a listing could not be read holds titles made from
+  // slugs where it would have held the listed ones, so it is kept only as
+  // long as that failure is remembered, and built again after it.
+  const ttl = listed.unread.length === 0 ? ctx.config.cacheTtl.products : UNREAD_LISTING_TTL_MS;
+  await ctx.cache.set(key, entries, ttl);
   return entries;
 }
 
@@ -137,7 +187,34 @@ const indexByServer = new WeakMap<CacheProvider, Map<string, {
   fuses: Map<number, Fuse<StaticSearchEntry>>;
 }>>();
 
-const FUSE_KEYS: FuseOptionKey<StaticSearchEntry>[] = [{ name: 'title', weight: 1 }];
+/**
+ * A page is matched on its title and, at half the weight, on the one its
+ * slug gives (`StaticSearchEntry.slugTitle`), so a match on its listed title
+ * ranks it above one on its slug's words alone.
+ *
+ * Every page is matched on both keys: where the slug gives the same title,
+ * the second key reads the listed one. Fuse multiplies a page's score over
+ * the keys it matched on, so a page matched on one key alone scores worse
+ * than one that matches its query as well on two. Without the fallback, a
+ * page whose slug title differed only in case, as 218 of support.jamf.com's
+ * 820 en ones do, outranked a page whose slug gave its title exactly.
+ *
+ * The title alone until 2026-09-28, when the listed titles replaced those
+ * made from slugs. Measured offline that day over the live pages, with 16,201
+ * queries taken from both builds' titles (each title, each word and each pair
+ * of adjacent words, in all eight locales): 14,891 found a page before. With
+ * the listed titles alone, 14,720 did, and 1,252 of the 14,891 found none,
+ * 1,217 of them queries that had found only concepts.jamf.com pages, whose
+ * titles are translated or reworded where their slugs are not. With both
+ * keys, 15,972 do, and none of the 14,891 finds nothing. Where one source's
+ * top 3 for a query is not what it was, a page among them has a title whose
+ * words changed, in each of the 5,116 cases; without the fallback, 690 of
+ * 9,344 had none.
+ */
+const FUSE_KEYS: FuseOptionKey<StaticSearchEntry>[] = [
+  { name: 'title', weight: 1 },
+  { name: 'slugTitle', weight: 0.5, getFn: (entry: StaticSearchEntry) => entry.slugTitle ?? entry.title },
+];
 
 /**
  * Carries no `minMatchCharLength`, so on its own it leaves Fuse's default of
@@ -244,6 +321,11 @@ function fuseFor(
  *
  * Best-effort per source: one unreachable sitemap costs its own hits, not
  * the block, and never the Fluid Topics results this runs alongside.
+ *
+ * The sources are searched side by side, and their hits returned in the
+ * order the sources are declared. Until 2026-09-28 one was searched after
+ * the other, so a search with both indexes cold waited on the two builds in
+ * turn, which since that day read the pages the titles are listed on as well.
  */
 export async function searchStaticSources(
   ctx: ServerContext,
@@ -252,25 +334,24 @@ export async function searchStaticSources(
   limit = 3,
 ): Promise<StaticSearchHit[]> {
   const log = ctx.logger.createLogger('static-search');
-  const hits: StaticSearchHit[] = [];
   const { pattern, minMatchCharLength } = fuseQueryFor(query);
 
-  for (const source of Object.values(STATIC_DOC_SOURCES) as StaticDocSource[]) {
+  const perSource = await Promise.all((Object.values(STATIC_DOC_SOURCES) as StaticDocSource[]).map(async source => {
     const sourceLocale = source.locales[locale];
-    if (sourceLocale === undefined) { continue; }
+    if (sourceLocale === undefined) { return []; }
 
     try {
       const entries = await loadStaticIndex(ctx, source, sourceLocale);
-      if (entries.length === 0) { continue; }
-      const results = fuseFor(ctx, `${source.id}:${sourceLocale}`, entries, minMatchCharLength)
-        .search(pattern, { limit });
-      for (const result of results) {
-        hits.push({ ...result.item, score: result.score ?? 1 });
-      }
+      if (entries.length === 0) { return []; }
+      return fuseFor(ctx, `${source.id}:${sourceLocale}`, entries, minMatchCharLength)
+        .search(pattern, { limit })
+        .map(({ item, score }): StaticSearchHit =>
+          ({ title: item.title, url: item.url, source: item.source, score: score ?? 1 }));
     } catch (error) {
       log.warning(`Could not search ${source.name}: ${String(error)}`);
+      return [];
     }
-  }
+  }));
 
-  return hits;
+  return perSource.flat();
 }

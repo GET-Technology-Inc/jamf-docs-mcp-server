@@ -18,8 +18,10 @@
  * each), and SAMPLE_SIZE articles (~0.9s each), at CONCURRENCY at a time.
  * Roughly 40s wall clock against the job's 5-minute timeout. Since
  * 2026-09-28 the home page of each of the other five locales as well, for
- * the three assertions on what each locale lists. The `localeLinks`
- * assertion reads pages fetched for the others, and costs no request.
+ * the three assertions on what each locale lists, and the sitemap (~253 KB),
+ * for the one on where the search index finds its articles' titles. The
+ * `localeLinks` assertion reads pages fetched for the others, and costs no
+ * request.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -31,6 +33,7 @@ import {
   HANDLED_BLOCK_TYPES,
 } from '../../src/core/services/intercom-service.js';
 import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
+import { parseSitemap } from '../../src/core/services/sitemap-service.js';
 import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../src/core/constants/sources.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
@@ -91,9 +94,9 @@ function pageProps(html: string, url: string): Record<string, unknown> {
   return props ?? {};
 }
 
-/** Every `articleSummaries[].url` anywhere in a collection page's payload. */
-function articleUrls(props: unknown): string[] {
-  const found: string[] = [];
+/** Every `articleSummaries[].url` anywhere in a collection page's payload, with its title. */
+function listedArticles(props: unknown): { url: string; title: unknown }[] {
+  const found: { url: string; title: unknown }[] = [];
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {
       node.forEach(walk);
@@ -103,8 +106,8 @@ function articleUrls(props: unknown): string[] {
     const record = node as Record<string, unknown>;
     if (Array.isArray(record.articleSummaries)) {
       for (const summary of record.articleSummaries) {
-        const { url } = summary as { url?: unknown };
-        if (typeof url === 'string' && url !== '') { found.push(url); }
+        const { url, title } = summary as { url?: unknown; title?: unknown };
+        if (typeof url === 'string' && url !== '') { found.push({ url, title }); }
       }
     }
     Object.values(record).forEach(walk);
@@ -175,6 +178,10 @@ function hasContent(block: Block): boolean {
 let collections: { url: string; name: unknown; id: unknown }[];
 let collectionPages: ListedPage[];
 let articles: Article[];
+/** Every article the en collection pages list, with its title. */
+let listedArticlesEn: { url: string; title: unknown }[];
+/** Every en article the sitemap lists, as `canonicalStaticUrl` spells it. */
+let sitemapArticles: string[];
 /** Each locale's home collections, keyed by support.jamf.com's code for it. */
 let homes: Map<string, { url: unknown; id: unknown }[]>;
 /** What each locale's home page carries as `home.collections`, list or not. */
@@ -187,11 +194,15 @@ beforeAll(async () => {
 
   const perCollection = await mapLimit(collections, async (collection) => {
     const props = pageProps(await getHtml(collection.url), collection.url);
-    return { urls: articleUrls(props), page: { url: collection.url, localeLinks: props.localeLinks } };
+    return { listed: listedArticles(props), page: { url: collection.url, localeLinks: props.localeLinks } };
   });
   collectionPages = perCollection.map(({ page }) => page);
+  listedArticlesEn = perCollection.flatMap(({ listed }) => listed);
+  sitemapArticles = parseSitemap(SOURCE, await getHtml(`${SUPPORT_BASE}/sitemap.xml`))
+    .filter(entry => entry.segments[0] === LOCALE && entry.segments[1] === 'articles' && entry.segments.length > 2)
+    .map(entry => entry.url);
 
-  const all = [...new Set(perCollection.flatMap(({ urls }) => urls))];
+  const all = [...new Set(listedArticlesEn.map(({ url }) => url))];
   expect(all.length, 'articles listed across all collections').toBeGreaterThan(SAMPLE_SIZE);
 
   const stride = Math.max(1, Math.floor(all.length / SAMPLE_SIZE));
@@ -218,6 +229,29 @@ describe('support.jamf.com contracts', () => {
       expect(collection.url, JSON.stringify(collection)).toMatch(/^https:\/\/support\.jamf\.com\//);
       expect(typeof collection.name === 'string' && collection.name !== '').toBe(true);
     }
+  });
+
+  /**
+   * A search title index lists every article the sitemap does, under the
+   * title a collection page gives it (static-titles.ts), found by the URL
+   * both spell the same once `canonicalStaticUrl` has had them. An article
+   * no collection page titles falls back to a title made from its slug,
+   * without a word: so this pins that the two still name the same pages.
+   * Live, the collection pages title all 820 en articles the sitemap lists,
+   * and list no other (2026-09-28). A floor, not a count: an article can be
+   * in the sitemap a while before a collection lists it.
+   */
+  it('titles, on its collection pages, nearly every en article the sitemap lists, by the same URL', () => {
+    const titled = new Set(listedArticlesEn
+      .filter(({ title }) => typeof title === 'string' && title.trim() !== '')
+      .map(({ url }) => canonicalStaticUrl(SOURCE, url)));
+    const untitled = sitemapArticles.filter(url => !titled.has(url));
+
+    expect(sitemapArticles.length, 'en articles in the sitemap').toBeGreaterThan(0);
+    expect(
+      untitled.length / sitemapArticles.length,
+      `en articles in the sitemap that no collection page titles: ${untitled.slice(0, 10).join(', ')}`,
+    ).toBeLessThanOrEqual(0.1);
   });
 
   it('carries every article body in articleContent.blocks', () => {

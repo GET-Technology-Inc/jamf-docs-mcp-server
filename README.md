@@ -616,13 +616,17 @@ What each TTL covers:
   older than it; support.jamf.com's list of collections; and the title
   indexes `jamf_docs_search` searches concepts.jamf.com and support.jamf.com
   with. The maps list's age counts from when it was fetched, also for a
-  server that starts later and reads it from the cache.
+  server that starts later and reads it from the cache. A title index built
+  while a page its titles are listed on could not be read is kept for a
+  minute.
 - `CACHE_TTL_TOC`: each table of contents `jamf_docs_get_toc` and
   `jamf://products/{productId}/toc` serve, whether it is read from a
   learn.jamf.com map, concepts.jamf.com's sitemap or a support.jamf.com
-  collection page, and the map TOC index an article's `navigation` is read
-  from. The glossary's term list is read from a map's table of contents too,
-  and is kept with the glossary, for `CACHE_TTL_ARTICLE`.
+  collection page; the titles concepts.jamf.com's section index pages list,
+  which its tables of contents and title indexes use; and the map TOC index
+  an article's `navigation` is read from. The glossary's term list is read
+  from a map's table of contents too, and is kept with the glossary, for
+  `CACHE_TTL_ARTICLE`.
 
 An article's breadcrumb and internal links are built from the map TOC index
 when the article is fetched, and kept with it for `CACHE_TTL_ARTICLE`. Its

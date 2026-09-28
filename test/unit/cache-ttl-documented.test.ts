@@ -211,6 +211,9 @@ const KEPT_FOR: Readonly<Record<string, string | null>> = {
   'ft-tocindex': 'CACHE_TTL_TOC',
   'static-sitemap': 'CACHE_TTL_TOC',
   'intercom-collection-toc': 'CACHE_TTL_TOC',
+  // The titles a concepts.jamf.com section's index page lists, which its
+  // table of contents and its search index are titled from.
+  'static-section-titles': 'CACHE_TTL_TOC',
   // A minute, and an hour.
   'intercom-collections-failure': null,
   'metadata-product-availability': null,
