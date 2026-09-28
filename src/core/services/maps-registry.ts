@@ -676,10 +676,14 @@ export class MapsRegistry {
    * "policy" and `jamf:portal=Jamf Pro` 994; the two together return 0 topics
    * under every query tried. Stated precisely, because a first draft of this
    * comment said "returns nothing" while the raw payload does carry 11 entries
-   * for that pair — all of them `DOCUMENT`, a type `FtSearchEntry` does not
-   * declare, which `transformFtSearchResult` drops through its fallback for
-   * want of a URL. Nothing reaches a caller either way, but "nothing comes
-   * back" and "nothing survives the transform" are different claims.
+   * for that pair — all of them `DOCUMENT` entries. On 2026-09-28 it carried
+   * one, and no topic: "Deploy Jamf Connect with Jamf Pro", a Jamf Training
+   * Catalog course, which Jamf files under both. Until that day
+   * `transformFtSearchResult` dropped every such entry for want of a URL; it
+   * now returns each as a result marked `external`. So sent together, the two
+   * axes would return courses and no documentation. "Nothing comes back" and
+   * "nothing survives the transform" were different claims, and the second
+   * no longer holds.
    */
   async classificationAxis(value: string): Promise<string | null> {
     await this.ensureBuilt();

@@ -150,12 +150,14 @@ describe('Jamf Docs MCP Server', () => {
     it('should not crash when calling get_article without progressToken', async () => {
       const searchResult = await client.callTool({
         name: 'jamf_docs_search',
-        arguments: { query: 'system requirements', limit: 1, responseFormat: 'json' }
+        arguments: { query: 'system requirements', limit: 10, responseFormat: 'json' }
       });
       const searchJson = JSON.parse(
         (searchResult.content[0] as { type: 'text'; text: string }).text
-      ) as { results?: { url?: string }[] };
-      const firstUrl = searchJson.results?.[0]?.url;
+      ) as { results?: { url?: string; external?: boolean }[] };
+      // The first result jamf_docs_get_article can read: since 2026-09-28 a
+      // search can rank a Jamf Training Catalog course, marked `external`, first.
+      const firstUrl = searchJson.results?.find(r => r.external !== true)?.url;
       const url = firstUrl !== undefined && firstUrl !== ''
         ? firstUrl
         : 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';
@@ -722,14 +724,16 @@ describe('Jamf Docs MCP Server', () => {
         name: 'jamf_docs_search',
         arguments: {
           query: 'policies',
-          limit: 1,
+          limit: 10,
           responseFormat: 'json'
         }
       });
       const searchJson = JSON.parse(
         (searchResult.content[0] as { type: 'text'; text: string }).text
-      ) as { results?: { url?: string }[] };
-      const firstUrl = searchJson.results?.[0]?.url;
+      ) as { results?: { url?: string; external?: boolean }[] };
+      // Not a result marked `external`, such as a Jamf Training Catalog
+      // course, which jamf_docs_get_article cannot read (since 2026-09-28).
+      const firstUrl = searchJson.results?.find(r => r.external !== true)?.url;
       validArticleUrl = firstUrl !== undefined && firstUrl !== ''
         ? firstUrl
         : 'https://learn.jamf.com/bundle/jamf-pro-documentation-current/page/Policies.html';

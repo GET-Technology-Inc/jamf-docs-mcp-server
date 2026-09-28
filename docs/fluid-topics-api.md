@@ -64,6 +64,13 @@ there are ten, not the seven this line claimed before 2026-09-18. The
 (`content-releasenotes` matches in every locale, where the translated value matched only its own).
 See `DOC_TYPE_LABEL_MAP` in `src/core/constants/doc-types.ts`.
 
+One exception, since 2026-09-28: `docType: "training"` is searched first by
+`jamf:contentType` with Jamf's "Training Content" in every language at once
+(`TRAINING_CONTENT_TYPES`), because that is the only filter that reaches the
+Jamf Training Catalog courses (see the `DOCUMENT` entry below), which carry no
+`content-*` label. Values inside one filter union, so the one filter holds in
+every language. When it finds nothing, the search asks by `content-training`.
+
 **Filter objects intersect; values inside one filter union.** Product and
 content type share the `zoominmetadata` key, so they must be sent as two
 separate objects. Measured 2026-09-18, en-US: `product-protect` alone
@@ -161,6 +168,22 @@ of them find nothing either, since they are analysed as the query's are: see
 }
 ```
 
+An entry is a `TOPIC` (`topic`), a `MAP` (`map`) or a `DOCUMENT` (`document`).
+A `DOCUMENT` is in no map. Every one measured is a course or learning path of
+the Jamf Training Catalog, crawled from Skilljar: 67 in 127 searches on
+2026-09-28, in en-US, ja-JP and zh-TW, each a cluster of its own. It carries
+`documentId`, `title`, `htmlExcerpt`, `openMode: "EXTERNAL"`, the course as
+`originUrl` (on trainingcatalog.jamf.com) and a `viewerUrl` on learn.jamf.com,
+and in its metadata Jamf's classification (`jamf:portal`, `jamf:app`) and a
+`jamf:contentType` of "Training Content" (in the language searched), but no
+`version` and no `content-*` label. So a `zoominmetadata` filter leaves it out
+(none came back in five `content-training` searches), and a `version` filter
+does too. Filtered on `jamf:contentType` = "Training Content" instead, the
+same five searches returned the `content-training` topics in the same order,
+and the courses ranked among them. The search returns a `DOCUMENT` as a result
+marked `external`, which `jamf_docs_get_article` cannot read, and whose
+`docType` is `training`.
+
 ### 2.2 Maps & Content
 
 #### `GET /api/khub/maps`
@@ -207,7 +230,7 @@ These are the metadata descriptors returned by `GET /api/configuration/metadata`
 | # | Key | Description |
 |---|-----|-------------|
 | 1 | `zoominmetadata` | Legacy Zoomin vocabulary: `product-*` and `content-*` values. Still the source for docType filtering (`content-*`); no longer used for product filtering — see rows 4-6. |
-| 2 | `jamf:contentType` | Content type. **Descriptive only — do not filter on it**; its values are localised (see the search section above). Use the `content-*` values of `zoominmetadata` instead. |
+| 2 | `jamf:contentType` | Content type. **Do not filter on one of its values**; they are localised (see the search section above). Use the `content-*` values of `zoominmetadata` instead. The one exception is training, sent in every language at once (see the same section). |
 | 3 | `jamf:product` | Jamf product descriptor. |
 | 4 | `jamf:portal` | Platform a publication documents. Multi-valued. |
 | 5 | `jamf:app` | Client app a publication documents. Multi-valued. |

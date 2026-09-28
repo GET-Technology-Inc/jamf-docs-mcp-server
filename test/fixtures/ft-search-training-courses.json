@@ -1,0 +1,923 @@
+{
+  "source": "POST https://learn.jamf.com/api/khub/clustered-search, 2026-09-28 10:00 UTC, perPage 50, no filters; entries trimmed to the fields the search reads. Each group holds the first entry of the clusters at `ranks` (0-based), in that order, which is the order Fluid Topics ranked them.",
+  "configurationProfilesJa": {
+    "query": "configuration profiles",
+    "locale": "ja-JP",
+    "ranks": [
+      0,
+      1,
+      2
+    ],
+    "entries": [
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "sDhy4J9VWvVEya~hPdKoOg",
+          "title": "構成プロファイル (Configuration Profiles)",
+          "htmlTitle": "<span class=\"kwicstring\">構成プロファイル (</span><span class=\"kwicmatch\">Configuration Profiles</span><span class=\"kwicstring\">)</span>",
+          "htmlExcerpt": "登録済みのコンピュータとモバイルデバイスに構成プロファイルを作成して展開します。",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/configuration-profiles-ja-jp",
+          "viewerUrl": "https://learn.jamf.com/v/u/sDhy4J9VWvVEya~hPdKoOg",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "course-y3u9fbkb5v84"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/configuration-profiles-ja-jp"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "トレーニングコンテンツ"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "GE9~jUeMhje7axrw1dW5VA",
+          "contentId": "ObiF8cfKaNsmbG3bffmNMQ",
+          "tocId": "IGHuEUlWPR~xqtSwXRialQ",
+          "title": "構成プロファイルのアップロード",
+          "htmlTitle": "<span class=\"kwicstring\">構成プロファイルのアップロード</span>",
+          "mapTitle": "Jamf Pro ドキュメント 11.32.0",
+          "breadcrumb": [
+            "コンピュータ管理",
+            "コンピュータの設定とセキュリティ管理",
+            "コンピュータ構成プロファイル",
+            "構成プロファイルのアップロード"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">Certificate Using Jamf Pro&#x27;s Built-in CA to Use for Signing </span><span class=\"kwicmatch\">Configuration Profiles</span><span class=\"kwicstring\"> and Packages (Jamf Pro の内蔵 CA を使用して署名証明書</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">。詳しくは、資料 Deploying Custom Computer </span><span class=\"kwicmatch\">Configuration Profiles</span><span class=\"kwicstring\"> Using the Application &amp; Custom Settings Payload (アプリケーション</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-pro-documentation-current/Uploading_a_Configuration_Profile_macOS"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-pro-documentation-current/Uploading_a_Configuration_Profile_macOS"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            },
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.32.0"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "product-pro",
+                "product-pro-11.32.0",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "テクニカル資料"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "JEc~s7Yc6BZM_8sDZDLNrg",
+          "contentId": "8Qn~QOJh6L0h5l8pb2XVtg",
+          "tocId": "02IIYbP~q~qNZpZWZAs6wA",
+          "title": "macOS デバイス上で App ごとの VPN を展開する",
+          "htmlTitle": "<span class=\"kwicstring\">macOS デバイス上で App ごとの VPN を展開する</span>",
+          "mapTitle": "Jamf Connect ドキュメント",
+          "breadcrumb": [
+            "Zero Trust ネットワークアクセス",
+            "App ごとの VPN",
+            "Apple",
+            "macOS",
+            "macOS デバイス上で App ごとの VPN を展開する"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">の場合も同様です。 Jamf Pro の 構成プロファイル (</span><span class=\"kwicmatch\">Configuration Profiles</span><span class=\"kwicstring\">) で、上記のステップで定義した Jamf Connect ゼ</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">次回の同期の際にインストールされます。</span><span class=\"kwicmatch\">Configuration Profiles</span><span class=\"kwicstring\"> (構成プロファイル) リストで、そのステータスを</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-connect-documentation-current/Deploying_Per-App_VPN_on_macOS_Devices"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-connect-documentation-current/Deploying_Per-App_VPN_on_macOS_Devices"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "product-connect",
+                "role-administrator",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "テクニカル資料"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "fileVault": {
+    "query": "FileVault",
+    "locale": "en-US",
+    "ranks": [
+      9,
+      14,
+      28,
+      32,
+      35,
+      36
+    ],
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "bjs61pwUXJK9FzeINitaJA",
+          "contentId": "spGaE6eXBYzcJGWUk~rUCw",
+          "tocId": "xpwMNeyZPM7Kvxq4YWiWjA",
+          "title": "FileVault Settings",
+          "htmlTitle": "<span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Settings</span>",
+          "mapTitle": "Jamf Connect Documentation",
+          "breadcrumb": [
+            "macOS Login Window",
+            "Login Window Settings",
+            "FileVault Settings"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">configure how </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> is enabled with Jamf Connect. Setting Description Enable </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> EnableFDE When enabled (set to true), </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> is enabled for the first user that logs in to a computer. &lt;key&gt;EnableFDE&lt;/key&gt; &lt;false/&gt; Save </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Recovery Key</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">to help enable </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> for standard accounts</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-connect-documentation-current/FileVault_Settings"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/jamf-connect-documentation-current/FileVault_Settings"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "product-connect",
+                "role-administrator",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Technical Documentation"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "hMdX8GTVdROu5nY7nPJ1wg",
+          "contentId": "KoFePgNERgIrhpxKUguVoQ",
+          "tocId": "5n8dRFvsIU9Nr0J_FPk6vA",
+          "title": "FileVault Management Options",
+          "htmlTitle": "<span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Management Options</span>",
+          "mapTitle": "Jamf Pro Security Overview",
+          "breadcrumb": [
+            "Security Settings on Managed Computers",
+            "FileVault Management Options"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> on managed computers: Configuration: Disk encryption configuration macOS configuration profile with a Security &amp; Privacy payload Reporting: Advanced inventory searches Smart computer group that uses the &quot;</span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> 2 Eligibility&quot; criteria Smart computer group that uses the &quot;</span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> 2</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-pro-security-overview/FileVault_2_Management_Options"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/jamf-pro-security-overview/FileVault_2_Management_Options"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "demote",
+                "product-pro",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Technical Documentation"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "IevK7QeFZja2KotG9~RDrQ",
+          "contentId": "AoepGoOYyx7KFrSGSfQG4g",
+          "tocId": "bHsAdBZ4fcqnCnIKScCKpg",
+          "title": "Video: How to Troubleshoot FileVault Status in Jamf Pro",
+          "htmlTitle": "<span class=\"kwicstring\">Video: How to Troubleshoot </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Status in Jamf Pro</span>",
+          "mapTitle": "Jamf Training and Support Videos: Jamf Pro",
+          "breadcrumb": [
+            "Jamf Pro Training and Support Shorts",
+            "Video: How to Troubleshoot FileVault Status in Jamf Pro"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">how to troubleshoot </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> status in Jamf Pro. Jamf Pro can be used to enforce </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> on managed computers and securely store recovery keys. This video provides a demonstration of how to troubleshoot </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> status in Jamf Pro. Resources Jamf Pro Documentation - </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Management Jamf Pro</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "training-video-shorts-jamf-pro/How_to_Troubleshoot_FileVault_Status_in_Jamf_Pro"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/training-video-shorts-jamf-pro/How_to_Troubleshoot_FileVault_Status_in_Jamf_Pro"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "role-administrator",
+                "product-pro",
+                "release-status-ga",
+                "content-training"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Training Content"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "GY9~75TOe8bNn9iDgvgqpA",
+          "contentId": "58hRV3mM13fqCN5tVC5gsA",
+          "tocId": "KCEe73AOpaS8vDgfPbJ1lQ",
+          "title": "FileVault",
+          "htmlTitle": "<span class=\"kwicmatch\">FileVault</span>",
+          "mapTitle": "Jamf Platform Technical Glossary",
+          "breadcrumb": [
+            "Jamf Platform Technical Glossary",
+            "FileVault"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">A built-in disk encryption capability on macOS that secure all data at rest on Mac computers. For more information, see Intro to </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> in Apple Platform Deployment.</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-technical-glossary/FileVault"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/jamf-technical-glossary/FileVault"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": []
+            }
+          ]
+        }
+      },
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "BYMahslTBAvSerEyoGpFwQ",
+          "title": "Administer FileVault with Jamf Pro",
+          "htmlTitle": "<span class=\"kwicstring\">Administer </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> with Jamf Pro</span>",
+          "htmlExcerpt": "<span class=\"kwicstring\">Enforce disk encryption and manage recovery keys with </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> and Jamf Pro.</span>",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/administer-filevault-with-jamf-pro",
+          "viewerUrl": "https://learn.jamf.com/v/u/BYMahslTBAvSerEyoGpFwQ",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "course-17goradidia48"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/administer-filevault-with-jamf-pro"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Training Content"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "wjYB9oSHVEtqCycomV~qiA",
+          "title": "Identify Authentication Screens with FileVault and Jamf Connect",
+          "htmlTitle": "<span class=\"kwicstring\">Identify Authentication Screens with </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> and Jamf Connect</span>",
+          "htmlExcerpt": "<span class=\"kwicstring\">Understand the login process with </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> enabled. Determine how to configure Jamf Connect with </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> enabled and identify authentication screens.</span>",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/identify-authentication-screens-with-filevault-and-jamf-connect",
+          "viewerUrl": "https://learn.jamf.com/v/u/wjYB9oSHVEtqCycomV~qiA",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "course-1ctla1t5ptqbd"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/identify-authentication-screens-with-filevault-and-jamf-connect"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Training Content"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "inventorySchool": {
+    "query": "inventory",
+    "locale": "en-US",
+    "ranks": [
+      43,
+      45
+    ],
+    "entries": [
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "~jyEuTaxdgWS1SxFVw5ZeQ",
+          "title": "Inventory Management Essentials in Jamf School",
+          "htmlTitle": "<span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Management Essentials in Jamf School</span>",
+          "htmlExcerpt": "<span class=\"kwicstring\">As devices are enrolled, it’s essential to keep track of </span><span class=\"kwicmatch\">inventory</span><span class=\"kwicstring\">. Learn how to effectively manage a fleet of devices using groups, </span><span class=\"kwicmatch\">inventory</span><span class=\"kwicstring\"> filtering, and quick action commands.</span>",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/path/inventory-management-essentials-in-jamf-school",
+          "viewerUrl": "https://learn.jamf.com/v/u/~jyEuTaxdgWS1SxFVw5ZeQ",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "skilljar-path-2mo9bnmdv1b05"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/path/inventory-management-essentials-in-jamf-school"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf School"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Training Content"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "twfNDFyLQcQJCF61MczkTg",
+          "title": "Filters, Inventory Records, and Quick Action Commands in Jamf School",
+          "htmlTitle": "<span class=\"kwicstring\">Filters, </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Records, and Quick Action Commands in Jamf School</span>",
+          "htmlExcerpt": "<span class=\"kwicstring\">Review </span><span class=\"kwicmatch\">inventory</span><span class=\"kwicstring\"> records and send quick action commands in Jamf School.</span>",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/filters-inventory-records-and-quick-action-commands-in-jamf-school",
+          "viewerUrl": "https://learn.jamf.com/v/u/twfNDFyLQcQJCF61MczkTg",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "course-bpu9hwdyb6dg"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/filters-inventory-records-and-quick-action-commands-in-jamf-school"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf School"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "Training Content"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "entraIdJa": {
+    "query": "Entra ID",
+    "locale": "ja-JP",
+    "ranks": [
+      48
+    ],
+    "entries": [
+      {
+        "type": "DOCUMENT",
+        "missingTerms": [],
+        "document": {
+          "documentId": "MskkHMQODUoTe_2VfjtIFA",
+          "title": "Microsoft Entra ID 向けに Jamf Connect を構成する (Configure Jamf Connect for Microsoft Entra ID)",
+          "htmlTitle": "<span class=\"kwicstring\">Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> 向けに Jamf Connect を構成する (Configure Jamf Connect for Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\">)</span>",
+          "htmlExcerpt": "<span class=\"kwicstring\">Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> と統合し、ユーザのロールを指定します。Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> を使用するために Jamf Connect を構成します。</span>",
+          "openMode": "EXTERNAL",
+          "originUrl": "https://trainingcatalog.jamf.com/configure-jamf-connect-for-microsoft-entra-id-ja-jp",
+          "viewerUrl": "https://learn.jamf.com/v/u/MskkHMQODUoTe_2VfjtIFA",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "course-2s3i7rztydkuj"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            },
+            {
+              "key": "ft:openMode",
+              "label": "ft:openMode",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "key": "ft:originUrl",
+              "label": "ft:originUrl",
+              "values": [
+                "https://trainingcatalog.jamf.com/configure-jamf-connect-for-microsoft-entra-id-ja-jp"
+              ]
+            },
+            {
+              "key": "ft:sourceType",
+              "label": "ft:sourceType",
+              "values": [
+                "ExternalDocument"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            },
+            {
+              "key": "jamf:contentType",
+              "label": "Content Type",
+              "values": [
+                "トレーニングコンテンツ"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

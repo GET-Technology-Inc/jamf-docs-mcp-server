@@ -103,5 +103,34 @@ export const DOC_TYPE_CONTENT_TYPE_MAP: Record<string, string> = {
   'getting-started': 'Technical Documentation',
 };
 
+/**
+ * The `jamf:contentType` values Jamf gives its training content, "Training
+ * Content", in every language Jamf has any in.
+ *
+ * They reach what `content-training` cannot: a course or learning path of
+ * the Jamf Training Catalog, which Jamf's search lists among the
+ * documentation (a DOCUMENT entry, see `FtSearchDocument`), carries one of
+ * them and no `content-*` label. So `docType: 'training'` is searched for by
+ * these, which select what Jamf classifies as training content, courses
+ * included, and a result with no `content-*` label is training when it
+ * carries one (see `docTypeLabelKeys` in search-service.ts).
+ *
+ * Listed in every language, not the one searched, so that one filter serves
+ * them all: values within a filter are a union. Measured live on 2026-09-28:
+ * the 21 maps labelled `content-training` carry one of these each, and none
+ * of the other 664 maps does. Filtered by them, 13 searches in six languages
+ * returned the `content-training` topics, in the same order, with the
+ * courses among them (see trainingContentFilters in search-service.ts).
+ * `data-contracts` checks that the maps still pair them so.
+ */
+export const TRAINING_CONTENT_TYPES: readonly string[] = [
+  'Training Content',
+  'Schulungsinhalt',
+  'Contenido de formación',
+  'Contenu de la formation',
+  'トレーニングコンテンツ',
+  '培訓內容',
+];
+
 // Derived ID array (shared by schemas, completions, etc.)
 export const DOC_TYPE_IDS = Object.keys(DOC_TYPES) as [string, ...string[]];

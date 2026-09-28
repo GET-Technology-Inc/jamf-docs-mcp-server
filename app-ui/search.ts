@@ -13,7 +13,7 @@
  * note for a page that was cut. What running a suggestion needs: the
  * arguments that search for it. And what opening a result needs: the
  * arguments that fetch that result's own article, which a table-of-contents
- * row is opened with too.
+ * row is opened with too, or, for a result the tool cannot read, a link out.
  *
  * Kept out of app.ts so it can be tested on its own, as toc.ts is: importing
  * app.ts runs its top-level wiring and throws outside a browser.
@@ -256,6 +256,44 @@ function ftId(value: unknown): value is string {
 function urlLocale(url: string): string | undefined {
   try {
     return /^\/(?:r\/)?([a-z]{2}-[A-Z]{2})(?:\/|$)/.exec(new URL(url).pathname)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a search result is one `jamf_docs_get_article` cannot read, which
+ * the server marks `external`: a page Jamf's search lists beside the
+ * documentation, such as a Jamf Training Catalog course. Until 2026-09-28 the
+ * server dropped these, so every result on screen was one the panel could
+ * open with the tool.
+ */
+export function opensOutside(hit: { external?: unknown }): boolean {
+  return hit.external === true;
+}
+
+/**
+ * A search result that {@link opensOutside}, as the list shows it: a link the
+ * host opens in a browser, as it opens the other-source matches, where the
+ * panel would otherwise ask `jamf_docs_get_article` for it and fail. `meta`
+ * is what the list shows under every result; the site the link goes to is
+ * added, where an article shows its breadcrumb.
+ */
+export function renderExternalHit(hit: { title: string; url: string; snippet?: unknown }, meta: string[]): string {
+  const site = siteOf(hit.url);
+  const line = [...meta, ...(site !== undefined ? [`${site} ↗`] : [])];
+  return `
+      <li><a class="hit" href="${esc(hit.url)}" data-external>
+        <span class="hit-title">${esc(hit.title)}</span>
+        ${text(hit.snippet) ? `<span class="hit-snippet">${esc(hit.snippet)}</span>` : ''}
+        ${line.length > 0 ? `<span class="hit-meta">${esc(line.join(' · '))}</span>` : ''}
+      </a></li>`;
+}
+
+/** The host a url is on, or undefined when it is not a url. */
+function siteOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname;
   } catch {
     return undefined;
   }

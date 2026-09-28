@@ -198,9 +198,36 @@ const PROTECT_MACOS: Topic = {
     + '<span class="kwicstring">, see the following.</span>',
 };
 
+/**
+ * A Jamf Training Catalog course, which Jamf's search lists among the
+ * documentation (live, en-US "iPad", 2026-09-28, trimmed): the only kind of
+ * result that is `external`.
+ */
+const SHARED_IPAD_COURSE: FtSearchEntry = {
+  type: 'DOCUMENT',
+  missingTerms: [],
+  document: {
+    documentId: 'pPnKlEwm2JJnkpXwKpkmWw',
+    title: 'Shared iPad for Jamf Pro',
+    htmlTitle: '<span class="kwicmatch">Shared iPad</span><span class="kwicstring"> for Jamf Pro</span>',
+    htmlExcerpt: '<span class="kwicstring">Set up </span><span class="kwicmatch">Shared iPad</span>'
+      + '<span class="kwicstring"> for business or education with Jamf Pro.</span>',
+    openMode: 'EXTERNAL',
+    originUrl: 'https://trainingcatalog.jamf.com/shared-ipad-for-jamf-pro',
+    viewerUrl: 'https://learn.jamf.com/v/u/pPnKlEwm2JJnkpXwKpkmWw',
+    metadata: meta({
+      'ft:clusterId': ['course-q53tdmxcttr2'],
+      'ft:locale': ['en-US'],
+      'jamf:contentType': ['Training Content'],
+      ...PRO,
+    }),
+  },
+};
+
 const CORPUS: FtSearchEntry[] = [
-  ...SHARED_IPAD, DEVICE_COMPLIANCE, TRUST_WINDOWS, PROTECT_MACOS,
-].map(entry);
+  ...[...SHARED_IPAD, DEVICE_COMPLIANCE, TRUST_WINDOWS, PROTECT_MACOS].map(entry),
+  SHARED_IPAD_COURSE,
+];
 
 /** One map per publication, carrying the classification its topics carry. */
 const MAPS: FtMapInfo[] = ([
@@ -234,6 +261,7 @@ const EVERY_FIELD: Required<SearchResult> = {
   breadcrumb: ['Jamf Setup', 'Device Compliance for Shared Devices'],
   mapTitle: 'Jamf Setup and Reset Configuration Guide',
   crossFiled: true,
+  external: true,
   otherVersions: ['2.3.0'],
 };
 
@@ -249,7 +277,7 @@ const BARE: SearchResult = {
 
 /** Fluid Topics' filter semantics: objects intersect, values within one union. */
 function passes(request: FtSearchRequest, e: FtSearchEntry): boolean {
-  const carried = e.topic?.metadata ?? [];
+  const carried = e.topic?.metadata ?? e.document?.metadata ?? [];
   return (request.filters ?? []).every(f =>
     (carried.find(m => m.key === f.key)?.values ?? []).some(v => f.values.includes(v)));
 }
@@ -381,8 +409,10 @@ describe('structuredContent carries every result field the outputSchema declares
     const { sc, declared } = await callSearch(ctx, { query: 'shared ipad', product: 'jamf-pro', responseFormat: 'json' });
 
     expect(requests).toContain(`POST ${CLUSTERED_SEARCH}`);
-    expect(sc.results.map(r => r.title)).toEqual(['Shared iPad User Management', 'Device Compliance for Shared Devices']);
-    // Between them, the two results set every field a result can have, so
+    expect(sc.results.map(r => r.title)).toEqual([
+      'Shared iPad User Management', 'Device Compliance for Shared Devices', 'Shared iPad for Jamf Pro',
+    ]);
+    // Between them, the three results set every field a result can have, so
     // every key the schema declares must reach the client.
     expect(keysOf(sc.results)).toEqual(declared);
 
@@ -403,6 +433,15 @@ describe('structuredContent carries every result field the outputSchema declares
       product: 'Jamf Pro',
       mapTitle: 'Jamf Setup and Reset Configuration Guide',
       crossFiled: true,
+    });
+    expect(byTitle(sc.results, 'Shared iPad for Jamf Pro')).toEqual({
+      title: 'Shared iPad for Jamf Pro',
+      url: 'https://trainingcatalog.jamf.com/shared-ipad-for-jamf-pro',
+      snippet: 'Set up Shared iPad for business or education with Jamf Pro.',
+      product: 'Jamf Pro',
+      // No `content-*` label, but Jamf's "Training Content".
+      docType: 'training',
+      external: true,
     });
   });
 

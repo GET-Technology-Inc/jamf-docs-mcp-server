@@ -103,6 +103,16 @@ export interface SearchResult {
    */
   crossFiled?: boolean;
   /**
+   * Set, to true, on a result that is not a page of the documentation and
+   * that `jamf_docs_get_article` cannot read: a page Jamf's search lists
+   * beside the documentation, to be opened at `url` in a browser. On the
+   * Fluid Topics path that is a DOCUMENT entry ({@link FtSearchDocument}),
+   * and every one measured is a Jamf Training Catalog course, whose `docType`
+   * is `training`, as Jamf classifies it. It has no `mapId` + `contentId`
+   * pair. Absent otherwise.
+   */
+  external?: boolean;
+  /**
    * Other versions of this same topic that the search collapsed away.
    *
    * Fluid Topics publishes one entry per product version, all sharing an
@@ -520,11 +530,39 @@ export interface FtSearchMap {
   openMode: string;
 }
 
+/**
+ * A document Fluid Topics indexes beside the maps: not a topic of any map,
+ * and not something `jamf_docs_get_article` can read.
+ *
+ * Every one measured is a course or learning path of the Jamf Training
+ * Catalog, crawled from trainingcatalog.jamf.com: the 67 DOCUMENT entries of
+ * 127 searches on 2026-09-28, in en-US, ja-JP and zh-TW, all with `openMode`
+ * EXTERNAL, the course as `originUrl`, Jamf's product classification and a
+ * `jamf:contentType` of "Training Content" (in the language searched), and
+ * no `version` or `content-*` label.
+ */
+export interface FtSearchDocument {
+  documentId: string;
+  /** Optional for the same reason as {@link FtTopicInfo.title}. */
+  title?: string;
+  htmlTitle?: string;
+  htmlExcerpt?: string;
+  /** Optional for the same reason as `title`; readers go through getMetaValue(s). */
+  metadata?: FtMetadataEntry[];
+  /** `EXTERNAL` on a document Jamf's portal opens at `originUrl`. */
+  openMode?: string;
+  /** Where the document is: the course, for a Jamf Training Catalog course. */
+  originUrl?: string;
+  /** Fluid Topics' own page for the document, on learn.jamf.com. */
+  viewerUrl?: string;
+}
+
 export interface FtSearchEntry {
-  type: 'TOPIC' | 'MAP';
+  type: 'TOPIC' | 'MAP' | 'DOCUMENT';
   missingTerms: string[];
   topic?: FtSearchTopic;
   map?: FtSearchMap;
+  document?: FtSearchDocument;
 }
 
 export interface FtSearchCluster {
