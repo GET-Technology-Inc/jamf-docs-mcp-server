@@ -193,7 +193,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 Jamf 的搜尋也會把 Jamf Training Catalog (trainingcatalog.jamf.com) 的課程與學習路徑排在文件之間。這些頁面會與其他結果一樣回傳，排在 Jamf 搜尋給的名次，也同樣受 `product` 與 `topic` 篩選，並標示為 `external: true` (markdown 中為 **External**)。`jamf_docs_get_article` 無法讀取這些頁面，請在瀏覽器中開啟其 `url`。它們沒有 `mapId` + `contentId`。Jamf 將它們歸類為培訓內容，因此其 `docType` 為 `training`：指定 `docType: "training"` 時，它們會依 Jamf 搜尋給的名次與培訓主題一同出現；指定其他 `docType` 或特定 `version` 時則不會出現。
 
-「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若查詢含有中文、日文、韓文或泰文字詞，而搜尋的語言其文件並非以這些文字撰寫（例如預設的 `en-US`，其文件為英文），則不會建議這些字詞，回應會說明可改用英文術語搜尋，或改用哪個 `language` 搜尋（JSON 為 `localeNote`）。查詢若沒有以雙引號括住的片語，也沒有以 `+` 或 `-` 標示的字詞，Fluid Topics 只要頁面含有其中任一字詞即視為符合；因此這類查詢沒有結果時，不會建議只用其中較少的字詞（同樣找不到），而是在 markdown 回應中提示檢查拼字或改用其他詞彙。彎引號（“ ” „ ‟）與全形 ＂ 會以直雙引號送往 Fluid Topics，因此以它們括住的片語會當作片語搜尋。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
+「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若查詢含有中文、日文、韓文或泰文字詞，而搜尋的語言其文件並非以這些文字撰寫（例如預設的 `en-US`，其文件為英文），則不會建議這些字詞，回應會說明可改用英文術語搜尋，或改用哪個 `language` 搜尋（JSON 為 `localeNote`）。查詢若沒有以雙引號括住的片語，也沒有以 `+` 或 `-` 標示的字詞，Fluid Topics 只要頁面含有其中任一字詞即視為符合；因此這類查詢沒有結果時，不會建議只用其中較少的字詞（同樣找不到），而是在 markdown 回應中提示檢查拼字或改用其他詞彙。彎引號（“ ” „ ‟）、全形 ＂、引號「」與『』，以及法文引號 « » 會以直雙引號送往 Fluid Topics，因此以它們括住的片語會當作片語搜尋。例外有二：查詢只有一個字詞時，括住它的「」、『』或 « » 會照原樣送出，因為單一字詞的片語只比對所輸入的字形（在 de-DE 中，`"Konfigurationsprofil"` 有 1,717 筆結果，`Konfigurationsprofil` 有 7,141 筆）；若沒有任何頁面含有以這些符號括住的片語，搜尋會再以原樣的符號執行一次，以寬鬆方式比對其中字詞，並在 `queryNote` 中說明。以直雙引號括住的片語若查無結果，會建議去掉引號後的字詞。全形英文字母與數字（ＳＳＯ、１５）會以半形送出，因為在多數語言中 Fluid Topics 不會把它們視為半形字元比對；比對其他來源的標題時也以半形比對。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
 
 ### jamf_docs_get_article
 
@@ -260,7 +260,7 @@ concepts.jamf.com 路徑開頭沒有語系代碼的網址，網站只會回應�
 
 ### jamf_docs_glossary_lookup
 
-查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。若以其他語言查詢，或術語以拉丁字母以外的文字（如中文）書寫，查無結果時回應也會說明這一點（JSON 為 `warning`）。
+查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。若以其他語言查詢，或術語以拉丁字母以外的文字（如中文）書寫，查無結果時回應也會說明這一點（JSON 為 `warning`）。術語中的全形英文字母與數字（`ＭＤＭ`）會以半形比對。
 
 「No glossary entries found」表示已讀取術語表，但沒有符合的條目（使用 `responseFormat: "json"` 時，則是 `totalMatches: 0` 的 JSON 內容）。若有符合的條目，但連排在第一位的條目都超出 `maxTokens`，回應會說明符合的條目數，以及第一個條目所需的 `maxTokens`；`truncatedContent` 會列出每個被省略的條目及其估計 token 數。若無法讀取術語表（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的文件地圖清單來源 `MapsProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗，以及重試是否可能有幫助。若部分符合的條目無法取得，回應會以其餘條目作答並加以註明：`incomplete` 會列出可能缺少的條目。若其中有原本應排在回應第一位的條目（其名稱比所有已取得的條目都更貼近查詢術語），則改為回傳錯誤，不會以其他較不相關的條目代替作答。
 

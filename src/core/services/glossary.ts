@@ -48,7 +48,7 @@ import { limitConcurrency } from '../utils/concurrency.js';
 import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
 import { describeMapsListFailure } from './maps-list-failure.js';
 import { readGlossaryProviderResult } from './provider-results.js';
-import { CJK_CHARACTER } from '../utils/cjk.js';
+import { CJK_CHARACTER, foldFullWidthLatin } from '../utils/cjk.js';
 
 /**
  * The glossary could not be read, so the lookup has no answer to give. That
@@ -1066,7 +1066,14 @@ export async function lookupGlossaryTerm(
   // `jamf:portal`, `jamf:app` and `jamf:utility` (2026-09-24), so there is
   // nothing to filter by. It stays in the signature because a
   // `GlossaryProvider` receives it.
-  const { term, maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
+  //
+  // The term is matched with its full-width Latin letters and digits in
+  // ASCII since 2026-09-28 (see foldFullWidthLatin): Jamf titles its entries
+  // in ASCII, and until then `ＭＤＭ` matched none of them, where `MDM`
+  // matched 2 (live that day). The lookup's own messages name it so too. A
+  // GlossaryProvider is handed the term as typed.
+  const { maxTokens = TOKEN_CONFIG.DEFAULT_MAX_TOKENS } = params;
+  const term = foldFullWidthLatin(params.term);
   const locale = params.language ?? DEFAULT_LOCALE;
 
   log.info(`Looking up glossary term: "${term}" (locale=${locale})`);

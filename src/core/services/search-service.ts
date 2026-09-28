@@ -56,7 +56,7 @@ import { dedupeResultsToLatestVersions, namedVersion } from './search-result-ver
 import { readSearchProviderResults } from './provider-results.js';
 import { estimateTokens, buildPaginationNote } from './tokenizer.js';
 import { pageStarts, pagesPastTheLastNote } from './budget-pages.js';
-import { straightenQuotes } from './search-suggestions.js';
+import { looseQueryForFluidTopics, queryForFluidTopics } from './search-suggestions.js';
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -1544,12 +1544,14 @@ export async function searchDocumentation(
   let productPublication: ReadonlySet<string> | undefined;
   let rankedBy: SearchDocumentationResult['rankedBy'];
   let failure: SearchFailure | undefined;
+  let noted: Pick<SearchDocumentationResult, 'queryNote'> = {};
 
   try {
     const resolved = await resolveSearchResults(ctx, params, log);
     allResults = resolved.results;
     fromProvider = resolved.fromProvider;
     productUnfilterable = resolved.productUnfilterable;
+    noted = queryNoteOf(resolved);
     if (resolved.productPublication !== undefined) {
       productPublication = new Set(resolved.productPublication);
     } else if (fromProvider && isUnclassified(params.product)) {
@@ -1595,9 +1597,31 @@ export async function searchDocumentation(
     ...(paginationNote !== undefined ? { paginationNote } : {}),
     ...(versionNote !== undefined ? { versionNote } : {}),
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+    ...noted,
     ...(truncatedResult !== undefined ? { truncatedResult } : {}),
     ...failure,
     ...(rankedBy !== undefined ? { rankedBy } : {}),
+  };
+}
+
+/**
+ * What a search says when no page had the phrases its query quotes in 「」,
+ * 『』, ｢｣ or « » as written, and it searched the query again with those
+ * quotes as typed, which Fluid Topics reads as none (see
+ * {@link searchedAgainIfNothing}): which phrases, and whether that found
+ * anything. Nothing for any other search.
+ */
+function queryNoteOf(resolved: ResolvedSearchResults): Pick<SearchDocumentationResult, 'queryNote'> {
+  const phrases = resolved.phrasesNotFound;
+  if (phrases === undefined) { return {}; }
+  const quoted = phrases.length < 2
+    ? phrases.join('')
+    : `${phrases.slice(0, -1).join(', ')} and ${phrases.slice(-1).join('')}`;
+  const without = `the query searched without ${phrases.length < 2 ? 'those quotes' : 'their quotes'}`;
+  return {
+    queryNote: resolved.results.length > 0
+      ? `No page has ${quoted} as written, so these results are for ${without}.`
+      : `No page has ${quoted} as written, and ${without} found nothing either.`,
   };
 }
 
@@ -1689,6 +1713,14 @@ interface ResolvedSearchResults {
    * where {@link searchDocumentation} looks them up itself.
    */
   productPublication?: readonly string[];
+  /**
+   * Phrases the query quotes in 「」, 『』, ｢｣ or « », as typed, with their
+   * quotes, that no page had as written, so that the query was searched
+   * again with those quotes as typed, which Fluid Topics reads as none (see
+   * looseQueryForFluidTopics): `results` are that search's. Absent for every
+   * other search, and on the provider path.
+   */
+  phrasesNotFound?: readonly string[];
 }
 
 async function resolveSearchResults(
@@ -1730,14 +1762,25 @@ async function resolveSearchResults(
     CONTENT_LIMITS.FILTER_OVERFETCH_CAP
   );
 
-  /** One cached round-trip to FT for a given filter set. */
-  const fetchFiltered = async (filters: FtSearchFilter[]): Promise<SearchResultWithMeta[]> => {
+  /** The filters of the last request `fetchFiltered` made: those the search ends with. */
+  let lastFilters: FtSearchFilter[] = [];
+
+  /**
+   * One cached round-trip to FT for a given filter set and `query`, by
+   * default the query as queryForFluidTopics writes it: with its quotes
+   * straightened and its full-width letters and digits in ASCII since
+   * 2026-09-28, as Fluid Topics reads a phrase in curly quotes, 「」 or « »
+   * as loose words, finds nothing for a query with ＂ in it, and in most
+   * languages nothing for ＳＳＯ. The provider above is handed the query as
+   * typed.
+   */
+  const fetchFiltered = async (
+    filters: FtSearchFilter[],
+    query = queryForFluidTopics(params.query),
+  ): Promise<SearchResultWithMeta[]> => {
+    lastFilters = filters;
     const request: FtSearchRequest = {
-      // With ＂ and the curly quotes straightened since 2026-09-28: Fluid
-      // Topics reads a phrase in curly quotes as loose words, and finds
-      // nothing for a query with ＂ in it (see straightenQuotes). The
-      // provider above is handed the query as typed.
-      query: straightenQuotes(params.query),
+      query,
       contentLocale: locale,
       // Sent explicitly even though it matches Fluid Topics' default, so the
       // ordering this server promises its callers is a stated request
@@ -1864,10 +1907,36 @@ async function resolveSearchResults(
     ));
   }
 
+  // 4. When no page has a phrase the query quotes in 「」, 『』, ｢｣ or « »
+  //    as written, search its words loosely, with the filters the search
+  //    ended with (see searchedAgainIfNothing).
   return {
-    results,
+    ...await searchedAgainIfNothing(params.query, results, log,
+      async query => await fetchFiltered(lastFilters, query)),
     fromProvider: false,
     productUnfilterable,
     ...(productPublication !== undefined ? { productPublication } : {}),
   };
+}
+
+/**
+ * `results`, or, when they are none and `query` has a phrase in 「」, 『』, ｢｣
+ * or « », what `searchAgain` finds for it with those marks as typed, which
+ * Fluid Topics reads as no quotes (see looseQueryForFluidTopics), and the
+ * phrases no page had. One more request, and only when the search found
+ * nothing. A term the documentation writes otherwise, or a message it does
+ * not have word for word, then finds the pages with its words, as it did
+ * until 2026-09-28, when such a pair was sent as typed, and the reply says
+ * so (see queryNoteOf).
+ */
+async function searchedAgainIfNothing(
+  query: string,
+  results: SearchResultWithMeta[],
+  log: Logger,
+  searchAgain: (query: string) => Promise<SearchResultWithMeta[]>,
+): Promise<Pick<ResolvedSearchResults, 'results' | 'phrasesNotFound'>> {
+  const loose = results.length === 0 ? looseQueryForFluidTopics(query) : undefined;
+  if (loose === undefined) { return { results }; }
+  log.debug(`No results for the phrases ${loose.phrases.join(', ')}; searching "${loose.query}"`);
+  return { results: await searchAgain(loose.query), phrasesNotFound: loose.phrases };
 }

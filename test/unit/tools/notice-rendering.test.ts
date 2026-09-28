@@ -68,6 +68,8 @@ function structured(result: { structuredContent?: unknown }): Record<string, unk
 
 const CLAMPED_PAGE_NOTE = 'Note: Requested page 99 exceeds total pages (3). Showing last page.';
 const SEARCH_VERSION_NOTE = 'Version "11.5.0" was not available for some results.';
+const SEARCH_QUERY_NOTE = 'No page has «certificat expiré» as written, so these results are for the query ' +
+  'searched without those quotes.';
 
 /** A search service payload carrying every notice `SearchDocumentationResult` can hold. */
 function searchPayloadWithAllNotices(): Record<string, unknown> {
@@ -77,6 +79,7 @@ function searchPayloadWithAllNotices(): Record<string, unknown> {
     tokenInfo: createTokenInfo(),
     paginationNote: CLAMPED_PAGE_NOTE,
     versionNote: SEARCH_VERSION_NOTE,
+    queryNote: SEARCH_QUERY_NOTE,
   };
 }
 
@@ -200,6 +203,31 @@ describe('tool notices reach the caller', () => {
   });
 
   // --- jamf_docs_get_toc ----------------------------------------------------
+
+  describe('jamf_docs_search queryNote', () => {
+    it('should carry the query note in every channel', async () => {
+      // A phrase in 「」 or « » that no page had, searched again without its
+      // quotes (see resolveSearchResults in search-service.ts).
+      for (const responseFormat of ['markdown', 'json']) {
+        vi.mocked(searchDocumentation).mockResolvedValueOnce(
+          searchPayloadWithAllNotices() as never
+        );
+
+        const result = await client.callTool({
+          name: 'jamf_docs_search',
+          arguments: { query: '«certificat expiré»', language: 'fr-FR', responseFormat },
+        });
+
+        expect(structured(result).queryNote).toBe(SEARCH_QUERY_NOTE);
+        const text = getTextContent(result);
+        if (responseFormat === 'json') {
+          expect((JSON.parse(text) as { queryNote?: unknown }).queryNote).toBe(SEARCH_QUERY_NOTE);
+        } else {
+          expect(text).toContain(`> **Query Note:** ${SEARCH_QUERY_NOTE}`);
+        }
+      }
+    });
+  });
 
   describe('jamf_docs_get_toc paginationNote', () => {
     it('should render the clamped-page note in markdown', async () => {

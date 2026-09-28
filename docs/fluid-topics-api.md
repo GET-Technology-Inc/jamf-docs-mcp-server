@@ -127,6 +127,108 @@ closes with “; with “ alone straightened, `„Zertifikat erneuern“ „Push
 the phrase `" „Push"` (20, against 42 for `"Zertifikat erneuern" "Push"`).
 The single quotes change no count (`Apple’s` and `Apple's` 9,811 each).
 
+**Since 2026-09-28 the search sends 「」, 『』 and « » as a straight double
+quote too, but in the two cases below, and ＇ as a straight single one.** 「」 are how Japanese and
+Chinese quote (『』 inside a quote, or for a title), and « » how French
+quotes, and German, either way round. Fluid Topics reads them as no quotes,
+so until then a phrase in them was searched as loose words. Measured
+2026-09-28, the count and how many of the first 10 results had the phrase,
+typed and with the marks straightened:
+
+| query | language | typed | straightened |
+|---|---|---|---|
+| `「プッシュ証明書」の更新` | ja-JP | 19,979, 6 of 10 | 442, 10 of 10 |
+| `「スマートグループ」の作成` | ja-JP | 19,987, 10 of 10 | 1,640, 10 of 10 |
+| `上傳「設定描述檔」失敗` | zh-TW | 15,749, 8 of 10 | 3,001, 10 of 10 |
+| `傳送「遠端命令」` | zh-TW | 4,740, 8 of 10 | 789, 10 of 10 |
+| `Renouvellement du « certificat push »` | fr-FR | 12,983, 6 of 10 | 379, 10 of 10 |
+| `créer un « groupe intelligent »` | fr-FR | 16,476, 9 of 10 | 1,007, 10 of 10 |
+| `»Zertifikat erneuern«` | de-DE | 2,352, 3 of 10 | 42, 4 of 4 |
+| `「プッシュ証明書の更新に失敗しました」` | ja-JP | 20,138, 0 of 10 | 0 |
+
+Jamf's own titles quote a label with these marks, such as
+`構成プロファイルの「失敗」のステータスに関するトラブルシューティング`. Each of the
+19 such titles that searches for common words in ja-JP, zh-TW and fr-FR
+returned, searched as a query with its marks straightened, still had its
+page first, among 1 to 2,842 results instead of 6,569 to 20,631. A quoted
+word in a query of more is one a page must have: `「FileVault」を有効にする`
+had 2 of its first 10 with FileVault in the title, and
+`"FileVault"を有効にする` 8; `「原則」 無法執行` in zh-TW 2 with 原則, and
+`"原則" 無法執行` 10.
+
+Titles contain their phrase by construction, so they cannot show what a
+phrase costs. Of 44 queries quoted as a person would quote a term or a
+message (18 in ja-JP, 10 in zh-TW, 4 in zh-CN, 6 in fr-FR, 3 in de-DE, 2 in
+es-ES, 1 in it-IT), 12 found nothing with every pair straightened, where as
+typed each had results: 5 of the 18 in ja-JP, 1 in zh-TW, the 4 in zh-CN
+(whose results as typed were not about the query), 1 in fr-FR and 1 in
+it-IT. Among them were terms the documentation writes otherwise
+(`「セルフサービス」`, 2,981 as typed; it writes Self Service;
+`「プレステージ登録」`, 5,190, led by 登録 and 登録 URL),
+messages it does not have word for word
+(`「MDMプロファイルのインストールに失敗しました」`, 20,160, led by
+`構成プロファイルの「失敗」のステータスに関するトラブルシューティング`), and
+`« certificat push expiré »` (2,505, led by "Suppression du certificat
+push" and "Certificats push"). So two cases are not left as phrases:
+
+- **A pair around the query's one word is sent as typed**, which Fluid
+  Topics reads as no quotes. A phrase of one word is that word in the form
+  typed and no other: `"Konfigurationsprofil"` 1,717 in de-DE and
+  `Konfigurationsprofil` 7,141, led by "Konfigurationsprofile für Computer",
+  which the quoted one's first 10 lack. Of 25 such words in 9 languages, 14
+  had fewer results quoted and lost from 1 to 8 of the first 10 (such as
+  "Certificats" for `certificat` in fr-FR, 1,844 against 2,087); the other 11
+  had the same first 10. Of 9 Chinese and Japanese words Unicode's rules
+  find no other word in, such as ポリシー and 原則, each had the same first
+  10 either way, 2 with fewer results quoted (ポリシー 2,879 against 2,948).
+  A word is as the search reads words (`wordsSearchedFor`), so
+  `「リモートコマンド」`, two words to Unicode's rules, stays a phrase; Fluid
+  Topics has the same 769 for it either way.
+- **When Fluid Topics finds nothing for the query with such a phrase, the
+  search asks again with every pair sent as typed** (`looseQueryForFluidTopics`),
+  with the filters it ended with: one more request, only then. The reply
+  serves what that finds and says so in `queryNote` ("No page has
+  「プレステージ登録」 as written, so these results are for the query searched
+  without those quotes."), or, when that finds nothing either, says that too
+  and suggests no query made only of the words that search had. With both, none of the 44
+  finds nothing: 11 were searched again, and `「セルフサービス」` is sent as
+  typed.
+
+What is left is a phrase that finds little. 7 of the 44 found fewer than 50
+pages as phrases, where as typed they found hundreds or thousands:
+`「ユーザーの追加」` 4 (20,034 as typed), `「遠端指令」` 4 (1,919),
+`»Smart Group«` 8 (274), `« échec de l'inscription »` 24 (20,194),
+`「インベントリ更新」` 43 (4,960), `「管理対象のApple ID」` 43 (20,134) and
+`「自助服務」` 46 (3,127). For 2 of them (`「ユーザーの追加」`,
+`「インベントリ更新」`) the first 3 as typed were closer to the question, for 1
+(`「管理対象のApple ID」`) the phrase's, and for the other 4 neither's. That
+is the cost of the choice: the same query without the marks finds what it
+found before.
+
+｢｣, the half-width 「」, are straightened with them. The single guillemets
+‹ ›, like ‘ ’, quote nothing (`‹certificat push›` has the 2,284 of
+`certificat push` in fr-FR), and are sent as typed. ＇ is ' typed in full
+width, and is sent as ': it quotes nothing either (`＇push certificate＇`
+462), and `Apple＇s` has the 9,811 results of `Apple's` in another order,
+where `Apple’s` has them in the same order.
+
+A straight-quoted phrase that finds nothing is suggested its words without
+the quotes, however few (`simplifyQuery`): until 2026-09-28 one of three
+keywords or fewer was not, and `"certificat push expiré"` in fr-FR, which
+finds nothing, was suggested `deploy` alone, while `certificat push expiré`
+has 2,505.
+
+**A narrow no-break space (U+202F) in a phrase finds nothing.** Measured
+2026-09-28 in fr-FR: `"certificat push"` 379, and 0 with U+202F between its
+words or inside its quotes, while it has 379 with the no-break space U+00A0
+in either place, and with the thin space U+2009, the figure space U+2007 or
+the ideographic space U+3000 inside its quotes. Out of a phrase U+202F is a
+space too (`certificat push` 2,284 either way). French typography puts
+U+202F or U+00A0 inside « », and Jamf's French titles use U+00A0
+(`Correction d’une erreur « Impossible de modifier la clé » dans FileVault`).
+So the search sends U+202F as a space (`queryForFluidTopics` in
+`src/core/services/search-suggestions.ts`).
+
 Words are split at every character that is not a letter or digit (`11.32.0`
 and `11 32 0` 21,744 each; `xyzzyq_pro` has the count of `pro`, and
 `Jamf Pro™` the 22,191 of `pro`, while `protm` has 0), and Chinese and Thai
@@ -136,12 +238,38 @@ applies to the words: in de-DE, compounds are taken apart, so the entries
 found for `Zertifikat erneuern fehlgeschlagen` (2,986) list `fehl` and
 `geschlagen` among their `missingTerms`. Accents are folded (`politica` and
 `política` 2,409 each in es-ES), whether typed with the letter or as a
-combining mark after it (`política` in NFD 2,409 too). Full-width Latin is
-folded in ja-JP and zh-TW (`ＭＤＭ` and `MDM` 2,397 each in ja-JP) but not in
-en-US (`ＳＳＯ` 0, `SSO` 1,228). So a query with none of those parts that
-finds nothing has none of its words in the documentation searched, and fewer
-of them find nothing either, since they are analysed as the query's are: see
-`generateSearchSuggestions` in `src/core/services/search-suggestions.ts`.
+combining mark after it (`política` in NFD 2,409 too). So a query with none
+of those parts that finds nothing has none of its words in the documentation
+searched, and fewer of them find nothing either, since they are analysed as
+the query's are: see `generateSearchSuggestions` in
+`src/core/services/search-suggestions.ts`.
+
+**Full-width Latin letters and digits are read as ASCII in few languages.**
+Measured 2026-09-28, each of the eleven languages, full width against ASCII:
+
+| language | letters (`ＳＳＯ`, `ＦｉｌｅＶａｕｌｔ`, `Ｊａｍｆ`, `ｉＯＳ`) | digits (`１５`, `１１．３２`) |
+|---|---|---|
+| ja-JP | read as ASCII: the same count and first 10 (`ＳＳＯ` and `SSO` 712 each) | read as ASCII (`１５` and `15` 1,626 each) |
+| zh-TW, zh-CN | read as ASCII (`ＳＳＯ` and `SSO` 698 each in zh-TW) | not (`１５` 0, `15` 1,599 in zh-TW) |
+| en-US, de-DE, es-ES, fr-FR, nl-NL, th-TH, it-IT, pt-BR | not: each 0, and in each language some had results in ASCII (`ＳＳＯ` 0, `SSO` 1,228 in en-US) | not (`１５` 0, `15` 1,934 in en-US) |
+
+An input method in full-width mode types them. So since 2026-09-28 the search
+sends a query's full-width letters and digits (U+FF10–FF19, U+FF21–FF3A,
+U+FF41–FF5A) in ASCII, in every language (`queryForFluidTopics`). Where Fluid
+Topics reads them as ASCII already, that changes no result: 12 queries in
+ja-JP, among them `ＭＤＭ登録` and `Ｊａｍｆ Ｐｒｏの設定`, and 9 of letters
+alone in zh-TW and zh-CN, had the same count and the same first 10 either
+way. Full-width punctuation is sent as typed: Fluid Topics reads it as a
+space, where its ASCII form can be an operator (`certificate －push` 3,010,
+the count of `certificate push`; `certificate -push` 2,188), and `．` changes
+only the order (`11．32` and `11.32` 16,330 each in zh-TW). The ligature ﬁ is
+read as fi (`Configuration Profile` with it 11,602, as without); the
+mathematical letters such as 𝐒 are not (`𝐒𝐒𝐎` 0), and are sent as typed.
+The glossary lookup matches a term, and the other sites' titles are matched
+against a query, with the same letters and digits in ASCII
+(`foldFullWidthLatin` in `src/core/utils/cjk.ts`): the glossary had no
+entry for `ＭＤＭ` and 2 for `MDM`, and `ｊａｍｆｏｒｍｅｒ` matched no
+concepts.jamf.com title.
 
 **Do not send `latestVersion=yes`.** See architectural note 4 below.
 
