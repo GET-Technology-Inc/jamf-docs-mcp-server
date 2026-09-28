@@ -90,11 +90,13 @@ const TOOL_NAME = 'jamf_docs_batch_get_articles';
 
 /**
  * `language` was missing from Args until 2026-09-24, although the schema has
- * accepted it since the tool was added in #58. The schema checks only that each
- * url is a URL of at most CONTENT_LIMITS.MAX_URL_LENGTH characters (since
- * 2026-09-28); the host check runs per article, so a URL on another host, or
- * an http:// one, comes back as that article's error ("URL must be from …")
- * and the rest of the batch still runs.
+ * accepted it since the tool was added in #58. Until 2026-09-28 Args said it
+ * had no effect on a concepts.jamf.com or support.jamf.com URL, which was so
+ * (see `fetchStaticArticle`). The schema checks only that each url is a URL
+ * of at most CONTENT_LIMITS.MAX_URL_LENGTH characters (since 2026-09-28); the
+ * host check runs per article, so a URL on another host, or an http:// one,
+ * comes back as that article's error ("URL must be from …") and the rest of
+ * the batch still runs.
  */
 const TOOL_DESCRIPTION = `Retrieve multiple Jamf documentation articles in a single request.
 
@@ -104,7 +106,7 @@ comparing articles, gathering information from multiple pages, or bulk research.
 Args:
   - urls (string[], required): Array of 1-10 https:// article URLs on ${ALLOWED_HOSTNAME_LIST}, each at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Any other URL fails as its own per-article error, and a longer one fails the call's input validation
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
-  - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. No effect on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
+  - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no edition in it is served as its URL names it, with a note
   - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')

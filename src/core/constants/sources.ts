@@ -81,12 +81,22 @@ export interface StaticDocSource {
    * exactly. Locales absent from this map are not published by the source at
    * all — th-TH is a hard gap, `/th` and `/th-TH` both 404. `jamf_docs_get_toc`
    * serves such a locale the `en-US` edition, with a `localeNote`, as it does
-   * a Fluid Topics publication with no map in the language.
+   * a Fluid Topics publication with no map in the language, and
+   * `jamf_docs_get_article` serves the page its url names, with a note.
    *
-   * Each code appears at most once, because `fetchStaticToc` maps the code
-   * that answered back to this server's id through this table.
+   * Each code appears at most once, because {@link staticLocaleId} maps a
+   * code back to this server's id through this table.
    */
   readonly locales: Readonly<Record<string, string>>;
+  /**
+   * Codes the source also publishes its pages under, which no `language`
+   * value names and {@link StaticDocSource.locales} so leaves out:
+   * concepts.jamf.com's `ko` and `pl`, whose sitemap lists the same 99 paths
+   * under each as under `en` (2026-09-28). A url under one of them is still
+   * an edition of its page, so `jamf_docs_get_article` serves it in the
+   * locale `language` asks for, as it does a url under a code of `locales`.
+   */
+  readonly otherLocales?: readonly string[];
   /**
    * The locale code whose language every page's slug is written in, for a
    * source that keeps one set of slugs in all its locales and translates only
@@ -194,6 +204,7 @@ export const STATIC_DOC_SOURCES = {
       'zh-TW': 'zh-TW',
       'zh-CN': 'zh-CN',
     },
+    otherLocales: ['ko', 'pl'],
     // Each of the sitemap's ten locale codes lists the same 99 paths as en,
     // and a page's title is translated where its slug is not: the og:title of
     // /ja/guides/threat-and-risk-management/ is 脅威とリスク管理 (2026-09-28).
@@ -305,6 +316,17 @@ export function canonicalStaticUrl(sourceOrUrl: StaticDocSource | string, maybeU
   } catch {
     return urlStr;
   }
+}
+
+/**
+ * This server's locale id for one of `source`'s own codes: `ja-JP` for `ja`.
+ *
+ * Read back through the source's locale table, which names each code once
+ * (see {@link StaticDocSource.locales}). Undefined for a code the table does
+ * not name, such as concepts.jamf.com's `ko`: no `language` value asks for it.
+ */
+export function staticLocaleId(source: StaticDocSource, code: string): string | undefined {
+  return Object.entries(source.locales).find(([, own]) => own === code)?.[0];
 }
 
 /** Every non-Fluid-Topics hostname this server will fetch from. */

@@ -171,9 +171,12 @@ describe('concepts.jamf.com contracts', () => {
   /**
    * The TOC is derived from these paths instead of crawling, so the shape
    * `{locale}/{section}/…` is load-bearing: flatten it and the tree is gone.
+   * `jamf_docs_get_article` reads a url's first segment as its locale code,
+   * the `otherLocales` ones too (since 2026-09-28), to serve the page in
+   * another.
    */
   it('encodes the hierarchy in the sitemap paths', () => {
-    const locales = Object.values(SOURCE.locales);
+    const locales = [...Object.values(SOURCE.locales), ...SOURCE.otherLocales];
     expect(locales.length, 'locales declared for this source').toBeGreaterThan(0);
 
     for (const locale of locales) {

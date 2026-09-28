@@ -68,13 +68,17 @@ const LANGUAGE_DESCRIPTION = `Documentation language/locale (default: ${DEFAULT_
  * gets: measured on 2026-09-24, a `/ja-JP/bundle/…` URL comes back in
  * Japanese with no `language` at all, and `language: "ja-JP"` on an `/en-US/`
  * URL comes back in Japanese too. So "default: en-US" was wrong for every
- * non-English URL. It also never reaches the static sources: their fetch
- * path does not read the locale, and a concepts.jamf.com or support.jamf.com
- * page asked for in ja-JP is still English.
+ * non-English URL.
+ *
+ * Until 2026-09-28 it said it had no effect on the static sources, and it
+ * had none: a concepts.jamf.com or support.jamf.com page asked for in ja-JP
+ * was the page the URL named, in English, with no note. It now picks that
+ * page's edition there too, where the site publishes one.
  */
 const URL_LANGUAGE_DESCRIPTION =
   'Documentation language/locale. Overrides the locale in the article URL, which is ' +
-  `used when this is omitted. Has no effect on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs`;
+  `used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no ` +
+  'edition in it is served as the URL names it, with a note';
 const LANGUAGE_OPTIONS = `Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
 
 // Common page parameter schema
@@ -241,8 +245,8 @@ export const GetArticleInputSchema = z.object({
       // A mapId is one language's copy of a publication — the ja-JP Jamf Pro
       // map has its own mapId and its own contentIds — so `language: "ja-JP"`
       // with an en-US pair still returns English (measured 2026-09-24).
-      `${URL_LANGUAGE_DESCRIPTION}, or on a mapId + contentId pair, whose map is already ` +
-      `in one language. ${LANGUAGE_OPTIONS}`
+      `${URL_LANGUAGE_DESCRIPTION}. No effect on a mapId + contentId pair, whose map is ` +
+      `already in one language. ${LANGUAGE_OPTIONS}`
     ),
     completeLanguage
   ),

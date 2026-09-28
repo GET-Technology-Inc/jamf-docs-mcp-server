@@ -412,7 +412,9 @@ export interface ParsedArticle {
    * The language of the bytes in `content`.
    *
    * Not the requested locale and not the locale in `url`, both of which still
-   * say e.g. `th-TH` when Jamf has no translation and served English.
+   * say e.g. `th-TH` when Jamf has no translation and served English. A
+   * concepts.jamf.com or support.jamf.com page sets it to the edition served
+   * (since 2026-09-28), and there `url` is that edition's own address.
    */
   contentLocale?: string | undefined;
   /** Where the page sits in its product's table of contents. */

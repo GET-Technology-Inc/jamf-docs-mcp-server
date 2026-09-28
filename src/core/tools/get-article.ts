@@ -200,6 +200,11 @@ const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be 
  * The example URL changed at the same time: `.../page/Configuration_Profiles.html`
  * answered "Topic not found" (live, 2026-09-24); the page Jamf publishes is
  * `Computer_Configuration_Profiles`.
+ *
+ * Until 2026-09-28 `language` was documented as having no effect on a
+ * concepts.jamf.com or support.jamf.com url, and a support.jamf.com
+ * collection url, 24 of which `jamf_docs_get_toc` lists for Jamf Pro alone,
+ * was an error. See `fetchStaticArticle` for both.
  */
 const TOOL_DESCRIPTION = `Retrieve the full content of a specific Jamf documentation article.
 
@@ -212,13 +217,14 @@ both, as a search result allows, is fine: on learn.jamf.com the pair decides
 which article is fetched, and the result's url is that article's own address
 (a note says so if the url you passed does not match it). A
 ${STATIC_SOURCE_HOSTNAMES.join(' or ')} url is fetched by url, and a note says
-the pair was ignored.
+the pair was ignored. A support.jamf.com collection url, which a TOC lists
+each subcollection by, returns the collection's list of articles.
 
 Args:
   - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}, at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Required unless mapId and contentId are given
   - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId, instead of url or alongside it
   - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId, instead of url or alongside it
-  - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. No effect on a mapId + contentId pair (a map is in one language) or on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
+  - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no edition in it is served as the url names it, with a note. No effect on a mapId + contentId pair (a map is in one language)
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article and its sub-topics
   - includeRelated (boolean, optional): Include links to related articles (default: false)

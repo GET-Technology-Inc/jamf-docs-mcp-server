@@ -18,7 +18,8 @@
  * each), and SAMPLE_SIZE articles (~0.9s each), at CONCURRENCY at a time.
  * Roughly 40s wall clock against the job's 5-minute timeout. Since
  * 2026-09-28 the home page of each of the other five locales as well, for
- * the three assertions on what each locale lists.
+ * the three assertions on what each locale lists. The `localeLinks`
+ * assertion reads pages fetched for the others, and costs no request.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -30,7 +31,7 @@ import {
   HANDLED_BLOCK_TYPES,
 } from '../../src/core/services/intercom-service.js';
 import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
-import { STATIC_DOC_SOURCES } from '../../src/core/constants/sources.js';
+import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../src/core/constants/sources.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
 const SOURCE = STATIC_DOC_SOURCES['jamf-support'];
@@ -64,6 +65,13 @@ interface Article {
   url: string;
   title?: unknown;
   blocks: Block[];
+  localeLinks?: unknown;
+}
+
+/** A page the reader takes `localeLinks` from: an article, or a collection. */
+interface ListedPage {
+  url: string;
+  localeLinks?: unknown;
 }
 
 async function getHtml(url: string): Promise<string> {
@@ -165,6 +173,7 @@ function hasContent(block: Block): boolean {
 }
 
 let collections: { url: string; name: unknown; id: unknown }[];
+let collectionPages: ListedPage[];
 let articles: Article[];
 /** Each locale's home collections, keyed by support.jamf.com's code for it. */
 let homes: Map<string, { url: unknown; id: unknown }[]>;
@@ -178,10 +187,11 @@ beforeAll(async () => {
 
   const perCollection = await mapLimit(collections, async (collection) => {
     const props = pageProps(await getHtml(collection.url), collection.url);
-    return articleUrls(props);
+    return { urls: articleUrls(props), page: { url: collection.url, localeLinks: props.localeLinks } };
   });
+  collectionPages = perCollection.map(({ page }) => page);
 
-  const all = [...new Set(perCollection.flat())];
+  const all = [...new Set(perCollection.flatMap(({ urls }) => urls))];
   expect(all.length, 'articles listed across all collections').toBeGreaterThan(SAMPLE_SIZE);
 
   const stride = Math.max(1, Math.floor(all.length / SAMPLE_SIZE));
@@ -190,7 +200,7 @@ beforeAll(async () => {
   articles = await mapLimit(sample, async (url) => {
     const props = pageProps(await getHtml(url), url);
     const content = props.articleContent as { blocks?: Block[]; title?: unknown } | undefined;
-    return { url, title: content?.title, blocks: content?.blocks ?? [] };
+    return { url, title: content?.title, blocks: content?.blocks ?? [], localeLinks: props.localeLinks };
   });
 
   const others = Object.values(SOURCE.locales).filter(code => code !== LOCALE);
@@ -405,6 +415,35 @@ describe('support.jamf.com contracts', () => {
       for (const collection of listed) {
         const path = typeof collection.url === 'string' ? new URL(collection.url).pathname : '';
         expect(path, `${code}: ${JSON.stringify(collection)}`).toMatch(new RegExp(`^/${code}/collections/`));
+      }
+    }
+  });
+
+  /**
+   * `jamf_docs_get_article` serves a page in another language from the
+   * edition its `localeLinks` lists for that locale's code, and labels a page
+   * with the address its selected entry gives. So each page it reads, an
+   * article or a collection, has to list every locale the source declares
+   * under that code, mark the one it is, at its own address, and give each
+   * edition it has an address in that edition's locale. A code spelled
+   * otherwise would read as a locale with no edition, and every page would
+   * be served in the language its url names, with a note saying Jamf does
+   * not publish it in the one asked for.
+   */
+  it('lists each page\'s editions under the codes the source declares, and marks its own', () => {
+    const declared = Object.values(SOURCE.locales);
+    for (const page of [...articles, ...collectionPages]) {
+      const links = (Array.isArray(page.localeLinks) ? page.localeLinks : []) as {
+        id?: unknown; absoluteUrl?: unknown; available?: unknown; selected?: unknown;
+      }[];
+      expect(links.map(link => link.id), `${page.url} localeLinks`).toEqual(expect.arrayContaining(declared));
+      const selected = links.filter(link => link.selected === true);
+      expect(selected.map(link => link.id), `${page.url} selected`).toEqual([LOCALE]);
+      expect(canonicalStaticUrl(SOURCE, String(selected[0]?.absoluteUrl)), `${page.url} own address`)
+        .toBe(canonicalStaticUrl(SOURCE, page.url));
+      for (const link of links.filter(l => l.available === true)) {
+        const path = typeof link.absoluteUrl === 'string' ? new URL(link.absoluteUrl).pathname : '';
+        expect(path, `${page.url}: ${JSON.stringify(link)}`).toMatch(new RegExp(`^/${String(link.id)}/`));
       }
     }
   });

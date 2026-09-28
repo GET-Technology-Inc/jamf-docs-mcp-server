@@ -293,10 +293,12 @@ const TOOL_NAME = 'jamf_docs_get_toc';
  * concepts.jamf.com and support.jamf.com ones, whose entries have no
  * `contentId` either, and a `TocProvider`'s that names no map. The Note said
  * "Markdown output shows the mapId only" until the same date, though compact
- * markdown shows neither half. It does not tell a caller to read a
- * concepts.jamf.com or support.jamf.com entry by its url: a support.jamf.com
- * subcollection's url is a collection page, which jamf_docs_get_article
- * cannot read.
+ * markdown shows neither half. Until the same date it did not tell a caller
+ * to read a concepts.jamf.com or support.jamf.com entry by its url, because a
+ * support.jamf.com subcollection's url is a collection page, which
+ * jamf_docs_get_article could not read, while the full markdown's footer
+ * said to read "any URL above" with it. It reads one now, as the list of the
+ * collection's articles, so the footer holds and the Note says so.
  */
 const TOOL_DESCRIPTION = `Get the table of contents for Jamf documentation.
 
@@ -376,7 +378,9 @@ jamf_docs_get_article accepts for a direct fetch. Full markdown shows the
 mapId only, and compact markdown shows neither; use responseFormat="json" (or
 read structuredContent) for both. A concepts.jamf.com or support.jamf.com TOC
 has neither: it names no map, and its entries carry only title, url and
-children.
+children. Read any of its entries by url with jamf_docs_get_article; a
+support.jamf.com subcollection's url is its collection page, which reads as
+the list of its articles.
 structuredContent also carries what to send back for the next page:
 productId (or publicationId), version, language (when one was asked for) and
 maxTokens. The JSON text has no id or language, and has the budget as

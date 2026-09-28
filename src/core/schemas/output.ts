@@ -256,7 +256,8 @@ export const ArticleOutputSchema = z.object({
   mapId: z.string().optional(),
   contentId: z.string().optional(),
   /**
-   * The three below are `ArticleProvider` signals. They are declared here
+   * The three below are `ArticleProvider` signals, and `contentLocale` is a
+   * concepts.jamf.com and support.jamf.com one too. They are declared here
    * because a key absent from this schema is a key the tool's structured
    * output cannot promise, whatever the builder emits — and each one is a fact
    * a reader has to act on, not decoration.
@@ -270,6 +271,11 @@ export const ArticleOutputSchema = z.object({
    * The language of `content`. Distinct from the requested locale and from the
    * locale in `url`: Jamf serves English when it has no translation, and both
    * of those keep saying the language that was asked for.
+   *
+   * On a concepts.jamf.com or support.jamf.com page, since 2026-09-28, it is
+   * the edition served, whose own address `url` is, and is absent where
+   * neither the page nor its url says which edition it is. The MCP App says
+   * "Shown in …" when it is not the host's locale.
    */
   contentLocale: z.string().optional(),
   /**

@@ -11,7 +11,7 @@
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
-import { canonicalStaticUrl, type StaticDocSource, type StaticSection } from '../constants/sources.js';
+import { canonicalStaticUrl, staticLocaleId, type StaticDocSource, type StaticSection } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import type { FetchTocOptions, FetchTocResult, TocEntry } from '../types.js';
 import { PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
@@ -423,18 +423,6 @@ export async function buildStaticToc(
 }
 
 /**
- * This server's locale id for one of `source`'s own codes: `ja-JP` for `ja`.
- *
- * Read back through the source's locale table, which names each code once
- * (see {@link StaticDocSource.locales}).
- * Undefined for a code the table does not name, such as concepts.jamf.com's
- * `ko`: no `language` value asks for it.
- */
-function localeIdFor(source: StaticDocSource, sourceLocale: string): string | undefined {
-  return Object.entries(source.locales).find(([, code]) => code === sourceLocale)?.[0];
-}
-
-/**
  * A `FetchTocResult` for a static source's section.
  *
  * Pagination and token truncation are the same operations the Fluid Topics
@@ -457,7 +445,7 @@ export async function fetchStaticToc(
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   const allToc = await buildStaticToc(ctx, source, section, sourceLocale);
-  const resolvedLocale = localeIdFor(source, sourceLocale);
+  const resolvedLocale = staticLocaleId(source, sourceLocale);
 
   return {
     ...paginateTocEntries(allToc, page, maxTokens),

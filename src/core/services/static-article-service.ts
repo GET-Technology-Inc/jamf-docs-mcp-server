@@ -15,12 +15,15 @@ import { extractSections } from './tokenizer.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { loadOnce } from './load-once.js';
 import { TOKEN_CONFIG } from '../constants.js';
-import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
+import { canonicalStaticUrl, staticLocaleId, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
 import { JamfDocsError, JamfDocsErrorCode } from '../types.js';
 import type { FetchArticleOptions, FetchArticleResult } from '../types.js';
-import { parseIntercomArticle } from './intercom-service.js';
+import { HttpError } from '../http-client.js';
+import { parseIntercomPage, type IntercomEditions } from './intercom-service.js';
 import type { ParsedArticleContent } from './content-parser.js';
+import { NO_REASON_GIVEN } from './failure-reason.js';
+import { describeFetchFailure, isRequestFailure, reasonGiven } from '../utils/fetch-failure.js';
 
 // Exported from here until #338 moved it next to the registry it reads.
 // `./core/*` is a published path, so an embedder's import of it from here
@@ -31,9 +34,24 @@ export { canonicalStaticUrl };
 interface CachedStaticArticle {
   title: string;
   parsed: ParsedArticleContent;
+  /**
+   * The page's own address: the one it lists as its own in `editions` where
+   * it lists one, else the url it was read from.
+   */
   displayUrl: string;
   /** Only Intercom publishes one; the static pages carry no date. */
   lastUpdated?: string;
+  /**
+   * Which edition the page is, and where its others are, from the page
+   * itself. Only an Intercom page says; a concepts.jamf.com page's editions
+   * are addressed by the locale code its path starts with.
+   */
+  editions?: IntercomEditions;
+  /**
+   * What the page is, for a note about its editions to name: an article, or
+   * a support.jamf.com collection, read as the list of its articles.
+   */
+  kind: 'article' | 'collection';
 }
 
 /**
@@ -71,8 +89,16 @@ function decodeEntities(text: string): string {
 /**
  * Fetch and parse one article from a static documentation source.
  *
+ * `options.locale` picks the edition, as `language` does on learn.jamf.com:
+ * the locale's edition of the page `url` names, where the site publishes
+ * one, and otherwise that page, with a note saying which edition it is (see
+ * {@link servedEdition}). Until 2026-09-28 it was not read, and a
+ * concepts.jamf.com or support.jamf.com url was served as it was whatever
+ * `language` said, with no note.
+ *
  * @param source the registry row for the hostname in `url`
- * @param options `note` is one line to end the reply with, within `maxTokens`
+ * @param options `note` is one line to end the reply with, within `maxTokens`,
+ *   before any about the language
  */
 export async function fetchStaticArticle(
   ctx: ServerContext,
@@ -84,16 +110,255 @@ export async function fetchStaticArticle(
   // One spelling for the fetch, the cache key and the reported `url`, so
   // either spelling a caller passes is one request to the form the site
   // serves, one cache entry, and one name for the page.
-  const displayUrl = canonicalStaticUrl(source, url);
-  const key = cacheKey('static-article', { source: source.id, url: displayUrl });
+  const asked = canonicalStaticUrl(source, url);
+  const { page, note, edition } = await servedEdition(ctx, source, asked, options.locale);
+  const notes = [options.note, note].filter((line): line is string => line !== undefined);
+  const contentLocale = servedLocale(source, page);
+  return renderStaticArticle(
+    page, source, { ...options, note: notes.length > 0 ? notes.join(' ') : undefined }, maxTokens, {
+      // A fragment names a place in the page the url names, and it is kept on
+      // that page's label as it always was. Another edition's headings have
+      // ids of their own (support.jamf.com's `h_…` differ between the en, ja
+      // and fr editions of an article, 2026-09-28), so its label has none.
+      url: edition === true ? page.displayUrl : withFragmentOf(page.displayUrl, asked),
+      ...(contentLocale !== undefined ? { contentLocale } : {}),
+    },
+  );
+}
 
+/** The cached parse of the page at `url`, in the source's spelling, or that page read. */
+async function loadPage(ctx: ServerContext, source: StaticDocSource, url: string): Promise<CachedStaticArticle> {
+  const key = cacheKey('static-article-v2', { source: source.id, url });
   // One request for the page however many calls want it at once (load-once.ts).
-  const cached = await loadOnce(ctx.cache, key, async () => await readStaticArticle(ctx, source, displayUrl, key));
-  return renderStaticArticle(cached, source, options, maxTokens);
+  return await loadOnce(ctx.cache, key, async () => await readStaticArticle(ctx, source, url, key));
+}
+
+/** What asking for another edition of a page came to. */
+type EditionRead =
+  | { status: 'read'; page: CachedStaticArticle }
+  /** The site answered that there is none: a 404. */
+  | { status: 'missing' }
+  /** Anything else: a 5xx after the retries, a timeout, a page that could not be parsed. */
+  | { status: 'failed'; error: unknown };
+
+/**
+ * The page at `url`, another edition of the one a call named.
+ *
+ * Its failure is never the call's: the page the url names is served in its
+ * place, with a note saying why (see {@link servedEdition}). Only that page's
+ * own failure fails the call, as it did before editions were read.
+ */
+async function loadEdition(ctx: ServerContext, source: StaticDocSource, url: string): Promise<EditionRead> {
+  try {
+    return { status: 'read', page: await loadPage(ctx, source, url) };
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) { return { status: 'missing' }; }
+    ctx.logger.createLogger('static-article').warning(
+      `Could not read the edition at ${url}; serving the page the url names instead: ${whyUnread(error)}`,
+    );
+    return { status: 'failed', error };
+  }
+}
+
+/** The page to serve, and the note that says it is not in the language asked for. */
+interface ServedEdition {
+  page: CachedStaticArticle;
+  note?: string;
+  /** Set when `page` is another edition than the page the url names. */
+  edition?: true;
 }
 
 /**
- * The cached parse of the page at `displayUrl`, or the page read, parsed and
+ * The edition of the page at `asked` that a call in `requested` gets.
+ *
+ * The two sites address editions differently, both measured live on
+ * 2026-09-28:
+ *
+ * - concepts.jamf.com puts an edition under its locale code: the sitemap
+ *   lists the same 99 paths under each of its ten codes, so the ja edition of
+ *   `/en/guides/ai-governance/` is `/ja/guides/ai-governance/`. It is
+ *   requested directly, and the page `asked` names only if that one is a 404
+ *   or cannot be read. A url under `ko` or `pl`, which no `language` value
+ *   names, is an edition too (see `StaticDocSource.otherLocales`).
+ * - support.jamf.com keeps an article's Intercom id in every locale and gives
+ *   each locale its own slug, so an edition's address is read off the page
+ *   `asked` names, from its `localeLinks` (see {@link IntercomEditions}).
+ *   Without `requested`, the locale the url names is the one asked for, as it
+ *   is on learn.jamf.com: the site answers a `/ja/` url of an article with no
+ *   ja edition with the en one, which used to be labelled with the `/ja/`
+ *   url and not said.
+ *
+ * A locale the source does not publish in at all, th-TH on either site, gets
+ * the page `asked` names without a request for anything else. So does a
+ * locale the page has no edition in. Either way a note says which edition it
+ * is, as `jamf_docs_get_toc`'s `localeNote` does for a TOC. An edition that
+ * could not be read for another reason than a 404, a 5xx after the retries or
+ * a timeout, gets that page too, with a note that says so: the call does not
+ * fail on a page it was not asked for.
+ */
+async function servedEdition(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  asked: string,
+  requested: string | undefined,
+): Promise<ServedEdition> {
+  if (source.parser === 'intercom') {
+    return await listedEdition(ctx, source, asked, requested);
+  }
+  if (requested === undefined) { return { page: await loadPage(ctx, source, asked) }; }
+
+  const own = pathLocale(source, asked);
+  const wanted = source.locales[requested];
+  if (own === undefined) {
+    return {
+      page: await loadPage(ctx, source, asked),
+      note: notApplied(requested, `this url's path does not start with one of ${
+        source.hostname}'s locale codes (${pathLocales(source).join(', ')})`),
+    };
+  }
+  if (wanted === own) { return { page: await loadPage(ctx, source, asked) }; }
+  const edition = wanted !== undefined
+    ? await loadEdition(ctx, source, canonicalStaticUrl(source, withPathLocale(asked, wanted)))
+    : { status: 'missing' as const };
+  if (edition.status === 'read') { return { page: edition.page, edition: true }; }
+  const page = await loadPage(ctx, source, asked);
+  return {
+    page,
+    note: edition.status === 'failed'
+      ? unreadEdition(source, page, requested, own, edition.error)
+      : otherEdition(source, page, requested, own),
+  };
+}
+
+/** {@link servedEdition} for a source whose pages list their editions. */
+async function listedEdition(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  asked: string,
+  requested: string | undefined,
+): Promise<ServedEdition> {
+  const page = await loadPage(ctx, source, asked);
+  const own = pathLocale(source, asked);
+  const wanted = requested !== undefined ? source.locales[requested] : own;
+  const wantedId = requested ?? (wanted !== undefined ? staticLocaleId(source, wanted) : undefined);
+  if (wantedId === undefined) { return { page }; }
+  const { editions } = page;
+  if (editions === undefined) {
+    // Nothing on the page says which edition it is, so the url's locale code
+    // is taken at its word, as a concepts.jamf.com url's is.
+    return requested === undefined || (wanted !== undefined && wanted === own)
+      ? { page }
+      : { page, note: notApplied(requested, 'the page does not list its editions') };
+  }
+  if (wanted === editions.locale) { return { page }; }
+
+  const url = wanted !== undefined ? editions.editions[wanted] : undefined;
+  if (url !== undefined && url !== null) {
+    const edition = await loadEdition(ctx, source, canonicalStaticUrl(source, url));
+    // The edition's own page says which it is: a url for a locale with no
+    // edition is answered with the en one.
+    if (edition.status === 'read' && edition.page.editions?.locale === wanted) {
+      return { page: edition.page, edition: true };
+    }
+    if (edition.status === 'failed') {
+      return { page, note: unreadEdition(source, page, wantedId, editions.locale, edition.error) };
+    }
+  }
+  return { page, note: otherEdition(source, page, wantedId, editions.locale) };
+}
+
+/** Every locale code a url on `source` can start with: its table's, then its `otherLocales`. */
+function pathLocales(source: StaticDocSource): string[] {
+  return [...Object.values(source.locales), ...(source.otherLocales ?? [])];
+}
+
+/** The source's locale code a url's path starts with, when it starts with one. */
+function pathLocale(source: StaticDocSource, url: string): string | undefined {
+  const first = new URL(url).pathname.split('/')[1] ?? '';
+  return pathLocales(source).includes(first) ? first : undefined;
+}
+
+/**
+ * `url` with its first path segment, its locale code, replaced by `code`, and
+ * no fragment: that names a place in the page `url` names (see
+ * {@link fetchStaticArticle}).
+ */
+function withPathLocale(url: string, code: string): string {
+  const parsed = new URL(url);
+  const segments = parsed.pathname.split('/');
+  segments[1] = code;
+  parsed.pathname = segments.join('/');
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+/** `label` with the fragment of `asked`, where `asked` has one. */
+function withFragmentOf(label: string, asked: string): string {
+  const { hash } = new URL(asked);
+  if (hash === '') { return label; }
+  const parsed = new URL(label);
+  parsed.hash = hash;
+  return parsed.toString();
+}
+
+/**
+ * This server's id for the locale `page` is in, for `contentLocale`: the
+ * edition the page lists as its own, or on a site whose pages list none, the
+ * locale code its url starts with. Undefined where neither says, or for a
+ * code no `language` value names (concepts.jamf.com's `ko`).
+ */
+function servedLocale(source: StaticDocSource, page: CachedStaticArticle): string | undefined {
+  const code = source.parser === 'intercom' ? page.editions?.locale : pathLocale(source, page.displayUrl);
+  return code !== undefined ? staticLocaleId(source, code) : undefined;
+}
+
+/** The edition a note says is served, by this server's id for its locale code. */
+function editionShown(source: StaticDocSource, servedCode: string): string {
+  const served = staticLocaleId(source, servedCode);
+  return served !== undefined ? `the ${served} edition` : 'the page this url names';
+}
+
+/**
+ * The note on a page served in another language than `requested`: the one
+ * `jamf_docs_get_toc` puts in `localeNote`, about an article or a collection.
+ */
+function otherEdition(
+  source: StaticDocSource,
+  page: CachedStaticArticle,
+  requested: string,
+  servedCode: string,
+): string {
+  return `Jamf does not publish this ${page.kind} in ${requested}. Showing ${editionShown(source, servedCode)} instead.`;
+}
+
+/** The note on a page served in place of its `requested` edition, which could not be read. */
+function unreadEdition(
+  source: StaticDocSource,
+  page: CachedStaticArticle,
+  requested: string,
+  servedCode: string,
+  error: unknown,
+): string {
+  return `The ${requested} edition of this ${page.kind} could not be read (${whyUnread(error)}). ` +
+    `Showing ${editionShown(source, servedCode)} instead.`;
+}
+
+/** Why an edition could not be read, in a few words: "HTTP 503 Service Unavailable", "the request timed out". */
+function whyUnread(error: unknown): string {
+  if (isRequestFailure(error)) { return describeFetchFailure(error); }
+  if (error instanceof JamfDocsError && error.code === JamfDocsErrorCode.PARSE_ERROR) {
+    return 'its page could not be parsed';
+  }
+  return reasonGiven(error) ?? NO_REASON_GIVEN;
+}
+
+/** The note on a page whose editions cannot be told from its url or its page. */
+function notApplied(requested: string, reason: string): string {
+  return `Language "${requested}" was not applied: ${reason}, so the page was served as the url names it.`;
+}
+
+/**
+ * The cached parse of the page at `url`, or the page read, parsed and
  * stored: the load {@link fetchStaticArticle} shares between calls.
  *
  * Takes none of a call's options, so what one call loads is what any other
@@ -109,26 +374,29 @@ export async function fetchStaticArticle(
 async function readStaticArticle(
   ctx: ServerContext,
   source: StaticDocSource,
-  displayUrl: string,
+  url: string,
   key: CacheKey,
 ): Promise<CachedStaticArticle> {
   const hit = await ctx.cache.get<CachedStaticArticle>(key);
   if (hit !== null) { return hit; }
 
-  const html = await ctx.http.getText(displayUrl);
+  const html = await ctx.http.getText(url);
 
   // An Intercom Help Center's body is a block list in `__NEXT_DATA__`, not
   // markup — no selector set can read it, so the parser is chosen per
   // source rather than per page.
   if (source.parser === 'intercom') {
-    const article = parseIntercomArticle(html);
+    // An article, or a collection read as the list of its articles.
+    const article = parseIntercomPage(html, source);
     if (article === null) {
       throw new JamfDocsError(
-        `Could not read a ${source.name} article at ${displayUrl}`,
+        `Could not read a ${source.name} article at ${url}`,
         JamfDocsErrorCode.PARSE_ERROR,
       );
     }
+    const { editions } = article;
     const cached: CachedStaticArticle = {
+      kind: article.kind,
       title: article.title,
       parsed: {
         title: article.title,
@@ -136,15 +404,19 @@ async function readStaticArticle(
         breadcrumb: article.breadcrumb,
         relatedArticles: [],
       },
-      displayUrl,
+      // The page's own address, which is not `url` when the site answered
+      // `url` with another page: the en edition, for a locale the page has
+      // none in, or the article under its current slug.
+      displayUrl: editions !== undefined ? canonicalStaticUrl(source, editions.url) : url,
       ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
+      ...(editions !== undefined ? { editions } : {}),
     };
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
     return cached;
   }
 
   const documentTitle = extractDocumentTitle(html);
-  const parsed = parseArticle(html, displayUrl, {
+  const parsed = parseArticle(html, url, {
     // The source's own markup rules. Parsing a static page with Fluid
     // Topics' selectors finds no content wrapper and falls through to
     // <body>, which is the whole site chrome.
@@ -164,17 +436,24 @@ async function readStaticArticle(
   // body has none; Fluid Topics never needs this because its titles arrive
   // as metadata.
   const title = parsed.title !== 'Untitled' ? parsed.title : documentTitle ?? parsed.title;
-  const cached: CachedStaticArticle = { title, parsed, displayUrl };
+  const cached: CachedStaticArticle = { kind: 'article', title, parsed, displayUrl: url };
   await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
   return cached;
 }
 
-/** Assemble the response from a parsed page, whichever parser produced it. */
+/**
+ * Assemble the response from a parsed page, whichever parser produced it.
+ *
+ * @param shown the page's label, and the language its content is in where
+ *   that is known ({@link servedLocale}). Until 2026-09-28 a static page
+ *   carried no `contentLocale`, which only an `ArticleProvider` set.
+ */
 function renderStaticArticle(
   cached: CachedStaticArticle,
   source: StaticDocSource,
   options: FetchArticleOptions & Pick<ArticleViewOptions, 'note'>,
   maxTokens: number,
+  shown: { url: string; contentLocale?: string },
 ): FetchArticleResult {
   const { title, parsed } = cached;
 
@@ -191,8 +470,9 @@ function renderStaticArticle(
   return buildArticleView(
     {
       title,
-      url: cached.displayUrl,
+      url: shown.url,
       product: source.name,
+      ...(shown.contentLocale !== undefined ? { contentLocale: shown.contentLocale } : {}),
       ...(cached.lastUpdated !== undefined ? { lastUpdated: cached.lastUpdated } : {}),
       breadcrumb: parsed.breadcrumb.length > 0 ? parsed.breadcrumb : undefined,
       relatedArticles: options.includeRelated === true && parsed.relatedArticles.length > 0
