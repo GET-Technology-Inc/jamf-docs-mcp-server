@@ -6,7 +6,7 @@
 
 import { DEFAULT_LOCALE, JAMF_TOPICS, type TopicId } from '../constants.js';
 import type { SearchRanker } from '../types.js';
-import { blankForeignWriting, splitWords } from '../utils/cjk.js';
+import { blankForeignWriting, foldFullWidthLatin, splitWords } from '../utils/cjk.js';
 
 /**
  * Search suggestion result
@@ -26,8 +26,7 @@ export interface SearchSuggestionOptions {
    * The backend that ran it, whose way of matching says which queries can
    * find something. Unset, it is not known, and every suggestion is made, as
    * every one was until 2026-09-28. `fluid-topics` is Fluid Topics searching
-   * the query with its quotes straightened, as `searchDocumentation` sends it
-   * (see `straightenQuotes`).
+   * the query as `searchDocumentation` sends it (see `queryForFluidTopics`).
    */
   searchedBy?: SearchRanker | undefined;
   /**
@@ -37,6 +36,14 @@ export interface SearchSuggestionOptions {
    * nothing, and was not told to remove it.
    */
   hasVersionFilter?: boolean;
+  /**
+   * Whether Fluid Topics, having found nothing for a phrase the query quotes
+   * in 「」, 『』, ｢｣ or « », also searched it with those quotes sent as typed
+   * (see `looseQueryForFluidTopics`), and found nothing either. Its words are
+   * then those of that search, which no longer made a phrase of them: fewer
+   * of them, or the words without the quotes, find nothing either.
+   */
+  searchedLoosely?: boolean;
 }
 
 /**
@@ -187,8 +194,9 @@ function foldLatin(text: string): string {
  *
  * With its full-width Latin letters and digits read as the ones they are (see
  * `foldLatin`). Until 2026-09-28 they were read as spaces, so a query written
- * in them had no keywords. The search does not read them so: live that day,
- * ＳＳＯ had no results in en-US, and SSO 1,228.
+ * in them had no keywords. In most languages Fluid Topics does not read them
+ * so, and the search sends them to it in ASCII (see `queryForFluidTopics`):
+ * live that day, ＳＳＯ had no results in en-US, and SSO 1,228.
  */
 function extractKeywords(query: string): string[] {
   return keywordsIn(wordsOf(foldLatin(query)));
@@ -199,9 +207,11 @@ function extractKeywords(query: string): string[] {
  *
  * Applies the same lowercasing / punctuation stripping / whitespace collapsing
  * as extractKeywords, but keeps stop words so the result is comparable to the
- * literal query the caller ran. Not folded (see `foldLatin`): the query the
- * caller ran is the one typed, and `sso` is not the query `ＳＳＯ` that found
- * nothing.
+ * literal query the caller ran. Not folded (see `foldLatin`): a backend
+ * handed the query as typed, a SearchProvider, ran `ＳＳＯ`, and `sso` is not
+ * that query. Fluid Topics is sent `ＳＳＯ` as SSO (see `queryForFluidTopics`),
+ * and `findsMore` in `generateSearchSuggestions` is what keeps `sso` from
+ * being suggested for it.
  */
 function normalizeQuery(query: string): string {
   return wordsOf(query)
@@ -230,22 +240,36 @@ function queryContainsPhrase(normalized: string, phrase: string): boolean {
 
 /**
  * Simplify a query by removing stop words and keeping key terms
+ *
+ * `quoted` is whether the query as it was searched has a phrase in it (see
+ * `PHRASE`). Its words without the quotes are then another query, which a
+ * page need not have as a phrase, and are suggested however few they are.
+ * Until 2026-09-28 a quoted query of three keywords or fewer was suggested
+ * none of them, since without its quotes it was compared with itself: live
+ * that day, `"certificat push expiré"` had no results in fr-FR and was
+ * suggested `deploy` alone, while `certificat push expiré` had 2,505, led by
+ * "Suppression du certificat push" and "Certificats push".
  */
-function simplifyQuery(query: string): string | null {
+function simplifyQuery(query: string, quoted: boolean): string | null {
   const keywords = extractKeywords(query);
 
   if (keywords.length === 0) {
     return null;
   }
 
+  // Keep the most important 2-3 keywords
+  const simplified = keywords.slice(0, 3).join(' ');
+
+  if (quoted) {
+    return simplified;
+  }
+
   // If query is already simple (2 words or less), no simplification needed,
-  // unless folding changed its keywords: `ＳＳＯ` is simple, and `sso` is not it.
+  // unless folding changed its keywords: `ＳＳＯ` is simple, and `sso` is not
+  // the query a backend handed it as typed ran (see `normalizeQuery`).
   if (keywords.length <= 2 && sameWords(keywords.join(' '), keywordsIn(wordsOf(query)).join(' '))) {
     return null;
   }
-
-  // Keep the most important 2-3 keywords
-  const simplified = keywords.slice(0, 3).join(' ');
 
   // Suggesting the query that just returned nothing is not advice. A 3-keyword
   // query with no stop words "simplifies" to itself, so compare before emitting.
@@ -390,16 +414,20 @@ function generateTips(query: string, hasFilters: boolean, filteredUpstream: bool
   return tips;
 }
 
-const CURLY_DOUBLE_QUOTES = /[＂“”„‟]/gu;
-const CURLY_SINGLE_QUOTES = /[‘’]/gu;
+const DOUBLE_QUOTES = /[＂“”„‟「」『』｢｣«»]/gu;
+const SINGLE_QUOTES = /[‘’＇]/gu;
 
 /**
- * `query` as it is sent to Fluid Topics: with the full-width quotation mark ＂
- * and the curly double quotes “ ” „ ‟ written as a straight double quote,
- * and the curly single quotes ‘ ’ as a straight one.
+ * `query` with the full-width quotation mark ＂, the curly double quotes
+ * “ ” „ ‟, the corner brackets 「」 and 『』 and the guillemets « » written as
+ * a straight double quote, and the curly single quotes ‘ ’ and the full-width
+ * ＇ as a straight one: its quotes as a reader reads them. Fluid Topics is
+ * sent them so, but for a pair of 「」, 『』, ｢｣ or « » around the query's
+ * one word, and in a second search, around any words (see
+ * `queryForFluidTopics`).
  *
  * Fluid Topics searches a phrase in straight double quotes as one a page must
- * have. It reads the curly quotes as if they were not there, and a query with
+ * have. It reads the other quotes as if they were not there, and a query with
  * ＂ in it, paired or not, finds nothing. Live on 2026-09-28, in en-US,
  * `"push certificate"` had 398 results, `“push certificate”` the 462 of
  * `push certificate`, and `＂push certificate＂` and `＂push certificate`
@@ -409,21 +437,181 @@ const CURLY_SINGLE_QUOTES = /[‘’]/gu;
  * “ because a German phrase opens with „ and closes with “: with “ alone
  * straightened, `„Zertifikat erneuern“ „Push“` in de-DE was the phrase
  * `" „Push"`, 20 results led by a page on remote commands, against 42 for
- * `"Zertifikat erneuern" "Push"`. Single quotes of either kind quote nothing
- * (`'push certificate'` and `‘push certificate’` had 462 each), and an
- * apostrophe is read the same either way (`Apple's` and `Apple’s` 9,811
- * each), so straightening them changes no result: it makes one request, and
- * one cache entry, of two that are the same search. «», 「」 and ＇, which
- * Fluid Topics also reads as if they were not there, are sent as typed.
+ * `"Zertifikat erneuern" "Push"`.
+ *
+ * 「」 are how Japanese and Chinese quote, 『』 how they quote inside a quote
+ * or name a title, and « » how French quotes, and German too, either way
+ * round. ｢｣ are the half-width 「」. Until 2026-09-28 they were sent as typed,
+ * so a phrase in them was searched as loose words (see `QUOTING_MARK` for
+ * what that day measured, and what it costs).
+ *
+ * Single quotes of any of these kinds quote nothing (`'push certificate'`,
+ * `‘push certificate’` and `＇push certificate＇` had 462 each). ‘ ’ are read
+ * as ' is (`Apple's` and `Apple’s` had 9,811 each, in the same order), so
+ * straightening them changes no result: it makes one request, and one cache
+ * entry, of the same search. ＇ is ' typed in full width, as ＳＳＯ is SSO,
+ * and until 2026-09-28 it was sent as typed: `Apple＇s` had the 9,811 of
+ * `Apple's`, in another order. The single guillemets ‹ › quote nothing
+ * either, and are sent as typed.
  */
 export function straightenQuotes(query: string): string {
-  return query.replace(CURLY_DOUBLE_QUOTES, '"').replace(CURLY_SINGLE_QUOTES, '\'');
+  return query.replace(DOUBLE_QUOTES, '"').replace(SINGLE_QUOTES, '\'');
+}
+
+/** A double quote, straight or one `straightenQuotes` makes straight. */
+const ANY_DOUBLE_QUOTE = /["＂“”„‟「」『』｢｣«»]/gu;
+
+/**
+ * The marks Japanese, Chinese, French and German quote with: 「」, 『』, ｢｣
+ * and « ». Since 2026-09-28 a pair of them is sent to Fluid Topics as a
+ * phrase, in straight double quotes, but in two cases.
+ *
+ * Jamf's own titles quote a label with them, as
+ * `構成プロファイルの「失敗」のステータスに関するトラブルシューティング` and
+ * `Correction d’une erreur « Impossible de modifier la clé » dans FileVault`
+ * do, and as a phrase a quoted label finds the pages that have it: live that
+ * day, `「プッシュ証明書」の更新` had 19,979 results in ja-JP, and 6 of the
+ * first 10 had the phrase, against 442 and 10 of 10 for `"プッシュ証明書"の更新`;
+ * in fr-FR, `Renouvellement du « certificat push »` had 12,983 and 6 of 10,
+ * against 379 and 10 of 10. A quoted word in a query of more is one a page
+ * must have: `「FileVault」を有効にする` had 2 of its first 10 with FileVault in
+ * the title, and `"FileVault"を有効にする` 8; `「原則」 無法執行` in zh-TW had 2
+ * with 原則, and `"原則" 無法執行` 10.
+ *
+ * - A pair around the query's one word is sent as typed, which Fluid Topics
+ *   reads as no quotes. A phrase of one word is that word in the form typed
+ *   and no other: live that day, `"Konfigurationsprofil"` had 1,717 results
+ *   in de-DE and `Konfigurationsprofil` 7,141, led by "Konfigurationsprofile
+ *   für Computer", which the quoted one's first 10 lacked. Of 25 such words
+ *   in 9 languages, 14 had fewer results quoted, and lost from 1 to 8 of the
+ *   first 10, such as "Certificats" for `certificat` in fr-FR; the other 11
+ *   had the same first 10. Of 9 Chinese and Japanese words Unicode's rules
+ *   find no other word in (see `splitWords`), such as ポリシー and 原則, each
+ *   had the same first 10 either way, 2 with fewer results quoted; and
+ *   `「セルフサービス」` had none, where as typed it had 2,981.
+ * - When Fluid Topics finds nothing for the query with such a phrase, the
+ *   search asks again with every pair sent as typed (see
+ *   `looseQueryForFluidTopics`). A term a query quotes may be one the
+ *   documentation writes otherwise, and a message it quotes one it does not
+ *   have word for word: of 44 queries quoted as a person would quote them,
+ *   measured that day, 11 found nothing as phrases, such as
+ *   `「プレステージ登録」` in ja-JP and `« certificat push expiré »` in fr-FR,
+ *   which had 5,190 and 2,505 results as typed, led by 登録 and by
+ *   "Suppression du certificat push". What is left is a phrase that finds
+ *   little: 7 of the 44 found under 50 pages where as typed they found
+ *   thousands, such as `「ユーザーの追加」` (4, where the documentation writes
+ *   ユーザ) and `「インベントリ更新」` (43).
+ */
+const QUOTING_MARK = /[「」『』｢｣«»]/u;
+
+/** The places in a query of the two quotes of a pair. */
+interface QuotePair { open: number; close: number }
+
+/**
+ * The pairs of 「」, 『』, ｢｣ and « » in `query`: the double quotes that
+ * Fluid Topics, sent them straightened, pairs, as it pairs straight ones: the
+ * first with the second, the third with the fourth. A pair of which either
+ * quote is another kind is not one, nor is a quote left over.
+ */
+function quotingPairs(query: string): QuotePair[] {
+  const at = Array.from(query.matchAll(ANY_DOUBLE_QUOTE), match => match.index);
+  const pairs: QuotePair[] = [];
+  for (let i = 0; i + 1 < at.length; i += 2) {
+    const [open, close] = [at[i], at[i + 1]];
+    if (open !== undefined && close !== undefined &&
+      QUOTING_MARK.test(query.charAt(open)) && QUOTING_MARK.test(query.charAt(close))) {
+      pairs.push({ open, close });
+    }
+  }
+  return pairs;
+}
+
+/** Whether `pair` is around the one word of `query`, as Fluid Topics reads words (see `wordsSearchedFor`). */
+function aroundTheOneWord(query: string, pair: QuotePair): boolean {
+  return wordsSearchedFor(query).size === 1 && wordsSearchedFor(query.slice(pair.open + 1, pair.close)).size === 1;
+}
+
+/** The narrow no-break space, which French writes inside « » and before ? ! ; and :. */
+const NARROW_NO_BREAK_SPACE = /\u202F/gu;
+
+/**
+ * `query` as it is sent to Fluid Topics, with the quotes of `asTyped` as
+ * typed: its other quotes straightened (see `straightenQuotes`), its
+ * full-width Latin letters and digits written in ASCII (see
+ * `foldFullWidthLatin`), and a narrow no-break space written as a space.
+ */
+function sendWith(query: string, asTyped: readonly QuotePair[]): string {
+  const kept = new Set(asTyped.flatMap(pair => [pair.open, pair.close]));
+  return foldFullWidthLatin(
+    query
+      .replace(DOUBLE_QUOTES, (mark: string, at: number) => kept.has(at) ? mark : '"')
+      .replace(SINGLE_QUOTES, '\''),
+  ).replace(NARROW_NO_BREAK_SPACE, ' ');
+}
+
+/**
+ * `query` as it is sent to Fluid Topics: with its quotes straightened (see
+ * `straightenQuotes`), but for a pair of 「」, 『』, ｢｣ or « » around its one
+ * word (see `QUOTING_MARK`), its full-width Latin letters and digits written
+ * in ASCII, and a narrow no-break space written as a space.
+ *
+ * Fluid Topics reads full-width letters as ASCII ones in ja-JP, zh-TW and
+ * zh-CN only, and full-width digits in ja-JP only. Live on 2026-09-28: ＳＳＯ
+ * had no results in en-US, and SSO 1,228; ＳＳＯ, ＦｉｌｅＶａｕｌｔ and
+ * １１．３２ had none in en-US, de-DE, es-ES, fr-FR and nl-NL, and Ｊａｍｆ,
+ * ｉＯＳ and Ａｐｐｌｅ none in th-TH, it-IT and pt-BR, each of which had
+ * results in ASCII; １５ had none in zh-TW, and 15 had 1,599. An input method
+ * in full-width mode types them, so until then such a query found nothing,
+ * or not what it asked for. They are written in ASCII in every language: 12
+ * queries in ja-JP, and 9 of letters alone in zh-TW and zh-CN, had the same
+ * count and the same first ten results either way, so a list of the languages
+ * whose analysis already reads them would change no result, and would go
+ * wrong the day Fluid Topics changes one. Full-width punctuation is sent as
+ * typed: Fluid Topics reads it as a space, and in ASCII it can be an
+ * operator (`certificate －push` had the 3,010 results of `certificate push`,
+ * where `certificate -push` leaves out every page with push, 2,188). So is
+ * the ideographic space, which Fluid Topics reads as a space.
+ *
+ * A narrow no-break space, U+202F, joins the words either side of it in a
+ * phrase: live that day, in fr-FR, `"certificat push"` had 379 results, and
+ * none with U+202F for the space between its words, or inside its quotes.
+ * Out of a phrase it is a space (`certificat push` with U+202F had the 2,284
+ * of `certificat push`), and in one the no-break space U+00A0 is too. French
+ * writes one of the two inside « », so without this a phrase quoted as French
+ * quotes it could find nothing.
+ *
+ * A SearchProvider is handed the query as typed.
+ */
+export function queryForFluidTopics(query: string): string {
+  return sendWith(query, quotingPairs(query).filter(pair => aroundTheOneWord(query, pair)));
+}
+
+/**
+ * The second search `searchDocumentation` asks Fluid Topics for when it
+ * found nothing for `queryForFluidTopics(query)`: `query` with every pair of
+ * 「」, 『』, ｢｣ and « » sent as typed, which Fluid Topics reads as no quotes,
+ * and `phrases`, what those pairs made phrases of in the first, as typed,
+ * with their quotes. Undefined when the first had no such phrase.
+ *
+ * Its words then match as they did until 2026-09-28, when every such pair was
+ * sent as typed: a page need have only one of them, if the query has no other
+ * phrase and no word marked `+` or `-` (see `MUST_OR_MUST_NOT`). See
+ * `QUOTING_MARK` for why.
+ */
+export function looseQueryForFluidTopics(query: string): { query: string; phrases: string[] } | undefined {
+  const pairs = quotingPairs(query);
+  const phrases = pairs.filter(pair => !aroundTheOneWord(query, pair));
+  if (phrases.length === 0) { return undefined; }
+  return {
+    query: sendWith(query, pairs),
+    phrases: phrases.map(pair => query.slice(pair.open, pair.close + 1)),
+  };
 }
 
 /**
  * A part of a query that a page must match, or must not, in Fluid Topics: a
  * phrase in straight double quotes, or a word with `+` or `-` before it. It
- * is looked for in the query as sent (see `straightenQuotes`).
+ * is looked for in the query as sent (see `queryForFluidTopics`).
  *
  * Without one, Fluid Topics finds a page with any one word of a query. Live on
  * 2026-09-28, in en-US: `certificate` had 2,768 results, and so did
@@ -438,6 +626,9 @@ export function straightenQuotes(query: string): string {
  * `certificate push`).
  */
 const MUST_OR_MUST_NOT = /"[^"]*"|(?:^|\s)[+-](?=\S)/u;
+
+/** A phrase in straight double quotes (see `MUST_OR_MUST_NOT`). */
+const PHRASE = /"[^"]*"/u;
 
 /**
  * The words of `text` as Fluid Topics reads them: its runs of letters, marks
@@ -481,25 +672,34 @@ function wordsSearchedFor(text: string): Set<string> {
  * 2026-09-28 it was: live that day, `Zertifikat erneuern fehlgeschlagen
  * Anmeldung` had no results in en-US, and was suggested `zertifikat erneuern
  * fehlgeschlagen`, which had none either. The tips say so instead (see
- * `generateTips`). A query's full-width letters, folded (see `foldLatin`),
- * are other words to Fluid Topics, so `sso` is suggested for `ＳＳＯ`. Any
- * other backend, or none named, may not match a page on any one word, and
- * its query is suggested fewer of its words, as every query was.
+ * `generateTips`). Its words are those of the query as sent, whose
+ * full-width letters are in ASCII (see `queryForFluidTopics`), so `sso` is
+ * not suggested for `ＳＳＯ`: until 2026-09-28 it was, in every language,
+ * though in ja-JP Fluid Topics read the two as one. Any other backend, or
+ * none named, may not match a page on any one word, and is handed the query
+ * as typed: its query is suggested fewer of its words, as every query was,
+ * and `sso` for `ＳＳＯ`.
+ *
+ * A query with a phrase in it is suggested its words without the quotes,
+ * however few (see `simplifyQuery`). When its phrase was in 「」, 『』, ｢｣ or
+ * « », Fluid Topics searched them so already (`searchedLoosely`), and its
+ * words are those of that search.
  */
 export function generateSearchSuggestions(
   query: string,
   hasProductFilter = false,
   hasTopicFilter = false,
   language: string = DEFAULT_LOCALE,
-  { searchedBy, hasVersionFilter = false }: SearchSuggestionOptions = {},
+  { searchedBy, hasVersionFilter = false, searchedLoosely = false }: SearchSuggestionOptions = {},
 ): SearchSuggestions {
   const hasFilters = hasProductFilter || hasTopicFilter || hasVersionFilter;
   const searchable = blankForeignWriting(query, language);
-  const anyWord = searchedBy === 'fluid-topics' && !MUST_OR_MUST_NOT.test(straightenQuotes(query));
-  const searched = anyWord ? wordsSearchedFor(query) : undefined;
+  const sent = (searchedLoosely ? looseQueryForFluidTopics(query)?.query : undefined) ?? queryForFluidTopics(query);
+  const anyWord = searchedBy === 'fluid-topics' && !MUST_OR_MUST_NOT.test(sent);
+  const searched = anyWord ? wordsSearchedFor(sent) : undefined;
   const findsMore = (suggestion: string): boolean =>
     searched === undefined || [...wordsSearchedFor(suggestion)].some(word => !searched.has(word));
-  const simplified = simplifyQuery(searchable);
+  const simplified = simplifyQuery(searchable, PHRASE.test(sent));
 
   return {
     simplifiedQuery: simplified !== null && findsMore(simplified) ? simplified : null,

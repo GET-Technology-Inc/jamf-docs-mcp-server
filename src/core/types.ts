@@ -156,6 +156,8 @@ export interface SearchResponse {
   tokenInfo: TokenInfo;
   pagination: PaginationInfo;
   filterRelaxation?: FilterRelaxation;
+  /** See {@link SearchDocumentationResult.queryNote}. */
+  queryNote?: string;
   versionNote?: string;
   relevanceNote?: string;
   /** Set when the requested page was clamped to the last available page. */
@@ -289,6 +291,14 @@ export interface SearchDocumentationResult {
   tokenInfo: TokenInfo;
   filterRelaxation?: FilterRelaxation;
   versionNote?: string;
+  /**
+   * Set when no page had a phrase the query quotes in 「」, 『』, ｢｣ or « » as
+   * written, and Fluid Topics was asked again with those quotes as typed,
+   * which it reads as none (see `looseQueryForFluidTopics`): which phrases,
+   * and that `results` are for that second search, or that it found nothing
+   * either. Since 2026-09-28.
+   */
+  queryNote?: string;
   /**
    * How many results come before this page's first one, which is result
    * `offset + 1` of `pagination.totalItems`. A page holds as many whole

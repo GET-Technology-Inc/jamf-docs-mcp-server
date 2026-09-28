@@ -191,6 +191,13 @@ export const SearchOutputSchema = z.object({
     message: z.string(),
   }).optional(),
   versionNote: z.string().optional(),
+  /**
+   * Set when no page had a phrase the query quotes in 「」, 『』, ｢｣ or « » as
+   * written, and the search asked again with those marks read as no quotes:
+   * `results` are what that found, and this says so. Since 2026-09-28, when
+   * such marks began to make a phrase.
+   */
+  queryNote: z.string().optional(),
   relevanceNote: z.string().optional(),
   /**
    * Set when `page` was clamped to the last available page.

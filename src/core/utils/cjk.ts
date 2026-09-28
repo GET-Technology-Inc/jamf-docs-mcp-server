@@ -122,6 +122,30 @@ const RUN = new RegExp(
  */
 export const NON_LATIN_LETTER = /(?![\p{Script=Latin}\p{Script=Common}])\p{L}/u;
 
+/** A full-width Latin letter or digit, U+FF10–FF19, U+FF21–FF3A and U+FF41–FF5A. */
+const FULL_WIDTH_LETTER_OR_DIGIT = /[０-９Ａ-Ｚａ-ｚ]/gu;
+
+/** How far a full-width ASCII character is from the one it is the width of. */
+const FULL_WIDTH_OFFSET = 0xFEE0;
+
+/**
+ * `text` with its full-width Latin letters and digits written in ASCII: ＳＳＯ
+ * is SSO, and １５ is 15. A Chinese, Japanese or Korean input method in
+ * full-width mode types them. Full-width punctuation such as － ＋ ． is kept,
+ * as in ASCII it can mean something else (see `queryForFluidTopics` in
+ * search-suggestions.ts).
+ *
+ * Since 2026-09-28 the search sends a query to Fluid Topics so, the glossary
+ * matches a term so, and the other sites' titles are matched against a query
+ * so. Until then each had the text as typed, and in most languages found
+ * nothing for it: live that day, ＳＳＯ had no results in en-US and SSO 1,228,
+ * and the glossary had no entry for ＭＤＭ and 2 for MDM.
+ */
+export function foldFullWidthLatin(text: string): string {
+  return text.replace(FULL_WIDTH_LETTER_OR_DIGIT, character =>
+    String.fromCharCode(character.charCodeAt(0) - FULL_WIDTH_OFFSET));
+}
+
 /**
  * Word boundaries by the Unicode rules, which find Chinese, Japanese and Thai
  * words with a dictionary: 推送證書續約失敗 is 推送 | 證書 | 續約 | 失敗

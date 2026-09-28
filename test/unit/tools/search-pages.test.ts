@@ -287,7 +287,7 @@ describe('the description', () => {
     const { ctx } = searchUpstream();
     const { description } = await callSearch(ctx, { query: 'enrollment' });
     const shape = description.slice(description.indexOf('For JSON format:'), description.indexOf('For Markdown format:'));
-    for (const note of ['filterRelaxation', 'versionNote', 'paginationNote', 'relevanceNote', 'localeNote']) {
+    for (const note of ['filterRelaxation', 'queryNote', 'versionNote', 'paginationNote', 'relevanceNote', 'localeNote']) {
       expect(shape).toMatch(new RegExp(`^ {4}"${note}"\\?: `, 'm'));
     }
   });

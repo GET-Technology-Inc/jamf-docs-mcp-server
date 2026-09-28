@@ -65,13 +65,10 @@ describe('the query sent to Fluid Topics', () => {
       .toEqual(['"Zertifikat erneuern" "Push"']);
   });
 
-  it.each([
-    ['"push certificate" renewal'],
-    ['«push certificate»'],
-    ['「プッシュ証明書」'],
-    ['＇push certificate＇'],
-  ])('%s is sent as typed', async (query) => {
-    expect(await sent({ query })).toEqual([query]);
+  it('sends a straight quote as typed', async () => {
+    // «», 「」 and ＇ were sent as typed too until 2026-09-28
+    // (search-corner-brackets-and-guillemets.test.ts).
+    expect(await sent({ query: '"push certificate" renewal' })).toEqual(['"push certificate" renewal']);
   });
 });
 
@@ -105,6 +102,33 @@ describe('a query in curly or full-width quotes that found nothing', () => {
 
     expect(reply.suggestions).toEqual([]);
     expect(reply.tips).toContain(ANY_WORD);
+    expect(reply.tips).not.toContain(REMOVE_QUOTES);
+  });
+});
+
+describe('a quoted query of three keywords or fewer that found nothing', () => {
+  it.each([
+    // Live on 2026-09-28, in fr-FR, the phrase had no results and was
+    // suggested `deploy` alone, while `certificat push expiré` had 2,505,
+    // led by "Suppression du certificat push" and "Certificats push".
+    ['"certificat push expiré"', 'fr-FR', ['certificat push expiré', 'deploy']],
+    ['“push certificate”', 'en-US', ['push certificate', 'deploy', 'certificates', 'cert', 'ssl', 'tls']],
+    // A phrase of one word is that word in the form typed: live that day,
+    // `"certificat"` had 1,844 results in fr-FR and `certificat` 2,087.
+    ['"xyzzyq"', 'en-US', ['xyzzyq']],
+  ])('%s in %s is suggested its words without the quotes, a query that is not a phrase', async (query, language, expected) => {
+    const reply = await suggest({ query, language });
+
+    expect(reply.suggestions).toEqual(expected);
+    expect(reply.tips).toContain(REMOVE_QUOTES);
+  });
+
+  it('is not suggested its words when they have no quotes to remove', async () => {
+    // `+` makes a word one a page must have, as a phrase does, but its words
+    // with no quotes are the query that found nothing.
+    const reply = await suggest({ query: '+certificat push expiré', language: 'fr-FR' });
+
+    expect(reply.suggestions).toEqual(['deploy']);
     expect(reply.tips).not.toContain(REMOVE_QUOTES);
   });
 });

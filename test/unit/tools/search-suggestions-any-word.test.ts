@@ -13,8 +13,9 @@
  * (`certificate +xyzzyq` had none), and a word with `-` before it, which a
  * page must not have (`certificate -certificate` had none). An unpaired quote
  * is read as no quote: `"push certificate` had the 462 of `push certificate`.
- * Curly and full-width quotes are sent as straight ones, and read as those
- * (see search-quote-marks.test.ts).
+ * Curly and full-width quotes, corner brackets and guillemets are sent as
+ * straight ones, and read as those (see search-quote-marks.test.ts and
+ * search-corner-brackets-and-guillemets.test.ts).
  *
  * So a query with none of those found nothing because the documentation
  * searched has none of its words, and a query made only of those words finds
@@ -125,12 +126,14 @@ describe('a query Fluid Topics matches on any one word', () => {
     expect(reply.suggestions).toEqual(['network', 'config']);
   });
 
-  it('is suggested its full-width words in half width, which Fluid Topics does not read them as', async () => {
-    // Live on 2026-09-28, in en-US, ＳＳＯ ｌｏｇｉｎ had no results, and
-    // sso login 2,669.
+  it('is not suggested its full-width words in half width, which are the words it was sent as', async () => {
+    // Until 2026-09-28 it was suggested `sso login` first: live that day, in
+    // en-US, ＳＳＯ ｌｏｇｉｎ had no results, and sso login 2,669. It is now
+    // sent as `SSO login` (search-full-width-query.test.ts).
     const reply = await suggest({ query: 'ＳＳＯ ｌｏｇｉｎ' });
 
-    expect(reply.suggestions).toEqual(['sso login', 'single sign-on', 'authentication', 'identity', 'sign-in', 'connect']);
+    expect(reply.suggestions).toEqual(['single sign-on', 'authentication', 'identity', 'sign-in', 'connect']);
+    expect(reply.tips).toContain(ANY_WORD);
   });
 
   it('is told first to remove its product filter, as its words may be outside it', async () => {

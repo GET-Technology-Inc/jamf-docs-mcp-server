@@ -14,7 +14,10 @@
  *
  * Most queries here are quoted: Fluid Topics matches any one word of a query
  * without quotes, so fewer of its own words are suggested only to a quoted one
- * (see search-suggestions-any-word.test.ts).
+ * (see search-suggestions-any-word.test.ts). Since 2026-09-28 a quoted one is
+ * also suggested its words without the quotes, however few; a query whose
+ * words a page must have, marked `+`, is not, and is what shows here that a
+ * suggestion is not the query that found nothing.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -67,20 +70,23 @@ describe('a Latin word with an accent is one word', () => {
   it('joins two accents typed after one letter to it', async () => {
     // Vietnamese "update the system", each ậ and ệ typed as a letter and two
     // marks. As the three words of the query, `cập nhật hệ` is not suggested
-    // to it again.
+    // to it again, and quoted, it is its words without the quotes.
     const reply = await suggest({ query: '"ca\u0323\u0302p nha\u0323\u0302t he\u0323\u0302 tho\u0302ng"' });
 
     expect(reply.structured).toEqual(['cập nhật hệ']);
-    expect((await suggest({ query: '"ca\u0323\u0302p nha\u0323\u0302t he\u0323\u0302"' })).structured).toEqual([]);
+    expect((await suggest({ query: '+ca\u0323\u0302p nha\u0323\u0302t he\u0323\u0302' })).structured).toEqual([]);
+    expect((await suggest({ query: '"ca\u0323\u0302p nha\u0323\u0302t he\u0323\u0302"' })).structured)
+      .toEqual(['cập nhật hệ']);
   });
 
   it('is not suggested again when its accents were typed apart from their letters', async () => {
     // "se\u0301curite\u0301" joined is sécurité, the same query, which Fluid
     // Topics reads the same way (live on 2026-09-28, 2,231 results in fr-FR
-    // either way).
-    const reply = await suggest({ query: '"se\u0301curite\u0301"', language: 'fr-FR' });
+    // either way). Quoted, it is suggested its word, joined, without them.
+    const reply = await suggest({ query: '+se\u0301curite\u0301', language: 'fr-FR' });
 
     expect(reply.structured).toEqual([]);
+    expect((await suggest({ query: '"se\u0301curite\u0301"', language: 'fr-FR' })).structured).toEqual(['sécurité']);
   });
 
   it('keeps a mark Unicode writes no letter with inside its word', async () => {
@@ -119,7 +125,7 @@ describe('a mark that follows no Latin letter is no part of a word', () => {
 
     expect(reply.structured).toEqual(['café policy settings', 'policies', 'rule', 'rules', 'enforcement', 'config']);
     // Two words, and the same two as café policy: no query of fewer.
-    expect((await suggest({ query: '"cafe\ufe0f\u0301 policy"' })).structured).toEqual([
+    expect((await suggest({ query: '+cafe\ufe0f\u0301 policy' })).structured).toEqual([
       'policies', 'rule', 'rules', 'enforcement',
     ]);
   });
@@ -127,7 +133,8 @@ describe('a mark that follows no Latin letter is no part of a word', () => {
 
 describe('full-width Latin letters are read as the letters they are', () => {
   // Live on 2026-09-28, in en-US, ＳＳＯ had no results and SSO 1,228:
-  // Fluid Topics does not read one as the other there. Until then ＳＳＯ was
+  // Fluid Topics does not read one as the other there, and the search sends
+  // it SSO since (search-full-width-query.test.ts). Until then ＳＳＯ was
   // read as spaces, and a query written in full width had no suggestion.
 
   it('suggests a quoted full-width query its words in half width, with their synonyms', async () => {
@@ -161,13 +168,14 @@ describe('full-width Latin letters are read as the letters they are', () => {
     expect((await suggest({ query: 'Jamf Pro\u2122' })).structured).toEqual([]);
   });
 
-  it('suggests one full-width word in half width, which is not the query that found nothing', async () => {
-    // A query of two keywords or fewer is not suggested again as it is; this
-    // one is not as it is.
+  it('reads one full-width word as the half-width word, whose synonyms it is suggested', async () => {
+    // Not `sso` itself: since 2026-09-28 ＳＳＯ is sent to Fluid Topics as
+    // SSO, so `sso` is the query that found nothing. A SearchProvider, handed
+    // ＳＳＯ as typed, is still suggested `sso` (search-full-width-query.test.ts).
     const reply = await suggest({ query: 'ＳＳＯ' });
 
-    expect(reply.structured).toEqual(['sso', 'single sign-on', 'authentication', 'identity', 'login']);
-    expect(reply.markdown).toContain('**Try simpler query**: `sso`');
+    expect(reply.structured).toEqual(['single sign-on', 'authentication', 'identity', 'login']);
+    expect(reply.markdown).not.toContain('Try simpler query');
   });
 });
 

@@ -446,6 +446,10 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * or its URL, as the Note before it says; that Note now names the exception.
  * `docType: "training"` has returned the courses since then too, as a filter
  * on Jamf's "Training Content" does (see trainingContentFilters).
+ *
+ * `queryNote` joined the JSON shape on 2026-09-28, when the search began to
+ * send 「」, 『』, ｢｣ and « » as straight quotes, and to search a phrase in
+ * them again as loose words when no page has it (see resolveSearchResults).
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -489,6 +493,10 @@ Returns:
     "filterRelaxation"?: { "removed": [string], "original": { "<filter>": string }, "message": string },
     // Set when a result is at a version other than the one asked for.
     "versionNote"?: string,
+    // Set when no page has a phrase the query quotes in 「」, 『』, ｢｣ or « » as written:
+    // the query was searched again with those marks read as no quotes, and "results" are
+    // what that found. Also set, with no results, when that found nothing either.
+    "queryNote"?: string,
     // Set when page was past the last page, and the last is shown instead, or when
     // limit and maxTokens make more pages than page accepts: it then says what
     // reaches the rest.
@@ -812,6 +820,7 @@ function buildSearchStructuredContent(
     truncatedResult?: SearchTruncatedResult | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
+    queryNote?: string | undefined;
     otherSources?: StaticSearchHit[] | undefined;
   }
 ): Record<string, unknown> {
@@ -828,6 +837,7 @@ function buildSearchStructuredContent(
     hasMore: pagination.hasNext,
     results: results.map(toStructuredResult),
     ...(extras?.filterRelaxation !== undefined ? { filterRelaxation: extras.filterRelaxation } : {}),
+    ...(extras?.queryNote !== undefined ? { queryNote: extras.queryNote } : {}),
     ...(extras?.versionNote !== undefined ? { versionNote: extras.versionNote } : {}),
     ...(extras?.paginationNote !== undefined ? { paginationNote: extras.paginationNote } : {}),
     ...(extras?.truncatedResult !== undefined ? { truncatedResult: extras.truncatedResult } : {}),
@@ -858,17 +868,22 @@ function buildSearchStructuredContent(
  */
 function buildNoResultsResponse(
   params: SearchInput,
-  found: Pick<SearchDocumentationResult, 'pagination' | 'tokenInfo' | 'filterRelaxation' | 'rankedBy'>,
+  found: Pick<SearchDocumentationResult, 'pagination' | 'tokenInfo' | 'filterRelaxation' | 'queryNote' | 'rankedBy'>,
   otherSources: StaticSearchHit[],
 ): ToolResult {
   const { query } = params;
   // Which backend found nothing says which queries can find something: Fluid
   // Topics matches a page on any one word of a query (see
   // generateSearchSuggestions). "current" is no version filter (see
-  // buildSearchFilters).
+  // buildSearchFilters). A queryNote says the query's 「」 or « » phrase was
+  // searched as loose words too, and found nothing either.
   const suggestions = generateSearchSuggestions(
     query, params.product !== undefined, params.topic !== undefined, params.language,
-    { searchedBy: found.rankedBy, hasVersionFilter: params.version !== undefined && params.version !== 'current' },
+    {
+      searchedBy: found.rankedBy,
+      hasVersionFilter: params.version !== undefined && params.version !== 'current',
+      searchedLoosely: found.queryNote !== undefined,
+    },
   );
 
   /**
@@ -894,12 +909,13 @@ function buildNoResultsResponse(
     ...suggestions.alternativeKeywords
   ];
 
-  const { pagination, tokenInfo, filterRelaxation } = found;
+  const { pagination, tokenInfo, filterRelaxation, queryNote } = found;
   const structuredContent = {
     ...buildSearchStructuredContent(query, [], pagination, {
       filters: activeSearchFilters(params),
       limit: params.limit,
       filterRelaxation,
+      queryNote,
       otherSources,
     }),
     suggestions: suggestionTexts,
@@ -923,6 +939,7 @@ function buildNoResultsResponse(
       tokenInfo,
       pagination,
       ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+      ...(queryNote !== undefined ? { queryNote } : {}),
       ...otherSourcesField(otherSources),
       suggestions: suggestionTexts,
       ...(localeNote !== undefined ? { localeNote } : {}),
@@ -935,7 +952,7 @@ function buildNoResultsResponse(
 
   const markdown = appendMarkdownNotices(
     `${formatSearchSuggestions(query, suggestions)}${localeNote !== undefined ? `\n\n${localeNote}` : ''}`,
-    { filterRelaxation },
+    { filterRelaxation, queryNote },
   ) + renderOtherSources(otherSources, OTHER_SOURCES_CAVEAT.noResults);
 
   return {
@@ -1046,11 +1063,15 @@ function appendMarkdownNotices(
   markdown: string,
   notices: {
     filterRelaxation?: { message: string } | undefined;
+    queryNote?: string | undefined;
     versionNote?: string | undefined;
     paginationNote?: string | undefined;
   }
 ): string {
   let result = markdown;
+  if (notices.queryNote !== undefined) {
+    result += `\n> **Query Note:** ${notices.queryNote}\n`;
+  }
   if (notices.filterRelaxation !== undefined) {
     result += `\n> **Note:** ${notices.filterRelaxation.message}\n`;
   }
@@ -1069,7 +1090,7 @@ function appendMarkdownNotices(
  * has not set since 2026-09-28 (see `SearchDocumentationResult`).
  */
 function buildJsonBody(query: string, filters: SearchFilters, found: SearchDocumentationResult): SearchResponse {
-  const { results, pagination, tokenInfo, filterRelaxation, versionNote, paginationNote, truncatedResult } = found;
+  const { results, pagination, tokenInfo, filterRelaxation, queryNote, versionNote, paginationNote, truncatedResult } = found;
   return {
     total: pagination.totalItems,
     query,
@@ -1078,6 +1099,7 @@ function buildJsonBody(query: string, filters: SearchFilters, found: SearchDocum
     tokenInfo,
     pagination,
     ...(filterRelaxation !== undefined ? { filterRelaxation } : {}),
+    ...(queryNote !== undefined ? { queryNote } : {}),
     ...(versionNote !== undefined ? { versionNote } : {}),
     ...(paginationNote !== undefined ? { paginationNote } : {}),
     ...(truncatedResult !== undefined ? { truncatedResult } : {}),
@@ -1208,7 +1230,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         }
 
         const {
-          results, pagination, tokenInfo, filterRelaxation, versionNote,
+          results, pagination, tokenInfo, filterRelaxation, queryNote, versionNote,
           paginationNote, truncatedResult, rankedBy
         } = searchResult;
 
@@ -1231,6 +1253,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
             limit: params.limit,
             maxTokens: tokenInfo.maxTokens,
             filterRelaxation,
+            queryNote,
             versionNote,
             paginationNote,
             truncatedResult,
@@ -1268,7 +1291,7 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           : formatSearchResultsAsMarkdown;
         const markdown = appendMarkdownNotices(
           formatFn(pageView(params.query, filters, searchResult)),
-          { filterRelaxation, versionNote, paginationNote }
+          { filterRelaxation, queryNote, versionNote, paginationNote }
         ) + renderOtherSources(otherSources);
 
         await reportProgress(extra, { progress: 3, total: 3 });

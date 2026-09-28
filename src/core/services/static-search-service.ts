@@ -23,7 +23,7 @@ import { loadOnce } from './load-once.js';
 import { loadSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
 import { loadListedTitles, UNREAD_LISTING_TTL_MS } from './static-titles.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
-import { CJK_CHARACTER } from '../utils/cjk.js';
+import { CJK_CHARACTER, foldFullWidthLatin } from '../utils/cjk.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { ServerContext } from '../types/context.js';
 
@@ -238,6 +238,12 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * What Fuse is asked for `query`: the pattern, and its `minMatchCharLength`,
  * the shortest run of characters in a row that a title must match.
  *
+ * Since 2026-09-28 the query's full-width Latin letters and digits are
+ * written in ASCII first (see `foldFullWidthLatin`), as the titles have them:
+ * until then `ｊａｍｆｏｒｍｅｒ` matched no title, where `jamformer` matched the
+ * concepts.jamf.com page of that name. What follows is of the query so
+ * written.
+ *
  * Three, for a query with no Chinese, Japanese or Korean character in it,
  * which is every Latin one, and that query is passed on as typed. Fuse matches
  * anywhere in a title, not word by word, and two Latin letters are mostly
@@ -279,10 +285,11 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * its padding.
  */
 function fuseQueryFor(query: string): { pattern: string; minMatchCharLength: number } {
-  if (!CJK_CHARACTER.test(query)) {
-    return { pattern: query, minMatchCharLength: MIN_MATCH_CHAR_LENGTH };
+  const folded = foldFullWidthLatin(query);
+  if (!CJK_CHARACTER.test(folded)) {
+    return { pattern: folded, minMatchCharLength: MIN_MATCH_CHAR_LENGTH };
   }
-  const pattern = query.trim();
+  const pattern = folded.trim();
   return { pattern, minMatchCharLength: Math.min(MIN_MATCH_CHAR_LENGTH, pattern.length) };
 }
 
