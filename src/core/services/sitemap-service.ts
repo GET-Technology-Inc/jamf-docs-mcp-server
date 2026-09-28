@@ -88,15 +88,55 @@ export async function loadSitemap(
 }
 
 /**
- * Terms whose casing a naive capitalise gets wrong.
+ * Terms whose casing a naive capitalise gets wrong. Keyed lowercase.
  *
- * The sitemap gives slugs, not titles, and fetching 99 pages per locale to
- * read each `og:title` is not worth one heading apiece. Word-by-word
- * capitalisation produces "Ai Governance", "Byod" and "Ios", which read as
- * mistakes; this table is what the site's own index page shows those as.
- * Keyed lowercase.
+ * The sitemap gives slugs, not titles, and a slug keeps a title's letters but
+ * not their case. Word-by-word capitalisation produces "Ai Governance",
+ * "Apns Certificate" and "Shared Ipads", which read as mistakes; this table is
+ * how the sites spell those words in their own titles. Measured on 2026-09-28
+ * over the titles {@link titleFromSlug} is checked against: a word is here
+ * when those titles spell it other than as an ordinary word, capitalised or
+ * in lower case. Two words whose pages' titles do not hold them, `dlp` and
+ * `jnuc`, are spelled as those pages spell them.
+ *
+ * Only the case of a word is changed, never its letters or where it breaks:
+ * a slug runs together some names the site writes as two words, and
+ * `jamfplatform` is "JamfPlatform", not "Jamf Platform". Fuse ignores case,
+ * so what a search matches, and how it ranks it, is the same as it was:
+ * over 61,960 queries taken from the titles, in all eight locales, not one
+ * hit or score moved (2026-09-28). Splitting the four such names, as the site
+ * writes them, changed the hits or their order for 994 of 61,976.
+ *
+ * Where the titles disagree, most of them decide, and both times they spell
+ * the word as Apple and Jamf do: FileVault (12 titles, "Filevault" in 1) and
+ * APNs (9, "APNS" in 1). That "Filevault" is the one word a title had right
+ * before this table held it, and has wrong now. A tie decides nothing, so
+ * `ebooks` is not here: one title has "eBooks" and one "Ebooks", and an entry
+ * would only trade a word that is right for one that is wrong. `pin` is: one
+ * title has "PIN", and the other "pin", in lower case in a sentence-case
+ * title, which "Pin" did not match either.
+ *
+ * The table applies to a slug in any language, except where a key is also an
+ * ordinary word in the slug's own: see {@link ORDINARY_WORDS}. Left as they
+ * are:
+ *
+ * - `it`, "IT", though 4 titles hold the pronoun and 3 the abbreviation: a
+ *   slug cannot tell the two apart, and concepts.jamf.com names a section
+ *   "IT Workflows" in every locale. Likewise `url` ("url" in 1 of 5) and
+ *   `macos` ("MacOS" in 3 of 46), and `mac`, "Mac" in 16 and "MAC", the
+ *   address, in 2.
+ * - An identifier a title quotes from an error or a setting, such as
+ *   `enableFirewall`, `ASDErrorDomain` or `jamf-auth`. 18 titles hold one.
+ * - An ordinary word a title spells in capitals, in a name or a quote:
+ *   "IntelliJ IDEA", "DRC INSIGHT", "NONE", "TRIAL", "GET", "JAMF".
+ *
+ * A Map, so that a slug word naming a property every object inherits is a
+ * word like any other. Looked up on an object literal until 2026-09-28,
+ * `constructor` came out as "function Object() { [native code] }" and
+ * `__proto__` as "[object Object]"; no live slug holds either. Exported for
+ * the unit tests, which check that each entry changes only its key's case.
  */
-const TITLE_CASE_TERMS: Readonly<Record<string, string>> = {
+export const TITLE_CASE_TERMS: ReadonlyMap<string, string> = new Map(Object.entries({
   ai: 'AI', api: 'API', byod: 'BYOD', ddm: 'DDM', it: 'IT', mdm: 'MDM',
   pki: 'PKI', ldap: 'LDAP', scep: 'SCEP', ztna: 'ZTNA', sso: 'SSO',
   vpn: 'VPN', mfa: 'MFA', dns: 'DNS', ip: 'IP', tls: 'TLS', url: 'URL',
@@ -105,7 +145,73 @@ const TITLE_CASE_TERMS: Readonly<Record<string, string>> = {
   macos: 'macOS', ios: 'iOS', ipados: 'iPadOS', tvos: 'tvOS',
   watchos: 'watchOS', visionos: 'visionOS', jamf: 'Jamf', apple: 'Apple',
   aws: 'AWS', okta: 'Okta', entra: 'Entra', jss: 'JSS',
-};
+  // Abbreviations, and terms spelled with one.
+  '2fa': '2FA', ade: 'ADE', adfs: 'ADFS', apns: 'APNs', ard: 'ARD', asm: 'ASM',
+  b2b: 'B2B', cpu: 'CPU', dlp: 'DLP', dmg: 'DMG', dnsproxy: 'DNSProxy',
+  drc: 'DRC', faq: 'FAQ', fido: 'FIDO', gsx: 'GSX', gui: 'GUI', http: 'HTTP',
+  idp: 'IdP', imei: 'IMEI', jc: 'JC', jcds: 'JCDS', jnuc: 'JNUC', jwt: 'JWT',
+  laps: 'LAPS', llm: 'LLM', mcp: 'MCP', md5: 'MD5', mime: 'MIME', ms: 'MS',
+  mut: 'MUT', nvram: 'NVRAM', oidc: 'OIDC', oie: 'OIE', os: 'OS', pin: 'PIN',
+  pkcs12: 'PKCS12', pkg: 'PKG', pppc: 'PPPC', pram: 'PRAM', psso: 'PSSO',
+  qr: 'QR', ropg: 'ROPG', saml: 'SAML', slasa: 'SLASA', smb: 'SMB', sms: 'SMS',
+  smtp: 'SMTP', soc: 'SOC', ssh: 'SSH', ssl: 'SSL', tv: 'TV', uem: 'UEM',
+  vpp: 'VPP', wifi: 'WiFi',
+  // Plurals, which a word's own entry does not cover.
+  ips: 'IPs', pdfs: 'PDFs', tvs: 'TVs', vpns: 'VPNs',
+  // Apple's names.
+  airplay: 'AirPlay', airprint: 'AirPrint', airtag: 'AirTag',
+  appstore: 'AppStore', facetime: 'FaceTime',
+  filevault: 'FileVault', filevault2: 'FileVault2', icloud: 'iCloud',
+  imessage: 'iMessage', ipad: 'iPad', ipads: 'iPads', iphone: 'iPhone',
+  iphones: 'iPhones', itunes: 'iTunes', macbooks: 'MacBooks',
+  // Jamf's, the Jamf Concepts tools' among them.
+  authchanger: 'authchanger', jamfautoupdate: 'JamfAutoUpdate',
+  jamfcheck: 'JamfCheck', jamformer: 'jamformer', jamfplatform: 'JamfPlatform',
+  jamfpro: 'JamfPro', jamfprotect: 'JamfProtect', jawa: 'JAWA',
+  postinstall: 'PostInstall', prestage: 'PreStage', quickadd: 'QuickAdd',
+  rapidid: 'RapidID', reenroller: 'ReEnroller', remediasoar: 'RemediaSOAR',
+  saastenancy: 'SaaSTenancy',
+  // Other vendors'.
+  chromeos: 'ChromeOS', clearpass: 'ClearPass', forticlient: 'FortiClient',
+  github: 'GitHub', godaddy: 'GoDaddy', goguardian: 'GoGuardian',
+  iboss: 'iBoss', imazing: 'iMazing', jetbrains: 'JetBrains',
+  launchdarkly: 'LaunchDarkly', n8n: 'n8n', openclaw: 'OpenClaw',
+  sentinelone: 'SentinelOne', youtube: 'YouTube',
+}));
+
+/**
+ * Keys of {@link TITLE_CASE_TERMS} that are also an ordinary word in a
+ * language, by the locale code a slug in that language is listed under. A
+ * slug in it is cased as if the table did not hold them, so a Spanish "os
+ * recomendamos" is not "OS Recomendamos".
+ *
+ * support.jamf.com is the one source whose slugs are in their locale's own
+ * language (concepts.jamf.com's are the en ones in every locale; see
+ * `StaticDocSource.slugLocale`), and besides en it writes de, es and fr slugs
+ * in Latin letters. Its ja and zh-TW slugs hold only English words in them,
+ * such as `jamf-pro-apns-續約時顯示-403-存取被拒絕`, and get the whole table.
+ * No de, es or fr slug holds a word listed here (2026-09-28), so nothing
+ * shows that it is only ever the term in that language, and it is not
+ * applied there. `id` is a Spanish word too, and is applied: the one es
+ * title that holds it means the term ("Asocie su Jamf ID").
+ *
+ * In en, every title holding one of these means the term: OS in 6, LAPS 3,
+ * MUT 2, PIN 2, and ADE, GUI, MIME, OIE and SOC 1 each, and each AI is
+ * concepts.jamf.com's. So `pin`, `laps` and `mime`, English words as well,
+ * are applied in en, as `pram` (1) is. `it` is the one key applied where it
+ * is not only ever the term; {@link TITLE_CASE_TERMS} says why.
+ *
+ * Exported for the unit tests, which check that each is a key of the table.
+ */
+export const ORDINARY_WORDS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  // ade "adieu", Mime "actor", Mut "courage", Pin "badge".
+  ['de', new Set(['ade', 'mime', 'mut', 'pin'])],
+  // os "you", pin "badge".
+  ['es', new Set(['os', 'pin'])],
+  // ai "have" (j'ai), gui "mistletoe", laps "lapse", mime, oie "goose",
+  // os "bone", pin "pine", soc "ploughshare".
+  ['fr', new Set(['ai', 'gui', 'laps', 'mime', 'oie', 'os', 'pin', 'soc'])],
+]);
 
 /** Words that stay lowercase unless they open the title. */
 const TITLE_MINOR_WORDS = new Set([
@@ -156,7 +262,7 @@ const NON_LATIN_LETTER = /(?![\p{Script=Latin}\p{Script=Common}])\p{L}/u;
 /**
  * One run of Latin letters and digits, inside a word that also holds others.
  * A run keeps its digits, as a word does, so it is cased as the same letters
- * and digits would be on their own: `2faで` stays `2faで`, as `2fa` stays `2fa`.
+ * and digits would be on their own: `2faで` is `2FAで`, as `2fa` is `2FA`.
  */
 const LATIN_RUN = /[\p{Script=Latin}\p{N}]+/gu;
 
@@ -165,24 +271,35 @@ function mixesScripts(word: string): boolean {
   return LATIN_LETTER.test(word) && NON_LATIN_LETTER.test(word);
 }
 
-/** One word of a heading, cased; `opensTitle` exempts it from the minor-word rule. */
-function titleCaseWord(word: string, opensTitle: boolean): string {
-  const known = TITLE_CASE_TERMS[word.toLowerCase()];
+/**
+ * One word of a heading, cased; `opensTitle` exempts it from the minor-word
+ * rule, and `ordinary` names the keys of {@link TITLE_CASE_TERMS} to pass over.
+ */
+function titleCaseWord(word: string, opensTitle: boolean, ordinary: ReadonlySet<string> | undefined): string {
+  const lower = word.toLowerCase();
+  const known = ordinary?.has(lower) === true ? undefined : TITLE_CASE_TERMS.get(lower);
   if (known !== undefined) { return known; }
-  if (!opensTitle && TITLE_MINOR_WORDS.has(word.toLowerCase())) { return word.toLowerCase(); }
+  if (!opensTitle && TITLE_MINOR_WORDS.has(lower)) { return lower; }
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 /**
  * Turn a slug into a heading: `ai-governance` → `AI Governance`.
  *
- * Checked against the fourteen real titles concepts.jamf.com's own guides
- * index renders, which is the only place the site publishes them without a
- * per-page request: eight of nine match exactly. The ninth is
- * `infrastructure-as-code`, which the site titles "Infrastructure As Code"
- * and this produces as "Infrastructure as Code" — standard title case
- * lowercases "as", and matching one page's capitalisation is not worth a
- * special case.
+ * Checked on 2026-09-28 against the real title of each page it names that has
+ * one to check: all 894 support.jamf.com articles, in all six locales, as
+ * Intercom's collection pages give them, and concepts.jamf.com's 93 en pages,
+ * as each page gives its own. (concepts.jamf.com's other locales use the en
+ * slugs, and translate the titles.) 929 of those 987 titles keep their
+ * letters and digits in the slug, in order, and 446 of the 929 come out
+ * exactly as the page has them but for punctuation and spacing. Of the other
+ * 483, 444 differ only in style: support.jamf.com writes most of its titles
+ * in sentence case ("How to determine if an IdP is configured…"), and a few
+ * with every word capitalised ("…Via The Jamf Pro Portal"), where this
+ * writes title case. The last 39 hold a word the site spells two ways, or one
+ * {@link TITLE_CASE_TERMS} leaves alone; its comment says which. The 58 that
+ * lost letters lost them to the slug: an accent (`für` is `fur`), or words
+ * the title has and the slug does not.
  *
  * `slug` is a path segment as `URL.pathname` spells it, which percent-encodes
  * every character that is not ASCII, so it is decoded first. Until it was,
@@ -204,19 +321,25 @@ function titleCaseWord(word: string, opensTitle: boolean): string {
  *
  * Measured against the titles Intercom's collection pages give those 29
  * (2026-09-26): all 29 have the letters and digits of their real title, in
- * order, and 24 match it exactly but for punctuation and spacing. The other
- * five differ only in case, which a slug loses and the rules here guess
- * wrong: `Cer` for `.cer`, `Apns` and `Idp` for `APNs` and `IdP`, and, in two
- * quoted error messages, `Jamf Auth` for `jamf-auth` and "We Are Sorry an
- * Error Occurred" for "We are sorry, an error occurred".
+ * order, and 26 match it exactly but for punctuation and spacing (24 until
+ * `apns` and `idp` were cased, 2026-09-28). The other three differ only in
+ * case, which a slug loses and the rules here guess wrong: `Cer` for `.cer`,
+ * and, in two quoted error messages, `Jamf Auth` for `jamf-auth` and "We Are
+ * Sorry an Error Occurred" for "We are sorry, an error occurred".
+ *
+ * `language` is the locale code of the language `slug` is written in, such as
+ * `es`, so that a word the table spells as a term is not, where it is an
+ * ordinary word in that language: see {@link ORDINARY_WORDS}. Without it,
+ * every entry applies.
  */
-export function titleFromSlug(slug: string): string {
+export function titleFromSlug(slug: string, language?: string): string {
+  const ordinary = language === undefined ? undefined : ORDINARY_WORDS.get(language);
   const words = decodeSlug(slug).split('-').filter(Boolean);
   return words
     .map((word, index) => mixesScripts(word)
       ? word.replace(LATIN_RUN, (run: string, offset: number) =>
-        titleCaseWord(run, index === 0 && offset === 0))
-      : titleCaseWord(word, index === 0))
+        titleCaseWord(run, index === 0 && offset === 0, ordinary))
+      : titleCaseWord(word, index === 0, ordinary))
     .join(' ');
 }
 
@@ -226,15 +349,16 @@ interface TreeNode {
   children: Map<string, TreeNode>;
 }
 
-function toTocEntries(nodes: Iterable<TreeNode>, titles: Map<string, string>): TocEntry[] {
+/** @param language the locale code of the language the slugs are written in */
+function toTocEntries(nodes: Iterable<TreeNode>, titles: Map<string, string>, language: string): TocEntry[] {
   return [...nodes]
     // By its words, not its escapes, which would sort every non-ASCII slug
     // ahead of every ASCII one.
     .sort((a, b) => decodeSlug(a.slug).localeCompare(decodeSlug(b.slug)))
     .map(node => {
-      const children = toTocEntries(node.children.values(), titles);
+      const children = toTocEntries(node.children.values(), titles, language);
       const entry: TocEntry = {
-        title: titles.get(node.url ?? '') ?? titleFromSlug(node.slug),
+        title: titles.get(node.url ?? '') ?? titleFromSlug(node.slug, language),
         url: node.url ?? '',
       };
       if (children.length > 0) { entry.children = children; }
@@ -275,7 +399,7 @@ export async function buildStaticToc(
     if (node !== undefined) { node.url = entry.url; }
   }
 
-  return toTocEntries(root.values(), new Map());
+  return toTocEntries(root.values(), new Map(), source.slugLocale ?? locale);
 }
 
 /**

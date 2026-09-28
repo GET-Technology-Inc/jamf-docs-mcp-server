@@ -10,9 +10,11 @@
  * this query matched.
  *
  * The index is titles, recovered from each source's sitemap. That is one
- * request per source for 808 support articles and 98 concepts pages, against
- * ~900 page fetches to read the real headings — and a title is what a
- * ranked pointer needs.
+ * request per source, for 820 support.jamf.com articles in en (894 over its
+ * six locales) and 93 concepts.jamf.com pages in each locale (2026-09-28),
+ * against a request per concepts.jamf.com page to read the real headings, or
+ * one per Intercom home and collection page for support.jamf.com's (28 for
+ * its six locales) — and a title is what a ranked pointer needs.
  */
 
 import Fuse, { type FuseIndex, type FuseOptionKey, type IFuseOptions } from 'fuse.js';
@@ -63,7 +65,7 @@ function entryFor(source: StaticDocSource, entry: SitemapEntry, locale: string):
   const slug = (rest[rest.length - 1] ?? '').replace(/^\d+-/, '');
   if (slug === '') { return null; }
 
-  return { title: titleFromSlug(slug), url: entry.url, source: source.name };
+  return { title: titleFromSlug(slug, source.slugLocale ?? locale), url: entry.url, source: source.name };
 }
 
 /** Build one source's title index for a locale. */
@@ -72,7 +74,7 @@ export async function loadStaticIndex(
   source: StaticDocSource,
   locale: string,
 ): Promise<StaticSearchEntry[]> {
-  const key = cacheKey('static-search-index-v3', { source: source.id, locale });
+  const key = cacheKey('static-search-index-v4', { source: source.id, locale });
   const cached = await ctx.cache.get<StaticSearchEntry[]>(key);
   if (cached !== null) { return cached; }
 

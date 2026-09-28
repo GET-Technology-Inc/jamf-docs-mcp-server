@@ -88,6 +88,15 @@ export interface StaticDocSource {
    */
   readonly locales: Readonly<Record<string, string>>;
   /**
+   * The locale code whose language every page's slug is written in, for a
+   * source that keeps one set of slugs in all its locales and translates only
+   * the titles. Unset where each locale's slugs are in its own language, as
+   * Intercom writes them. `titleFromSlug` is told which, so that a word it
+   * spells as a term stays an ordinary word where the slug's language has one
+   * (a Spanish "os" is not "OS").
+   */
+  readonly slugLocale?: string;
+  /**
    * Browsable sections, exposed as publications.
    *
    * Empty for a source whose sections are not knowable without a request —
@@ -185,6 +194,10 @@ export const STATIC_DOC_SOURCES = {
       'zh-TW': 'zh-TW',
       'zh-CN': 'zh-CN',
     },
+    // Each of the sitemap's ten locale codes lists the same 99 paths as en,
+    // and a page's title is translated where its slug is not: the og:title of
+    // /ja/guides/threat-and-risk-management/ is 脅威とリスク管理 (2026-09-28).
+    slugLocale: 'en',
     sections: [
       { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides' },
       { id: 'jamf-concepts-tools', path: 'concepts', title: 'Jamf Concepts: Open Source Tools' },
