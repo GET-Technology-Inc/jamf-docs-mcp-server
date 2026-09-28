@@ -682,7 +682,7 @@ export async function fetchIntercomCollectionToc(
     }),
   ];
 
-  if (entries.length > 0) { await ctx.cache.set(key, entries, ctx.config.cacheTtl.products); }
+  if (entries.length > 0) { await ctx.cache.set(key, entries, ctx.config.cacheTtl.toc); }
   return entries;
 }
 

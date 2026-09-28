@@ -504,7 +504,7 @@ describe('fetchTableOfContents()', () => {
     // nothing from the registry. Until 2026-09-28 a hit asked it again, and
     // this cost the reply its mapId.
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v3'));
+    await ctx.cache.delete(cacheKey('maps-registry-v4'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const result = await fetchTableOfContents(ctx, 'jamf-pro');
@@ -514,7 +514,7 @@ describe('fetchTableOfContents()', () => {
     expect(result.resolvedLocale).toBe('en-US');
   });
 
-  // The tree is cached for CACHE_TTL_ARTICLE (24 hours by default), and the
+  // The tree is cached for CACHE_TTL_TOC (24 hours by default), and the
   // registry's maps for CACHE_TTL_PRODUCTS (7 days in the Node server), each
   // written at its own time. Until 2026-09-28 a hit named the tree by asking
   // the registry again, so once the registry named a newer map, after Jamf
@@ -527,7 +527,7 @@ describe('fetchTableOfContents()', () => {
     await fetchTableOfContents(ctx, 'jamf-pro');
 
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v3'));
+    await ctx.cache.delete(cacheKey('maps-registry-v4'));
     setupMapsResponse('map-published-since', 'jamf-pro-documentation');
     expect(await ctx.mapsRegistry.resolveMapId('jamf-pro-documentation')).toBe('map-published-since');
 
@@ -546,7 +546,7 @@ describe('fetchTableOfContents()', () => {
     const cold = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });
 
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v3'));
+    await ctx.cache.delete(cacheKey('maps-registry-v4'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const cached = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });

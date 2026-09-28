@@ -9,49 +9,16 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 
 import { createMcpServer } from './core/create-server.js';
-import type { ServerContext } from './core/types/context.js';
-import { createNodeConfig } from './platforms/node/config.js';
-import { FileCache } from './platforms/node/cache.js';
+import { createNodeContext } from './platforms/node/context.js';
 import { NodeLoggerFactory } from './platforms/node/logger.js';
-import { createHttpClient } from './core/http-client.js';
-import { MapsRegistry } from './core/services/maps-registry.js';
-import { TopicResolver } from './core/services/topic-resolver.js';
 import { createStderrLogger } from './core/services/logging.js';
 import { parseCliArgs } from './transport/index.js';
 
 const log = createStderrLogger('server');
 
-// Build Node.js platform context
-const config = createNodeConfig();
-const logger = new NodeLoggerFactory();
-const cache = new FileCache({
-  ...(config.cache.dir !== undefined ? { cacheDir: config.cache.dir } : {}),
-  maxEntries: config.cache.maxEntries,
-  log: logger.createLogger('cache'),
-});
-
-// One client for the process, bound to the request settings. Everything that
-// reaches a documentation host goes through it, so the User-Agent and the
-// timeout/retry/politeness settings apply everywhere rather than per call site.
-const http = createHttpClient(config.request);
-
-// Build singleton services
-const mapsRegistry = new MapsRegistry(
-  cache, undefined, undefined, config.cacheTtl.products, http
-);
-const topicResolver = new TopicResolver(
-  mapsRegistry, cache, undefined, config.cacheTtl.article, http
-);
-
-// Build the complete ServerContext
-const ctx: ServerContext = {
-  config,
-  logger,
-  cache,
-  http,
-  mapsRegistry,
-  topicResolver,
-};
+// Build the Node.js platform context: the config read from the environment,
+// the file cache, one HTTP client for the process and the singleton services.
+const ctx = createNodeContext();
 
 /**
  * Reclaim disk the cache can no longer read back.
@@ -67,7 +34,7 @@ const ctx: ServerContext = {
  * response, and every failure inside `prune()` is already contained.
  */
 function sweepCacheInBackground(): void {
-  void cache.prune().then(
+  void ctx.cache.prune().then(
     (reclaimed) => {
       if (reclaimed > 0) { log.info(`Cache sweep reclaimed ${String(reclaimed)} stale entries`); }
     },

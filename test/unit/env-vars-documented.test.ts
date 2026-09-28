@@ -9,7 +9,17 @@
  * anywhere in the HTTP path. MAX_RETRIES was documented as defaulting to 3
  * against a shipped default of 0, so the docs were not merely inert but wrong.
  *
- * Nothing caught it because nothing connected the two sides. This does.
+ * Nothing caught it because nothing connected the two sides. This connects
+ * them by name only: it asks whether each documented name appears somewhere
+ * under src/. A variable that is parsed and then not used passes, because
+ * the parse is where the name appears, and that was the defect above. Replayed
+ * on the tree before #296, when platforms/node/config.ts parsed all five, it
+ * passes. So did `CACHE_TTL_TOC`, which the Node server has parsed since the
+ * first release and nothing read until 2026-09-28.
+ *
+ * What this catches is a documented variable src/ never mentions. Whether a
+ * value takes effect takes a test that sets it and looks at what it changed:
+ * cache-ttl-documented.test.ts is that test for the CACHE_TTL_* variables.
  */
 
 import { describe, it, expect } from 'vitest';

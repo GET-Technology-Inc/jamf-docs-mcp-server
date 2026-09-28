@@ -224,7 +224,7 @@ describe('one guard per provider', () => {
     // first server's logger, because it holds the same guard.
     await mapsRegistry.ensureBuilt();
     expect(warnings).toEqual([
-      '[cache] Cache read failed (maps-registry-v3), read as a miss: Error: KV GET failed: 503 Service Unavailable',
+      '[cache] Cache read failed (maps-registry-v4), read as a miss: Error: KV GET failed: 503 Service Unavailable',
     ]);
     expect(created.filter(name => name === 'cache')).toEqual(['cache']);
     await Promise.all(servers.map(async s => { await s.close(); }));

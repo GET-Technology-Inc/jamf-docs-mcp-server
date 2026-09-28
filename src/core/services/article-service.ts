@@ -84,8 +84,15 @@ interface CachedArticle {
 export interface FetchArticleFromFtOptions extends FetchArticleOptions {
   /** Bound to ServerConfig.request; carried here because this takes a cache, not a ctx. */
   http: HttpClient;
-  /** TTL (seconds) for the cached article entry; undefined uses the cache default. */
+  /** TTL (ms) for the cached article entry; undefined uses the cache default. */
   cacheTtl?: number;
+  /**
+   * TTL (ms) for the map TOC index the breadcrumb, the navigation and the
+   * internal links are read from: `cacheTtl.toc` (CACHE_TTL_TOC) in a server.
+   * Undefined uses `cacheTtl`, which was the index's TTL until 2026-09-28,
+   * when this was added.
+   */
+  tocCacheTtl?: number;
   /** Used to report a TOC index that would not load; links degrade either way. */
   logger?: Logger | undefined;
   /**
@@ -143,6 +150,7 @@ export async function fetchArticleFromFt(
   // not the article. A hit leaves it unset: the navigation is then the only
   // lookup, and loads the index for itself.
   let ownMap: SettledTocIndex | undefined;
+  const tocTtl = options.tocCacheTtl ?? options.cacheTtl;
 
   if (cached === null) {
     const [topicMeta, html] = await Promise.all([
@@ -168,7 +176,7 @@ export async function fetchArticleFromFt(
         http: options.http,
         cache,
         mapId: id,
-        ttl: options.cacheTtl,
+        ttl: tocTtl,
         logger: options.logger,
         consequence,
       });
@@ -189,7 +197,7 @@ export async function fetchArticleFromFt(
       http: options.http,
       cache,
       mapIds: linkedMapIds,
-      ttl: options.cacheTtl,
+      ttl: tocTtl,
       logger: options.logger,
       loaded: [own, ...otherMaps],
     });
@@ -213,7 +221,7 @@ export async function fetchArticleFromFt(
           cache,
           mapId,
           contentId,
-          ttl: options.cacheTtl,
+          ttl: tocTtl,
           logger: options.logger,
           loaded: ownMap,
         });
@@ -242,10 +250,11 @@ export async function fetchArticleFromFt(
 
   // Read off the same map index the breadcrumb came from, so on a miss this is
   // a second lookup rather than a second load — and read outside the article
-  // cache entry on purpose: the index has its own TTL, and burying navigation
-  // inside `CachedArticle` would freeze one map's tree into every article
-  // cached from it until each of those entries expired separately. Which is
-  // also why a hit still loads the index, for this lookup alone.
+  // cache entry on purpose: the index has its own TTL (CACHE_TTL_TOC, where
+  // the article's is CACHE_TTL_ARTICLE), and burying navigation inside
+  // `CachedArticle` would freeze one map's tree into every article cached
+  // from it until each of those entries expired separately. Which is also why
+  // a hit still loads the index, for this lookup alone.
   //
   // Why it is worth having: the Fluid Topics API serves one topic per call
   // while the website concatenates a topic and its children into one page, so
@@ -258,7 +267,7 @@ export async function fetchArticleFromFt(
     cache,
     mapId,
     contentId,
-    ...(options.cacheTtl !== undefined ? { ttl: options.cacheTtl } : {}),
+    ...(tocTtl !== undefined ? { ttl: tocTtl } : {}),
     logger: options.logger,
     loaded: ownMap,
   });
@@ -402,6 +411,7 @@ export async function resolveAndFetchArticle(
       ...options,
       http: ctx.http,
       cacheTtl: ctx.config.cacheTtl.article,
+      tocCacheTtl: ctx.config.cacheTtl.toc,
       logger: ctx.logger.createLogger('article-service'),
       articleUrlNamesTopic,
       noteFor,

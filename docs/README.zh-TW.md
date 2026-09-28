@@ -381,9 +381,9 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 |------|------|--------|----------|
 | `CACHE_DIR` | 快取目錄路徑。必須是專供此快取使用的目錄，見下方說明 | `.cache` | 相對或絕對路徑 |
 | `CACHE_TTL_SEARCH` | 搜尋結果快取時間 (ms) | `1800000` (30 分鐘) | 1 分鐘 - 30 天 |
-| `CACHE_TTL_ARTICLE` | 文章內容快取時間 (ms) | `86400000` (24 小時) | 1 分鐘 - 30 天 |
-| `CACHE_TTL_PRODUCTS` | 產品清單快取時間 (ms) | `604800000` (7 天) | 1 分鐘 - 30 天 |
-| `CACHE_TTL_TOC` | 目錄快取時間 (ms) | `86400000` (24 小時) | 1 分鐘 - 30 天 |
+| `CACHE_TTL_ARTICLE` | 文章、術語表與各 map 主題索引的快取時間 (ms)，見下方說明 | `86400000` (24 小時) | 1 分鐘 - 30 天 |
+| `CACHE_TTL_PRODUCTS` | 產品清單的快取時間 (ms)：產品與版本清單所依據的 map 清單、support.jamf.com 的 collection 清單，以及 concepts.jamf.com 與 support.jamf.com 的搜尋索引，見下方說明 | `604800000` (7 天) | 1 分鐘 - 30 天 |
+| `CACHE_TTL_TOC` | 任何來源的目錄，以及 `navigation` 所依據的 map TOC 索引的快取時間 (ms)，見下方說明 | `86400000` (24 小時) | 1 分鐘 - 30 天 |
 | `CACHE_MAX_ENTRIES` | 快取最大項目數 | `500` | 10 - 10000 |
 
 `CACHE_DIR` 必須是專供此快取使用的目錄。伺服器會把快取項目寫成
@@ -401,6 +401,36 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
   `/home` 是指向 `/var/home` 的連結。
 - 被拒絕的值會改用 `.cache`，並在 stderr 輸出一行警告。`.cache` 同樣以工作目錄為
   基準解析，所以工作目錄本身位於系統目錄之下時，改用的 `.cache` 也會在那裡。
+
+各快取時間涵蓋的範圍：
+
+- `CACHE_TTL_SEARCH`：`jamf_docs_search` 從 learn.jamf.com 取得的搜尋結果。
+- `CACHE_TTL_ARTICLE`：`jamf_docs_get_article` 與 `jamf_docs_batch_get_articles`
+  取得的每一篇文章（不論來源），連同取得時建立的 breadcrumb 與內部連結；術語表的
+  詞條清單與定義；learn.jamf.com 各 map 用來解析頁面 URL 的主題索引；以及
+  `jamf://topics` 清單。
+- `CACHE_TTL_PRODUCTS`：learn.jamf.com 的 map 清單（產品、版本與出版品每次呼叫都由此
+  讀出，因此 `jamf_docs_list_products` 與 `jamf://products` 列出的產品與版本不會比它舊）；
+  support.jamf.com 的 collection 清單；以及 `jamf_docs_search` 搜尋 concepts.jamf.com
+  與 support.jamf.com 時使用的標題索引。map 清單的存放時間從取得時起算，稍後啟動、
+  從快取讀取它的伺服器也一樣。
+- `CACHE_TTL_TOC`：`jamf_docs_get_toc` 與 `jamf://products/{productId}/toc` 提供的
+  每一份目錄，不論是從 learn.jamf.com 的 map、concepts.jamf.com 的 sitemap，還是
+  support.jamf.com 的 collection 頁面讀出；以及文章 `navigation` 所依據的 map TOC
+  索引。術語表的詞條清單雖然也是從 map 的目錄讀出，但隨術語表沿用 `CACHE_TTL_ARTICLE`。
+
+文章的 breadcrumb 與內部連結是在取得文章時由 map TOC 索引建立，隨文章保存
+`CACHE_TTL_ARTICLE` 的時間；`navigation` 則每次呼叫都從索引讀取。因此
+`CACHE_TTL_TOC` 比 `CACHE_TTL_ARTICLE` 短時，同一個回應中的 breadcrumb 可能比
+`navigation` 舊。
+
+6.0.12 及更早的版本不會讀取 `CACHE_TTL_TOC`。在 6.0.12 中，Fluid Topics 的目錄與
+map TOC 索引沿用 `CACHE_TTL_ARTICLE`，concepts.jamf.com 與 support.jamf.com 的目錄
+則沿用 `CACHE_TTL_PRODUCTS`，預設為 7 天，現在是 24 小時。`jamf_docs_list_products`
+列出的產品與版本原本與 map 清單分開快取，沿用 `CACHE_TTL_ARTICLE`，因此 Jamf 新發布
+的版本可能先出現在 `publications`，最多 24 小時後才出現在 `products`。從快取讀取 map
+清單的伺服器，會從讀取時起算 `CACHE_TTL_PRODUCTS`，而不是從清單取得時起算，因此
+提供的清單最舊可達該時間的兩倍。
 
 ### 請求設定
 

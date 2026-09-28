@@ -112,7 +112,9 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
     expect(pro?.latestVersion).toBe(JAMF_PRODUCTS['jamf-pro'].latestVersion);
   });
 
-  it('should return cached data without calling MapsRegistry again', async () => {
+  it('should build the catalogue from the registry, not serve a real one from the cache', async () => {
+    // A real catalogue under the key, as builds before 2026-09-28 wrote one.
+    // It is read as a miss: see the next describe.
     const cachedProducts = [
       {
         id: 'jamf-pro',
@@ -126,10 +128,11 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
 
     vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: false });
     getMockedRegistry().getProducts.mockClear();
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
 
     const products = await getProductsMetadata(ctx);
-    expect(products).toEqual(cachedProducts);
-    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
+    expect(getMockedRegistry().getProducts).toHaveBeenCalledOnce();
+    expect(products.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.24.0', '11.23.0']);
   });
 
   it('should use fallback for products not found in registry', async () => {
@@ -164,11 +167,12 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
     expect(pro?.bundleId).toBe('jamf-pro-documentation');
   });
 
-  it('should cache the results after fetching', async () => {
+  it('should not cache a catalogue the registry answered', async () => {
     getMockedRegistry().getProducts.mockResolvedValue([]);
+    vi.mocked(ctx.cache.set).mockClear();
 
     await getProductsMetadata(ctx);
-    expect(vi.mocked(ctx.cache.set)).toHaveBeenCalled();
+    expect(vi.mocked(ctx.cache.set)).not.toHaveBeenCalled();
   });
 });
 
@@ -181,10 +185,16 @@ describe('getProductsMetadata - MapsRegistry integration', () => {
 // apart — including on a cache hit, since the entry is kept for a minute after
 // the outage that produced it.
 //
-// A minute, not the 24 hours a real catalogue is kept (#335). MapsRegistry does
-// not cache a failure, so a day-long fallback outlived the outage it stood in
-// for: `list_products` reported Jamf Pro as unversioned for a day after one
+// A minute, where a real catalogue was once kept for a day (#335). MapsRegistry
+// does not cache a failure, so a day-long fallback outlived the outage it stood
+// in for: `list_products` reported Jamf Pro as unversioned for a day after one
 // failed fetch, beside publications that already had its versions again.
+//
+// Since 2026-09-28 a real catalogue is not cached at all, and the fallback is
+// the only thing this key holds. Cached apart from the maps list, a real one
+// outlived the list it was built from, and `list_products` gave a version
+// under `publications` a day before it gave it under `products`
+// (list-products-maps-list-age.test.ts).
 // ============================================================================
 
 describe('getProductsMetadata - degradation reporting', () => {
@@ -235,14 +245,16 @@ describe('getProductsMetadata - degradation reporting', () => {
     expect((cachedValue as { products: unknown[] }).products.length).toBeGreaterThan(0);
   });
 
-  it('should keep a forced catalogue for a minute, and a real one for the article TTL', async () => {
+  it('should keep a forced catalogue for a minute, and not keep a real one', async () => {
     getMockedRegistry().getProducts.mockRejectedValue(new Error('ECONNREFUSED'));
     await getProductsMetadata(ctx);
+    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.slice(0, 1)).toEqual([cacheKey('metadata-products-v2')]);
     expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(60_000);
 
+    vi.mocked(ctx.cache.set).mockClear();
     getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
     await getProductsMetadata(ctx);
-    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[2]).toBe(ctx.config.cacheTtl.article);
+    expect(vi.mocked(ctx.cache.set)).not.toHaveBeenCalled();
   });
 
   it('should still report degraded when the answer comes from cache', async () => {
@@ -292,27 +304,33 @@ describe('getProductsMetadata - degradation reporting', () => {
     getMockedRegistry().getProducts.mockClear();
     getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct()]);
 
+    vi.mocked(ctx.cache.set).mockClear();
+    vi.mocked(ctx.cache.delete).mockClear();
+
     const status = { degraded: false };
     const products = await getProductsMetadata(ctx, status, { revalidateFallback: true });
 
     expect(getMockedRegistry().getProducts).toHaveBeenCalledOnce();
     expect(products.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.24.0', '11.23.0']);
     expect(status.degraded).toBe(false);
-    expect(vi.mocked(ctx.cache.set).mock.calls.at(-1)?.[1]).toMatchObject({ degraded: false });
+    // And the fallback goes, so a caller with no news of the registry is not
+    // served it for the rest of its minute. Nothing takes its place.
+    expect(vi.mocked(ctx.cache.delete)).toHaveBeenCalledWith(cacheKey('metadata-products-v2'));
+    expect(vi.mocked(ctx.cache.set)).not.toHaveBeenCalled();
   });
 
-  it('should not ask the registry again on a real hit, whatever it is told', async () => {
-    const cachedProducts = [{
-      id: 'jamf-pro', name: 'Jamf Pro', description: 'Cached',
-      bundleId: 'jamf-pro-documentation-11.0.0', latestVersion: '11.0.0', availableVersions: ['11.0.0'],
-    }];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: cachedProducts, degraded: false });
+  it('should give what the registry holds on every call, whatever it is told', async () => {
+    // The registry's maps list is read again, and it has a version since.
     getMockedRegistry().getProducts.mockClear();
+    getMockedRegistry().getProducts.mockResolvedValueOnce([makeRegistryProduct({ versions: ['11.24.0'] })]);
+    getMockedRegistry().getProducts.mockResolvedValueOnce([makeRegistryProduct({ versions: ['11.25.0', '11.24.0'] })]);
 
-    const products = await getProductsMetadata(ctx, undefined, { revalidateFallback: true });
+    const before = await getProductsMetadata(ctx);
+    const after = await getProductsMetadata(ctx, undefined, { revalidateFallback: false });
 
-    expect(products).toEqual(cachedProducts);
-    expect(getMockedRegistry().getProducts).not.toHaveBeenCalled();
+    expect(getMockedRegistry().getProducts).toHaveBeenCalledTimes(2);
+    expect(before.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.24.0']);
+    expect(after.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.25.0', '11.24.0']);
   });
 });
 
@@ -326,86 +344,41 @@ describe('getBundleIdForVersion', () => {
     vi.mocked(ctx.cache.set).mockResolvedValue(undefined);
   });
 
+  /** The registry lists Jamf Pro with `versions`, newest first. */
+  function registryHasJamfPro(versions: string[]): void {
+    getMockedRegistry().getProducts.mockResolvedValue([makeRegistryProduct({ versions })]);
+  }
+
   it('should return latestBundleId when version is "current"', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation-11.24.0',
-        latestVersion: '11.24.0',
-        availableVersions: ['11.24.0', '11.23.0']
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    registryHasJamfPro(['11.24.0', '11.23.0']);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'current');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
   it('should return latestBundleId when version is "latest"', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation-11.24.0',
-        latestVersion: '11.24.0',
-        availableVersions: ['11.24.0']
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    registryHasJamfPro(['11.24.0']);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', 'latest');
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
   it('should return latestBundleId when version is undefined', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation-11.24.0',
-        latestVersion: '11.24.0',
-        availableVersions: ['11.24.0']
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    registryHasJamfPro(['11.24.0']);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', undefined);
     expect(bundleId).toBe('jamf-pro-documentation-11.24.0');
   });
 
   it('should return versioned bundleId when a valid specific version is requested', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation-11.24.0',
-        latestVersion: '11.24.0',
-        availableVersions: ['11.24.0', '11.23.0', '11.22.0']
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    registryHasJamfPro(['11.24.0', '11.23.0', '11.22.0']);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '11.23.0');
     expect(bundleId).toBe('jamf-pro-documentation-11.23.0');
   });
 
   it('should return null when a specific version is not in availableVersions', async () => {
-    const mockProducts = [
-      {
-        id: 'jamf-pro',
-        name: 'Jamf Pro',
-        description: 'Desc',
-        bundleId: 'jamf-pro-documentation-11.24.0',
-        latestVersion: '11.24.0',
-        availableVersions: ['11.24.0']
-      }
-    ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    registryHasJamfPro(['11.24.0']);
 
     const bundleId = await getBundleIdForVersion(ctx, 'jamf-pro', '10.0.0');
     expect(bundleId).toBeNull();
@@ -641,7 +614,8 @@ describe('getProductsResourceData', () => {
         availableVersions: ['current']
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    // A fallback, the one catalogue the cache serves as it holds it.
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: true });
 
     const data = await getProductsResourceData(ctx);
 
@@ -666,7 +640,7 @@ describe('getProductsResourceData', () => {
         availableVersions: ['11.24.0', '11.23.0']
       }
     ];
-    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: false });
+    vi.mocked(ctx.cache.get).mockResolvedValue({ products: mockProducts, degraded: true });
 
     const data = await getProductsResourceData(ctx);
     const product = data.products[0];

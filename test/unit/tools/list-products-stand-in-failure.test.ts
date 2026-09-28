@@ -208,11 +208,13 @@ describe('a MapsProvider that answers the publication half and then fails is nam
   });
 
   it.each([
-    // The availability map is kept for an hour and the product catalogue for
-    // a day, so the map is the one that lapses first.
-    ['the availability map', 'metadata-product-availability-v2', 'Every product is assumed to have a table of contents.'],
+    // The availability map is kept for an hour. Since 2026-09-28 the product
+    // catalogue is built from the registry on every call and only a fallback
+    // is cached, so whenever the registry fails in a call the versions are a
+    // stand-in; the availability map is one only once it has lapsed too.
+    ['the availability map', 'metadata-product-availability-v2', 'Product versions are compiled-in defaults. Every product is assumed to have a table of contents.'],
     ['the product catalogue', 'metadata-products-v2', 'Product versions are compiled-in defaults.'],
-  ] as const)('when only %s is rebuilt, and the other is served from the cache', async (_label, namespace, standIn) => {
+  ] as const)('when %s lapses and the registry then fails', async (_label, namespace, standIn) => {
     // Two reads answer the first call; the third answers the second call's
     // publication half, and the fourth, the one entry it rebuilds, fails.
     const { ctx, requests, reads } = upstream({

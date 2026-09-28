@@ -11,11 +11,48 @@
 
 /**
  * Cache TTL configuration (in milliseconds)
+ *
+ * The Node server reads each from the environment variable named with it
+ * (platforms/node/config.ts). A cache none of them names has a fixed TTL.
  */
 export interface CacheTtlConfig {
+  /** Search results from learn.jamf.com (CACHE_TTL_SEARCH). */
   search: number;
+  /**
+   * Articles (CACHE_TTL_ARTICLE): each article `jamf_docs_get_article` and
+   * `jamf_docs_batch_get_articles` fetch, from any source, with the
+   * breadcrumb and internal links built when it was fetched; the glossary's
+   * term list and definitions; each map's topic index, which a learn.jamf.com
+   * page URL is resolved with; and the `jamf://topics` list.
+   */
   article: number;
+  /**
+   * The product list (CACHE_TTL_PRODUCTS): the list of learn.jamf.com maps,
+   * support.jamf.com's list of collections, and the title indexes
+   * concepts.jamf.com and support.jamf.com are searched with. The product
+   * catalogue `jamf_docs_list_products` and `jamf://products` serve is read
+   * from the maps list on every call, so it is as old as the list; until
+   * 2026-09-28 it was cached apart from it, for `article`.
+   *
+   * The maps list's age is counted from when it was fetched, also by a
+   * process that reads it from the cache. Until 2026-09-28 such a process
+   * counted from its read, and could keep a list up to twice this long.
+   */
   products: number;
+  /**
+   * Tables of contents (CACHE_TTL_TOC): each one `jamf_docs_get_toc` and
+   * `jamf://products/{productId}/toc` serve, whichever source it is read
+   * from (a Fluid Topics map, concepts.jamf.com's sitemap, a support.jamf.com
+   * collection page), and the map TOC index an article's navigation is read
+   * from. The breadcrumb and internal links built from that index are stored
+   * with the article, for `article`. The glossary's term list is read from a
+   * map's table of contents too, and kept with its definitions, for `article`.
+   *
+   * Until 2026-09-28 nothing read this, though the Node server has parsed
+   * `CACHE_TTL_TOC` since the first release. In 6.0.12 the Fluid Topics
+   * trees and the map TOC index were kept for `article`, and the
+   * concepts.jamf.com and support.jamf.com tables of contents for `products`.
+   */
   toc: number;
 }
 

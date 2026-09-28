@@ -173,9 +173,14 @@ function parseMap(map: FtMapInfo): MapEntry {
 // `CACHE_TTL_PRODUCTS` is 7 days, so an in-place upgrade would carry a stale
 // entry for up to a week. Moving the namespace is what makes that impossible.
 //
+// v4 (2026-09-28): the value is `{ fetchedAt, entries }` (CachedMaps), not the
+// entries alone, so that a registry reading it counts the list's age from the
+// fetch. A v3 payload has no time to count from, and read as the entries it
+// still is, it would be served for a whole TTL from the read, as it was before.
+//
 // Entries left under the old namespace expire on their TTL and are reclaimed
 // by the startup sweep in `src/index.ts`.
-const CACHE_KEY = cacheKey('maps-registry-v3');
+const CACHE_KEY = cacheKey('maps-registry-v4');
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GLOSSARY_BUNDLE_STEM = 'jamf-technical-glossary';
 
@@ -199,9 +204,41 @@ export class MapsProviderError extends Error {
   }
 }
 
+/**
+ * What the maps list cache entry holds: the parsed maps, and when they were
+ * fetched from upstream, which is what their age is counted from.
+ */
+interface CachedMaps {
+  /** `Date.now()` when the maps were fetched. */
+  fetchedAt: number;
+  entries: MapEntry[];
+}
+
+/**
+ * Whether a cache hit has the shape {@link CachedMaps} has.
+ *
+ * The entries themselves are trusted, as they always were; this checks what
+ * the age is read from, so that nothing else, a v3 payload among them, is
+ * mistaken for a list with an age.
+ */
+function isCachedMaps(value: unknown): value is CachedMaps {
+  if (typeof value !== 'object' || value === null) { return false; }
+  const candidate = value as { fetchedAt?: unknown; entries?: unknown };
+  return typeof candidate.fetchedAt === 'number' && Number.isFinite(candidate.fetchedAt)
+    && candidate.fetchedAt > 0 && Array.isArray(candidate.entries);
+}
+
 export class MapsRegistry {
   private entries: MapEntry[] = [];
-  private builtAt = 0;
+  /**
+   * When the maps in `entries` were fetched from upstream, whoever fetched
+   * them; 0 when there are none. Not when this registry read them: a
+   * registry that reads the list from the cache takes the time stored with
+   * it, so a process that starts late in the list's life keeps it only for
+   * what is left of its TTL. Until 2026-09-28 it was the time of the read, so
+   * a process started 6 days into the list's 7 kept it until day 13.
+   */
+  private fetchedAt = 0;
   private buildPromise: Promise<void> | null = null;
   private readonly fetchMapsFn: typeof fetchMaps;
   private readonly mapsProvider: MapsProvider | undefined;
@@ -234,7 +271,7 @@ export class MapsRegistry {
    * is suspected.
    */
   reset(): void {
-    this.builtAt = 0;
+    this.fetchedAt = 0;
     this.entries = [];
   }
 
@@ -244,7 +281,7 @@ export class MapsRegistry {
    * multiple concurrent callers invoke ensureBuilt() simultaneously.
    */
   async ensureBuilt(): Promise<void> {
-    if (this.builtAt > 0 && (Date.now() - this.builtAt) < this.cacheTtl) {return;}
+    if (this.fetchedAt > 0 && (Date.now() - this.fetchedAt) < this.cacheTtl) {return;}
     if (this.buildPromise !== null) {
       await this.buildPromise;
       return;
@@ -261,10 +298,14 @@ export class MapsRegistry {
    * Internal build logic: fetch maps from cache or API and populate entries.
    */
   private async doBuild(): Promise<void> {
-    const cached = await this.cache.get<MapEntry[]>(CACHE_KEY);
-    if (cached !== null) {
-      this.entries = cached;
-      this.builtAt = Date.now();
+    const cached = await this.cache.get<unknown>(CACHE_KEY);
+    // Older than this registry's TTL, although the cache still holds it, when
+    // a process kept for longer wrote it: fetched again rather than served
+    // past this registry's TTL, or read from the cache on every call until
+    // the cache lets it go.
+    if (isCachedMaps(cached) && Date.now() - cached.fetchedAt < this.cacheTtl) {
+      this.entries = cached.entries;
+      this.fetchedAt = cached.fetchedAt;
       return;
     }
 
@@ -286,9 +327,10 @@ export class MapsRegistry {
     }
     const maps = provided ?? await this.fetchMapsFn(this.http);
     this.entries = maps.map(m => parseMap(m));
-    this.builtAt = Date.now();
+    this.fetchedAt = Date.now();
 
-    await this.cache.set(CACHE_KEY, this.entries, this.cacheTtl);
+    const entry: CachedMaps = { fetchedAt: this.fetchedAt, entries: this.entries };
+    await this.cache.set(CACHE_KEY, entry, this.cacheTtl);
   }
 
   /**

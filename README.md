@@ -570,9 +570,9 @@ All settings are optional. Set them as environment variables before launching th
 |----------|---------|-------|-------------|
 | `CACHE_DIR` | `.cache` | — | Cache directory. Must be a directory used only for this cache; see below |
 | `CACHE_TTL_SEARCH` | `1800000` (30 min) | 1 min–30 days | TTL for search result cache entries |
-| `CACHE_TTL_ARTICLE` | `86400000` (24 hr) | 1 min–30 days | TTL for article content cache entries |
-| `CACHE_TTL_PRODUCTS` | `604800000` (7 days) | 1 min–30 days | TTL for product list cache entries |
-| `CACHE_TTL_TOC` | `86400000` (24 hr) | 1 min–30 days | TTL for table of contents cache entries |
+| `CACHE_TTL_ARTICLE` | `86400000` (24 hr) | 1 min–30 days | TTL for articles, the glossary and each map's topic index; see below |
+| `CACHE_TTL_PRODUCTS` | `604800000` (7 days) | 1 min–30 days | TTL for the product list: the maps list the product catalogue is read from, support.jamf.com's collections and the search indexes of concepts.jamf.com and support.jamf.com; see below |
+| `CACHE_TTL_TOC` | `86400000` (24 hr) | 1 min–30 days | TTL for tables of contents, from any source, and the map TOC index `navigation` is read from; see below |
 | `CACHE_MAX_ENTRIES` | `500` | 10–10000 | Maximum number of entries kept in the in-memory cache |
 
 `CACHE_DIR` must be a directory used only for this cache. The server writes
@@ -594,6 +594,46 @@ point it at a project root or a directory other tools use.
 - A rejected value falls back to `.cache`, with a warning on stderr. That is
   relative to the working directory too, so if the working directory is
   inside a system directory, the fallback is as well.
+
+What each TTL covers:
+
+- `CACHE_TTL_SEARCH`: the search results `jamf_docs_search` reads from
+  learn.jamf.com.
+- `CACHE_TTL_ARTICLE`: each article `jamf_docs_get_article` and
+  `jamf_docs_batch_get_articles` fetch, from any source, with the breadcrumb
+  and internal links built when it was fetched; the glossary's term list and
+  definitions; each learn.jamf.com map's topic index, which a page URL is
+  resolved with; and the `jamf://topics` list.
+- `CACHE_TTL_PRODUCTS`: the list of learn.jamf.com maps, which products,
+  versions and publications are read from on every call, so the products and
+  versions `jamf_docs_list_products` and `jamf://products` list are never
+  older than it; support.jamf.com's list of collections; and the title
+  indexes `jamf_docs_search` searches concepts.jamf.com and support.jamf.com
+  with. The maps list's age counts from when it was fetched, also for a
+  server that starts later and reads it from the cache.
+- `CACHE_TTL_TOC`: each table of contents `jamf_docs_get_toc` and
+  `jamf://products/{productId}/toc` serve, whether it is read from a
+  learn.jamf.com map, concepts.jamf.com's sitemap or a support.jamf.com
+  collection page, and the map TOC index an article's `navigation` is read
+  from. The glossary's term list is read from a map's table of contents too,
+  and is kept with the glossary, for `CACHE_TTL_ARTICLE`.
+
+An article's breadcrumb and internal links are built from the map TOC index
+when the article is fetched, and kept with it for `CACHE_TTL_ARTICLE`. Its
+`navigation` is read from the index on every call, so with `CACHE_TTL_TOC`
+shorter than `CACHE_TTL_ARTICLE`, a reply can carry a breadcrumb older than
+its `navigation`.
+
+6.0.12 and earlier did not read `CACHE_TTL_TOC`. In 6.0.12 the Fluid Topics
+tables of contents and the map TOC index were kept for `CACHE_TTL_ARTICLE`,
+and the concepts.jamf.com and support.jamf.com ones for `CACHE_TTL_PRODUCTS`,
+7 days by default where they now get 24 hours. The products and versions
+`jamf_docs_list_products` lists were cached apart from the maps list, for
+`CACHE_TTL_ARTICLE`, so a version Jamf published could show under
+`publications` up to 24 hours before it showed under `products`. A server
+that read the maps list from the cache kept it for `CACHE_TTL_PRODUCTS` from
+that read, not from when the list was fetched, so it could serve a list up to
+twice that old.
 
 ### Request Settings
 

@@ -328,8 +328,10 @@ interface Incomplete {
 
 /**
  * Which parts of the product list are the compiled-in stand-in for an
- * unreachable registry. Each comes from its own cache entry, so each is
- * reported by its own {@link DegradationStatus}.
+ * unreachable registry. The versions are read from the maps list on every
+ * call and the availability map is cached for an hour, so one can be the
+ * stand-in while the other is not, and each is reported by its own
+ * {@link DegradationStatus}.
  */
 interface ProductFallbacks {
   /** `currentVersion` and `availableVersions`, from getProductsMetadata. */
@@ -370,10 +372,12 @@ function registrySentences(
  * The `incomplete` note, or undefined when every source answered.
  *
  * The registry's sentences name only what is actually a stand-in, because the
- * three can differ. Each is cached on its own clock: the product catalogue for
- * a day, the availability map for an hour. When the registry's own entry
- * lapses (after 7 days on Node) and cannot be rebuilt, each of the two turns
- * into a fallback only as it expires in turn, the availability map first.
+ * three can differ. The product versions are read from the maps list on every
+ * call, and the availability map is cached for an hour. When the registry's
+ * own entry lapses (after 7 days on Node) and cannot be rebuilt, the versions
+ * turn into the fallback at once, as the publications do, and the
+ * availability map only once its hour is up. Until 2026-09-28 the versions
+ * were cached too, for a day, and the availability map turned first.
  *
  * `registryFailure` is what the registry threw in this call: in the
  * publication half's read, or, when that answered, in the product half's,
@@ -636,13 +640,14 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
 
         // Each set when its part of the product half is the compiled-in
         // stand-in for an unreachable registry, cached or not. Two, because
-        // the two entries expire on their own clocks and the note names only
-        // the one that is a stand-in.
+        // the availability map is cached for an hour and the versions are
+        // not, so one can be a stand-in while the other is not, and the note
+        // names only the one that is.
         const versionsStatus: DegradationStatus = { degraded: false };
         const availabilityStatus: DegradationStatus = { degraded: false };
 
-        // Product availability and versions, both cached. Asked for together
-        // so that when neither is cached they share one registry request
+        // Product availability and versions. Asked for together so that when
+        // the registry has to be built for them they share one request
         // (MapsRegistry deduplicates a build in flight) rather than making two
         // in a row, which during an outage is two waits on a failing endpoint.
         //

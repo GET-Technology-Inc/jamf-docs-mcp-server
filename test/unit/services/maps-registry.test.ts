@@ -2,7 +2,7 @@
  * Unit tests for MapsRegistry
  */
 
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../../src/core/services/ft-client.js', () => ({
   fetchMaps: vi.fn(),
@@ -12,6 +12,7 @@ import { fetchMaps } from '../../../src/core/services/ft-client.js';
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
 import type { PublicationInfo } from '../../../src/core/services/maps-registry.js';
 import { createMockCache } from '../../helpers/mock-context.js';
+import { cacheKey } from '../../../src/core/services/cache-key.js';
 import type { FtMapInfo } from '../../../src/core/types.js';
 
 const mockedFetchMaps = vi.mocked(fetchMaps);
@@ -262,6 +263,74 @@ describe('caching', () => {
     expect(mockedFetchMaps).toHaveBeenCalledTimes(2);
 
     vi.useRealTimers();
+  });
+});
+
+/**
+ * How old a maps list a registry serves, when it reads the list from the
+ * cache. Two registries on one cache stand for two processes on one
+ * `CACHE_DIR`.
+ *
+ * Until 2026-09-28 a registry that read the list from the cache counted its
+ * age from the read, so one started 6 days into the list's 7 served it until
+ * day 13, and one configured with a shorter TTL than the list was written with
+ * served it for as long as the cache held it.
+ */
+describe('the age of a cached maps list', () => {
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is counted from when it was fetched, by a registry that reads it from the cache', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const cache = createMockCache();
+    await new MapsRegistry(cache, mockedFetchMaps, undefined, 7 * DAY).getProducts();
+    expect(mockedFetchMaps).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(Date.now() + 6 * DAY);
+    const late = new MapsRegistry(cache, mockedFetchMaps, undefined, 7 * DAY);
+    await late.getProducts();
+    expect(mockedFetchMaps).toHaveBeenCalledTimes(1);
+
+    // Seven days and a second after the fetch, one day after this registry read it.
+    vi.setSystemTime(Date.now() + DAY + 1000);
+    await late.getProducts();
+    expect(mockedFetchMaps).toHaveBeenCalledTimes(2);
+  });
+
+  it('is fetched again when it is older than this registry\'s TTL, though the cache still holds it', async () => {
+    // Written for 7 days by one process, read 2 hours later by one kept for an hour.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const cache = createMockCache();
+    await new MapsRegistry(cache, mockedFetchMaps, undefined, 7 * DAY).getProducts();
+
+    vi.setSystemTime(Date.now() + 2 * HOUR);
+    await new MapsRegistry(cache, mockedFetchMaps, undefined, HOUR).getProducts();
+    expect(mockedFetchMaps).toHaveBeenCalledTimes(2);
+  });
+
+  it('is stored with the time it was fetched', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const cache = createMockCache();
+    const fetchedAt = Date.now();
+    await new MapsRegistry(cache, mockedFetchMaps, undefined, DAY).getProducts();
+
+    expect(await cache.get(cacheKey('maps-registry-v4'))).toMatchObject({
+      fetchedAt,
+      entries: expect.arrayContaining([expect.objectContaining({ mapId: 'pro-en-latest' })]),
+    });
+  });
+
+  it('reads an entry of another shape as a miss', async () => {
+    // What maps-registry-v3 held: the entries alone.
+    const cache = createMockCache();
+    await cache.set(cacheKey('maps-registry-v4'), [{ mapId: 'stale', bundleStem: 'jamf-pro-documentation' }], DAY);
+
+    expect(await new MapsRegistry(cache, mockedFetchMaps).resolveMapId('jamf-pro-documentation')).toBe('pro-en-latest');
+    expect(mockedFetchMaps).toHaveBeenCalledTimes(1);
   });
 });
 
