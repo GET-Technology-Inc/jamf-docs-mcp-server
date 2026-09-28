@@ -35,7 +35,7 @@ import { createMcpServer } from '../../../src/core/create-server.js';
 import { MapsRegistry, type MapEntry } from '../../../src/core/services/maps-registry.js';
 import { TopicResolver } from '../../../src/core/services/topic-resolver.js';
 import type { HttpClient } from '../../../src/core/http-client.js';
-import { cacheKey } from '../../../src/core/services/cache-key.js';
+import { cacheKey, type CacheKey } from '../../../src/core/services/cache-key.js';
 import { createMockCache, createMockContext } from '../../helpers/mock-context.js';
 import type { FtMapInfo, FtTopicInfo } from '../../../src/core/types.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
@@ -299,9 +299,10 @@ describe('a map whose version is not a version number is an unversioned map', ()
     expect(reply.text).not.toContain(TEMPLATE);
   });
 
-  it('a list an earlier build cached with the value as it came reads the same, from the cache', async () => {
-    // As a build before 2026-09-28 wrote it (maps-registry-v4): the version as it came.
-    const entry = (id: string, version: string, isLatest: boolean): MapEntry => ({
+  it('a list an earlier build cached with the value as it came is not read, and the list read again reads the same', async () => {
+    // As a build before 2026-09-28 wrote it (maps-registry-v4): the version as
+    // it came. The namespace has moved to v5 since, so this is not read.
+    const entry = (id: string, version: string, isLatest: boolean): Omit<MapEntry, 'labelKeys' | 'contentType'> => ({
       mapId: id,
       title: `Jamf Pro Documentation ${version}`,
       bundleStem: 'jamf-pro-documentation',
@@ -314,14 +315,16 @@ describe('a map whose version is not a version number is an unversioned map', ()
       utility: [],
     });
     const ctx = upstream({ maps });
-    await ctx.cache.set(cacheKey('maps-registry-v4'), {
+    // The key a namespace of no parts is (cache-key.ts), which this build no
+    // longer names.
+    await ctx.cache.set('maps-registry-v4' as CacheKey, {
       fetchedAt: Date.now(),
       entries: [entry(PRO_MAP, '11.32.0', true), entry(PRO_PREVIOUS_MAP, TEMPLATE, false)],
     });
 
     const text = await readText(ctx, 'jamf://products/jamf-pro/versions');
 
-    expect(mapsListRequests(ctx)).toBe(0);
+    expect(mapsListRequests(ctx)).toBe(1);
     expect((JSON.parse(text) as { versions: string[] }).versions).toEqual(['11.32.0']);
   });
 

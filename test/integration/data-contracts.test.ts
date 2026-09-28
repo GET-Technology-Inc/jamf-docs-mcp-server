@@ -20,7 +20,7 @@ import {
 } from '../../src/core/services/ft-client.js';
 import { SUPPORTED_LOCALES } from '../../src/core/constants/locales.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
-import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP, TRAINING_CONTENT_TYPES } from '../../src/core/constants.js';
+import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
 import { deriveBundleStem, MapsRegistry } from '../../src/core/services/maps-registry.js';
 import { TopicResolver } from '../../src/core/services/topic-resolver.js';
 import { transformFtTocToTocEntries } from '../../src/core/services/toc-service.js';
@@ -828,39 +828,42 @@ describe('FT API data contracts', () => {
       ).toEqual([]);
     });
 
-    // `docType: 'training'` asks by TRAINING_CONTENT_TYPES first, and an entry
-    // with no `content-*` label (every Jamf Training Catalog course measured)
-    // is training when it carries one of them. Both hold only while the
-    // values pair with `content-training`, as they did on 2026-09-28 (21 maps
-    // labelled, one of the six values each, and no other map with one): a
-    // training map in a language the list lacks costs that language its
-    // courses, and a listed value on another kind of map would make its
-    // unlabelled entries training.
-    it('the training content types are what the content-training maps carry, and only they', () => {
-      const listed = new Set(TRAINING_CONTENT_TYPES);
-      const unlisted: string[] = [];
-      const elsewhere: string[] = [];
+    /**
+     * The training content types as the search reads them: from these maps,
+     * through the registry (`MapsRegistry.contentTypesOf`).
+     */
+    async function trainingContentTypes(): Promise<string[]> {
+      const registry = new MapsRegistry(createMockCache(), undefined, { getMaps: async () => await Promise.resolve(maps) });
+      return await registry.contentTypesOf(DOC_TYPE_LABEL_MAP.training);
+    }
+
+    // `docType: 'training'` asks by the `jamf:contentType` values the maps
+    // pair with `content-training` and no other map carries, and an entry with
+    // no `content-*` label (every Jamf Training Catalog course measured) is
+    // training when it carries one of them. So each language Jamf publishes
+    // training in has its courses only while each of its training maps carries
+    // such a value. On 2026-09-28 the 21 training maps carried one each, in
+    // six languages, and no other map carried any of the six.
+    it('every content-training map carries a content type that only content-training maps carry', async () => {
+      const derived = new Set(await trainingContentTypes());
+      const without: string[] = [];
       for (const map of maps) {
         const meta = metaOf(map);
         const labelled = (meta.find(m => m.key === 'zoominmetadata')?.values ?? [])
           .includes(DOC_TYPE_LABEL_MAP.training);
+        if (!labelled) { continue; }
         const types = meta.find(m => m.key === 'jamf:contentType')?.values ?? [];
         const locale = meta.find(m => m.key === 'ft:locale')?.values[0] ?? '?';
-        const named = `${map.title ?? map.id} (${locale}): ${JSON.stringify(types)}`;
-        const carries = types.some(type => listed.has(type));
-        if (labelled && !carries) { unlisted.push(named); }
-        if (!labelled && carries) { elsewhere.push(named); }
+        if (!types.some(type => derived.has(type))) {
+          without.push(`${map.title ?? map.id} (${locale}): ${JSON.stringify(types)}`);
+        }
       }
 
+      expect(derived.size, 'the maps pair no content type with content-training').toBeGreaterThan(0);
       expect(
-        unlisted,
-        'content-training maps whose jamf:contentType TRAINING_CONTENT_TYPES does not list: add it, ' +
-        'or docType "training" returns none of that language\'s courses',
-      ).toEqual([]);
-      expect(
-        elsewhere,
-        'maps not labelled content-training that carry a TRAINING_CONTENT_TYPES value, which ' +
-        'docTypeLabelKeys would read as training on an entry with no content-* label',
+        without,
+        'content-training maps with no content type of their own: docType "training" in their ' +
+        'language returns none of its courses, and those courses have no docType',
       ).toEqual([]);
     });
 
@@ -868,18 +871,19 @@ describe('FT API data contracts', () => {
       // A key Fluid Topics ignored would return the unfiltered ranking, which
       // the local docType filter would then narrow to the training in it: a
       // fraction of what the filter finds, and no error to show for it.
+      const types = await trainingContentTypes();
       const filtered = await search(http, {
         query: 'FileVault',
         contentLocale: 'en-US',
         sortId: 'relevance',
         paging: { perPage: 50, page: 1 },
-        filters: [{ key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] }],
+        filters: [{ key: 'jamf:contentType', values: types }],
       });
       const hits = filtered.results.flatMap(c => c.entries);
-      expect(hits.length, 'jamf:contentType = "Training Content" returned nothing for "FileVault"').toBeGreaterThan(0);
+      expect(hits.length, `jamf:contentType = ${JSON.stringify(types)} returned nothing for "FileVault"`).toBeGreaterThan(0);
 
       const strays = hits.filter(e => !metaOf(e.topic ?? e.map ?? e.document ?? {})
-        .some(m => m.key === 'jamf:contentType' && m.values.some(v => TRAINING_CONTENT_TYPES.includes(v))));
+        .some(m => m.key === 'jamf:contentType' && m.values.some(v => types.includes(v))));
       expect(
         strays.length,
         `${String(strays.length)} of ${String(hits.length)} results carry no training content type. ` +

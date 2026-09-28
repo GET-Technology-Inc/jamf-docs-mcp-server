@@ -504,7 +504,7 @@ describe('fetchTableOfContents()', () => {
     // nothing from the registry. Until 2026-09-28 a hit asked it again, and
     // this cost the reply its mapId.
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v4'));
+    await ctx.cache.delete(cacheKey('maps-registry-v5'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const result = await fetchTableOfContents(ctx, 'jamf-pro');
@@ -527,7 +527,7 @@ describe('fetchTableOfContents()', () => {
     await fetchTableOfContents(ctx, 'jamf-pro');
 
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v4'));
+    await ctx.cache.delete(cacheKey('maps-registry-v5'));
     setupMapsResponse('map-published-since', 'jamf-pro-documentation');
     expect(await ctx.mapsRegistry.resolveMapId('jamf-pro-documentation')).toBe('map-published-since');
 
@@ -546,7 +546,7 @@ describe('fetchTableOfContents()', () => {
     const cold = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });
 
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v4'));
+    await ctx.cache.delete(cacheKey('maps-registry-v5'));
     mockedGetJson.mockRejectedValue(new Error('maps endpoint down'));
 
     const cached = await fetchTableOfContents(ctx, 'jamf-pro', 'current', { locale: 'zh-TW' });

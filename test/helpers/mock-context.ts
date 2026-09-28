@@ -109,6 +109,13 @@ export function createStubMapsRegistry(
     resolveFromBundleId: vi.fn(async () => await Promise.resolve(null)),
     resolveGlossaryMapId: vi.fn(async () => await Promise.resolve(null)),
     getProducts: vi.fn(async () => await Promise.resolve([])),
+    // As a registry with no maps answers: a classified product's search is
+    // then filtered locally, and an unclassified one's is reported as not
+    // filtered, as with the real registry. Until 2026-09-28 these two were
+    // missing, and a search for a classified product failed on this stub.
+    classificationAxis: vi.fn(async () => await Promise.resolve(null)),
+    mapIdsOf: vi.fn(async () => await Promise.resolve([])),
+    contentTypesOf: vi.fn(async () => await Promise.resolve([])),
     ensureBuilt: vi.fn(async () => { await Promise.resolve(); }),
     reset: vi.fn(),
   } as unknown as ServerContext['mapsRegistry'];

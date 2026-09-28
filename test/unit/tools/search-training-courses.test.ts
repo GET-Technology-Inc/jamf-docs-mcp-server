@@ -30,10 +30,10 @@ import { registerSearchTool } from '../../../src/core/tools/search.js';
 import { registerGetArticleTool } from '../../../src/core/tools/get-article.js';
 import { transformFtSearchResult } from '../../../src/core/services/search-service.js';
 import { MapsRegistry } from '../../../src/core/services/maps-registry.js';
-import { TRAINING_CONTENT_TYPES } from '../../../src/core/constants.js';
 import { TopicResolver } from '../../../src/core/services/topic-resolver.js';
 import { createMockContext, createMockCache } from '../../helpers/mock-context.js';
 import { loadFixture } from '../../helpers/fixtures.js';
+import { mapsWithContentTypes } from '../../fixtures/maps-content-types.js';
 import type { HttpClient } from '../../../src/core/http-client.js';
 import type { SearchProvider } from '../../../src/core/services/interfaces/index.js';
 import type {
@@ -80,20 +80,39 @@ const CONNECT_COURSE = 'https://trainingcatalog.jamf.com/identify-authentication
 
 /**
  * Enough of the maps list for the product filter to find the axis of the
- * three products these cases filter by, as `jamf:portal` or `jamf:app`.
+ * three products these cases filter by, as `jamf:portal` or `jamf:app`, and
+ * the live list's pairing of `content-*` labels with `jamf:contentType`
+ * (test/fixtures/maps-content-types.ts), which says what content types are
+ * training (`MapsRegistry.contentTypesOf`).
  */
-const MAPS: FtMapInfo[] = ([
-  ['Jamf Pro', 'jamf:portal'], ['Jamf School', 'jamf:portal'], ['Jamf Connect', 'jamf:app'],
-] as const).map(([value, key], i) => ({
-  id: `map${String(i)}`,
-  title: `${value} Documentation`,
-  mapApiEndpoint: `/api/khub/maps/map${String(i)}`,
-  metadata: [
-    { key: 'jamf:portal', label: 'Portal', values: key === 'jamf:portal' ? [value] : [] },
-    { key: 'jamf:app', label: 'Application', values: key === 'jamf:app' ? [value] : [] },
-    { key: 'jamf:utility', label: 'Utilities & Services', values: [] },
-  ],
-}));
+const MAPS: FtMapInfo[] = [
+  ...([
+    ['Jamf Pro', 'jamf:portal'], ['Jamf School', 'jamf:portal'], ['Jamf Connect', 'jamf:app'],
+  ] as const).map(([value, key], i) => ({
+    id: `map${String(i)}`,
+    title: `${value} Documentation`,
+    mapApiEndpoint: `/api/khub/maps/map${String(i)}`,
+    metadata: [
+      { key: 'jamf:portal', label: 'Portal', values: key === 'jamf:portal' ? [value] : [] },
+      { key: 'jamf:app', label: 'Application', values: key === 'jamf:app' ? [value] : [] },
+      { key: 'jamf:utility', label: 'Utilities & Services', values: [] },
+    ],
+  })),
+  ...mapsWithContentTypes(),
+];
+
+/**
+ * What the maps list pairs with `content-training`: "Training Content" in the
+ * six languages Jamf had training in on 2026-09-28, as the search sends them.
+ */
+const LIVE_TRAINING_CONTENT_TYPES = [
+  'Contenido de formación',
+  'Contenu de la formation',
+  'Schulungsinhalt',
+  'Training Content',
+  'トレーニングコンテンツ',
+  '培訓內容',
+];
 
 function metadataOf(e: FtSearchEntry): FtMetadataEntry[] {
   return e.topic?.metadata ?? e.map?.metadata ?? e.document?.metadata ?? [];
@@ -160,7 +179,7 @@ function backends(entries: FtSearchEntry[], provider?: SearchResult[]): Harness 
 
 /** What a provider indexing learn.jamf.com's search hands over: one result per entry. */
 const asProviderResults = (entries: FtSearchEntry[]): SearchResult[] =>
-  entries.map(e => transformFtSearchResult(e));
+  entries.map(e => transformFtSearchResult(e, LIVE_TRAINING_CONTENT_TYPES));
 
 interface TextContent { type: 'text'; text: string }
 
@@ -416,7 +435,7 @@ describe('filters apply to a course as Jamf\'s search applies them', () => {
 
     const training = await search(ctx, FILEVAULT, { docType: 'training' });
 
-    expect(requests.map(r => r.filters)).toEqual([[{ key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] }]]);
+    expect(requests.map(r => r.filters)).toEqual([[{ key: 'jamf:contentType', values: [...LIVE_TRAINING_CONTENT_TYPES] }]]);
     expect(training.results.map(r => [r.title, r.docType, r.external])).toEqual([
       ['Video: How to Troubleshoot FileVault Status in Jamf Pro', 'training', undefined],
       ['Administer FileVault with Jamf Pro', 'training', true],
@@ -432,14 +451,15 @@ describe('filters apply to a course as Jamf\'s search applies them', () => {
 
     expect(requests.map(r => r.filters)).toEqual([[
       { key: 'jamf:app', values: ['Jamf Connect'] },
-      { key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] },
+      { key: 'jamf:contentType', values: [...LIVE_TRAINING_CONTENT_TYPES] },
     ]]);
     expect(urls(connect.results)).toEqual([CONNECT_COURSE]);
   });
 
   it('docType: training asked for by its label when Jamf\'s "Training Content" finds nothing', async () => {
-    // Constructed: the video's content type in a language the list does not
-    // have. The courses of that language would be missed; its topics are not.
+    // Constructed: the video's content type in a language the maps list pairs
+    // with no training. The courses of that language would be missed; its
+    // topics are not.
     const [connectTopic, proTopic, video, ...rest] = FILEVAULT.entries as [FtSearchEntry, FtSearchEntry, FtSearchEntry, ...FtSearchEntry[]];
     const untranslated = structuredClone(video);
     const contentType = untranslated.topic?.metadata?.find(m => m.key === 'jamf:contentType');
@@ -451,7 +471,7 @@ describe('filters apply to a course as Jamf\'s search applies them', () => {
     const training = await search(ctx, FILEVAULT, { docType: 'training' });
 
     expect(requests.map(r => r.filters)).toEqual([
-      [{ key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] }],
+      [{ key: 'jamf:contentType', values: [...LIVE_TRAINING_CONTENT_TYPES] }],
       [{ key: 'zoominmetadata', values: ['content-training'] }],
     ]);
     expect(training.results.map(r => r.title)).toEqual(['Video: How to Troubleshoot FileVault Status in Jamf Pro']);

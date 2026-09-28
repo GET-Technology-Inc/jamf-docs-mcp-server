@@ -229,18 +229,37 @@ const CORPUS: FtSearchEntry[] = [
   SHARED_IPAD_COURSE,
 ];
 
-/** One map per publication, carrying the classification its topics carry. */
-const MAPS: FtMapInfo[] = ([
-  ['Jamf Pro Documentation', 'jamf-pro-documentation', PRO],
-  ['Jamf Setup and Reset Configuration Guide', 'jamf-setup-reset-configuration-guide', SETUP_RESET],
-  ['Jamf Trust Release Notes', 'jamf-trust-documentation', TRUST],
-  ['Jamf Protect Release Notes', 'jamf-protect-release-notes', PROTECT],
-] as const).map(([title, bundle, classification], i) => ({
-  id: `map-${String(i)}`,
-  title,
-  mapApiEndpoint: `/api/khub/maps/map-${String(i)}`,
-  metadata: meta({ 'ft:locale': ['en-US'], 'bundle': [bundle], ...classification }),
-}));
+/**
+ * One map per publication, carrying the classification its topics carry, and
+ * the en-US Jamf 100 Course as the live list has it: the map that pairs
+ * "Training Content" with `content-training`, which is what makes the course
+ * above training (`MapsRegistry.contentTypesOf`).
+ */
+const MAPS: FtMapInfo[] = [
+  ...([
+    ['Jamf Pro Documentation', 'jamf-pro-documentation', PRO],
+    ['Jamf Setup and Reset Configuration Guide', 'jamf-setup-reset-configuration-guide', SETUP_RESET],
+    ['Jamf Trust Release Notes', 'jamf-trust-documentation', TRUST],
+    ['Jamf Protect Release Notes', 'jamf-protect-release-notes', PROTECT],
+  ] as const).map(([title, bundle, classification], i) => ({
+    id: `map-${String(i)}`,
+    title,
+    mapApiEndpoint: `/api/khub/maps/map-${String(i)}`,
+    metadata: meta({ 'ft:locale': ['en-US'], 'bundle': [bundle], ...classification }),
+  })),
+  {
+    id: 'map-training',
+    title: 'Jamf 100 Course',
+    mapApiEndpoint: '/api/khub/maps/map-training',
+    metadata: meta({
+      'ft:locale': ['en-US'],
+      'bundle': ['jamf-100-course-current'],
+      'zoominmetadata': ['content-training'],
+      'jamf:contentType': ['Training Content'],
+      ...PRO,
+    }),
+  },
+];
 
 /**
  * A SearchProvider result that sets every field a `SearchResult` has.

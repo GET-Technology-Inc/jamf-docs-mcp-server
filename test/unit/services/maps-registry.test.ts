@@ -318,7 +318,7 @@ describe('the age of a cached maps list', () => {
     const fetchedAt = Date.now();
     await new MapsRegistry(cache, mockedFetchMaps, undefined, DAY).getProducts();
 
-    expect(await cache.get(cacheKey('maps-registry-v4'))).toMatchObject({
+    expect(await cache.get(cacheKey('maps-registry-v5'))).toMatchObject({
       fetchedAt,
       entries: expect.arrayContaining([expect.objectContaining({ mapId: 'pro-en-latest' })]),
     });
@@ -327,7 +327,7 @@ describe('the age of a cached maps list', () => {
   it('reads an entry of another shape as a miss', async () => {
     // What maps-registry-v3 held: the entries alone.
     const cache = createMockCache();
-    await cache.set(cacheKey('maps-registry-v4'), [{ mapId: 'stale', bundleStem: 'jamf-pro-documentation' }], DAY);
+    await cache.set(cacheKey('maps-registry-v5'), [{ mapId: 'stale', bundleStem: 'jamf-pro-documentation' }], DAY);
 
     expect(await new MapsRegistry(cache, mockedFetchMaps).resolveMapId('jamf-pro-documentation')).toBe('pro-en-latest');
     expect(mockedFetchMaps).toHaveBeenCalledTimes(1);

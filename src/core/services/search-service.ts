@@ -26,7 +26,6 @@ import {
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_PRECEDENCE,
   LABEL_KEY_DOC_TYPE_MAP,
-  TRAINING_CONTENT_TYPES,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
@@ -335,26 +334,45 @@ function entryMetadata(entry: FtSearchEntry): FtMetadataEntry[] | undefined {
  * `content-releasenotes` — so all of them are kept and the docType post-filter
  * matches on any one of them.
  *
- * This replaces a reverse lookup through DOC_TYPE_CONTENT_TYPE_MAP, which is
- * many-to-one ('Technical Documentation' covers four docTypes) and was walked
- * in object-literal insertion order: a release note matched `documentation`
- * first, was labelled `content-techdocs`, and was then dropped by its own
- * `docType: 'release-notes'` filter.
+ * This replaces a reverse lookup through DOC_TYPE_CONTENT_TYPE_MAP, which was
+ * then many-to-one ('Technical Documentation' covered four docTypes) and was
+ * walked in object-literal insertion order: a release note matched
+ * `documentation` first, was labelled `content-techdocs`, and was then
+ * dropped by its own `docType: 'release-notes'` filter.
  *
  * An entry with no `content-*` label that Jamf classifies as training content
- * (a {@link TRAINING_CONTENT_TYPES} value of `jamf:contentType`) is training:
- * every Jamf Training Catalog course is such an entry. Since 2026-09-28; until
- * then a course had no docType, and no docType filter returned it, although
- * a filter on Jamf's "Training Content" does. A topic that has a label is
- * read by its label alone, as before.
+ * (one of `trainingContentTypes`, the `jamf:contentType` values the maps list
+ * pairs with `content-training`: see {@link readTrainingContentTypes}) is
+ * training: every Jamf Training Catalog course is such an entry. Since
+ * 2026-09-28; until then a course had no docType, and no docType filter
+ * returned it, although a filter on Jamf's "Training Content" does. A topic
+ * that has a label is read by its label alone, as before.
  */
-function docTypeLabelKeys(metadata: FtMetadataEntry[] | undefined): string[] {
-  const labels = getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
-    .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined);
+function docTypeLabelKeys(
+  metadata: FtMetadataEntry[] | undefined,
+  trainingContentTypes: readonly string[],
+): string[] {
+  const labels = labelKeysOf(metadata);
   if (labels.length > 0) { return labels; }
-  return getMetaValues(metadata, FT_META.CONTENT_TYPE).some(value => TRAINING_CONTENT_TYPES.includes(value))
+  return getMetaValues(metadata, FT_META.CONTENT_TYPE).some(value => trainingContentTypes.includes(value))
     ? [DOC_TYPE_LABEL_MAP.training]
     : [];
+}
+
+/** The `content-*` labels an entry carries that {@link LABEL_KEY_DOC_TYPE_MAP} knows. */
+function labelKeysOf(metadata: FtMetadataEntry[] | undefined): string[] {
+  return getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
+    .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined);
+}
+
+/**
+ * Whether {@link docTypeLabelKeys} reads this entry's kind from its
+ * `jamf:contentType`, and so needs the training content types: it has no
+ * `content-*` label, and a content type. Every Jamf Training Catalog course
+ * measured is such an entry.
+ */
+function readsContentType(metadata: FtMetadataEntry[] | undefined): boolean {
+  return labelKeysOf(metadata).length === 0 && getMetaValues(metadata, FT_META.CONTENT_TYPE).length > 0;
 }
 
 /**
@@ -468,12 +486,15 @@ function isUnclassified(product: ProductId | undefined): product is ProductId {
  * before it was, its search never read the list at all. So for that product
  * a list that cannot be read (the fetch fails, or an injected MapsProvider
  * throws) gives null, which leaves the search where it was then: unfiltered,
- * and the product reported as not applied.
+ * and the product reported as not applied. `mapsList.unreadable` is then set,
+ * so that a search can leave the list unasked for the rest of it (see
+ * resolveSearchResults).
  */
 async function resolveSearchProductFilter(
   ctx: ServerContext,
   product: ProductId | undefined,
   log: Logger,
+  mapsList: { unreadable: boolean } = { unreadable: false },
 ): Promise<FtSearchFilter | null> {
   try {
     return await resolveProductFilter(ctx.mapsRegistry, product);
@@ -483,6 +504,7 @@ async function resolveSearchProductFilter(
       `Could not read the maps list (${String(error)}); the product filter ` +
       `"${product}" cannot be applied by its publication`
     );
+    mapsList.unreadable = true;
     return null;
   }
 }
@@ -567,9 +589,11 @@ export function buildSearchFilters(
 
 /**
  * What `docType: 'training'` is searched by first: the product filter and
- * Jamf's "Training Content" in every language ({@link TRAINING_CONTENT_TYPES}).
- * Null for any other search, and for training in a specific version, which
- * {@link buildSearchFilters} alone serves.
+ * Jamf's "Training Content" in every language it has any in, as the maps
+ * list pairs them with `content-training` ({@link readTrainingContentTypes}).
+ * Null for any other search, for training in a specific version, which
+ * {@link buildSearchFilters} alone serves, and when the maps list names no
+ * such value.
  *
  * `content-training` returns the training topics but none of the Jamf
  * Training Catalog courses, which carry no `content-*` label. A filter on
@@ -587,21 +611,80 @@ export function buildSearchFilters(
  * A translated value is a filter this server otherwise avoids (see
  * buildSearchFilters): one language's value finds nothing in another. Every
  * language's value is sent at once, so the filter holds in each, and one
- * missing from the list costs that language its courses only: the search
- * then asks by `content-training`, as it did before.
+ * missing costs that language its courses only: the search then asks by
+ * `content-training`, as it did before. Read from the maps list since
+ * 2026-09-28, the values are missing only when Jamf's own maps lack them,
+ * or, while the list cannot be read, when Jamf has added a language since
+ * the stand-in's six ({@link TRAINING_CONTENT_TYPES_STAND_IN}).
  *
  * Not sent with a specific version: no course has one, so it would return
  * what `content-training` does.
+ *
+ * `trainingContentTypes` is asked for only when this search is one of those
+ * it serves, so that no other search reads the maps list for it.
  */
-function trainingContentFilters(
+async function trainingContentFilters(
   params: Pick<SearchParams, 'docType' | 'version'>,
   productFilter: FtSearchFilter | null,
-): FtSearchFilter[] | null {
+  trainingContentTypes: () => Promise<readonly string[]>,
+): Promise<FtSearchFilter[] | null> {
   if (params.docType !== 'training' || isSpecificVersion(params.version)) { return null; }
+  const values = await trainingContentTypes();
+  if (values.length === 0) { return null; }
   return [
     ...buildSearchFilters({}, productFilter),
-    { key: FT_META.CONTENT_TYPE, values: [...TRAINING_CONTENT_TYPES] },
+    { key: FT_META.CONTENT_TYPE, values: [...values] },
   ];
+}
+
+/**
+ * The `jamf:contentType` values the maps list paired with `content-training`
+ * on 2026-09-28, sorted as `MapsRegistry.contentTypesOf` sorts them: Jamf's
+ * "Training Content" in the six languages it had training in. Measured that
+ * day over the 685 maps: the 21 `content-training` maps carried one of these
+ * each, and no other map carried any.
+ *
+ * A stand-in for a maps list that cannot be read, and for nothing else, the
+ * way JAMF_PRODUCTS stands in for the product versions: while the list
+ * answers, its values are used, whatever they are. With it, a search during
+ * an outage still asks for `docType: 'training'` by Jamf's "Training
+ * Content", still reads a course as training, and caches what it found, as
+ * the search did before the values were read from the list. Sorted as the
+ * list's are, so the training request is the same request, under the same
+ * cache key, whichever of the two gave the values. Private, unlike the
+ * `TRAINING_CONTENT_TYPES` it was until 2026-09-28 (#379): it is not what
+ * Jamf pairs now, only what Jamf paired that day.
+ */
+const TRAINING_CONTENT_TYPES_STAND_IN: readonly string[] = [
+  'Contenido de formación',
+  'Contenu de la formation',
+  'Schulungsinhalt',
+  'Training Content',
+  'トレーニングコンテンツ',
+  '培訓內容',
+];
+
+/**
+ * The `jamf:contentType` values Jamf gives its training content, in every
+ * language it has any in: those the maps list pairs with `content-training`
+ * (`MapsRegistry.contentTypesOf`), or, when the list cannot be read,
+ * {@link TRAINING_CONTENT_TYPES_STAND_IN}. A registry an embedder stands in
+ * with that has no `contentTypesOf` is read as one whose list cannot be read.
+ *
+ * Until 2026-09-28 these were a list kept by hand (TRAINING_CONTENT_TYPES,
+ * #379), the six values Jamf had that day, and a language Jamf added training
+ * in was searched without its courses until the list was edited.
+ */
+async function readTrainingContentTypes(ctx: ServerContext, log: Logger): Promise<readonly string[]> {
+  try {
+    return await ctx.mapsRegistry.contentTypesOf(DOC_TYPE_LABEL_MAP.training);
+  } catch (error) {
+    log.warning(
+      `Could not read the training content types from the maps list (${String(error)}); ` +
+      'using the six of 2026-09-28',
+    );
+    return TRAINING_CONTENT_TYPES_STAND_IN;
+  }
 }
 
 /** A survivor of {@link dedupeToLatestVersions}, with the versions it stands for. */
@@ -766,20 +849,27 @@ function topicOf(entry: FtSearchEntry): string | FtSearchEntry {
  * page Jamf's search lists beside it, which `jamf_docs_get_article` cannot
  * read (see {@link transformDocumentEntry}). An entry of any other shape gets
  * a url of '', and the search leaves it out.
+ *
+ * `trainingContentTypes` are the `jamf:contentType` values that make an entry
+ * with no `content-*` label `training` (see docTypeLabelKeys): the search
+ * passes those the maps list pairs with `content-training`, or its stand-in
+ * for them while the list cannot be read. Left out, such an entry has no
+ * docType.
  */
 export function transformFtSearchResult(
   entry: FtSearchEntry,
+  trainingContentTypes: readonly string[] = [],
 ): SearchResult {
   if (entry.type === 'TOPIC' && entry.topic !== undefined) {
-    return transformTopicEntry(entry);
+    return transformTopicEntry(entry, trainingContentTypes);
   }
 
   if (entry.type === 'MAP' && entry.map !== undefined) {
-    return transformMapEntry(entry);
+    return transformMapEntry(entry, trainingContentTypes);
   }
 
   if (entry.type === 'DOCUMENT' && entry.document !== undefined) {
-    return transformDocumentEntry(entry.document);
+    return transformDocumentEntry(entry.document, trainingContentTypes);
   }
 
   // Fallback for unexpected entry shapes
@@ -812,7 +902,7 @@ interface EntryFields {
  * Shared builder: turns the common fields of a TOPIC, MAP or DOCUMENT entry
  * into a fully-populated SearchResult.
  */
-function buildSearchResult(fields: EntryFields): SearchResult {
+function buildSearchResult(fields: EntryFields, trainingContentTypes: readonly string[]): SearchResult {
   const { metadata } = fields;
   // Both the absent and the empty case fall back, matching how the article
   // path picks its title (article-service.ts). Testing only `!== ''` let
@@ -822,7 +912,7 @@ function buildSearchResult(fields: EntryFields): SearchResult {
     : 'Untitled';
   const product = extractProductFromClassification(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
-  const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata));
+  const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata, trainingContentTypes));
 
   const result: SearchResult = {
     title,
@@ -883,7 +973,7 @@ function resolveMapUrl(map: NonNullable<FtSearchEntry['map']>): string {
   return '';
 }
 
-function transformTopicEntry(entry: FtSearchEntry): SearchResult {
+function transformTopicEntry(entry: FtSearchEntry, trainingContentTypes: readonly string[]): SearchResult {
   const { topic } = entry;
   if (topic === undefined) {
     return { title: 'Untitled', url: '', snippet: '', product: null };
@@ -898,10 +988,10 @@ function transformTopicEntry(entry: FtSearchEntry): SearchResult {
     contentId: topic.contentId,
     breadcrumb: topic.breadcrumb,
     mapTitle: topic.mapTitle,
-  });
+  }, trainingContentTypes);
 }
 
-function transformMapEntry(entry: FtSearchEntry): SearchResult {
+function transformMapEntry(entry: FtSearchEntry, trainingContentTypes: readonly string[]): SearchResult {
   const { map } = entry;
   if (map === undefined) {
     return { title: 'Untitled', url: '', snippet: '', product: null };
@@ -914,7 +1004,7 @@ function transformMapEntry(entry: FtSearchEntry): SearchResult {
     metadata: map.metadata,
     mapId: map.mapId,
     mapTitle: map.title,
-  });
+  }, trainingContentTypes);
 }
 
 /**
@@ -943,14 +1033,14 @@ function transformMapEntry(entry: FtSearchEntry): SearchResult {
  * docType is `training` (see docTypeLabelKeys), and a `docType: 'training'`
  * search asks for it (see trainingContentFilters).
  */
-function transformDocumentEntry(document: FtSearchDocument): SearchResult {
+function transformDocumentEntry(document: FtSearchDocument, trainingContentTypes: readonly string[]): SearchResult {
   return buildSearchResult({
     title: document.title,
     url: documentUrl(document),
     htmlExcerpt: document.htmlExcerpt ?? '',
     metadata: document.metadata,
     external: true,
-  });
+  }, trainingContentTypes);
 }
 
 /** Where a document is: the first of its `originUrl` and `viewerUrl` on Jamf's own site, or ''. */
@@ -1762,6 +1852,20 @@ async function resolveSearchResults(
     CONTENT_LIMITS.FILTER_OVERFETCH_CAP
   );
 
+  // Read from the maps list at most once a search, and only by a search that
+  // needs them: a training search, or one with an entry whose kind only its
+  // `jamf:contentType` says (see readsContentType). Any other search reads
+  // no maps list for them, as none did before. Not read when the product
+  // filter has just found the list unreadable: MapsRegistry keeps no
+  // failure, so that would be a second request for it in one search, and
+  // the stand-in is what the read would give.
+  const mapsList = { unreadable: false };
+  let trainingContentTypesRead: Promise<readonly string[]> | undefined;
+  const trainingContentTypes = async (): Promise<readonly string[]> =>
+    mapsList.unreadable
+      ? TRAINING_CONTENT_TYPES_STAND_IN
+      : await (trainingContentTypesRead ??= readTrainingContentTypes(ctx, log));
+
   /** The filters of the last request `fetchFiltered` made: those the search ends with. */
   let lastFilters: FtSearchFilter[] = [];
 
@@ -1818,14 +1922,19 @@ async function resolveSearchResults(
     // Deduping before transform avoids running cleanSnippet etc. over every
     // Jamf Pro version variant (a broad query can return ~15 snapshots/topic).
     const out: SearchResultWithMeta[] = [];
+    let training: readonly string[] = [];
     try {
-      for (const { entry, collapsedVersions } of dedupeToLatestVersions(ftResponse.results)) {
-        const searchResult = transformFtSearchResult(entry);
+      const deduped = dedupeToLatestVersions(ftResponse.results);
+      if (deduped.some(({ entry }) => readsContentType(entryMetadata(entry)))) {
+        training = await trainingContentTypes();
+      }
+      for (const { entry, collapsedVersions } of deduped) {
+        const searchResult = transformFtSearchResult(entry, training);
         if (searchResult.url !== '') {
           const metadata = entryMetadata(entry);
           out.push(toSearchResultWithMeta(
             { ...searchResult, ...(collapsedVersions.length > 0 ? { otherVersions: collapsedVersions } : {}) },
-            { labelKeys: docTypeLabelKeys(metadata), classification: classificationValues(metadata) },
+            { labelKeys: docTypeLabelKeys(metadata, training), classification: classificationValues(metadata) },
           ));
         }
       }
@@ -1841,7 +1950,7 @@ async function resolveSearchResults(
     return out;
   };
 
-  const productFilter = await resolveSearchProductFilter(ctx, params.product, log)
+  const productFilter = await resolveSearchProductFilter(ctx, params.product, log, mapsList)
     .catch(failedAt('maps'));
   // No upstream filter has two causes, and only one makes the product
   // unfilterable. A product with no classification value, whose publication
@@ -1869,14 +1978,14 @@ async function resolveSearchResults(
   // them (see trainingContentFilters), and by its `content-*` label only when
   // that finds nothing. Every other search, and training in a specific
   // version, asks by the label alone, as before.
-  const trainingFilters = trainingContentFilters(params, productFilter);
+  const trainingFilters = await trainingContentFilters(params, productFilter, trainingContentTypes);
   let results = trainingFilters === null ? [] : await fetchFiltered(trainingFilters);
   if (trainingFilters === null || results.length === 0) {
     results = await fetchFiltered(buildSearchFilters(params, productFilter));
     if (trainingFilters !== null && results.length > 0) {
       log.warning(
         `docType "training" found ${String(results.length)} results by its content-* label and none by ` +
-        'jamf:contentType: TRAINING_CONTENT_TYPES may be missing a language'
+        'jamf:contentType: the training content types may name none in this language'
       );
     }
   }
