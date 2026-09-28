@@ -172,7 +172,10 @@ describe('a Chinese, Japanese or Korean query with no results, in a language who
   it('reads a Chinese word between two Latin ones as a space, which parts them', async () => {
     // 設定 is "settings". Left out without a space, it would join the Latin
     // words into one, vpnproxywi-fisettings, and there would be no simpler query.
-    const reply = await replies({ query: 'VPN設定proxy設定Wi-Fi設定settings' });
+    // Quoted, as a query of fewer of its words is suggested only to a query
+    // Fluid Topics does not match on any one word (see
+    // search-suggestions-any-word.test.ts).
+    const reply = await replies({ query: '"VPN設定proxy設定Wi-Fi設定settings"' });
 
     expect(reply.json.suggestions).toEqual(['vpn proxy wi-fi', 'network', 'config']);
   });
@@ -249,17 +252,20 @@ describe('a Chinese, Japanese or Korean query with no results, in a language who
 
 describe('a Latin query with no results is suggested what it was before', () => {
   // Each value is what the query was suggested before Chinese and Japanese
-  // words were read (2026-09-28), byte for byte.
+  // words were read (2026-09-28), byte for byte. Quoted where a query of fewer
+  // of its words is among them: Fluid Topics matches a query without quotes
+  // on any one word, so since 2026-09-28 such a query is not suggested fewer
+  // of its words (see search-suggestions-any-word.test.ts).
   it.each([
     ['"renew push certificate failed"', ['renew push certificate', 'deploy', 'certificates', 'cert', 'ssl', 'tls']],
-    ['how to configure the mdm enrollment process', ['configure mdm enrollment', 'config', 'mobile device management', 'device management']],
+    ['"how to configure the mdm enrollment process"', ['configure mdm enrollment', 'config', 'mobile device management', 'device management']],
     ['smart group', ['groups', 'static group']],
     ['xqzvbnmplk', []],
     // Marks written with Chinese and Japanese, in the Common script, and no
     // Chinese, Japanese or Korean character: the query is split the Latin way
     // whole, so ー is read as a space and is not a word of its own.
     ['configure mdm enrollment ー', ['config', 'mobile device management', 'device management']],
-    ['wi-fi・vpn、proxy。settings', ['wi-fi vpn proxy', 'network', 'config']],
+    ['"wi-fi・vpn、proxy。settings"', ['wi-fi vpn proxy', 'network', 'config']],
   ])('%s', async (query, expected) => {
     const reply = await suggest(query, 'en-US');
 
