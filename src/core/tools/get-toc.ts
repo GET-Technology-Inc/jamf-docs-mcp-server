@@ -27,7 +27,8 @@ import {
   type IntercomCollection,
 } from '../services/intercom-service.js';
 import { getAvailableVersions } from '../services/metadata.js';
-import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl } from '../utils/sanitize.js';
+import { failureReason } from '../services/failure-reason.js';
 
 /**
  * Render a single TOC entry as markdown
@@ -971,7 +972,7 @@ export function registerGetTocTool(server: McpServer, ctx: ServerContext): void 
           isError: true,
           content: [{
             type: 'text',
-            text: `Error fetching table of contents: ${getSafeErrorMessage(error)}`
+            text: `Error fetching table of contents: ${failureReason(error)}`
           }]
         };
       }

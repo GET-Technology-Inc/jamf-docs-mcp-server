@@ -14,6 +14,7 @@ import type { ToolResult, GlossaryEntry, GlossaryLookupResult } from '../types.j
 import { lookupGlossaryTerm, GlossaryUnavailableError } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
+import { failureReason } from '../services/failure-reason.js';
 
 const ENGLISH_ONLY_WARNING =
   'Note: Glossary content is currently only available in English (en-US).' +
@@ -364,7 +365,7 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           isError: true,
           content: [{
             type: 'text',
-            text: `Glossary lookup error: ${getSafeErrorMessage(error)}\n\nPlease try again or use different search terms.`,
+            text: `Glossary lookup error: ${failureReason(error)}\n\nPlease try again or use different search terms.`,
           }],
         };
       }

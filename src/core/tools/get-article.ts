@@ -18,7 +18,9 @@ import type {
   FetchArticleResult,
   ParsedArticle,
 } from '../types.js';
-import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { failureReason } from '../services/failure-reason.js';
+import { HttpError } from '../http-client.js';
+import { ProviderError } from '../services/provider-error.js';
 import { ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
@@ -372,14 +374,19 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
           structuredContent
         };
       } catch (error) {
-        const errorMessage = getSafeErrorMessage(error);
+        const errorMessage = failureReason(error);
 
-        // Provide helpful error messages
+        // Provide helpful error messages. A 429 is read from its status, this
+        // server's request's or a provider's own. Until 2026-09-28 only a
+        // message saying "rate limit" got the advice, as a provider's can, and
+        // no error this server throws does ("HTTP 429 Too Many Requests:
+        // <url>"), so a rate-limited request of this server's never got it.
+        const cause = error instanceof ProviderError ? error.failure : error;
         let helpText = '';
-        if (errorMessage.includes('404')) {
-          helpText = '\n\nThe article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.';
-        } else if (errorMessage.includes('rate limit')) {
+        if ((cause instanceof HttpError && cause.status === 429) || errorMessage.includes('rate limit')) {
           helpText = '\n\nPlease wait a moment and try again.';
+        } else if (errorMessage.includes('404')) {
+          helpText = '\n\nThe article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.';
         }
 
         return {

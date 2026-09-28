@@ -286,6 +286,12 @@ describe('HttpError', () => {
     expect(err).toBeInstanceOf(Error);
   });
 
+  it('leaves no space for status text a response did not have', () => {
+    // learn.jamf.com's 404s have none (live, 2026-09-28). Until then this read
+    // "HTTP 404 : <url>".
+    expect(new HttpError(404, '', 'https://example.com/gone').message).toBe('HTTP 404: https://example.com/gone');
+  });
+
   it('should report isRetryable=true for 429 and 5xx status codes', () => {
     expect(new HttpError(429, 'Too Many Requests', '').isRetryable).toBe(true);
     expect(new HttpError(500, 'Internal Server Error', '').isRetryable).toBe(true);

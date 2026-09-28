@@ -29,6 +29,16 @@ import { cacheKey } from './cache-key.js';
  */
 export interface DegradationStatus {
   degraded: boolean;
+  /**
+   * What the registry threw, when this lookup caught it: the answer is a
+   * stand-in built in this call. Absent for a stand-in read from the cache,
+   * which keeps that it is one but not why, and when nothing was thrown.
+   *
+   * `jamf_docs_list_products` words its incomplete note from it when the
+   * product half's read is the one that failed, so the note names the source
+   * that failed, a MapsProvider or learn.jamf.com.
+   */
+  failure?: unknown;
 }
 
 /**
@@ -176,6 +186,7 @@ function isCachedProductsMetadata(value: unknown): value is CachedProductsMetada
 async function loadProductsMetadata(
   ctx: ServerContext,
   options: MetadataReadOptions,
+  status: DegradationStatus | undefined,
 ): Promise<CachedProductsMetadata> {
   const log = ctx.logger.createLogger('metadata');
 
@@ -217,6 +228,8 @@ async function loadProductsMetadata(
     log.error(`MapsRegistry failed, using static fallback: ${String(error)}`);
     degraded = true;
     products = productIds.map((productId) => buildFallbackMetadata(productId));
+    // Not cached with the entry: see DegradationStatus.failure.
+    if (status !== undefined) { status.failure = error; }
   }
 
   const entry: CachedProductsMetadata = { products, degraded };
@@ -239,7 +252,8 @@ async function loadProductsMetadata(
  *
  * @param status - Optional sink; `degraded` is set when the returned catalogue
  *   is the static fallback because MapsRegistry was unreachable. Reported on
- *   cache hits too.
+ *   cache hits too. `failure` is what the registry threw, when the fallback
+ *   was built in this call.
  * @param options - See {@link MetadataReadOptions}.
  */
 export async function getProductsMetadata(
@@ -247,7 +261,7 @@ export async function getProductsMetadata(
   status?: DegradationStatus,
   options: MetadataReadOptions = {},
 ): Promise<ProductMetadata[]> {
-  const { products, degraded } = await loadProductsMetadata(ctx, options);
+  const { products, degraded } = await loadProductsMetadata(ctx, options, status);
 
   if (degraded && status !== undefined) {
     status.degraded = true;
@@ -319,6 +333,7 @@ export async function getAvailableVersions(
     log.error(
       `MapsRegistry.getVersions failed for ${productId}: ${String(error)}`
     );
+    if (status !== undefined) { status.failure = error; }
   }
 
   // Fallback: return the static latestVersion from constants
@@ -406,6 +421,7 @@ function isCachedProductAvailability(value: unknown): value is CachedProductAvai
 async function loadProductAvailability(
   ctx: ServerContext,
   options: MetadataReadOptions,
+  status: DegradationStatus | undefined,
 ): Promise<CachedProductAvailability> {
   const log = ctx.logger.createLogger('metadata');
 
@@ -436,6 +452,7 @@ async function loadProductAvailability(
     for (const productId of productIds) {
       availability[productId] = true;
     }
+    if (status !== undefined) { status.failure = error; }
   }
 
   const entry: CachedProductAvailability = { availability, degraded };
@@ -455,7 +472,7 @@ async function loadProductAvailability(
  *
  * @param status - Optional sink, as for {@link getProductsMetadata}: set when
  *   the registry was unreachable and every product is assumed available.
- *   Reported on cache hits too.
+ *   Reported on cache hits too, and `failure` only when built in this call.
  * @param options - See {@link MetadataReadOptions}.
  */
 export async function getProductAvailability(
@@ -463,7 +480,7 @@ export async function getProductAvailability(
   status?: DegradationStatus,
   options: MetadataReadOptions = {},
 ): Promise<Record<string, boolean>> {
-  const { availability, degraded } = await loadProductAvailability(ctx, options);
+  const { availability, degraded } = await loadProductAvailability(ctx, options, status);
 
   if (degraded && status !== undefined) {
     status.degraded = true;

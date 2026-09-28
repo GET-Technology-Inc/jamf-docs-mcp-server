@@ -16,7 +16,8 @@ import {
   getAvailableVersions
 } from '../services/metadata.js';
 import { completeProduct } from '../completions.js';
-import { readProductToc, TOC_RESOURCE_MAX_TOKENS } from './product-toc.js';
+import { readProductToc, TOC_RESOURCE_MAX_TOKENS, type ProductTocBody } from './product-toc.js';
+import { failureReason } from '../services/failure-reason.js';
 
 /**
  * Cache fields for a `resources/read` result that must not be reused.
@@ -147,7 +148,20 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
       // Every page, not the first: see `readProductToc`. A body that is not
       // the whole tree is still what this resource gives for that product
       // until the documentation changes, so it keeps the configured hint.
-      const body = await readProductToc(ctx, validation.id);
+      let body: ProductTocBody;
+      try {
+        body = await readProductToc(ctx, validation.id);
+      } catch (error) {
+        // Worded as jamf_docs_get_toc words it (see failureReason), and
+        // thrown as an Error of this server's own. Until 2026-09-28 what
+        // readProductToc threw went out as thrown: a provider's message
+        // whole, file paths and stack lines included. A TocProvider that
+        // rejected with `undefined` or `null` got no answer at all, the read
+        // waiting until the client gave up, and one that rejected with an
+        // object carrying a numeric `code` got that as the JSON-RPC error
+        // code, and its `data`, if it had one, as the error's `data`.
+        throw new Error(`Error fetching table of contents: ${failureReason(error)}`, { cause: error });
+      }
       return {
         contents: [{
           uri: uri.href,

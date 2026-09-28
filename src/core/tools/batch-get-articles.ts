@@ -10,7 +10,7 @@ import { BatchArticlesOutputSchema } from '../schemas/output.js';
 import { reportProgress } from '../utils/progress.js';
 import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
-import { getSafeErrorMessage } from '../utils/sanitize.js';
+import { failureReason } from '../services/failure-reason.js';
 import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
@@ -181,7 +181,7 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
             completedCount++;
             await reportProgress(extra, { progress: completedCount, total: params.urls.length, message: `Fetched ${String(completedCount)}/${String(params.urls.length)} articles...` });
 
-            return { status: 'error', url, error: getSafeErrorMessage(error) };
+            return { status: 'error', url, error: failureReason(error) };
           }
         };
       });

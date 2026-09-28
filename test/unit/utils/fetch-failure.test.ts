@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { HttpError } from '../../../src/core/http-client.js';
-import { isRequestFailure, mayBeTemporary, reasonGiven } from '../../../src/core/utils/fetch-failure.js';
+import { isRequestFailure, mayBeTemporary, reasonGiven, reasonStated } from '../../../src/core/utils/fetch-failure.js';
 import { connectionRefused, notJson, timedOut } from '../../helpers/search-upstream.js';
 
 const URL = 'https://learn.jamf.com/api/khub/clustered-search';
@@ -97,5 +97,30 @@ describe('reasonGiven', () => {
     expect(Array.from(reason)).toHaveLength(200);
     expect(reason).toBe(`${'🔑'.repeat(199)}…`);
     expect(reasonGiven('🔑'.repeat(200))).toBe('🔑'.repeat(200));
+  });
+
+  it('never cuts inside a %XX escape, or between the escapes of one encoded character', () => {
+    // 関 is %E9%96%A2: cut by character, 197 + 2 would end on "%E".
+    expect(reasonGiven(`${'x'.repeat(197)}${'%E9%96%A2'.repeat(3)}`)).toBe(`${'x'.repeat(197)}…`);
+    // は is %E3%81%AF: cut by character, 193 + 6 would end on "%E3%81", half
+    // of it. 190 + 9 is 199, so the whole of it fits.
+    expect(reasonGiven(`${'x'.repeat(193)}${'%E3%81%AF'.repeat(3)}`)).toBe(`${'x'.repeat(193)}…`);
+    expect(reasonGiven(`${'x'.repeat(190)}${'%E3%81%AF'.repeat(3)}`)).toBe(`${'x'.repeat(190)}%E3%81%AF…`);
+    // A single escape that starts no encoded character.
+    expect(reasonGiven(`${'x'.repeat(197)}%20and the rest`)).toBe(`${'x'.repeat(197)}…`);
+    // A % that starts no escape is one character, as any other.
+    expect(reasonGiven(`${'x'.repeat(198)}%zz and the rest`)).toBe(`${'x'.repeat(198)}%…`);
+  });
+});
+
+describe('reasonStated', () => {
+  it('is the reason on one line, without file paths or stack lines, and not cut', () => {
+    const long = `Could not read\n the page at /srv/app/page.html ${'%E3%81%AF'.repeat(40)}\n    at f (/srv/app/a.js:1:1)`;
+
+    expect(reasonStated(new Error(long))).toBe(`Could not read the page at <path> ${'%E3%81%AF'.repeat(40)}`);
+    expect(reasonStated(' quota exceeded ')).toBe('quota exceeded');
+    for (const error of [new Error(''), ' \n', undefined, null, { code: 7 }]) {
+      expect(reasonStated(error)).toBeUndefined();
+    }
   });
 });
