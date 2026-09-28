@@ -7,6 +7,7 @@ import type {
   SearchParams,
   SearchDocumentationResult,
   FtSearchEntry,
+  FtSearchDocument,
   FtSearchCluster,
   FtSearchFilter,
   FtSearchRequest,
@@ -25,6 +26,7 @@ import {
   DOC_TYPE_LABEL_MAP,
   DOC_TYPE_PRECEDENCE,
   LABEL_KEY_DOC_TYPE_MAP,
+  TRAINING_CONTENT_TYPES,
   CONTENT_LIMITS,
   TOKEN_CONFIG,
   PAGINATION_CONFIG,
@@ -318,7 +320,9 @@ function namesProduct(title: string, name: string): boolean {
 
 /** The metadata array of whichever payload an FT search entry actually carries. */
 function entryMetadata(entry: FtSearchEntry): FtMetadataEntry[] | undefined {
-  return entry.type === 'MAP' ? entry.map?.metadata : entry.topic?.metadata;
+  if (entry.type === 'MAP') { return entry.map?.metadata; }
+  if (entry.type === 'DOCUMENT') { return entry.document?.metadata; }
+  return entry.topic?.metadata;
 }
 
 /**
@@ -335,10 +339,21 @@ function entryMetadata(entry: FtSearchEntry): FtMetadataEntry[] | undefined {
  * in object-literal insertion order: a release note matched `documentation`
  * first, was labelled `content-techdocs`, and was then dropped by its own
  * `docType: 'release-notes'` filter.
+ *
+ * An entry with no `content-*` label that Jamf classifies as training content
+ * (a {@link TRAINING_CONTENT_TYPES} value of `jamf:contentType`) is training:
+ * every Jamf Training Catalog course is such an entry. Since 2026-09-28; until
+ * then a course had no docType, and no docType filter returned it, although
+ * a filter on Jamf's "Training Content" does. A topic that has a label is
+ * read by its label alone, as before.
  */
 function docTypeLabelKeys(metadata: FtMetadataEntry[] | undefined): string[] {
-  return getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
+  const labels = getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
     .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined);
+  if (labels.length > 0) { return labels; }
+  return getMetaValues(metadata, FT_META.CONTENT_TYPE).some(value => TRAINING_CONTENT_TYPES.includes(value))
+    ? [DOC_TYPE_LABEL_MAP.training]
+    : [];
 }
 
 /**
@@ -476,7 +491,8 @@ async function resolveSearchProductFilter(
  *
  * - product → resolved separately by {@link resolveProductFilter} and passed
  *   in, because it needs the registry to know which axis the product lives on
- * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP
+ * - docType → `zoominmetadata` filter using DOC_TYPE_LABEL_MAP (a search for
+ *   `training` asks by {@link trainingContentFilters} first, since 2026-09-28)
  * - version → `version` filter (only when a specific version is requested)
  *
  * Both filters are pushed as *separate* entries. Fluid Topics intersects
@@ -548,6 +564,45 @@ export function buildSearchFilters(
   return filters;
 }
 
+/**
+ * What `docType: 'training'` is searched by first: the product filter and
+ * Jamf's "Training Content" in every language ({@link TRAINING_CONTENT_TYPES}).
+ * Null for any other search, and for training in a specific version, which
+ * {@link buildSearchFilters} alone serves.
+ *
+ * `content-training` returns the training topics but none of the Jamf
+ * Training Catalog courses, which carry no `content-*` label. A filter on
+ * the content type Jamf gives them all, "Training Content", returns both,
+ * ranked together. Measured live on 2026-09-28, in 13 searches in six
+ * languages (six of them by the searched language's value alone, which the
+ * whole list matched where both were tried): it returned the topics
+ * `content-training` does, in the same order, with the courses at Fluid
+ * Topics' rank among them (2 of the 18 entries for en-US "FileVault", 11 of
+ * the 50 for "enrollment", and all 3 for ja-JP "configuration profiles",
+ * where `content-training` returns nothing). Where courses rank, the 50
+ * clusters one request fetches end sooner in the topics: 4, 10 and 7 fewer
+ * for en-US "configuration profiles", "enrollment" and "smart groups".
+ *
+ * A translated value is a filter this server otherwise avoids (see
+ * buildSearchFilters): one language's value finds nothing in another. Every
+ * language's value is sent at once, so the filter holds in each, and one
+ * missing from the list costs that language its courses only: the search
+ * then asks by `content-training`, as it did before.
+ *
+ * Not sent with a specific version: no course has one, so it would return
+ * what `content-training` does.
+ */
+function trainingContentFilters(
+  params: Pick<SearchParams, 'docType' | 'version'>,
+  productFilter: FtSearchFilter | null,
+): FtSearchFilter[] | null {
+  if (params.docType !== 'training' || isSpecificVersion(params.version)) { return null; }
+  return [
+    ...buildSearchFilters({}, productFilter),
+    { key: FT_META.CONTENT_TYPE, values: [...TRAINING_CONTENT_TYPES] },
+  ];
+}
+
 /** A survivor of {@link dedupeToLatestVersions}, with the versions it stands for. */
 export interface DedupedEntry {
   entry: FtSearchEntry;
@@ -566,8 +621,10 @@ export interface DedupedEntry {
  * highest-versioned entries of a cluster so the user sees one (latest) result
  * per topic. A topic of a non-versioned product (Jamf School, Connect,
  * Protect, …) carries a single entry, nearly always in a cluster of its own,
- * so it passes through untouched. Entries with no `ft:clusterId` cannot be
- * version-deduped and are each kept.
+ * so it passes through untouched. So does a Jamf Training Catalog course (a
+ * DOCUMENT entry), which has no version and was a cluster of its own every
+ * time it was measured (67 of 67, 2026-09-28); it is kept once per document.
+ * Entries with no `ft:clusterId` cannot be version-deduped and are each kept.
  *
  * A cluster is not always one topic. A topic's cluster id is nearly always
  * its url's bundle and slug, with `-current` for a version number (16,687 of
@@ -632,7 +689,7 @@ export function dedupeToLatestVersions(
 
   for (const cluster of clusters) {
     for (const entry of cluster.entries) {
-      const metadata = entry.topic?.metadata ?? entry.map?.metadata ?? [];
+      const metadata = entry.topic?.metadata ?? entry.map?.metadata ?? entry.document?.metadata ?? [];
       const clusterId = getMetaValue(metadata, FT_META.CLUSTER_ID);
       const version = entryVersion(metadata);
       const topic = topicOf(entry);
@@ -688,12 +745,14 @@ function entryVersion(metadata: FtMetadataEntry[] | undefined): string {
 
 /**
  * The topic an entry is, as `jamf_docs_get_article` addresses it: a topic by
- * its `mapId` + `contentId` pair, a MAP entry by its map. An entry that is
- * neither is a topic of its own.
+ * its `mapId` + `contentId` pair, a MAP entry by its map. A DOCUMENT entry,
+ * which that tool cannot read, is its document. An entry that is none of
+ * these is a topic of its own.
  */
 function topicOf(entry: FtSearchEntry): string | FtSearchEntry {
   if (entry.topic !== undefined) { return JSON.stringify(['topic', entry.topic.mapId, entry.topic.contentId]); }
   if (entry.map !== undefined) { return JSON.stringify(['map', entry.map.mapId]); }
+  if (entry.document !== undefined) { return JSON.stringify(['document', entry.document.documentId]); }
   return entry;
 }
 
@@ -701,6 +760,11 @@ function topicOf(entry: FtSearchEntry): string | FtSearchEntry {
 
 /**
  * Transform a Fluid Topics search entry into an enriched SearchResult.
+ *
+ * A TOPIC or MAP entry is a page of the documentation. A DOCUMENT entry is a
+ * page Jamf's search lists beside it, which `jamf_docs_get_article` cannot
+ * read (see {@link transformDocumentEntry}). An entry of any other shape gets
+ * a url of '', and the search leaves it out.
  */
 export function transformFtSearchResult(
   entry: FtSearchEntry,
@@ -713,6 +777,10 @@ export function transformFtSearchResult(
     return transformMapEntry(entry);
   }
 
+  if (entry.type === 'DOCUMENT' && entry.document !== undefined) {
+    return transformDocumentEntry(entry.document);
+  }
+
   // Fallback for unexpected entry shapes
   return {
     title: 'Untitled',
@@ -722,22 +790,25 @@ export function transformFtSearchResult(
   };
 }
 
-/** Common fields extracted from either a TOPIC or MAP entry */
+/** Common fields extracted from a TOPIC, MAP or DOCUMENT entry */
 interface EntryFields {
   /** Absent when Fluid Topics sent the entry without one — see FtSearchTopic.title. */
   title?: string | undefined;
   url: string;
   htmlExcerpt: string;
   metadata?: FtMetadataEntry[] | undefined;
-  mapId: string;
+  /** Absent for a DOCUMENT entry, which is in no map. */
+  mapId?: string;
   contentId?: string;
   breadcrumb?: string[];
   /** A MAP entry reuses its own (optional) title here. Guarded at the use site. */
   mapTitle?: string | undefined;
+  /** A DOCUMENT entry: see {@link transformDocumentEntry}. */
+  external?: true;
 }
 
 /**
- * Shared builder: turns the common fields of a TOPIC or MAP entry
+ * Shared builder: turns the common fields of a TOPIC, MAP or DOCUMENT entry
  * into a fully-populated SearchResult.
  */
 function buildSearchResult(fields: EntryFields): SearchResult {
@@ -757,7 +828,7 @@ function buildSearchResult(fields: EntryFields): SearchResult {
     url: fields.url,
     snippet,
     product,
-    mapId: fields.mapId,
+    ...(fields.mapId !== undefined ? { mapId: fields.mapId } : {}),
     // Omitted rather than set to undefined when the topic carries no
     // `content-*` label — `docType` is declared optional and the config has
     // exactOptionalPropertyTypes on.
@@ -788,6 +859,9 @@ function buildSearchResult(fields: EntryFields): SearchResult {
   // value (#348), for this path as for a SearchProvider's.
   if (typeof fields.mapTitle === 'string' && fields.mapTitle !== '') {
     result.mapTitle = fields.mapTitle;
+  }
+  if (fields.external === true) {
+    result.external = true;
   }
 
   return result;
@@ -842,6 +916,70 @@ function transformMapEntry(entry: FtSearchEntry): SearchResult {
   });
 }
 
+/**
+ * A DOCUMENT entry: a page Jamf's search lists beside the documentation. It
+ * is in no map, and `jamf_docs_get_article` cannot read it, so the result is
+ * marked `external`, and has no `mapId` + `contentId` pair to fetch it by.
+ *
+ * Every one measured is a course or learning path of the Jamf Training
+ * Catalog ({@link FtSearchDocument}). Until 2026-09-28 only TOPIC and MAP
+ * entries were read, any other got a url of '', and the search dropped it
+ * without a word: fetched again that day, the 70 searches #363 replayed held
+ * 17 courses, and 106 unfiltered searches 46. Fluid Topics ranks them
+ * among the topics, some first of all (the ja-JP searches "configuration
+ * profiles" and "inventory"), and they carry Jamf's product classification
+ * as a topic does, so a product search returns them upstream: 12 in 10
+ * searches filtered to `jamf:portal` = Jamf Pro. So they are results like any
+ * other, at the rank Fluid Topics gave them, and not other-source matches,
+ * which this server matches on title and ranks apart from the results.
+ *
+ * Linked at `originUrl`, which is the course, and where Jamf's portal opens a
+ * document whose `openMode` is EXTERNAL; without one, at `viewerUrl`, the
+ * document's page on learn.jamf.com. Either only when it is on Jamf's own
+ * site ({@link isOnJamfSite}), and with neither the entry is left out. The
+ * product and the docType are read as a topic's are. A course carries no
+ * `content-*` label, but Jamf classifies it as "Training Content", so its
+ * docType is `training` (see docTypeLabelKeys), and a `docType: 'training'`
+ * search asks for it (see trainingContentFilters).
+ */
+function transformDocumentEntry(document: FtSearchDocument): SearchResult {
+  return buildSearchResult({
+    title: document.title,
+    url: documentUrl(document),
+    htmlExcerpt: document.htmlExcerpt ?? '',
+    metadata: document.metadata,
+    external: true,
+  });
+}
+
+/** Where a document is: the first of its `originUrl` and `viewerUrl` on Jamf's own site, or ''. */
+function documentUrl(document: FtSearchDocument): string {
+  for (const candidate of [document.originUrl, document.viewerUrl]) {
+    if (typeof candidate === 'string' && isOnJamfSite(candidate)) { return candidate; }
+  }
+  return '';
+}
+
+/**
+ * Whether `value` is an https address on jamf.com or a host under it, such as
+ * trainingcatalog.jamf.com.
+ *
+ * Every other result links to a host `jamf_docs_get_article` reads, and a
+ * url Fluid Topics sends for a topic is made one if it is not (see
+ * buildDisplayUrl, and test/integration/url-safety.test.ts). An external
+ * result cannot be held to that, as its page is elsewhere by definition, but
+ * it is held to Jamf's own site: a url Jamf's search sends is not passed on
+ * to just any host. All 67 measured were on trainingcatalog.jamf.com.
+ */
+function isOnJamfSite(value: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(value);
+    return protocol === 'https:' && (hostname === 'jamf.com' || hostname.endsWith('.jamf.com'));
+  } catch {
+    return false;
+  }
+}
+
 // ─── Filter Relaxation ─────────────────────────────────────────
 
 /**
@@ -891,7 +1029,14 @@ function buildActiveFilters(
         name: 'docType',
         value: docTypeFilter,
         apply: (results) => results.filter(r => {
-          if (r.labelKeys.length === 0) { return true; }
+          // A result of no known kind is kept, but an external one is known
+          // not to be a page of the documentation. A Jamf Training Catalog
+          // course is `training` (see docTypeLabelKeys); an external result
+          // of no kind, which no course measured is but a SearchProvider's
+          // may be, is not what any docType asks for. Kept, it would be
+          // listed as whatever docType was asked for when the search asks
+          // again without it (see resolveSearchResults).
+          if (r.labelKeys.length === 0) { return r.result.external !== true; }
           return r.labelKeys.includes(targetLabelKey);
         }),
       });
@@ -1668,7 +1813,22 @@ async function resolveSearchResults(
       'searching without an upstream product filter and filtering locally'
     );
   }
-  let results = await fetchFiltered(buildSearchFilters(params, productFilter));
+  // `docType: 'training'` asks by Jamf's "Training Content" first, which
+  // reaches the Jamf Training Catalog courses at the rank Jamf's search gives
+  // them (see trainingContentFilters), and by its `content-*` label only when
+  // that finds nothing. Every other search, and training in a specific
+  // version, asks by the label alone, as before.
+  const trainingFilters = trainingContentFilters(params, productFilter);
+  let results = trainingFilters === null ? [] : await fetchFiltered(trainingFilters);
+  if (trainingFilters === null || results.length === 0) {
+    results = await fetchFiltered(buildSearchFilters(params, productFilter));
+    if (trainingFilters !== null && results.length > 0) {
+      log.warning(
+        `docType "training" found ${String(results.length)} results by its content-* label and none by ` +
+        'jamf:contentType: TRAINING_CONTENT_TYPES may be missing a language'
+      );
+    }
+  }
 
   // 3. Re-query without docType when narrowing by it emptied the result set
   //    upstream.

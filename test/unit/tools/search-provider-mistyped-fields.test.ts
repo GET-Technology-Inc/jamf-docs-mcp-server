@@ -67,6 +67,7 @@ const WHOLE: Required<SearchResult> = {
   breadcrumb: ['Managing Mobile Devices', 'Shared iPad with Jamf Pro'],
   mapTitle: 'Jamf Pro Documentation 11.32.0',
   crossFiled: true,
+  external: true,
   otherVersions: ['11.31.0'],
 };
 

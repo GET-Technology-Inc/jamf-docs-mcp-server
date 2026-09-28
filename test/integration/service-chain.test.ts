@@ -71,6 +71,23 @@ function flattenToc(entries: TocEntry[]): TocEntry[] {
   return out;
 }
 
+/**
+ * A search result's url is on the host it has to be: learn.jamf.com, or, for
+ * a result marked `external` (a Jamf Training Catalog course, since
+ * 2026-09-28), an https page on jamf.com or a host under it, the rule the
+ * search holds such a url to (isOnJamfSite in search-service.ts). Compared on
+ * the parsed hostname, not on the text of the url.
+ */
+function expectResultHost(r: SearchResult): void {
+  const { protocol, hostname } = new URL(r.url);
+  expect(protocol, r.url).toBe('https:');
+  if (r.external === true) {
+    expect(hostname === 'jamf.com' || hostname.endsWith('.jamf.com'), `${r.url} is not on jamf.com`).toBe(true);
+  } else {
+    expect(hostname, r.url).toBe('learn.jamf.com');
+  }
+}
+
 // =============================================================================
 // 1. Search → product filtering chain
 // =============================================================================
@@ -96,7 +113,8 @@ describe('search product filtering with real API data', () => {
 
   it('product field comes from zoominmetadata, not from mapId', () => {
     // Use the pre-fetched unfiltered results; pick results whose product is 'Jamf Pro'.
-    const proResults = proSearchResults.filter(r => r.product === 'Jamf Pro');
+    // Not an `external` one, a Jamf Training Catalog course, which is in no map.
+    const proResults = proSearchResults.filter(r => r.product === 'Jamf Pro' && r.external !== true);
 
     // Guard: if the API returned no Jamf Pro results at all, skip the mapId assertion
     // but still confirm we got some results from the search.
@@ -161,7 +179,7 @@ describe('search product filtering with real API data', () => {
 
     for (const r of proSearchResults) {
       expect(r.url).toBeTruthy();
-      expect(r.url).toMatch(/^https:\/\/learn\.jamf\.com\//);
+      expectResultHost(r);
     }
   }, 30000);
 });
@@ -336,7 +354,7 @@ describe('filter fallback preserves data integrity', () => {
     // Whether relaxed or not, all results must have valid structure
     for (const r of result.results) {
       expect(r.title).toBeTruthy();
-      expect(r.url).toMatch(/^https:\/\/learn\.jamf\.com\//);
+      expectResultHost(r);
       // product may be null for some entries but must be a string or null
       expect(r.product === null || typeof r.product === 'string').toBe(true);
     }

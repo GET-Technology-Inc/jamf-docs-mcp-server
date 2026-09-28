@@ -18,9 +18,10 @@ import {
   fetchTopicContent,
 } from '../../src/core/services/ft-client.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
-import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
+import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP, TRAINING_CONTENT_TYPES } from '../../src/core/constants.js';
 import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
 import { namedVersion } from '../../src/core/services/search-result-versions.js';
+import { transformFtSearchResult } from '../../src/core/services/search-service.js';
 import { classificationValuesFor, PRODUCT_IDS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
 import { createTestHttpClient } from '../helpers/mock-context.js';
@@ -215,6 +216,29 @@ describe('FT API data contracts', () => {
         expect(typeof cluster.metadataVariableAxis).toBe('string');
       }
     });
+
+    // A DOCUMENT entry (a Jamf Training Catalog course, every one measured)
+    // becomes a result marked `external` only while it carries a documentId
+    // and a url on Jamf's own site, `originUrl` or `viewerUrl`. Without one
+    // the transform gives it a url of '' and the search drops it, silently,
+    // as it dropped every one until 2026-09-28. Two searches that returned
+    // courses high that day; with no DOCUMENT entry, there is nothing the
+    // search reads to check.
+    it('a DOCUMENT entry carries what the search links it by', async () => {
+      for (const [query, contentLocale] of [['configuration profiles', 'ja-JP'], ['inventory', 'en-US']] as const) {
+        const response = await search(http, { query, contentLocale, sortId: 'relevance', paging: { perPage: 50, page: 1 } });
+        for (const entry of response.results.flatMap(cluster => cluster.entries)) {
+          if (entry.type !== 'DOCUMENT') { continue; }
+          const id = entry.document?.documentId;
+          expect(id, `a DOCUMENT entry for "${query}" (${contentLocale}) has no documentId`).toBeTruthy();
+          expect(
+            transformFtSearchResult(entry).url,
+            `DOCUMENT ${String(id)} ("${entry.document?.title ?? ''}") has no https url on jamf.com: ` +
+            `originUrl ${String(entry.document?.originUrl)}, viewerUrl ${String(entry.document?.viewerUrl)}`,
+          ).not.toBe('');
+        }
+      }
+    }, 30000);
   });
 
   // ─── Maps response contracts ──────────────────────────────────────────────
@@ -690,6 +714,66 @@ describe('FT API data contracts', () => {
         'silently in every locale.'
       ).toEqual([]);
     });
+
+    // `docType: 'training'` asks by TRAINING_CONTENT_TYPES first, and an entry
+    // with no `content-*` label (every Jamf Training Catalog course measured)
+    // is training when it carries one of them. Both hold only while the
+    // values pair with `content-training`, as they did on 2026-09-28 (21 maps
+    // labelled, one of the six values each, and no other map with one): a
+    // training map in a language the list lacks costs that language its
+    // courses, and a listed value on another kind of map would make its
+    // unlabelled entries training.
+    it('the training content types are what the content-training maps carry, and only they', () => {
+      const listed = new Set(TRAINING_CONTENT_TYPES);
+      const unlisted: string[] = [];
+      const elsewhere: string[] = [];
+      for (const map of maps) {
+        const meta = metaOf(map);
+        const labelled = (meta.find(m => m.key === 'zoominmetadata')?.values ?? [])
+          .includes(DOC_TYPE_LABEL_MAP.training);
+        const types = meta.find(m => m.key === 'jamf:contentType')?.values ?? [];
+        const locale = meta.find(m => m.key === 'ft:locale')?.values[0] ?? '?';
+        const named = `${map.title ?? map.id} (${locale}): ${JSON.stringify(types)}`;
+        const carries = types.some(type => listed.has(type));
+        if (labelled && !carries) { unlisted.push(named); }
+        if (!labelled && carries) { elsewhere.push(named); }
+      }
+
+      expect(
+        unlisted,
+        'content-training maps whose jamf:contentType TRAINING_CONTENT_TYPES does not list: add it, ' +
+        'or docType "training" returns none of that language\'s courses',
+      ).toEqual([]);
+      expect(
+        elsewhere,
+        'maps not labelled content-training that carry a TRAINING_CONTENT_TYPES value, which ' +
+        'docTypeLabelKeys would read as training on an entry with no content-* label',
+      ).toEqual([]);
+    });
+
+    it('jamf:contentType is a working upstream filter key, as docType "training" sends it', async () => {
+      // A key Fluid Topics ignored would return the unfiltered ranking, which
+      // the local docType filter would then narrow to the training in it: a
+      // fraction of what the filter finds, and no error to show for it.
+      const filtered = await search(http, {
+        query: 'FileVault',
+        contentLocale: 'en-US',
+        sortId: 'relevance',
+        paging: { perPage: 50, page: 1 },
+        filters: [{ key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] }],
+      });
+      const hits = filtered.results.flatMap(c => c.entries);
+      expect(hits.length, 'jamf:contentType = "Training Content" returned nothing for "FileVault"').toBeGreaterThan(0);
+
+      const strays = hits.filter(e => !metaOf(e.topic ?? e.map ?? e.document ?? {})
+        .some(m => m.key === 'jamf:contentType' && m.values.some(v => TRAINING_CONTENT_TYPES.includes(v))));
+      expect(
+        strays.length,
+        `${String(strays.length)} of ${String(hits.length)} results carry no training content type. ` +
+        'Upstream is ignoring the jamf:contentType filter, so docType "training" returns what the ' +
+        'unfiltered window happens to hold.',
+      ).toBe(0);
+    }, 30000);
 
     it('a non-Pro product map exposes bundle + locale (the unversioned contract)', () => {
       // deriveBundleStem now depends ENTIRELY on the bundle value for non-Pro

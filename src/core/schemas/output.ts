@@ -151,6 +151,15 @@ export const SearchOutputSchema = z.object({
      */
     crossFiled: z.boolean().optional(),
     /**
+     * Present, and true, on a result `jamf_docs_get_article` cannot read: a
+     * page Jamf's search lists beside the documentation, such as a course in
+     * the Jamf Training Catalog (trainingcatalog.jamf.com). Open `url` in a
+     * browser. Such a result has no `mapId` + `contentId` pair; a course's
+     * `docType` is `training`. Absent on every page of the documentation.
+     * Until 2026-09-28 the search dropped these without a word.
+     */
+    external: z.boolean().optional(),
+    /**
      * Other versions of this topic that the search collapsed away.
      *
      * Fluid Topics returns one entry per product version; the search keeps

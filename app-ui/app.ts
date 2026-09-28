@@ -36,8 +36,10 @@ import {
   articleArgs,
   hitIdAttributes,
   nextSearchPageArgs,
+  opensOutside,
   otherSourceCount,
   renderElsewhere,
+  renderExternalHit,
   renderNoResults,
   searchBudgetNote,
   suggestionArgs,
@@ -61,6 +63,8 @@ interface SearchResult {
   /** The pair that fetches this result's own article: see `articleArgs`. */
   mapId?: string;
   contentId?: string;
+  /** Not readable by `jamf_docs_get_article`, and opened outside: see `opensOutside`. */
+  external?: boolean;
 }
 
 /**
@@ -916,6 +920,9 @@ function renderSearch(view: SearchView): string {
         ? `also ${r.otherVersions.filter(renderableText).slice(0, 3).join(', ')}`
         : undefined,
     ].filter(renderableText);
+    if (opensOutside(r)) {
+      return renderExternalHit(r, meta);
+    }
     return `
       <li><a class="hit" href="${esc(r.url)}" data-url="${esc(r.url)}"${hitIdAttributes(r)}>
         ${crumbs(r.breadcrumb, 'hit-path', r.title)}

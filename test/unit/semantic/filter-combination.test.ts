@@ -23,6 +23,7 @@ import { search as ftSearch } from '../../../src/core/services/ft-client.js';
 import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { createMockContext, createClassifyingMapsRegistry } from '../../helpers/mock-context.js';
 import { makeFtSearchResponse } from '../../helpers/fixtures.js';
+import { TRAINING_CONTENT_TYPES } from '../../../src/core/constants.js';
 
 // Product-filtered searches resolve their classification axis through the
 // registry, so it has to answer without reaching learn.jamf.com.
@@ -130,8 +131,10 @@ describe('multi-filter combination behavior', () => {
       docType: 'training',
     });
 
+    // Only the docType, which `training` asks for as Jamf's "Training
+    // Content" first (since 2026-09-28).
     const sentFilters = mockedFtSearch.mock.calls[0]?.[1].filters;
-    expect(sentFilters).toEqual([{ key: 'zoominmetadata', values: ['content-training'] }]);
+    expect(sentFilters).toEqual([{ key: 'jamf:contentType', values: [...TRAINING_CONTENT_TYPES] }]);
     expect(result.results.map(r => r.title)).toEqual(['Some Article']);
     expect(result.filterRelaxation?.removed).toEqual(['product', 'docType', 'topic']);
     expect(result.filterRelaxation?.message).toMatch(

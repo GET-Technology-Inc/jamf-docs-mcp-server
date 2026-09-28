@@ -5,6 +5,13 @@
  * TOC entries, article URLs) always point to allowed Jamf documentation
  * hostnames and never pass through arbitrary external URLs.
  *
+ * One kind of search result is held to Jamf's own site instead of those
+ * hostnames: a result marked `external`, a page Jamf's search lists beside
+ * the documentation, such as a Jamf Training Catalog course. Since
+ * 2026-09-28 it links to an https page on jamf.com or a host under it, and
+ * one with no such page is left out
+ * (test/unit/tools/search-training-courses.test.ts).
+ *
  * Coverage:
  * - buildDisplayUrl: hostname-allowlist defence against external/malicious URLs
  * - transformFtSearchResult: URLs generated from FT search entries

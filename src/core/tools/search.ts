@@ -126,12 +126,27 @@ function formatSearchResult(result: SearchResult): string {
   if (ids !== '') {
     meta.push(ids);
   }
+  if (result.external === true) {
+    meta.push(EXTERNAL_NOTE);
+  }
   if (meta.length > 0) {
     output += `${meta.join(' | ')}\n\n`;
   }
   output += '---\n\n';
   return output;
 }
+
+/**
+ * What the markdown says of a result marked `external`: a page Jamf's search
+ * lists beside the documentation, such as a Jamf Training Catalog course.
+ * Its link is to be followed in a browser. Passed to `jamf_docs_get_article`,
+ * as the footer suggests of every other url, it fails: live on 2026-09-28, a
+ * course's url was rejected, trainingcatalog.jamf.com not being a host the
+ * tool reads, and a document's page on learn.jamf.com was "Unrecognized URL
+ * format". Until that day such results were dropped without a word (see
+ * transformDocumentEntry in search-service.ts).
+ */
+const EXTERNAL_NOTE = '**External**: open the link in a browser; `jamf_docs_get_article` cannot read it';
 
 /** One page of results, as the markdown renderers show it. */
 interface SearchPageView {
@@ -211,7 +226,12 @@ function formatPaginationFooter(view: SearchPageView, compact = false): string {
   if (view.truncatedResult !== undefined) {
     footer += `\n*${truncationLine(tokenInfo, view.truncatedResult)}*`;
   }
-  footer += '\n\n*Use `jamf_docs_get_article` with any URL above — or with the `mapId` + `contentId` pair shown with a result — to read the full article.*\n';
+  // Not "any URL above" on a page with a result marked External, which that
+  // tool cannot read. A page with none keeps the line it had.
+  const urls = view.results.some(r => r.external === true)
+    ? 'any URL above but those marked **External**'
+    : 'any URL above';
+  footer += `\n\n*Use \`jamf_docs_get_article\` with ${urls} — or with the \`mapId\` + \`contentId\` pair shown with a result — to read the full article.*\n`;
   return footer;
 }
 
@@ -235,7 +255,10 @@ function formatSearchResultCompact(result: SearchResult, index: number, sharesUr
     ? `${result.snippet.slice(0, 77)}...`
     : result.snippet;
   const apart = sharesUrl ? compactDistinction(result) : '';
-  return `${index}. [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)}) - ${sanitizeMarkdownText(snippetPreview)}${apart}\n`;
+  // A result `jamf_docs_get_article` cannot read says so on its own line: the
+  // line is all compact output has to tell it from an article.
+  const external = result.external === true ? ' (external: jamf_docs_get_article cannot read it)' : '';
+  return `${index}. [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)}) - ${sanitizeMarkdownText(snippetPreview)}${apart}${external}\n`;
 }
 
 /** ` (in {parent}; mapId=…, contentId=…)`, each part when the result has it, or ''. */
@@ -415,6 +438,14 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * `noResultsLocaleNote`), and its comment says so. Thai is such a script
  * since 2026-09-28 as well, when a Thai query began to be sent to th-TH, and
  * the comment names it.
+ *
+ * The Note on `external` is from 2026-09-28 too. Until then the Jamf Training
+ * Catalog courses that Jamf's search ranks among the documentation were
+ * dropped without a word (see transformDocumentEntry in search-service.ts),
+ * so every result was a page `jamf_docs_get_article` could read, by its pair
+ * or its URL, as the Note before it says; that Note now names the exception.
+ * `docType: "training"` has returned the courses since then too, as a filter
+ * on Jamf's "Training Content" does (see trainingContentFilters).
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -507,7 +538,15 @@ offers no next page and paginationNote says what reaches the rest.
 Most results carry a mapId + contentId pair; pass both to jamf_docs_get_article
 to fetch that article directly instead of resolving its URL. The pair is omitted
 when a result comes from a source that does not resolve one — fall back to the
-URL in that case.`;
+URL in that case, unless the result is external (see the next Note).
+
+Note: A result with "external": true is not a page of the documentation but one
+Jamf's search lists beside it, such as a course in the Jamf Training Catalog
+(trainingcatalog.jamf.com), at the rank the search gave it. jamf_docs_get_article
+cannot read it: open its url in a browser. It has no mapId + contentId pair. Jamf
+classifies a Training Catalog course as training content, so its docType is
+"training" and docType "training" returns it; any other docType, or a specific
+version, leaves it out.`;
 
 /**
  * The filters a result set was produced under.
@@ -596,11 +635,11 @@ function renderOtherSources(hits: StaticSearchHit[], caveat: string = OTHER_SOUR
  * Neither wording promises a score. The one this replaced said "relevance
  * scores ... higher values indicate stronger keyword matches", but Fluid
  * Topics returns no score of any kind — a clustered-search entry carries only
- * `type`, `missingTerms` and the topic/map payload, with no score, rank or
- * weight field anywhere in the response — and no result this server emits has
- * ever carried a numeric relevance. Both carry the words "no numeric relevance
- * score", in lower case: clients match on them, and at least one downstream
- * test does so case-sensitively on the provider path.
+ * `type`, `missingTerms` and the topic, map or document payload, with no
+ * score, rank or weight field anywhere in the response — and no result this
+ * server emits has ever carried a numeric relevance. Both carry the words "no
+ * numeric relevance score", in lower case: clients match on them, and at
+ * least one downstream test does so case-sensitively on the provider path.
  *
  * Fluid Topics is named only when the service says it ranked the results. Its
  * ordering is real: `sortId: 'relevance'` is sent explicitly (see
@@ -670,6 +709,9 @@ const SEARCH_RESULT_FIELD_DISPOSITION = {
   contentId: 'publish',
   mapTitle: 'publish',
   crossFiled: 'publish',
+  // A result `jamf_docs_get_article` cannot read, such as a Jamf Training
+  // Catalog course: a program opening results has to know which.
+  external: 'publish',
   otherVersions: 'publish',
   // `null` when Fluid Topics sends no classification, and the schema declares
   // a string.

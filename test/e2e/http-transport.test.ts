@@ -207,12 +207,14 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
       // Get a valid article URL from search
       const result = await callTool('jamf_docs_search', {
         query: 'policies',
-        limit: 1,
+        limit: 10,
         responseFormat: 'json',
       });
       const content = result.content as { type: string; text: string }[];
-      const json = JSON.parse(content[0].text);
-      articleUrl = json.results[0]?.url
+      const json = JSON.parse(content[0].text) as { results: { url: string; external?: boolean }[] };
+      // Not a result marked `external`, such as a Jamf Training Catalog
+      // course, which jamf_docs_get_article cannot read (since 2026-09-28).
+      articleUrl = json.results.find(r => r.external !== true)?.url
         ?? 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Policies.html';
     });
 
