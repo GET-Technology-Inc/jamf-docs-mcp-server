@@ -130,7 +130,10 @@ describe('a partial answer at the largest maxTokens', () => {
       );
       expect(text).not.toContain('Increase `maxTokens`');
       // Titles are escaped (see the suite below), so this is how it would read.
-      expect(text).not.toContain('Apple File System \\(APFS\\)');
+      // The line after it lists every entry left out, APFS too, with its cost.
+      const advice = text.split('\n').find(line => line.startsWith(`*${AT_LIMIT}`));
+      expect(advice).toBeDefined();
+      expect(advice).not.toContain('Apple File System \\(APFS\\)');
     }
   });
 
@@ -144,13 +147,20 @@ describe('a partial answer at the largest maxTokens', () => {
     expect(result.structuredContent?.truncated).toBe(false);
   });
 
-  it('keeps the usual note one token below it, where a larger maxTokens is possible', async () => {
+  it('keeps the usual note below it, where a larger maxTokens gets the next entry', async () => {
+    // Until 2026-09-28 this ran at 49999, where Apple School Manager does not
+    // fit beside the two shown at 50000 either, so the note it pinned was
+    // advice no budget could follow (see glossary-lookup-no-larger-budget).
     serveApple(20000, 20000, 20000, 60000);
 
-    const text = textOf(await lookup({ term: 'Apple', maxTokens: LIMIT - 1 }));
+    const text = textOf(await lookup({ term: 'Apple', maxTokens: 30000 }));
 
+    expect(text).toContain('*1 of 4 match(es)');
     expect(text).toContain('*Results truncated due to token limit. Increase `maxTokens` or narrow your search.*');
     expect(text).not.toContain('largest it can be');
+
+    const larger = await lookup({ term: 'Apple', maxTokens: LIMIT });
+    expect(larger.structuredContent?.entries).toHaveLength(2);
   });
 });
 
@@ -337,6 +347,17 @@ describe('a GlossaryProvider answer below the limit whose first entry is larger 
       `fits in \`maxTokens: 5000\`. ${over} ` +
       'Look up another entry by its own name, with `maxTokens: 30000` or more, to get it: A, C.*',
     );
+  });
+
+  it('gives the largest maxTokens as the largest it can be, not as one "or more", when a named entry costs that', async () => {
+    firstOver(5000, [{ title: 'A', estimatedTokens: 100 }, { title: 'B', estimatedTokens: LIMIT }]);
+
+    const text = textOf(await lookup({ term: 'MDM', maxTokens: 5000 }));
+    expect(text).toContain(
+      `fits in \`maxTokens: 5000\`. ${over} ` +
+      'Look up another entry by its own name, with `maxTokens: 50000` (the largest it can be), to get it: A, B.*',
+    );
+    expect(text).not.toContain('or more');
   });
 
   it('gives no budget when the one it had is exactly what the costliest named entry needs', async () => {
