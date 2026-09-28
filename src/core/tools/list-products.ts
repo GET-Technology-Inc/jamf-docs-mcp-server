@@ -14,6 +14,7 @@ import {
   getProductAvailability,
   getProductsMetadata,
   type DegradationStatus,
+  type MetadataReadOptions,
 } from '../services/metadata.js';
 import {
   STATIC_SECTIONS,
@@ -642,9 +643,22 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         // and costs nothing to rebuild, and serving it would pair the
         // registry's publications with the fallback's product versions in
         // one reply, as #335 reproduced.
+        //
+        // When it is not, the product half is handed what it threw, and
+        // builds any stand-in it has no cached one for from that, rather than
+        // ask the registry again. Until 2026-09-28 it asked, so a call during
+        // an outage that found no stand-in cached built the failing registry
+        // twice: 2 requests for the maps list at the default MAX_RETRIES=0,
+        // and 8 at 3. So a failure a second read would not have met now
+        // costs the product half its versions and availability for this
+        // call too, as it costs the publication half its rows; the next call
+        // whose publication half answers rebuilds them.
         const listing = await listPublicationsQuietly(ctx);
         const publications = listing.rows;
-        const readOptions = { revalidateFallback: !listing.unavailable.includes(MAPS_REGISTRY) };
+        const registryRead = !listing.unavailable.includes(MAPS_REGISTRY);
+        const readOptions: MetadataReadOptions = registryRead
+          ? { revalidateFallback: true }
+          : { registryFailed: { failure: listing.registryFailure } };
 
         // Each set when its part of the product half is the compiled-in
         // stand-in for an unreachable registry, cached or not. Two, because
@@ -654,10 +668,11 @@ export function registerListProductsTool(server: McpServer, ctx: ServerContext):
         const versionsStatus: DegradationStatus = { degraded: false };
         const availabilityStatus: DegradationStatus = { degraded: false };
 
-        // Product availability and versions. Asked for together so that when
-        // the registry has to be built for them they share one request
-        // (MapsRegistry deduplicates a build in flight) rather than making two
-        // in a row, which during an outage is two waits on a failing endpoint.
+        // Product availability and versions. Asked for together, so that if
+        // the registry has to be built for them they share one build
+        // (MapsRegistry deduplicates a build in flight). It seldom has to:
+        // the publication half above has built it, or found it unreadable
+        // and passed that on in `readOptions`.
         //
         // Versions come from getProductsMetadata, not from JAMF_PRODUCTS.
         // Every registry row declares `versions: ['current']`, which is true

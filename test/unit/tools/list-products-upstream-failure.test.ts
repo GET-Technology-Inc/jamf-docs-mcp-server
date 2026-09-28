@@ -345,23 +345,24 @@ describe('a fallback does not outlive the outage', () => {
   it('waits on a failing registry as little as it can', async () => {
     registryUp = false;
 
-    // Cold: the publication axis asks once, and the product half asks once
-    // for both its lookups, which share the build in flight.
+    // Cold: the publication axis asks once, and the product half builds its
+    // fallbacks from the failure it met rather than ask again. Until
+    // 2026-09-28 the product half asked once more, for both its lookups.
     await listProducts();
-    expect(registryRequests).toBe(2);
+    expect(registryRequests).toBe(1);
 
     // Inside the minute: only the publication axis asks. It is the one read
     // that says whether the registry answers now, and it did not, so the
     // product half is served its cached fallback rather than sent back to an
     // endpoint that has just failed.
     await listProducts();
-    expect(registryRequests).toBe(3);
+    expect(registryRequests).toBe(2);
 
     // Recovered: the publication axis builds the registry, and the product
     // half rebuilds from it in memory, with no request of its own.
     registryUp = true;
     const recovered = await listProducts();
-    expect(registryRequests).toBe(4);
+    expect(registryRequests).toBe(3);
     expect(jamfPro(recovered)?.availableVersions).toEqual(['11.31.0', '11.30.0']);
     expect(recovered.structuredContent).not.toHaveProperty('incomplete');
   });
