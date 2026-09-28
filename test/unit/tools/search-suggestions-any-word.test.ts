@@ -153,12 +153,14 @@ describe('a query Fluid Topics matches on any one word', () => {
     expect((await suggest({ query: 'policy', version: 'current' })).tips).toEqual([ANY_WORD, TOC]);
   });
 
-  it('is told to check the spelling first when its only filter is a topic, which did not empty the search', async () => {
+  it('is not told to remove its filters when its only filter is a topic, which did not empty the search', async () => {
     // A topic is not sent to Fluid Topics. It filters what was found, and is
     // set aside when it leaves nothing, so the search found nothing without it.
+    // Until 2026-09-28 it was told to remove it, after the spelling (see
+    // search-no-results-topic-advice.test.ts).
     const reply = await suggest({ query: 'xyzzyq qwvzx plokm', topic: 'enrollment' });
 
-    expect(reply.tips).toEqual([ANY_WORD, REMOVE_FILTERS, TOC]);
+    expect(reply.tips).toEqual([ANY_WORD, TOC]);
   });
 
   it('reads a hyphen on its own as a space, not as a word a page must not have', async () => {
@@ -218,6 +220,22 @@ describe('a query with a part a page must match, or must not', () => {
 
     expect(reply.tips).toEqual([FEWER, REMOVE_FILTERS, REMOVE_QUOTES, TOC]);
   });
+
+  it('is not told to remove the corner brackets Fluid Topics was sent as typed, which it reads as no quotes', async () => {
+    // A pair of 「」 around the query's one word is sent as typed, and so is
+    // a phrase in them that no page had, when the search is asked again (see
+    // search-corner-brackets-and-guillemets.test.ts). Until 2026-09-29, with a
+    // word marked +, each was told to remove its quotes: the second in the
+    // reply that says the query searched without them found nothing either.
+    const oneWord = await suggest({ query: '+「xyzzyq」' });
+    const loose = await suggest({ query: '「enrollment xyzzyq」 +qwvzx' });
+
+    expect(oneWord.tips).toEqual([TOC]);
+    expect(loose.markdown).toContain('the query searched without those quotes found nothing either');
+    expect(loose.tips).toEqual([TOC]);
+    // A phrase in straight quotes beside them is still one a page must have.
+    expect((await suggest({ query: '「enrollment xyzzyq」 "qwvzx plokm"' })).tips).toEqual([REMOVE_QUOTES, TOC]);
+  });
 });
 
 describe('a search a SearchProvider answered', () => {
@@ -226,5 +244,13 @@ describe('a search a SearchProvider answered', () => {
 
     expect(reply.suggestions).toEqual(['xyzzyq qwvzx plokm']);
     expect(reply.tips).toEqual([FEWER, TOC]);
+  });
+
+  it('is told to remove corner brackets around its one word, which the provider was handed as typed', async () => {
+    // Fluid Topics is sent such a pair as typed, and reads it as no quotes.
+    // A provider is handed the query as typed too, and may read them as quotes.
+    const reply = await suggest({ query: '+「xyzzyq」' }, []);
+
+    expect(reply.tips).toEqual([REMOVE_QUOTES, TOC]);
   });
 });

@@ -417,7 +417,62 @@ export function parseArticle(
 
 // ─── Snippet cleaning ───────────────────────────────────────────
 
+/**
+ * The shortest excerpt `cleanSnippet` keeps, in characters of Latin text: a
+ * shorter one is taken to say too little to show, and the title and product
+ * are shown instead.
+ */
 const MIN_SNIPPET_LENGTH = 50;
+
+/** A Han character, which `latinLength` counts as four. */
+const HAN = /\p{Script=Han}/gu;
+
+/**
+ * A Hiragana or Katakana character, or a mark written with them, such as ー,
+ * 、 and 。, which `latinLength` counts as one and a half. Not the combining
+ * overline and dot below (U+0305, U+0323), which Unicode lists as written
+ * with Kana too, and which a Latin text can hold.
+ */
+const KANA = /(?![\u0300-\u036F])[\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}]/gu;
+
+/**
+ * The length of `text` in characters of Latin text that say as much: a Han
+ * character counts as four, a Hiragana or Katakana one as one and a half, and
+ * every other character as one, as each did until 2026-09-28.
+ *
+ * Until then every excerpt was held to 50 characters, and a Chinese or
+ * Japanese sentence says in 50 what an English one says in two to three times
+ * as many. So whole sentences were replaced by the title and product: the
+ * ja-JP course "構成プロファイル (Configuration Profiles)", whose excerpt is
+ * the 40-character sentence
+ * 登録済みのコンピュータとモバイルデバイスに構成プロファイルを作成して展開します。
+ * ("Create and deploy configuration profiles to enrolled computers and
+ * mobile devices."), had the snippet "構成プロファイル (Configuration
+ * Profiles) — Jamf Pro". Of the 6,463 excerpts found by the same 22
+ * searches in each of eight languages (live, 2026-09-28), 16 were replaced
+ * in ja-JP, 18 in zh-TW and 3 in zh-CN. Now 15, 9 and 1 are: those that are
+ * empty, and release notes of one line, such as "Third-party library
+ * update", which is replaced in de-DE, fr-FR and es-ES too. In the other
+ * languages none changed.
+ *
+ * The weights are fitted, by least squares, to the titles Jamf gives one page
+ * in en-US and in Chinese or Japanese: 755 pages of Jamf Pro Documentation
+ * 11.32.0 in ja-JP and 758 in zh-TW, and the Jamf Parent and Jamf Teacher
+ * guides' 49 in each of ja-JP, zh-TW and zh-CN (2026-09-28). They give 3.81
+ * for Han and 1.59 for Kana, with the titles' other characters, such as
+ * product names, counted as one. Rounded, they make the ja-JP and zh-TW
+ * titles of Jamf Pro 0.97 and 1.03 times as long as the English ones, where
+ * they were 0.53 and 0.35. Thai is not weighted: the 49 guide titles in th-TH
+ * are 1,524 characters, and in English 1,525. Nor is Hangul, which Jamf
+ * publishes nothing in. Text with neither Han nor Kana in it, which is every
+ * Latin excerpt, is counted as it was, in UTF-16 code units.
+ */
+function latinLength(text: string): number {
+  const han = text.match(HAN)?.length ?? 0;
+  const kana = text.match(KANA)?.length ?? 0;
+  return text.length + han * 3 + kana * 0.5;
+}
+
 const NAV_PATTERNS = [
   /^Home\s*>/i,
   /^[\w\s]+>\s*[\w\s]+>\s*[\w\s]+/,
@@ -463,8 +518,9 @@ export function cleanSnippet(
   // can make no element of it, only the one text node.
   cleaned = cheerio.load(cleaned, null, false).text().trim();
 
-  // Counted as decoded: the length a reader sees.
-  if (cleaned.length < MIN_SNIPPET_LENGTH) {
+  // Counted as decoded: the length a reader sees, in characters of Latin text
+  // that say as much (see latinLength).
+  if (latinLength(cleaned) < MIN_SNIPPET_LENGTH) {
     return titleProductSnippet(title, product);
   }
 

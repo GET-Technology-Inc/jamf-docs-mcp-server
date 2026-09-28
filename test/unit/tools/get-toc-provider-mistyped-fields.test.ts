@@ -20,7 +20,10 @@
  *
  * Now an optional field that is not of its declared type is read as absent,
  * on every channel. An entry without a `url` string is left out with its
- * sub-entries, and `totalItems` no longer counts them; one without a `title`
+ * sub-entries, and `totalItems` no longer counts them. So, since 2026-09-28,
+ * is one whose url is blank or not an absolute https URL: until then it was
+ * listed as `- [Nowhere](#)`, under a footer that says to fetch any url
+ * above, and is now logged at debug, as a `null` is. One without a `title`
  * string is titled "Untitled", as an entry from Fluid Topics without one is.
  * An answer without a usable `toc`, `pagination` or `tokenInfo`, or whose
  * every entry was left out, is read as the provider answering `null`, and the
@@ -246,6 +249,50 @@ describe('a TocProvider entry whose required field is not of its declared type',
 
     expect(reply.sc.entries.map(e => e.title)).toEqual(['Untitled', 'Untitled']);
     expect(reply.text).toContain(`[Untitled](${POLICIES.url})`);
+  });
+});
+
+describe('a TocProvider entry whose url no link can be made of', () => {
+  const UNLINKABLE: [string, string][] = [
+    ['empty', ''],
+    ['blank', ' '],
+    ['http', 'http://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Policies'],
+    ['relative', '/r/en-US/jamf-pro-documentation-current/Policies'],
+  ];
+
+  it.each(UNLINKABLE)('%s: is left out with its sub-entries on every channel, and a debug line says so', async (_label, bad) => {
+    const harness = backends(answer({ toc: [{ ...POLICIES, url: bad }, PROFILES] }));
+
+    for (const format of FORMATS) {
+      const reply = await getToc(harness.ctx, format);
+      expect(reply.sc.entries.map(e => e.title)).toEqual([PROFILES.title]);
+      expect(reply.sc.totalEntries).toBe(1);
+      expect(reply.text).not.toContain('](#)');
+    }
+    expect((await readTocResource(harness.ctx)).toc).toEqual([PROFILES]);
+    expect(harness.debugs.join('\n'))
+      .toContain('TocProvider: left out 1 entry, with its sub-entries (a url that is not an absolute https URL)');
+    expect(harness.warnings).toEqual([]);
+  });
+
+  it('as a sub-entry, is left out and its parent kept', async () => {
+    const harness = backends(answer({ toc: [{ ...POLICIES, children: [{ ...CHILD, url: '' }] }, PROFILES] }));
+
+    const reply = await getToc(harness.ctx, { responseFormat: 'markdown' });
+
+    expect(reply.sc.entries.map(e => e.title)).toEqual([POLICIES.title, PROFILES.title]);
+    expect(reply.sc.totalEntries).toBe(2);
+    expect(reply.text).not.toContain('](#)');
+    expect(reply.text).toContain(`](${POLICIES.url})`);
+  });
+
+  it('on every entry, is read as null, and learn.jamf.com answers', async () => {
+    const harness = backends(answer({ toc: UNLINKABLE.map(([, bad]) => ({ ...PROFILES, url: bad })) }));
+
+    const reply = await getToc(harness.ctx, { responseFormat: 'json' });
+
+    expect(reply.sc.entries[0]?.title).toBe('Managing Computers');
+    expect(harness.warnings).toHaveLength(1);
   });
 });
 

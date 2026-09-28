@@ -1136,9 +1136,15 @@ function applyFiltersWithFallback(
     if (relaxed.length > 0) {
       removed.push(...relaxed);
       const scope = unfilterableProduct === undefined ? 'all filters' : 'the remaining filters';
+      // Says what the results are. Until 2026-09-28 it ended "Try broader
+      // search terms or fewer filters.", which the MCP App shows as a warning
+      // above them: the terms had found them, and the filters were fewer
+      // already. Live that day, `enrollment` in jamf-protect with docType
+      // "solution-guide" had 36 results under it, none a solution guide.
+      const without = relaxed.map(name => `${name} "${original[name] ?? ''}"`).join(' or ');
       notes.push(
         `No results with ${scope} applied. Removed filter(s): ${relaxed.join(', ')}. `
-        + 'Try broader search terms or fewer filters.'
+        + `These results are not filtered by ${without}.`
       );
     }
   }

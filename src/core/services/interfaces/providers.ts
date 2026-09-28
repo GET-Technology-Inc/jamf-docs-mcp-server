@@ -58,13 +58,15 @@ import type {
 /**
  * Custom search backend (e.g., Vectorize semantic search).
  *
- * A result without a `url` string is left out. One without a `title` string
- * is titled "Untitled", one without a `snippet` string gets the title and
- * product as its snippet, and one without a `product` string has none
- * (`null`), as a Fluid Topics result would. A `docType` that is not one of
- * the document type ids is read as absent. An answer that is not an array, or
- * whose every result is left out, is read as `null`, so Fluid Topics answers;
- * return `[]` for "no results". See the module comment for the rest.
+ * A result without a `url` string is left out, and so, since 2026-09-28, is
+ * one whose url is blank or not an absolute https URL, which markdown lists as
+ * a link to nowhere. One without a `title` string is titled "Untitled", one
+ * without a `snippet` string gets the title and product as its snippet, and
+ * one without a `product` string has none (`null`), as a Fluid Topics result
+ * would. A `docType` that is not one of the document type ids is read as
+ * absent. An answer that is not an array, or whose every result is left out,
+ * is read as `null`, so Fluid Topics answers; return `[]` for "no results".
+ * See the module comment for the rest.
  *
  * A result's `title`, `snippet`, `mapTitle` and `breadcrumb` are plain text,
  * not HTML, and core does not decode them: structuredContent and the JSON
@@ -229,7 +231,8 @@ export interface ArticleProviderOptions extends FetchArticleOptions {
  * Return null to fall through to the default Fluid Topics API glossary.
  *
  * An entry without a `term`, `definition` and `url` string is left out, and
- * `totalMatches` is reduced by the entries left out. An answer without an
+ * so, since 2026-09-28, is one whose url is blank or not an absolute https
+ * URL. `totalMatches` is reduced by the entries left out. An answer without an
  * `entries` array, a numeric `totalMatches` and a well-typed `tokenInfo`, or
  * whose every entry is left out, is read as `null`.
  */
@@ -246,7 +249,8 @@ export interface GlossaryProvider {
  * Custom table-of-contents provider (e.g., D1/R2 stored TOC).
  * Return null to fall through to the default TOC fetching.
  *
- * An entry without a `url` string is left out with its `children`, and
+ * An entry without a `url` string is left out with its `children`, and so,
+ * since 2026-09-28, is one whose url is blank or not an absolute https URL.
  * `pagination.totalItems`, which counts nested entries too, is reduced by
  * every entry left out; one without a `title` string is titled "Untitled".
  * An answer without a `toc` array and a well-typed `pagination` and

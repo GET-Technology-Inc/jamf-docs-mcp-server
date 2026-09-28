@@ -48,28 +48,15 @@ describe('generateSearchSuggestions', () => {
   });
 
   describe('suggestedTopics', () => {
-    it('should suggest SSO topic for sso query', () => {
-      const result = generateSearchSuggestions('sso configuration');
-      const topicIds = result.suggestedTopics.map(t => t.id);
-      expect(topicIds).toContain('sso');
-    });
-
-    it('should suggest security topic for encryption query', () => {
-      const result = generateSearchSuggestions('disk encryption');
-      const topicIds = result.suggestedTopics.map(t => t.id);
-      expect(topicIds.some(id => id === 'filevault' || id === 'security')).toBe(true);
-    });
-
-    it('should suggest enrollment topic for enrollment query', () => {
-      const result = generateSearchSuggestions('device enrollment');
-      const topicIds = result.suggestedTopics.map(t => t.id);
-      expect(topicIds).toContain('enrollment');
-    });
-
-    it('should limit to 3 topics', () => {
-      const result = generateSearchSuggestions('security policy configuration');
-      expect(result.suggestedTopics.length).toBeLessThanOrEqual(3);
-    });
+    // Empty since 2026-09-28: a topic filters what the search found, so after
+    // a search that found nothing it finds nothing either. See
+    // search-no-results-topic-advice.test.ts.
+    it.each(['sso configuration', 'disk encryption', 'device enrollment', 'security policy configuration'])(
+      'suggests no topic for %s, whose words name topics',
+      (query) => {
+        expect(generateSearchSuggestions(query).suggestedTopics).toEqual([]);
+      },
+    );
 
     it('should return empty array for unrelated queries', () => {
       const result = generateSearchSuggestions('xyznonexistent123');
@@ -117,13 +104,10 @@ describe('formatSearchSuggestions', () => {
     expect(output).toContain('Alternative keywords');
   });
 
-  it('should format suggested topics', () => {
-    const suggestions = generateSearchSuggestions('enrollment');
-    // 'enrollment' is a known topic term, so suggestedTopics must be non-empty
-    expect(suggestions.suggestedTopics.length).toBeGreaterThan(0);
-    const output = formatSearchSuggestions('enrollment', suggestions);
-    expect(output).toContain('Try filtering by topic');
-    expect(output).toContain('topic=');
+  it('should not format a topic to filter by, even for a topic term', () => {
+    const output = formatSearchSuggestions('enrollment', generateSearchSuggestions('enrollment'));
+    expect(output).not.toContain('Try filtering by topic');
+    expect(output).not.toContain('topic=');
   });
 
   it('should format tips', () => {
@@ -207,9 +191,16 @@ describe('generateSearchSuggestions - tips with active filters', () => {
     expect(result.tips.some(t => t.includes('removing filters'))).toBe(true);
   });
 
-  it('should include "removing filters" tip when topic filter is active', () => {
+  it('should include "removing filters" tip when topic filter is active and the backend is not known', () => {
     const result = generateSearchSuggestions('enrollment', false, true);
     expect(result.tips.some(t => t.includes('removing filters'))).toBe(true);
+  });
+
+  it('should NOT include "removing filters" tip when a topic is the only filter of a Fluid Topics search', () => {
+    // A topic is applied to what Fluid Topics found, and set aside when it
+    // leaves nothing, so the search found nothing without it.
+    const result = generateSearchSuggestions('enrollment', false, true, 'en-US', { searchedBy: 'fluid-topics' });
+    expect(result.tips.some(t => t.includes('removing filters'))).toBe(false);
   });
 
   it('should include "removing filters" tip when both filters are active', () => {

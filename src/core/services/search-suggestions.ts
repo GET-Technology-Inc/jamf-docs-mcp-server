@@ -4,7 +4,7 @@
  * Generates helpful suggestions when a search returns no results.
  */
 
-import { DEFAULT_LOCALE, JAMF_TOPICS, type TopicId } from '../constants.js';
+import { DEFAULT_LOCALE, type TopicId } from '../constants.js';
 import type { SearchRanker } from '../types.js';
 import { blankForeignWriting, foldFullWidthLatin, splitWords } from '../utils/cjk.js';
 
@@ -14,6 +14,12 @@ import { blankForeignWriting, foldFullWidthLatin, splitWords } from '../utils/cj
 export interface SearchSuggestions {
   simplifiedQuery: string | null;
   alternativeKeywords: string[];
+  /**
+   * @deprecated Empty since 2026-09-28, and not rendered by
+   * `formatSearchSuggestions`. It listed topics to filter by, and a topic
+   * filter narrows what the search found: after a search that found nothing,
+   * it finds nothing either (see `generateSearchSuggestions`).
+   */
   suggestedTopics: { id: TopicId; name: string }[];
   tips: string[];
 }
@@ -24,9 +30,10 @@ export interface SearchSuggestions {
 export interface SearchSuggestionOptions {
   /**
    * The backend that ran it, whose way of matching says which queries can
-   * find something. Unset, it is not known, and every suggestion is made, as
-   * every one was until 2026-09-28. `fluid-topics` is Fluid Topics searching
-   * the query as `searchDocumentation` sends it (see `queryForFluidTopics`).
+   * find something. Unset, it is not known, and every suggestion that depends
+   * on it is made, as until 2026-09-28. `fluid-topics` is Fluid Topics
+   * searching the query as `searchDocumentation` sends it (see
+   * `queryForFluidTopics`).
    */
   searchedBy?: SearchRanker | undefined;
   /**
@@ -44,6 +51,16 @@ export interface SearchSuggestionOptions {
    * of them, or the words without the quotes, find nothing either.
    */
   searchedLoosely?: boolean;
+  /**
+   * Whether it was filtered by a document type. When Fluid Topics finds
+   * nothing of one, it is searched again without it (`resolveSearchResults`
+   * in search-service.ts): a search it ran that found nothing found nothing
+   * without the document type either, and is not told to remove it. A
+   * SearchProvider is handed the document type, and may filter by it itself,
+   * so a search it answered is told to remove its filters. Until 2026-09-28
+   * no search was told so for a document type alone.
+   */
+  hasDocTypeFilter?: boolean;
 }
 
 /**
@@ -323,50 +340,6 @@ function findAlternativeKeywords(query: string, findsMore: (suggestion: string) 
   return Array.from(alternatives).filter(findsMore).slice(0, 5);
 }
 
-/**
- * Find relevant topics based on query keywords
- */
-function findRelevantTopics(query: string): { id: TopicId; name: string }[] {
-  const keywords = extractKeywords(query);
-  const scoredTopics: { id: TopicId; name: string; score: number }[] = [];
-
-  for (const [topicId, topic] of Object.entries(JAMF_TOPICS)) {
-    let score = 0;
-
-    // Check topic name
-    const topicNameLower = topic.name.toLowerCase();
-    for (const keyword of keywords) {
-      if (topicNameLower.includes(keyword)) {
-        score += 3;
-      }
-    }
-
-    // Check topic keywords
-    for (const topicKeyword of topic.keywords) {
-      const tkLower = topicKeyword.toLowerCase();
-      for (const keyword of keywords) {
-        if (tkLower.includes(keyword) || keyword.includes(tkLower)) {
-          score += 1;
-        }
-      }
-    }
-
-    if (score > 0) {
-      scoredTopics.push({
-        id: topicId as TopicId,
-        name: topic.name,
-        score
-      });
-    }
-  }
-
-  // Sort by score and return top 3
-  return scoredTopics
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map(({ id, name }) => ({ id, name }));
-}
-
 const REMOVE_FILTERS = 'Try removing filters to broaden your search';
 
 /**
@@ -378,14 +351,22 @@ const REMOVE_FILTERS = 'Try removing filters to broaden your search';
  * spelled right. Until 2026-09-28 such a query of five keywords or more was
  * told to use fewer. Filtered by product or version (`filteredUpstream`), it
  * is told first to remove the filter, as its words may be spelled right and
- * outside it: live that day, `policy` had no results with version 11.5.0. A
- * topic filter does not come first. It is applied to what Fluid Topics found,
- * and set aside when it removes all of it (`applyFiltersWithFallback` in
- * search-service.ts), so it is not what left nothing.
+ * outside it: live that day, `policy` had no results with version 11.5.0.
  *
- * The quotes are the ones Fluid Topics searched (see `straightenQuotes`).
+ * `hasFilters` is whether the search had a filter whose removal can find
+ * something (see `generateSearchSuggestions`), and `quoted` whether it had
+ * quotes whose removal can (see `hasQuotesToRemove`). A pair of 「」, 『』, ｢｣
+ * or « » that Fluid Topics was sent as typed, around the query's one word or
+ * in the search asked again without its phrases (`searchedLoosely`), is no
+ * phrase to it. Until 2026-09-29 such a pair was read as one when the query
+ * also had a word marked `+` or `-`: offline that day,
+ * `「enrollment xyzzyq」 +qwvzx`, which found nothing as a phrase and nothing
+ * again without it, was told in one reply that the query searched without
+ * those quotes found nothing either, and to try removing them.
  */
-function generateTips(query: string, hasFilters: boolean, filteredUpstream: boolean, anyWord: boolean): string[] {
+function generateTips(
+  query: string, hasFilters: boolean, filteredUpstream: boolean, anyWord: boolean, quoted: boolean,
+): string[] {
   const tips: string[] = [];
   const keywords = extractKeywords(query);
 
@@ -405,7 +386,7 @@ function generateTips(query: string, hasFilters: boolean, filteredUpstream: bool
     tips.push(REMOVE_FILTERS);
   }
 
-  if (straightenQuotes(query).includes('"') && !anyWord) {
+  if (quoted && !anyWord) {
     tips.push('Try removing quotes for a broader search');
   }
 
@@ -631,6 +612,16 @@ const MUST_OR_MUST_NOT = /"[^"]*"|(?:^|\s)[+-](?=\S)/u;
 const PHRASE = /"[^"]*"/u;
 
 /**
+ * Whether `query`, sent to Fluid Topics as `sent`, has quotes that removing
+ * can find more for (see `generateTips`): when Fluid Topics searched, a
+ * phrase in `sent`, and for any other backend, or none named, a double quote
+ * as a reader reads one (see `straightenQuotes`).
+ */
+function hasQuotesToRemove(query: string, sent: string, searchedBy: SearchRanker | undefined): boolean {
+  return searchedBy === 'fluid-topics' ? PHRASE.test(sent) : straightenQuotes(query).includes('"');
+}
+
+/**
  * The words of `text` as Fluid Topics reads them: its runs of letters, marks
  * and digits, in NFC and lowercased, with a Chinese, Japanese, Korean or Thai
  * run cut into its words (see `splitWords`). Fluid Topics splits at every
@@ -684,15 +675,30 @@ function wordsSearchedFor(text: string): Set<string> {
  * however few (see `simplifyQuery`). When its phrase was in 「」, 『』, ｢｣ or
  * « », Fluid Topics searched them so already (`searchedLoosely`), and its
  * words are those of that search.
+ *
+ * No topic is suggested, and a search Fluid Topics ran is not told to remove
+ * its topic. A topic is not sent to Fluid Topics: it filters what the search
+ * found, and is set aside when it would leave nothing
+ * (`applyFiltersWithFallback` in search-service.ts). So a search that found
+ * nothing found nothing without its topic, and filtering it by one cannot
+ * find more. Until 2026-09-28 it was told to filter by the topics its words
+ * suggested, and, when a topic was its only filter, to remove its filters.
+ * Live that day, `ssoxyzzyq` had no results and was told to try
+ * `topic="sso"`. With `topic: "sso"` it still had none, and was told to
+ * filter by `topic="sso"` again and to remove filters, which gave back the
+ * first search. A SearchProvider is handed the topic with the rest of the
+ * search, and may filter by it itself, so a search it answered is still told
+ * to remove it, as it is a document type (see `hasDocTypeFilter`).
  */
 export function generateSearchSuggestions(
   query: string,
   hasProductFilter = false,
   hasTopicFilter = false,
   language: string = DEFAULT_LOCALE,
-  { searchedBy, hasVersionFilter = false, searchedLoosely = false }: SearchSuggestionOptions = {},
+  { searchedBy, hasVersionFilter = false, searchedLoosely = false, hasDocTypeFilter = false }: SearchSuggestionOptions = {},
 ): SearchSuggestions {
-  const hasFilters = hasProductFilter || hasTopicFilter || hasVersionFilter;
+  const hasFilters = hasProductFilter || hasVersionFilter
+    || ((hasTopicFilter || hasDocTypeFilter) && searchedBy !== 'fluid-topics');
   const searchable = blankForeignWriting(query, language);
   const sent = (searchedLoosely ? looseQueryForFluidTopics(query)?.query : undefined) ?? queryForFluidTopics(query);
   const anyWord = searchedBy === 'fluid-topics' && !MUST_OR_MUST_NOT.test(sent);
@@ -700,12 +706,13 @@ export function generateSearchSuggestions(
   const findsMore = (suggestion: string): boolean =>
     searched === undefined || [...wordsSearchedFor(suggestion)].some(word => !searched.has(word));
   const simplified = simplifyQuery(searchable, PHRASE.test(sent));
+  const quoted = hasQuotesToRemove(searchable, sent, searchedBy);
 
   return {
     simplifiedQuery: simplified !== null && findsMore(simplified) ? simplified : null,
     alternativeKeywords: findAlternativeKeywords(searchable, findsMore),
-    suggestedTopics: findRelevantTopics(searchable),
-    tips: generateTips(searchable, hasFilters, hasProductFilter || hasVersionFilter, anyWord)
+    suggestedTopics: [],
+    tips: generateTips(searchable, hasFilters, hasProductFilter || hasVersionFilter, anyWord, quoted)
   };
 }
 
@@ -722,14 +729,6 @@ export function formatSearchSuggestions(query: string, suggestions: SearchSugges
 
   if (suggestions.alternativeKeywords.length > 0) {
     output += `**Alternative keywords**: ${suggestions.alternativeKeywords.map(k => `\`${k}\``).join(', ')}\n\n`;
-  }
-
-  if (suggestions.suggestedTopics.length > 0) {
-    output += '**Try filtering by topic**:\n';
-    for (const topic of suggestions.suggestedTopics) {
-      output += `- \`topic="${topic.id}"\` - ${topic.name}\n`;
-    }
-    output += '\n';
   }
 
   if (suggestions.tips.length > 0) {
