@@ -177,7 +177,9 @@ export function versionedTopicOf(result: SearchResult): VersionedTopic | null {
  * not whatever else a `version` field was left holding.
  *
  * The Fluid Topics path reads an entry's `version` metadata by this too
- * (search-service.ts), so the two paths agree on what a version is.
+ * (search-service.ts), so the two paths agree on what a version is. So, since
+ * 2026-09-28, do an article (article-service.ts) and the maps registry, which
+ * the TOC's and the resources' versions come from (maps-registry.ts).
  */
 export function namedVersion(version: string | undefined): string | null {
   return version !== undefined && VERSION_NUMBER.test(version) ? version : null;

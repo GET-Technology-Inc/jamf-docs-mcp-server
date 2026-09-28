@@ -1296,7 +1296,9 @@ const NOT_A_NO_RESULTS =
  *   temporary" by the rule the glossary follows too ({@link mayBeTemporary}).
  * - A clustered-search answer that is not in the shape this server reads:
  *   learn.jamf.com is named, and it may be temporary, as the glossary says of
- *   a table of contents that came back with no terms.
+ *   a table of contents that came back with no terms. So is a maps list from
+ *   learn.jamf.com that is not a list of maps, since 2026-09-28
+ *   ({@link describeMapsListFailure}).
  * - A SearchProvider, or a MapsProvider the maps list comes from: the error's
  *   own message, which is all this server knows of it, and no advice, which
  *   only the provider could give. Not learn.jamf.com, which was not asked.

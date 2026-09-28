@@ -640,8 +640,7 @@ describe('jamf_docs_get_article tool', () => {
   // --- Error handling -------------------------------------------------------
 
   describe('error handling', () => {
-    it('should return isError with 404 message and search suggestion', async () => {
-      // Provider returns null, and the FT API will be called — mock it to fail
+    it('should return isError with a provider\'s 404 message, and no search suggestion', async () => {
       nextResult = null;
       mockProvider.getArticleByIds.mockRejectedValueOnce(new Error('Article not found: 404 Not Found'));
 
@@ -649,9 +648,11 @@ describe('jamf_docs_get_article tool', () => {
 
       expect(result.isError).toBe(true);
       const text = getTextContent(result);
-      expect(text).toContain('Error fetching article');
-      // The tool appends a help text about searching when 404 occurs
-      expect(text).toContain('jamf_docs_search');
+      expect(text).toBe('Error fetching article: Article not found: 404 Not Found');
+      // The search suggestion follows an HttpError 404 at one of the
+      // article's own addresses, read from its status and its url, not a
+      // "404" in a provider's words: see get-article-not-found.test.ts.
+      expect(text).not.toContain('jamf_docs_search');
     });
 
     it('should return isError with rate limit help text', async () => {

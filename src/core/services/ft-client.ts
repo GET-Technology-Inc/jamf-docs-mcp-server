@@ -129,3 +129,33 @@ export async function fetchTopicMetadata(
   const url = mapsUrl(mapId, 'topics', contentId);
   return await http.getJson<FtTopicInfo>(url);
 }
+
+/**
+ * The path of a {@link fetchMapTopics}, {@link fetchTopicMetadata} or
+ * {@link fetchTopicContent} request.
+ */
+const TOPIC_REQUEST_PATH = /^\/api\/khub\/maps\/[^/]+\/topics(?:\/[^/]+(?:\/content)?)?$/;
+
+/**
+ * Whether `url` is one of the requests an article on learn.jamf.com is read
+ * by: its map's topic index ({@link fetchMapTopics}), which a url is resolved
+ * through, or its own metadata or body ({@link fetchTopicMetadata},
+ * {@link fetchTopicContent}). Each path segment is encoded, so none holds a
+ * `/`.
+ *
+ * Each answers 404 only when what it names is gone: the topic, or, for the
+ * index, the whole map. Live on 2026-09-28, `/api/khub/maps/NoSuchMapXyz123/topics`
+ * and `…/topics/NoSuchTopicXyz123` both answered 404. So a url into a map
+ * Jamf has retired, resolved through a maps list cached before it was, is
+ * answered 404 by the index, and a `mapId` + `contentId` pair into the same
+ * map by the topic: the same article, gone either way.
+ */
+export function isTopicRequestUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return parsed.origin === new URL(FT_API_BASE).origin && TOPIC_REQUEST_PATH.test(parsed.pathname);
+}

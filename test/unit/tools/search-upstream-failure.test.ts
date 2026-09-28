@@ -215,9 +215,12 @@ describe('a search that could not be completed is an error, not "No results foun
     expect(text).toContain('could not be read from the configured maps provider, which gave no reason.');
   });
 
-  it('when the maps list from learn.jamf.com is not a list: plain words, not "a network error"', async () => {
-    // The registry's `maps.map is not a function` is a TypeError, which
-    // describeFetchFailure would call a network error.
+  it('when the maps list from learn.jamf.com is not a list: learn.jamf.com, not "a network error"', async () => {
+    // Until 2026-09-28 the registry threw `maps.map is not a function`, a
+    // TypeError, which describeFetchFailure would call a network error; the
+    // search said "could not be read", and the server log. The registry now
+    // says what it is, as the search says of results it could not read
+    // (maps-list-unreadable.test.ts).
     const { ctx } = searchUpstream({ maps: malformed({}) });
 
     const text = expectFailed(
@@ -227,7 +230,8 @@ describe('a search that could not be completed is an error, not "No results foun
 
     expect(text).toBe(
       'Search for "setup manager" failed: the list of documentation maps, which the product ' +
-      `filter "jamf-pro" is built from, could not be read.\n\n${NOT_A_NO_RESULTS}\n\n${UNEXPECTED_FAILURE_ADVICE}`,
+      'filter "jamf-pro" is built from, came back from learn.jamf.com in a form this server could not read.' +
+      `\n\n${NOT_A_NO_RESULTS}\n\n${MAY_BE_TEMPORARY}`,
     );
   });
 

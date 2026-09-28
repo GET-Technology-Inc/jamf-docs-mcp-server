@@ -206,7 +206,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`) |
+| `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`，最長 2,048 個字元) |
 | `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供，可取代 `url` 或與其並用 |
 | `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供，可取代 `url` 或與其並用 |
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
@@ -244,7 +244,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆，網域限制同 `jamf_docs_get_article`) |
+| `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆，網域限制同 `jamf_docs_get_article`，每筆最長 2,048 個字元) |
 | `concurrency` | number | 否 | 最大平行請求數 1-5 (預設: 3) |
 | `language` | string | 否 | 文件語系 (預設: 各網址本身的語系)。會覆寫每個網址中的語系；對 concepts.jamf.com、support.jamf.com 的網址沒有作用 |
 | `maxTokens` | number | 否 | 所有文章的總 token 預算 100-50000 (預設: 5000) |

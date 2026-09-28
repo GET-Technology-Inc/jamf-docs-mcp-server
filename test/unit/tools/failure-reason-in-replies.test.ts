@@ -430,14 +430,11 @@ describe('a request that failed is described as the search and the glossary desc
     expect(resource).toBe(`${TOC}${expected}`);
   });
 
-  it('a 404 still gets get_article\'s advice', async () => {
+  it('a 404 of the maps list gets no advice about the article: see get-article-not-found.test.ts', async () => {
     const reply = await call(upstream({ mapsError: new HttpError(404, 'Not Found', MAPS_LIST) }),
       'jamf_docs_get_article', { url: PRETTY_URL });
 
-    expect(reply.text).toBe(
-      `${ARTICLE}HTTP 404 Not Found: ${MAPS_LIST}\n\n` +
-      'The article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.',
-    );
+    expect(reply.text).toBe(`${ARTICLE}HTTP 404 Not Found: ${MAPS_LIST}`);
   });
 });
 

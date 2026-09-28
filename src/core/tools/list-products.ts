@@ -23,7 +23,7 @@ import {
 } from '../constants/sources.js';
 import { listIntercomCollections } from '../services/intercom-service.js';
 import { describeMapsListFailure } from '../services/maps-list-failure.js';
-import { isRequestFailure } from '../utils/fetch-failure.js';
+import { isRequestFailure, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
 import { failureReason } from '../services/failure-reason.js';
 import { reportProgress } from '../utils/progress.js';
 
@@ -386,14 +386,18 @@ function registrySentences(
  * word it ({@link describeMapsListFailure}). A MapsProvider that threw is
  * named with its own reason, and learn.jamf.com, which was not asked, is not.
  * Whether a retry helps only the provider could say, so the retry sentence is
- * left out unless another source failed too. Anything else, such as a list
- * that is not a list, is "could not be read", with the server log for what
- * went wrong. Until 2026-09-28 the note said "The maps registry on
- * learn.jamf.com could not be read" and "This may be temporary" whatever the
- * registry threw in either half's read, and so named learn.jamf.com for a
- * MapsProvider that threw although no request had been sent there. A request
- * to learn.jamf.com that failed, including one that replaced a provider's
- * answer the registry could not use, keeps that note.
+ * left out unless another source failed too. A list from learn.jamf.com
+ * that is not a list of maps names learn.jamf.com, with the retry sentence.
+ * Until 2026-09-28 it was "could not be read", with the server log, and a
+ * list of maps without ids no failure at all. Anything else is "could not be
+ * read", with the server log for what went wrong.
+ *
+ * Until 2026-09-28 the note said "The maps registry on learn.jamf.com could
+ * not be read" and "This may be temporary" whatever the registry threw in
+ * either half's read, and so named learn.jamf.com for a MapsProvider that
+ * threw although no request had been sent there. A request to learn.jamf.com
+ * that failed, including one that replaced a provider's answer the registry
+ * could not use, keeps that note.
  */
 function describeIncomplete(
   listing: Pick<PublicationListing, 'unavailable' | 'unreadLocales'>,
@@ -419,7 +423,11 @@ function describeIncomplete(
       ? sectionsLost(source)
       : localesLost(source, listing.unreadLocales.get(source.id) ?? []));
   }
-  const advice = maps === undefined || (maps.advice === undefined && unreadSources.length > 0)
+  // The note's own retry sentence also for a list that came back from
+  // learn.jamf.com in a form this server could not read, which the search and
+  // the glossary say "may be temporary" of in theirs.
+  const advice = maps === undefined || maps.advice === MAY_BE_TEMPORARY
+    || (maps.advice === undefined && unreadSources.length > 0)
     ? 'This may be temporary: try again in a minute.'
     : maps.advice;
   if (advice !== undefined) { sentences.push(advice); }

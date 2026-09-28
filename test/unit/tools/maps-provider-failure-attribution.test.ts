@@ -447,15 +447,19 @@ describe('jamf_docs_glossary_lookup says which source the maps list failed at', 
     expect(unreachable.text).toContain('could not be fetched from learn.jamf.com (a network error: ECONNREFUSED).');
   });
 
-  it('a maps list from learn.jamf.com that is not a list: plain words, not "a network error"', async () => {
-    // The registry's `maps.map is not a function` is a TypeError, which
+  it('a maps list from learn.jamf.com that is not a list: learn.jamf.com, not "a network error"', async () => {
+    // The registry's `maps.map is not a function` was a TypeError, which
     // describeFetchFailure calls a network error. The search stopped saying
-    // so in #354.
+    // so in #354, and until 2026-09-28 both said "could not be read". The
+    // registry now says what it is (maps-list-unreadable.test.ts).
     const { ctx } = upstream({ maps: 'not a list' });
 
     const reply = await call(ctx, 'jamf_docs_glossary_lookup', { term: 'MDM' });
 
-    expect(reply.text).toBe(`${lead} could not be read.\n\n${NOT_A_NO_MATCH}\n\n${UNEXPECTED_FAILURE_ADVICE}`);
+    expect(reply.text).toBe(
+      `${lead} came back from learn.jamf.com in a form this server could not read.\n\n${NOT_A_NO_MATCH}` +
+      `\n\n${MAY_BE_TEMPORARY}`,
+    );
   });
 
   it('a maps fetch that failed in a shape that is not a request\'s: plain words, as the search has said since #354', async () => {
@@ -561,27 +565,48 @@ describe('jamf_docs_list_products says which source the maps registry failed at'
   });
 
   it('a maps list that could not be read for a reason that is not a request\'s: the search\'s and the glossary\'s words', async () => {
-    const message =
-      'The maps registry could not be read. The publication list has none of the documents the maps registry ' +
-      `names. ${STAND_INS} ${UNEXPECTED_FAILURE_ADVICE}`;
+    const aborted = incompleteOf(await call(
+      upstream({ maps: new DOMException('This operation was aborted', 'AbortError') }).ctx,
+      'jamf_docs_list_products', { responseFormat: 'json' },
+    ));
 
-    for (const maps of ['not a list', new DOMException('This operation was aborted', 'AbortError')] as const) {
-      const incomplete = incompleteOf(await call(upstream({ maps }).ctx, 'jamf_docs_list_products', {
-        responseFormat: 'json',
-      }));
-
-      expect(incomplete).toEqual({ unavailable: ['maps-registry'], message });
-    }
+    expect(aborted).toEqual({
+      unavailable: ['maps-registry'],
+      message: 'The maps registry could not be read. The publication list has none of the documents the maps ' +
+        `registry names. ${STAND_INS} ${UNEXPECTED_FAILURE_ADVICE}`,
+    });
 
     // With support.jamf.com down too, the one advice, which is true of both.
-    const incomplete = incompleteOf(await call(upstream({ maps: 'not a list', supportUp: false }).ctx,
-      'jamf_docs_list_products', { responseFormat: 'json' }));
+    const incomplete = incompleteOf(await call(
+      upstream({ maps: new DOMException('This operation was aborted', 'AbortError'), supportUp: false }).ctx,
+      'jamf_docs_list_products', { responseFormat: 'json' },
+    ));
 
     expect(incomplete?.unavailable).toEqual(['maps-registry', 'jamf-support']);
     expect(incomplete?.message).toMatch(/^The maps registry could not be read\. /);
     expect(incomplete?.message).toContain('support.jamf.com could not be read');
     expect(incomplete?.message.endsWith(`(\`jamf-support-*\`). ${UNEXPECTED_FAILURE_ADVICE}`)).toBe(true);
     expect(incomplete?.message).not.toMatch(/may be temporary/i);
+  });
+
+  it('a maps list from learn.jamf.com that is not a list: learn.jamf.com, and the note\'s retry sentence', async () => {
+    // Until 2026-09-28 "could not be read", and the server log, as above.
+    const retry = 'This may be temporary: try again in a minute.';
+
+    const alone = incompleteOf(await call(upstream({ maps: 'not a list' }).ctx, 'jamf_docs_list_products', {
+      responseFormat: 'json',
+    }));
+    const withSupport = incompleteOf(await call(upstream({ maps: 'not a list', supportUp: false }).ctx,
+      'jamf_docs_list_products', { responseFormat: 'json' }));
+
+    expect(alone).toEqual({
+      unavailable: ['maps-registry'],
+      message: 'The maps registry came back from learn.jamf.com in a form this server could not read. The ' +
+        `publication list has none of the documents the maps registry names. ${STAND_INS} ${retry}`,
+    });
+    expect(withSupport?.unavailable).toEqual(['maps-registry', 'jamf-support']);
+    expect(withSupport?.message.endsWith(`(\`jamf-support-*\`). ${retry}`)).toBe(true);
+    expect(withSupport?.message.match(/may be temporary/g)).toHaveLength(1);
   });
 
   it('learn.jamf.com failing reads as it did', async () => {

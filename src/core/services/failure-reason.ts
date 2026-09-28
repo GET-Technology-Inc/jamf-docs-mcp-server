@@ -50,9 +50,13 @@ export const NO_REASON_GIVEN = 'no reason was given';
  *   This server wrote it, and some quote an address whole: "Could not read a
  *   Jamf Support Knowledge Base article at <url>" is 131 to 437 characters
  *   for the 29 ja and zh-TW support.jamf.com articles captured on 2026-09-26,
- *   whose urls are percent-encoded.
- * - Anything else, such as a list from learn.jamf.com that is not a list
- *   ("maps.map is not a function"): its reason, cut as a provider's is.
+ *   whose urls are percent-encoded. A maps list from learn.jamf.com that is
+ *   not a list of maps is one: "learn.jamf.com answered with the list of
+ *   documentation maps in a form this server could not read". Until
+ *   2026-09-28 it was the JavaScript error reading it hit, "maps.map is not
+ *   a function".
+ * - Anything else, such as a JavaScript error of this server's own: its
+ *   reason, cut as a provider's is.
  *
  * Any of these that says nothing is {@link NO_REASON_GIVEN}.
  */

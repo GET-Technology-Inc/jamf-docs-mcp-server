@@ -24,6 +24,7 @@ import {
   fetchMapTopics,
   fetchTopicContent,
   fetchTopicMetadata,
+  isTopicRequestUrl,
 } from '../../../src/core/services/ft-client.js';
 import { FT_API_BASE } from '../../../src/core/constants.js';
 import { createTestHttpClient } from '../../helpers/mock-context.js';
@@ -224,6 +225,77 @@ describe('fetchTopicMetadata()', () => {
       `${FT_API_BASE}/api/khub/maps/map1/topics/content1`
     );
     expect(result.title).toBe('MDM');
+  });
+});
+
+// ============================================================================
+// isTopicRequestUrl()
+// ============================================================================
+
+describe('isTopicRequestUrl()', () => {
+  // get_article's "moved or deleted" advice follows a 404 only at one of
+  // these: see isArticleNotFound in get-article.ts.
+  const MAPS = `${FT_API_BASE}/api/khub/maps`;
+
+  it('is true of the three requests an article is read by, as the fetchers build them', async () => {
+    mockedGetJson.mockResolvedValue([]);
+    mockedGetText.mockResolvedValue('');
+
+    // Ids as live ones look: `~` and `_` are left as they are by the encoding.
+    await fetchMapTopics(http, 'ZlB_0jgM2084m7JxZgV1KQ');
+    await fetchTopicMetadata(http, 'JEc~s7Yc6BZM_8sDZDLNrg', 'EN07tYt99KYjHfrWJ8QdfA');
+    await fetchTopicContent(http, 'JEc~s7Yc6BZM_8sDZDLNrg', 'EN07tYt99KYjHfrWJ8QdfA');
+    const built = [...mockedGetJson.mock.calls, ...mockedGetText.mock.calls].map(([url]) => url);
+
+    expect(built).toEqual([
+      `${MAPS}/ZlB_0jgM2084m7JxZgV1KQ/topics`,
+      `${MAPS}/JEc~s7Yc6BZM_8sDZDLNrg/topics/EN07tYt99KYjHfrWJ8QdfA`,
+      `${MAPS}/JEc~s7Yc6BZM_8sDZDLNrg/topics/EN07tYt99KYjHfrWJ8QdfA/content`,
+    ]);
+    for (const url of built) {
+      expect(isTopicRequestUrl(url), url).toBe(true);
+    }
+  });
+
+  it('is true of an id that had to be encoded: it holds no `/`', () => {
+    expect(isTopicRequestUrl(`${MAPS}/a%2Fb/topics/c%2Fd/content`)).toBe(true);
+  });
+
+  it.each([
+    ['the maps list', MAPS],
+    ['a map', `${MAPS}/map1`],
+    ['a map\'s table of contents', `${MAPS}/map1/toc`],
+    ['the search', `${FT_API_BASE}/api/khub/clustered-search`],
+    ['a topic\'s content under another name', `${MAPS}/map1/topics/content1/html`],
+  ])('is false of another learn.jamf.com request: %s', (_label, url) => {
+    expect(isTopicRequestUrl(url)).toBe(false);
+  });
+
+  it.each([
+    ['a trailing segment', `${MAPS}/map1/topics/content1/content/extra`],
+    ['a segment after the index', `${MAPS}/map1/topics/content1/extra`],
+    ['a trailing slash', `${MAPS}/map1/topics/`],
+    ['a prefix before /api', `${FT_API_BASE}/proxy/api/khub/maps/map1/topics/content1`],
+    ['no map id', `${FT_API_BASE}/api/khub/maps//topics/content1`],
+  ])('is false of a path that only contains one: %s', (_label, url) => {
+    expect(isTopicRequestUrl(url)).toBe(false);
+  });
+
+  it.each([
+    ['another host', 'https://r2.example.test/api/khub/maps/map1/topics/content1'],
+    ['a learn.jamf.com subdomain', 'https://cdn.learn.jamf.com/api/khub/maps/map1/topics/content1'],
+    ['http://', `${FT_API_BASE.replace(/^https:/, 'http:')}/api/khub/maps/map1/topics/content1`],
+    ['another port', `${FT_API_BASE}:8443/api/khub/maps/map1/topics/content1`],
+  ])('is false of the same path on %s', (_label, url) => {
+    expect(isTopicRequestUrl(url)).toBe(false);
+  });
+
+  it.each([
+    ['an empty string', ''],
+    ['a path alone', '/api/khub/maps/map1/topics/content1'],
+    ['words', 'HTTP 404: /api/khub/maps/map1/topics/content1'],
+  ])('is false of what is not a URL: %s', (_label, url) => {
+    expect(isTopicRequestUrl(url)).toBe(false);
   });
 });
 
