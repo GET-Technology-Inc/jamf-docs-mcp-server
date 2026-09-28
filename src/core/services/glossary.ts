@@ -33,7 +33,8 @@ import type {
   FtTocNode,
   TruncatedContentInfo,
 } from '../types.js';
-import { fetchMapToc, fetchTopicContent } from './ft-client.js';
+import { fetchTopicContent } from './ft-client.js';
+import { forgetMapToc, loadMapToc } from './ft-internal-link.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import { cleanHtml, htmlToMarkdown } from './content-parser.js';
 import type { ServerContext } from '../types/context.js';
@@ -177,6 +178,13 @@ async function glossaryLocaleOf(
  * 2026-09-24 by serving a childless root for `/toc` once, then looking up
  * `MDM` and `Automated Device Enrollment` directly. The lookups that share
  * such a request share its answer, and the next one asks again.
+ *
+ * The TOC is read with the map's TOC index, which an article in the glossary
+ * map reads its breadcrumb and navigation from, so one download of `/toc`
+ * serves both, whichever reads it first (ft-internal-link.ts `loadMapToc`).
+ * Until 2026-09-28 this downloaded it for itself, and a lookup and an article
+ * in the glossary map downloaded it twice. A TOC with no terms in it is
+ * dropped from the index too, so that the next lookup still asks again.
  */
 async function fetchGlossaryToc(
   ctx: ServerContext,
@@ -186,7 +194,15 @@ async function fetchGlossaryToc(
   return await loadOnce(ctx.cache, key, async () => await readGlossaryToc(ctx, mapId, key));
 }
 
-/** The cached terms, or the TOC's, fetched and stored: what {@link fetchGlossaryToc} shares. */
+/**
+ * The cached terms, or the TOC's, read and stored: what
+ * {@link fetchGlossaryToc} shares.
+ *
+ * Terms are stored for `cacheTtl.article` only when this read downloaded the
+ * TOC. Read from an index an article cached earlier, they are as old as that
+ * index, and are read from it again by each lookup while it lasts, rather
+ * than kept for `cacheTtl.article` more.
+ */
 async function readGlossaryToc(
   ctx: ServerContext,
   mapId: string,
@@ -197,7 +213,13 @@ async function readGlossaryToc(
     return cached;
   }
 
-  const nodes = await fetchMapToc(ctx.http, mapId);
+  const readAt = Date.now();
+  const { nodes, fetchedAt } = await loadMapToc({
+    http: ctx.http,
+    cache: ctx.cache,
+    mapId,
+    ttl: ctx.config.cacheTtl.toc,
+  });
 
   // Flatten: collect all leaf terms (children of the root)
   const terms: FtTocNode[] = [];
@@ -218,7 +240,9 @@ async function readGlossaryToc(
     }
   }
 
-  if (terms.length > 0) {
+  if (terms.length === 0) {
+    await forgetMapToc(ctx.cache, mapId);
+  } else if (fetchedAt >= readAt) {
     await ctx.cache.set(key, terms, ctx.config.cacheTtl.article);
   }
   return terms;

@@ -42,6 +42,7 @@ import {
 } from './ft-internal-link.js';
 import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
 import { extractSections } from './tokenizer.js';
 import { namedVersion } from './search-result-versions.js';
@@ -146,7 +147,7 @@ export async function fetchArticleFromFt(
   const maxTokens = options.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS;
 
   const key = cacheKey('ft-article-v3', { mapId, contentId, articleUrl });
-  let cached = await cache.get<CachedArticle>(key);
+  const tocTtl = options.tocCacheTtl ?? options.cacheTtl;
 
   // The topic's own map index, loaded once on an article-cache miss and handed
   // to every lookup the article makes over it: the internal links, the
@@ -156,10 +157,23 @@ export async function fetchArticleFromFt(
   // so a TOC that will not load still costs those lookups their answers and
   // not the article. A hit leaves it unset: the navigation is then the only
   // lookup, and loads the index for itself.
-  let ownMap: SettledTocIndex | undefined;
-  const tocTtl = options.tocCacheTtl ?? options.cacheTtl;
+  //
+  // The article and that index, in one load however many calls want the
+  // topic at once (load-once.ts), with the cache read inside it. Until
+  // 2026-09-28 each call fetched the topic for itself: five calls at once for
+  // one topic requested its metadata five times and its body five times,
+  // offline and live. A call that joins is handed the index with the
+  // article, so its navigation is read off the same index, and a map TOC
+  // that would not load is neither asked for nor warned about again for it.
+  const { cached, ownMap } = await loadOnce(cache, key, async (): Promise<{
+    cached: CachedArticle;
+    ownMap?: SettledTocIndex;
+  }> => {
+    const hit = await cache.get<CachedArticle>(key);
+    if (hit !== null) {
+      return { cached: hit };
+    }
 
-  if (cached === null) {
     // Both requests go out at once. When both fail, the metadata's failure is
     // the one thrown, whichever answered first: until 2026-09-28 it was the
     // first to answer, so an unknown `contentId`, which both answer 404,
@@ -208,7 +222,6 @@ export async function fetchArticleFromFt(
         .filter((id) => id !== mapId)
         .map(async (id) => await settle(id, 'its internal links will render without a destination'))),
     ]);
-    ownMap = own;
     const resolveInternalLink = await buildInternalLinkResolver({
       http: options.http,
       cache,
@@ -239,7 +252,7 @@ export async function fetchArticleFromFt(
           contentId,
           ttl: tocTtl,
           logger: options.logger,
-          loaded: ownMap,
+          loaded: own,
         });
 
     // Metadata title is authoritative; parseArticle h1 is only a fallback
@@ -247,7 +260,7 @@ export async function fetchArticleFromFt(
       ? topicMeta.title
       : parsed.title;
 
-    cached = {
+    const article: CachedArticle = {
       title,
       parsed: { ...parsed, breadcrumb },
       displayUrl,
@@ -259,8 +272,9 @@ export async function fetchArticleFromFt(
       lastUpdated: lastEdition !== '' ? lastEdition : undefined,
       ownUrl,
     };
-    await cache.set(key, cached, options.cacheTtl);
-  }
+    await cache.set(key, article, options.cacheTtl);
+    return { cached: article, ownMap: own };
+  });
 
   const { title, parsed, displayUrl, product, version, lastUpdated, ownUrl } = cached;
 

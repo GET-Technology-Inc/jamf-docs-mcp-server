@@ -73,15 +73,19 @@ export const UNREAD_LISTING_TTL_MS = 60 * 1000;
  * @param sections for a source whose sections are declared, the ones to read.
  *   A support.jamf.com locale is read whole: its collection pages list its
  *   articles.
+ * @param stop once aborted, no listing page not yet asked for is: the
+ *   caller no longer wants the titles, and what this answers then is not all
+ *   of them.
  */
 export async function loadListedTitles(
   ctx: ServerContext,
   source: StaticDocSource,
   locale: string,
   sections: readonly StaticSection[] = source.sections,
+  stop?: AbortSignal,
 ): Promise<ListedTitles> {
   if (source.dynamicSections?.kind === 'intercom-collections') {
-    return await intercomTitles(ctx, source, locale);
+    return await intercomTitles(ctx, source, locale, stop);
   }
   const read = await Promise.all(sections
     .filter(section => section.titleList !== undefined)
@@ -132,7 +136,12 @@ function warnUnread(ctx: ServerContext, source: StaticDocSource, page: string, e
  * this too. The listing is read as `list_products` reads it, remembering a
  * failure for a minute: these titles are not what the call is for.
  */
-async function intercomTitles(ctx: ServerContext, source: StaticDocSource, locale: string): Promise<ListedTitles> {
+async function intercomTitles(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  locale: string,
+  stop: AbortSignal | undefined,
+): Promise<ListedTitles> {
   const home = `${source.baseUrl}/${locale}/`;
   let collections;
   try {
@@ -141,6 +150,7 @@ async function intercomTitles(ctx: ServerContext, source: StaticDocSource, local
     warnUnread(ctx, source, home, error);
     return { titles: new Map(), order: new Map(), unread: [home] };
   }
+  if (stop?.aborted === true) { return { titles: new Map(), order: new Map(), unread: [] }; }
 
   const trees = await Promise.allSettled(collections.map(async collection =>
     await fetchIntercomCollectionToc(ctx, source, collection)));

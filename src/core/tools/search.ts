@@ -1167,8 +1167,13 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
 
         await reportProgress(extra, { progress: 0, total: 3, message: 'Searching documentation...' });
 
-        // Perform search
-        const searchResult = await searchDocumentation(ctx, {
+        // The product documentation and the other sources are searched side
+        // by side. Until 2026-09-28 the other sources were searched only once
+        // this search had answered, so a cold search waited on the two in
+        // turn: live, 4.0-4.1 s for "enrollment" in en-US, of which the other
+        // sources' 14 requests, sent after learn.jamf.com's search had
+        // answered at 2.4-2.7 s, took 1.3-1.7 s.
+        const searching = searchDocumentation(ctx, {
           query: params.query,
           product: params.product as ProductId | undefined,
           topic: params.topic as TopicId | undefined,
@@ -1180,8 +1185,6 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           maxTokens: params.maxTokens ?? TOKEN_CONFIG.DEFAULT_MAX_TOKENS
         });
 
-        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
-
         // The non-Fluid-Topics sources, as their own block.
         //
         // Deliberately not merged into the ranking above. A SearchResult
@@ -1189,8 +1192,10 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
         // and the type has no field in which a SearchProvider could pass one
         // on. So there is nothing on either side to fuse two orderings on.
         // Interleaving them on an invented number would look authoritative
-        // and would not be. Never allowed to fail the search it runs beside.
-        const otherSources = await searchStaticSources(
+        // and would not be. Never allowed to fail the search it runs beside,
+        // and caught as it starts, so that it cannot reject unhandled while
+        // that search is awaited, or after that search has thrown.
+        const searchingOtherSources = searchStaticSources(
           ctx, params.query, params.language ?? DEFAULT_LOCALE,
         ).catch((error: unknown) => {
           ctx.logger.createLogger('search').warning(
@@ -1198,6 +1203,14 @@ export function registerSearchTool(server: McpServer, ctx: ServerContext): void 
           );
           return [];
         });
+
+        const searchResult = await searching;
+
+        await reportProgress(extra, { progress: 1, total: 3, message: 'Processing results...' });
+
+        // Awaited in every outcome below, a failed search's included (#354):
+        // what the other sources matched is in that reply too.
+        const otherSources = await searchingOtherSources;
 
         // A search that could not be completed is an error, in every format,
         // and never "No results found": its empty `results` say nothing about

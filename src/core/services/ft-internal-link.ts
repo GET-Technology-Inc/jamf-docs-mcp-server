@@ -24,8 +24,11 @@
  * the navigation, so every article reads its own map's, once, and hands it to
  * all three lookups; another map's TOC is fetched only when the topic links
  * into it. The index is shared by every article in the map, and a burst of
- * articles in a cold map shares one load of it, so the amortised cost is one
- * TOC fetch per map per cache TTL.
+ * articles in a cold map shares one load of it, and so, since 2026-09-28, are
+ * the TOC `jamf_docs_get_toc` serves and the glossary's terms, which are read
+ * from the `/toc` the index keeps as it was answered (see {@link loadMapToc}).
+ * So the amortised cost is one TOC fetch per map per cache TTL, whichever
+ * tool reads it.
  *
  * When the TOC cannot be loaded the lookup returns `undefined` and the parser
  * leaves the span as plain text. That is deliberate: a tocId cannot be turned
@@ -112,7 +115,9 @@ export function collectInternalLinkMapIds(html: string): string[] {
  * entries written under an older shape hold only the fields that shape had, so
  * they answer a newer lookup with nothing — a v1 entry makes every topic look
  * parentless, and a v2 entry makes every topic look like a leaf with no
- * siblings. Bump it whenever a field is added.
+ * siblings. Bump it whenever a field is added, unless an entry without the
+ * field is read as a miss, as one without `nodes` and `fetchedAt` is (see
+ * {@link readOrBuildMapTocIndex}).
  */
 interface MapTocIndex {
   /** `tocId -> absolute display URL`, for placing internal links. */
@@ -143,6 +148,23 @@ interface MapTocIndex {
   tocIdByContentId: Record<string, string>;
   /** The tocIds of the roots, so a root topic still has siblings. */
   rootTocIds: string[];
+
+  /**
+   * The map's TOC as `/toc` answered it, which `jamf_docs_get_toc` serves
+   * (toc-service.ts) and, in the glossary's map, the glossary reads its terms
+   * from (glossary.ts), so that one download of `/toc` serves them all.
+   *
+   * Until 2026-09-28 get_toc downloaded it for itself, and a TOC and an
+   * article in one map downloaded it twice, whichever came first and when
+   * both came at once: Jamf Pro's is 188 KB, and took 1.1 s live. Keeping it
+   * here grew Jamf Pro's entry from 416 KB to 604 KB that day.
+   */
+  nodes: FtTocNode[];
+  /**
+   * `Date.now()` when `/toc` was downloaded, which the index's age counts
+   * from, and the age of the tree get_toc builds from `nodes` too.
+   */
+  fetchedAt: number;
 }
 
 function indexTocNodes(
@@ -242,6 +264,15 @@ async function loadMapTocIndex(
  * read the cache first and looked for a load second could miss both, reading
  * before the index was written and looking after the load had cleared, and
  * fetch the TOC again.
+ *
+ * An entry without `nodes` and `fetchedAt`, which every build wrote until
+ * 2026-09-28, is read as a miss and built again, once per map, as a move to a
+ * new namespace would have it be. So every load of the index answers with the
+ * TOC, whichever tool started it: a get_toc call that joins an article's load
+ * has what it came for. An entry downloaded `ttl` or more ago is read as a
+ * miss too, which only a reader given a shorter TTL than the one that stored
+ * it finds: get_toc, say, beside an embedder's `fetchArticleFromFt` given a
+ * longer `tocCacheTtl`.
  */
 async function readOrBuildMapTocIndex(
   http: HttpClient,
@@ -250,11 +281,13 @@ async function readOrBuildMapTocIndex(
   key: CacheKey,
   ttl: number | undefined,
 ): Promise<MapTocIndex> {
-  const cached = await cache.get<MapTocIndex>(key);
-  if (cached !== null) {
+  const cached = await cache.get<MapTocIndex | Omit<MapTocIndex, 'nodes' | 'fetchedAt'>>(key);
+  if (cached !== null && 'fetchedAt' in cached && (ttl === undefined || Date.now() - cached.fetchedAt < ttl)) {
     return cached;
   }
 
+  const nodes = await fetchMapToc(http, mapId);
+  const fetchedAt = Date.now();
   const index: MapTocIndex = {
     urlByTocId: {},
     ancestorsByContentId: {},
@@ -263,10 +296,54 @@ async function readOrBuildMapTocIndex(
     parentTocId: {},
     tocIdByContentId: {},
     rootTocIds: [],
+    nodes,
+    fetchedAt,
   };
-  indexTocNodes(await fetchMapToc(http, mapId), index, []);
+  indexTocNodes(nodes, index, []);
   await cache.set(key, index, ttl);
   return index;
+}
+
+/** What {@link loadMapToc} reads a map's TOC with. */
+export interface MapTocOptions {
+  http: HttpClient;
+  cache: CacheProvider;
+  mapId: string;
+  /** TTL for the cached index the TOC is kept in; `undefined` uses the cache default. */
+  ttl?: number | undefined;
+}
+
+/** A map's TOC as `/toc` answered it, and when it was downloaded. */
+export interface MapToc {
+  nodes: FtTocNode[];
+  /** `Date.now()` when `/toc` was downloaded, which the TOC's age counts from. */
+  fetchedAt: number;
+}
+
+/**
+ * A map's TOC as `/toc` answered it, from the map's TOC index (see
+ * {@link MapTocIndex.nodes}): what `jamf_docs_get_toc` reads, and the
+ * glossary's list of terms is read from.
+ *
+ * One download of `/toc` serves the index and each of them, whichever of
+ * get_toc, the glossary and an article in the map reads it first, and calls
+ * made at once share it. A TOC that will not load throws what the download
+ * threw, to every call that shared it.
+ */
+export async function loadMapToc(options: MapTocOptions): Promise<MapToc> {
+  const { http, cache, mapId, ttl } = options;
+  const { nodes, fetchedAt } = await loadMapTocIndex(http, cache, mapId, ttl);
+  return { nodes, fetchedAt };
+}
+
+/**
+ * Drop a map's TOC index, so that the next reader of the map downloads `/toc`
+ * again: for a TOC its reader could not use, as the glossary cannot use one
+ * with no terms in it (glossary.ts). Kept, such a TOC would answer that
+ * reader, and every other, until the index expired.
+ */
+export async function forgetMapToc(cache: CacheProvider, mapId: string): Promise<void> {
+  await cache.delete(cacheKey('ft-tocindex-v3', { mapId }));
 }
 
 // ─── Loading once per article ──────────────────────────────────

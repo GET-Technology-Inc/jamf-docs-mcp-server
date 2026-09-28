@@ -32,11 +32,14 @@
  *
  * What the guard does not check is the shape of a hit. A value under a key
  * is what core stored there: a namespace whose value changes shape moves to a
- * new key (`cache-key.ts`, `ft-search-v3` and the other `-vN`), and the two
- * entries that can hold a stand-in answer, the product catalogue and its
- * availability, check what they read already. A store that hands back
- * something core did not store under that key is broken in a way no guard
- * can tell from a hit.
+ * new key (`cache-key.ts`, `ft-search-v3` and the other `-vN`), unless its
+ * reader tells the shapes apart itself, as since 2026-09-28 the map TOC
+ * index does (`ft-tocindex-v3`, read as a miss without the `/toc` it now
+ * keeps) and a table of contents does (`ft-toc-v2`, whose download time is
+ * optional). The two entries that can hold a stand-in answer, the product
+ * catalogue and its availability, check what they read already. A store that
+ * hands back something core did not store under that key is broken in a way
+ * no guard can tell from a hit.
  */
 
 import type { CacheKey } from './cache-key.js';
