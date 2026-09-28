@@ -7,15 +7,19 @@ import { parseCliArgs } from '../../../src/transport/index.js';
 
 describe('parseCliArgs', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  /** What parseCliArgs wrote to stderr in the case. */
+  let printed: string[];
 
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((_code?: string | number | null) => {
       throw new Error(`process.exit(${String(_code)})`);
     });
+    printed = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => { printed.push(String(line)); });
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
   describe('default arguments', () => {
@@ -56,12 +60,11 @@ describe('parseCliArgs', () => {
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
-    it('should call process.exit(1) when --transport has no following value', () => {
-      // When --transport is the last arg, next is undefined, so it falls through
-      // and transport stays as default 'stdio' (no error for missing value in current impl)
+    it('ignores --transport with no following value, and says so', () => {
+      // Until 2026-09-28 without a word.
       const result = parseCliArgs(['--transport']);
-      // The current implementation silently ignores --transport with no value
       expect(result.transport).toBe('stdio');
+      expect(printed).toEqual(['[WARNING] [transport] Ignoring --transport, which was given no value.']);
     });
   });
 
@@ -122,6 +125,81 @@ describe('parseCliArgs', () => {
       const result = parseCliArgs(['--host', 'my.server.local']);
       expect(result.host).toBe('my.server.local');
     });
+
+    // Node listens on every interface for an empty host: until 2026-09-28,
+    // `--host ''` listened on `::`.
+    it.each([[['--host', '']], [['--host', '  ']], [['--host=']]])('refuses a blank host, %j', (argv) => {
+      expect(() => parseCliArgs(argv)).toThrow('process.exit(1)');
+      expect(printed.join('\n')).toContain('Must not be blank, which would listen on every interface.');
+    });
+  });
+
+  describe('--name=value', () => {
+    // Until 2026-09-28 this form was ignored without a word, and the server
+    // started on stdio.
+    it('reads each option written with =', () => {
+      const result = parseCliArgs(['--transport=http', '--port=8080', '--host=0.0.0.0']);
+      expect(result).toEqual({ transport: 'http', port: 8080, host: '0.0.0.0' });
+      expect(printed).toEqual([]);
+    });
+
+    it('checks the value as it does the one after a space', () => {
+      expect(() => parseCliArgs(['--port=8080x'])).toThrow('process.exit(1)');
+      expect(() => parseCliArgs(['--transport=grpc'])).toThrow('process.exit(1)');
+      expect(printed).toEqual([
+        '[ERROR] [transport] Invalid port: "8080x". Must be a whole number from 1 to 65535.',
+        '[ERROR] [transport] Invalid transport: "grpc". Must be "stdio" or "http".',
+      ]);
+    });
+
+    it.each(['--port=', '--transport='])('refuses %j, which is given an empty value', (arg) => {
+      expect(() => parseCliArgs([arg])).toThrow('process.exit(1)');
+    });
+
+    it('reads the value up to the end, = included', () => {
+      expect(() => parseCliArgs(['--port=80=80'])).toThrow('process.exit(1)');
+      expect(printed).toEqual(['[ERROR] [transport] Invalid port: "80=80". Must be a whole number from 1 to 65535.']);
+    });
+
+    it('does not take the next argument as the value', () => {
+      const result = parseCliArgs(['--host=127.0.0.1', '--port', '9000']);
+      expect(result).toEqual({ transport: 'stdio', port: 9000, host: '127.0.0.1' });
+    });
+  });
+
+  describe('an argument it does not know', () => {
+    // Until 2026-09-28 each was ignored without a word, so a misspelt option
+    // left the default in place.
+    it('is ignored, and each one said so', () => {
+      const result = parseCliArgs(['--prot', '8080']);
+      expect(result.port).toBe(3000);
+      expect(printed).toEqual([
+        '[WARNING] [transport] Ignoring unknown argument "--prot". The options are --transport, --port, --host.',
+        '[WARNING] [transport] Ignoring unknown argument "8080". The options are --transport, --port, --host.',
+      ]);
+    });
+
+    it.each(['--Port=8080', '-p', '--', 'http'])('such as %j, is ignored and said so', (arg) => {
+      expect(parseCliArgs([arg])).toEqual({ transport: 'stdio', port: 3000, host: '127.0.0.1' });
+      expect(printed).toEqual([
+        `[WARNING] [transport] Ignoring unknown argument "${arg}". The options are --transport, --port, --host.`,
+      ]);
+    });
+
+    it('does not stop the options after it from being read', () => {
+      expect(parseCliArgs(['--verbose', '--port', '9000']).port).toBe(9000);
+      expect(printed).toHaveLength(1);
+    });
+
+    it('is not an option\'s value, even one that begins with dashes', () => {
+      expect(parseCliArgs(['--host', '--weird']).host).toBe('--weird');
+      expect(printed).toEqual([]);
+    });
+
+    it.each(['--port', '--host'])('is not %j given no value, which is ignored and said so too', (arg) => {
+      expect(parseCliArgs([arg])).toEqual({ transport: 'stdio', port: 3000, host: '127.0.0.1' });
+      expect(printed).toEqual([`[WARNING] [transport] Ignoring ${arg}, which was given no value.`]);
+    });
   });
 
   describe('combined flags', () => {
@@ -132,6 +210,7 @@ describe('parseCliArgs', () => {
         '--host', '0.0.0.0',
       ]);
       expect(result).toEqual({ transport: 'http', port: 8080, host: '0.0.0.0' });
+      expect(printed).toEqual([]);
     });
 
     it('should use defaults for flags that are absent when others are provided', () => {

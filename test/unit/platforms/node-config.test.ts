@@ -14,7 +14,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MockInstance } from 'vitest';
+import type * as ChildProcessModule from 'child_process';
 import * as fs from 'fs';
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import type * as OsModule from 'os';
 import * as path from 'path';
 
@@ -29,7 +32,8 @@ import * as path from 'path';
  * true. So each case describes the layout it needs. By default every path
  * exists, none is a symlink, the temp directory is `/tmp` and the home
  * directory `/home/me`, none of which config.ts rejected before it resolved
- * anything.
+ * anything. Since 2026-09-28 it also asks getconf for macOS's per-user temp
+ * directory; by default that fails, as on any other system.
  *
  * POSIX paths only, like the rest of this file (CI runs on Linux).
  */
@@ -41,6 +45,13 @@ interface Disk {
   tmpdir: string;
   /** `undefined` makes `os.homedir()` throw, as Node's does with no $HOME and no passwd entry. */
   homedir: string | undefined;
+  /**
+   * What `getconf DARWIN_USER_TEMP_DIR` prints, macOS's per-user temp
+   * directory. `undefined` makes it fail, as it does on any other system.
+   */
+  darwinUserTempDir: string | undefined;
+  /** Each command config.ts ran, as `file arg…`. */
+  ran: string[];
 }
 
 const disk = vi.hoisted((): Disk => ({
@@ -48,6 +59,8 @@ const disk = vi.hoisted((): Disk => ({
   existing: undefined,
   tmpdir: '/tmp',
   homedir: '/home/me',
+  darwinUserTempDir: undefined,
+  ran: [],
 }));
 
 vi.mock('fs', async importOriginal => {
@@ -81,6 +94,18 @@ vi.mock('os', async importOriginal => ({
   },
 }));
 
+vi.mock('child_process', async importOriginal => ({
+  ...await importOriginal<typeof ChildProcessModule>(),
+  execFileSync: (file: string, args: readonly string[]): string => {
+    disk.ran.push([file, ...args].join(' '));
+    if (disk.darwinUserTempDir === undefined) {
+      throw Object.assign(new Error('Command failed: getconf DARWIN_USER_TEMP_DIR'), { status: 1 });
+    }
+    // getconf ends it with a slash and a newline.
+    return `${disk.darwinUserTempDir}/\n`;
+  },
+}));
+
 import { createNodeConfig, getEnvNumber } from '../../../src/platforms/node/config.js';
 import { createDefaultConfig, defaultUserAgent } from '../../../src/core/config.js';
 import type { ServerConfig } from '../../../src/core/config.js';
@@ -100,6 +125,14 @@ const ENV_KEYS = [
 /** Stands in for process.cwd(). Never touched on disk: `disk` above answers config.ts's lookups. */
 const PROJECT = '/work/proj';
 
+/** The real `process.platform`, put back after each case. */
+const PLATFORM = Object.getOwnPropertyDescriptor(process, 'platform');
+
+/** Stands in for `process.platform` until the case ends. */
+function onPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+}
+
 let stderr: MockInstance<typeof console.error>;
 
 beforeEach(() => {
@@ -112,6 +145,8 @@ beforeEach(() => {
   disk.existing = undefined;
   disk.tmpdir = '/tmp';
   disk.homedir = '/home/me';
+  disk.darwinUserTempDir = undefined;
+  disk.ran = [];
   stderr = vi.spyOn(console, 'error').mockImplementation(() => {
     // Swallow the [WARNING] lines; the spy records them.
   });
@@ -120,6 +155,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  if (PLATFORM !== undefined) { Object.defineProperty(process, 'platform', PLATFORM); }
 });
 
 /** Warnings config.ts wrote to stderr during the case. */
@@ -322,6 +358,59 @@ describe('USER_AGENT', () => {
     vi.stubEnv('USER_AGENT', 'Agent\t1.0 (compatible)');
     expect(userAgent()).toBe('Agent\t1.0 (compatible)');
   });
+
+  // Until 2026-09-28 any of these was taken, and every request then failed
+  // before it was sent, reported as a network error that might be temporary.
+  const UNSENDABLE: [label: string, raw: string, codePoint: string][] = [
+    ['a CJK character', 'ops-bot (客戶)', 'U+5BA2'],
+    ['an emoji', 'ops-bot 😀', 'U+1F600'],
+    ['the first character past Latin-1', 'ops-bot \u0100', 'U+0100'],
+    // Not NUL, which no environment variable can hold: process.env ends the value there.
+    ['a bell', 'ops-bot\u0007', 'U+0007'],
+    ['ESC', 'ops-bot \u001b[31m', 'U+001B'],
+    ['DEL', 'ops-bot\u007f', 'U+007F'],
+    ['a vertical tab', 'ops-bot\u000bx', 'U+000B'],
+  ];
+
+  /** Latin-1, which a header value can carry. */
+  const SENDABLE = ['ops-bot (Müller)', 'ops-bot\u00a0x', 'ops-bot \u00ff', 'Agent\t1.0'];
+
+  it.each(UNSENDABLE)('falls back to the default for one with %s, which a header cannot carry, and says so once', (_label, raw, codePoint) => {
+    vi.stubEnv('USER_AGENT', raw);
+    expect(userAgent()).toBe(defaultUserAgent(PKG_VERSION));
+    expect(warnings()).toEqual([
+      `[WARNING] [config] USER_AGENT ${JSON.stringify(raw)} contains ${codePoint}, which an HTTP header `
+      + `cannot carry, so no request could be sent. Using default "${defaultUserAgent(PKG_VERSION)}".`,
+    ]);
+  });
+
+  it.each(SENDABLE)('keeps %j, which is Latin-1, without a warning', raw => {
+    vi.stubEnv('USER_AGENT', raw);
+    expect(userAgent()).toBe(raw);
+    expect(warnings()).toEqual([]);
+  });
+
+  it('refuses exactly what fetch cannot send', async () => {
+    // A local server, which the no-network guard lets through, to see what
+    // fetch really sends.
+    const server = http.createServer((request, response) => { response.end(request.headers['user-agent']); });
+    await new Promise<void>(resolve => { server.listen(0, '127.0.0.1', resolve); });
+    const url = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}/`;
+    const send = async (agent: string): Promise<string> =>
+      await (await fetch(url, { headers: { 'User-Agent': agent } })).text();
+    try {
+      for (const raw of SENDABLE) {
+        expect(await send(raw)).toBe(raw);
+      }
+      for (const [, raw] of UNSENDABLE) {
+        await expect(send(raw), raw).rejects.toThrow(TypeError);
+        vi.stubEnv('USER_AGENT', raw);
+        expect(await send(userAgent())).toBe(defaultUserAgent(PKG_VERSION));
+      }
+    } finally {
+      server.close();
+    }
+  });
 });
 
 // ============================================================================
@@ -446,13 +535,17 @@ describe('CACHE_DIR', () => {
       expect(warnings()).toEqual([]);
     });
 
-    it('leaves the default alone even when the working directory is a system directory', () => {
-      // `.cache` is also what a rejected value falls back to, so rejecting it
-      // could only warn and hand back the same thing.
-      vi.spyOn(process, 'cwd').mockReturnValue('/etc');
-      expect(cacheDir(undefined)).toBe('.cache');
-      expect(warnings()).toEqual([]);
-    });
+    it.each([undefined, '', '   ', '\t\n'])(
+      'leaves the default alone for %j even when the working directory is a system directory',
+      raw => {
+        // `.cache` is also what a rejected value falls back to, so rejecting it
+        // could only warn and hand back the same thing. A blank value is unset
+        // since 2026-09-28, and checked no more than an unset one.
+        vi.spyOn(process, 'cwd').mockReturnValue('/etc');
+        expect(cacheDir(raw)).toBe('.cache');
+        expect(warnings()).toEqual([]);
+      },
+    );
   });
 
   describe('a path is judged by where it is, not how it is spelled', () => {
@@ -551,6 +644,56 @@ describe('CACHE_DIR', () => {
         expect(warnings()).toEqual([]);
       },
     );
+
+    describe('when the host passes no TMPDIR', () => {
+      // An MCP SDK stdio transport passes the server only HOME, LOGNAME, PATH,
+      // SHELL, TERM and USER, and os.tmpdir() is then /tmp. Until 2026-09-28
+      // the per-user temp directory was rejected then, measured that day on
+      // the built entry, and the server fell back to `.cache`.
+      beforeEach(() => {
+        onPlatform('darwin');
+        disk.tmpdir = '/tmp';
+        disk.darwinUserTempDir = TMPDIR;
+      });
+
+      it.each([`${TMPDIR}/jamf-docs`, `${REAL_TMPDIR}/jamf-docs`, TMPDIR])(
+        'accepts %j, in the per-user temp directory getconf names',
+        raw => {
+          expect(cacheDir(raw)).toBe(raw);
+          expect(warnings()).toEqual([]);
+          expect(disk.ran).toEqual(['/usr/bin/getconf DARWIN_USER_TEMP_DIR']);
+        },
+      );
+
+      it.each([
+        // Its parent, a sibling of it, another user's, and the rest of /var.
+        [path.dirname(TMPDIR), path.dirname(REAL_TMPDIR)],
+        [`${path.dirname(TMPDIR)}/C/jamf-docs`, `${path.dirname(REAL_TMPDIR)}/C/jamf-docs`],
+        ['/var/folders/zz/other/T/jamf-docs', '/private/var/folders/zz/other/T/jamf-docs'],
+        ['/var/db/jamf', '/private/var/db/jamf'],
+      ])('still rejects %j (really %s)', (raw, location) => {
+        expect(cacheDir(raw)).toBe('.cache');
+        expect(warnings()).toEqual([sensitive(raw, location)]);
+      });
+
+      it('rejects it, as before, when getconf fails', () => {
+        disk.darwinUserTempDir = undefined;
+        expect(cacheDir(`${TMPDIR}/jamf-docs`)).toBe('.cache');
+        expect(warnings()).toEqual([sensitive(`${TMPDIR}/jamf-docs`, `${REAL_TMPDIR}/jamf-docs`)]);
+      });
+
+      it('runs getconf only for a path in a system directory', () => {
+        expect(cacheDir('/Users/me/Library/Caches/jamf-docs')).toBe('/Users/me/Library/Caches/jamf-docs');
+        expect(cacheDir('/tmp/jamf-docs')).toBe('/tmp/jamf-docs');
+        expect(disk.ran).toEqual([]);
+      });
+
+      it('does not run getconf on another system', () => {
+        onPlatform('linux');
+        expect(cacheDir(`${TMPDIR}/jamf-docs`)).toBe('.cache');
+        expect(disk.ran).toEqual([]);
+      });
+    });
   });
 
   describe('on ostree systems, where /home is a symlink to /var/home', () => {

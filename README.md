@@ -504,8 +504,11 @@ node dist/index.js --transport http --port 8080 --host 127.0.0.1
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--transport` | `stdio` | Transport mode: `stdio` or `http` |
-| `--port` | `3000` | Port to listen on (1–65535) |
-| `--host` | `127.0.0.1` | Host to bind to |
+| `--port` | `3000` | Port to listen on, a whole number from 1 to 65535. Any other value stops the server with an error |
+| `--host` | `127.0.0.1` | Host to bind to. A blank value stops the server with an error |
+
+Each can also be written `--port=8080`. An argument the server does not know, such as a
+misspelt `--prot`, or an option given no value, is ignored, with a warning on stderr.
 
 > **Security note**: The default host `127.0.0.1` restricts access to localhost only. Binding to `0.0.0.0` exposes the server to the network; only do this in controlled environments.
 
@@ -567,8 +570,9 @@ on every request, which defeats the limit.
 ## Configuration
 
 All settings are optional. Set them as environment variables before launching the server.
-A numeric setting must be a whole number within its range. Any other value is ignored,
-with a warning on stderr, and the default is used; an empty one counts as unset.
+A setting that is empty, or only whitespace, counts as unset. A numeric setting must be a
+whole number within its range. Any other value is ignored, with a warning on stderr, and
+the default is used.
 
 ### Cache Settings
 
@@ -592,11 +596,13 @@ point it at a project root or a directory other tools use.
   `/.cache` can't be created, so nothing reaches the disk.
 - A path inside `/etc`, `/usr`, `/var`, `/sys`, `/proc`, `/dev`, `/sbin` or
   `/bin` is rejected, relative or absolute. Symlinks are resolved first, so
-  on macOS `/private/etc/…` is rejected just like `/etc/…`. An unset
-  `CACHE_DIR` isn't checked.
-- Your home directory and the OS temp directory are allowed even when they're
-  under one of those. `$TMPDIR` on macOS is under `/private/var`, and on
-  ostree systems such as Fedora Silverblue `/home` is a link to `/var/home`.
+  on macOS `/private/etc/…` is rejected just like `/etc/…`. An unset or
+  blank `CACHE_DIR` isn't checked.
+- Your home directory and the server's temp directory (`TMPDIR`) are allowed
+  even when they're under one of those. On macOS so is your per-user temp
+  directory, under `/private/var/folders`, even when the host does not pass
+  the server `TMPDIR`, as an MCP SDK stdio client does not. On ostree systems
+  such as Fedora Silverblue `/home` is a link to `/var/home`.
 - A rejected value falls back to `.cache`, with a warning on stderr. That is
   relative to the working directory too, so if the working directory is
   inside a system directory, the fallback is as well.
@@ -655,7 +661,7 @@ Applied to every outbound request to a documentation host.
 | `MAX_RETRIES` | `0` | 0–10 | Retry attempts after the first. Only 429, 5xx, network errors and timeouts are retried, with exponential backoff and `Retry-After` honoured. `0` disables retrying |
 | `RETRY_DELAY` | `1000` | 100–30000 ms | Base for the backoff between retries. No effect while `MAX_RETRIES` is `0` |
 | `RATE_LIMIT_DELAY` | `0` | 0–10000 ms | Minimum gap between outbound requests, retries included. `0` lets parallel fetches stay parallel |
-| `USER_AGENT` | `jamf-docs-mcp-server/<version> (+<repo url>)` | — | Sent on every request so this client is identifiable to Jamf |
+| `USER_AGENT` | `jamf-docs-mcp-server/<version> (+<repo url>)` | Latin-1 | Sent on every request so this client is identifiable to Jamf. An HTTP header can carry no character above U+00FF and no control character but a tab. Line breaks are removed; a value with any other such character is ignored, with a warning on stderr |
 
 ### HTTP Transport Settings
 

@@ -10,9 +10,10 @@
  * `…/maps/{mapId}/topics/{contentId}`.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { resourceText } from '../helpers/fixtures.js';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
+import { serverCacheDir, type ServerCacheDir } from '../helpers/server-cache-dir.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import path from 'path';
@@ -25,13 +26,17 @@ function flatten(nodes: TocNode[]): TocNode[] {
 
 describe('an entry of the table-of-contents resource, fetched by its pair', () => {
   let client: Client;
+  let cache: ServerCacheDir | undefined;
 
   beforeAll(async () => {
     requireFreshBuild();
+    // Not the working directory's .cache; see server-cache-dir.ts.
+    cache = serverCacheDir();
     client = new Client({ name: 'test-client', version: '1.0.0' });
     await client.connect(new StdioClientTransport({
       command: 'node',
       args: [path.resolve(process.cwd(), 'dist/index.js')],
+      env: cache.env,
     }));
   });
 
@@ -39,6 +44,11 @@ describe('an entry of the table-of-contents resource, fetched by its pair', () =
     // See mcp-server.test.ts: `beforeAll` can throw before `client` is set.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     await client?.close();
+    cache?.remove();
+  });
+
+  it('keeps its cache in the directory it was given, not the working directory', async () => {
+    await vi.waitFor(() => { expect(cache?.swept()).toBe(true); }, { timeout: 5_000 });
   });
 
   it('fetches the last entry of Jamf Pro\'s table of contents, by the body\'s mapId and its contentId', async () => {
