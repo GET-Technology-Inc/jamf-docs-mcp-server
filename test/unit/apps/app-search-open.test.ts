@@ -105,14 +105,16 @@ describe('the built bundle', () => {
 
   it('opens a result with the arguments articleArgs builds from what the click carries', () => {
     // Before 2026-09-28 this was `("jamf_docs_get_article",{url:r},!0,…)`.
+    // The host's language follows them, which `call` used to add to every
+    // call: see app-view-language.test.ts.
     const click = /let\{url:([\w$]+),mapId:([\w$]+),contentId:([\w$]+)\}=[\w$]+\.dataset;/.exec(APP_HTML);
     expect(click).not.toBeNull();
     const url = literal(click?.[1] ?? '');
     const mapId = literal(click?.[2] ?? '');
     const contentId = literal(click?.[3] ?? '');
     const call = new RegExp(
-      `"jamf_docs_get_article",([\\w$]+)\\(\\{url:${url},mapId:${mapId},contentId:${contentId}\\},` +
-      '[\\w$]+\\.language\\),!0,',
+      `"jamf_docs_get_article",\\{\\.\\.\\.([\\w$]+)\\(\\{url:${url},mapId:${mapId},contentId:${contentId}\\},` +
+      '([\\w$]+)\\.language\\),\\.\\.\\.\\2\\},!0,',
     ).exec(APP_HTML);
     expect(call).not.toBeNull();
     expect(APP_HTML).toMatch(new RegExp(

@@ -88,7 +88,7 @@ describe('renderNoResults', () => {
   it('shows what other sites matched, and says where nothing did', () => {
     const html = renderNoResults({ suggestions: [], otherSources: [JAMFORMER] });
 
-    expect(html).toContain('Nothing matched in the product documentation. Try a broader query.');
+    expect(html).toContain('<p class="notice">Nothing matched in the product documentation.</p>');
     expect(html).toContain(`href="${JAMFORMER.url}"`);
   });
 
@@ -104,8 +104,13 @@ describe('renderNoResults', () => {
     expect(renderNoResults({ otherSources })).toContain('Reenroller');
   });
 
-  it('says what it always said when nothing matched anywhere', () => {
-    expect(renderNoResults({ suggestions: [] })).toContain('<p class="notice">Nothing matched. Try a broader query.</p>');
+  it('says nothing matched anywhere, and offers the suggestions it has', () => {
+    // With none, it gives no advice. Until 2026-09-28 it said "Try a broader
+    // query", and Fluid Topics matches a page on any one word of a query, so
+    // fewer words find nothing more: see renderNoResults.
+    for (const suggestions of [[], undefined, [''], 'policies']) {
+      expect(renderNoResults({ suggestions })).toContain('<p class="notice">Nothing matched.</p>');
+    }
     const html = renderNoResults({ suggestions: ['policies'] });
     expect(html).toContain('<p class="notice">Nothing matched. Try one of these:</p>');
     expect(html).toContain('<button class="hit" data-search="policies"><span class="hit-title">policies</span></button>');
@@ -141,6 +146,7 @@ describe('the built bundle', () => {
       expect(identifier).not.toBe('');
     }
     expect(APP_HTML).toContain('Nothing matched in the product documentation.');
+    expect(APP_HTML).not.toContain('Try a broader query');
     expect(APP_HTML).toContain(UNEXPLAINED_ERROR);
   });
 

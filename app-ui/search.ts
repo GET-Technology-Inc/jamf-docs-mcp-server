@@ -10,8 +10,10 @@
  * concepts.jamf.com page.
  *
  * It also holds what paging needs: the arguments for the next page, and the
- * note for a page that was cut. And what opening a result needs: the
- * arguments that fetch that result's own article.
+ * note for a page that was cut. What running a suggestion needs: the
+ * arguments that search for it. And what opening a result needs: the
+ * arguments that fetch that result's own article, which a table-of-contents
+ * row is opened with too.
  *
  * Kept out of app.ts so it can be tested on its own, as toc.ts is: importing
  * app.ts runs its top-level wiring and throws outside a browser.
@@ -94,6 +96,15 @@ export function renderElsewhere(otherSources: unknown, cap = Number.POSITIVE_INF
  * inline panel leaves it out to save room for them; here there are none, and
  * it can be all that matched. The notice then says where nothing matched,
  * since something did.
+ *
+ * With no suggestion to run, the notice gives no advice. Until 2026-09-28 it
+ * said "Try a broader query", which does not help on Fluid Topics: it finds a
+ * page with any one word of a query that has no phrase in double quotes and
+ * no word marked `+` or `-`, so fewer words find nothing more. Live that
+ * day, in en-US, `xyzzyq` had no results and no suggestions, so the panel
+ * told it to broaden, and `certificate xyzzyq` had the 2,768 of
+ * `certificate`. The server's advice for the query is prose for the model,
+ * and is not in `structuredContent`.
  */
 export function renderNoResults(view: NoResultsView, cap = Number.POSITIVE_INFINITY): string {
   const suggestions = Array.isArray(view.suggestions) ? (view.suggestions as unknown[]).filter(text) : [];
@@ -110,9 +121,41 @@ export function renderNoResults(view: NoResultsView, cap = Number.POSITIVE_INFIN
   const elsewhere = renderElsewhere(view.otherSources, cap);
   const nothing = elsewhere === '' ? 'Nothing matched.' : 'Nothing matched in the product documentation.';
   return `
-      <p class="notice">${nothing} ${tips === '' ? 'Try a broader query.' : 'Try one of these:'}</p>
+      <p class="notice">${nothing}${tips === '' ? '' : ' Try one of these:'}</p>
       ${tips}
       ${elsewhere}`;
+}
+
+/**
+ * The filters a search ran under, as the server echoes them back, or none
+ * when the payload's are not an object: it is cast, not validated (see
+ * `classify` in app.ts).
+ */
+function filtersOf(view: { filters?: unknown }): Record<string, unknown> {
+  const { filters } = view;
+  return typeof filters === 'object' && filters !== null && !Array.isArray(filters)
+    ? filters as Record<string, unknown>
+    : {};
+}
+
+/**
+ * The `jamf_docs_search` arguments that run a suggestion from a search with
+ * no results: the suggestion, in the language the search ran in.
+ *
+ * A suggestion is made for that language: a query's Chinese and Japanese
+ * words are suggested only in a language whose documentation has them (see
+ * `generateSearchSuggestions`). Until 2026-09-28 it ran as `{ query }`, to
+ * which the App added the host's language, or none. Live that day, the zh-TW
+ * search "磁碟 加密 復原 金鑰 託管" (Jamf Pro 10.1.0) had no results and
+ * suggested "磁碟 加密 復原", which has 50 results in zh-TW and none in en-US,
+ * so on an en-US host the suggestion found nothing too.
+ *
+ * The search's other filters are not sent: a suggestion is a broader search,
+ * as it always was.
+ */
+export function suggestionArgs(view: { filters?: unknown }, suggestion: string): Record<string, string> {
+  const { language } = filtersOf(view);
+  return { query: suggestion, ...(text(language) ? { language } : {}) };
 }
 
 /** A result too large for the budget on its own, as its page shows it. */
@@ -163,9 +206,7 @@ export function nextSearchPageArgs(view: SearchPaging): { name: string; args: Re
   if (view.hasMore === false) {
     return null;
   }
-  const filters = typeof view.filters === 'object' && view.filters !== null && !Array.isArray(view.filters)
-    ? view.filters as Record<string, unknown>
-    : {};
+  const filters = filtersOf(view);
   const limit = count(view.limit);
   const maxTokens = count(view.maxTokens);
   return {
@@ -221,9 +262,9 @@ function urlLocale(url: string): string | undefined {
 }
 
 /**
- * The attributes that carry a search result's `mapId` + `contentId` pair to
- * the click that opens it (see {@link articleArgs}), or nothing when it has no
- * pair to send.
+ * The attributes that carry a search result's or a table-of-contents entry's
+ * `mapId` + `contentId` pair to the click that opens it (see
+ * {@link articleArgs}), or nothing when it has no pair to send.
  */
 export function hitIdAttributes(hit: { mapId?: unknown; contentId?: unknown }): string {
   const { mapId, contentId } = hit;
@@ -233,22 +274,23 @@ export function hitIdAttributes(hit: { mapId?: unknown; contentId?: unknown }): 
 }
 
 /**
- * The `jamf_docs_get_article` arguments that open a search result: its url,
- * and its `mapId` + `contentId` pair when it has one.
+ * The `jamf_docs_get_article` arguments that open a search result or a
+ * table-of-contents entry: its url, and its `mapId` + `contentId` pair when
+ * it has one.
  *
- * Until 2026-09-28 a result was opened by its url alone. Jamf publishes some
+ * Until 2026-09-28 both were opened by their url alone. Jamf publishes some
  * different topics at one url, and the url fetches only one of them, so every
- * other result at that url opened the wrong article: live that day,
+ * other result or entry at that url opened the wrong article: live that day,
  * `/r/en-US/technical-articles/Additional_Information` opened the section of
  * "Jamf Pro External Patch Source Endpoints" from any of the 19 results there,
  * and the LAPS paper's "Use LAPS" opened its child "Using LAPS in the Jamf Pro
  * API". With the pair, learn.jamf.com fetches the pair's topic.
  *
- * Except in another language. The panel asks every tool in the host's
+ * Except in another language. The panel opens an article in the host's
  * language (`language`), and on a url that fetches the page in that language;
  * a pair names a topic of one map, which is in one language, and the server
- * ignores `language` for it. So a result in another language than the one
- * asked in is opened by its url alone, as before, and the reader still gets
+ * ignores `language` for it. So a result or entry in another language than
+ * the host's is opened by its url alone, as before, and the reader still gets
  * the page in theirs.
  */
 export function articleArgs(

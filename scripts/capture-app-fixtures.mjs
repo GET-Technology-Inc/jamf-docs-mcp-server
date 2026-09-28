@@ -47,16 +47,16 @@ const CAPTURES = [
   {
     key: 'search-relaxed',
     label: 'Search — filter relaxed',
-    why: 'A version filter nothing matched, so the server dropped it and said so in filterRelaxation. The viewer must surface that, or the user reads results for the wrong version.',
+    why: 'A topic filter none of the results matched, so the server dropped it and said so in filterRelaxation. The viewer must surface that, or the user reads results the filter was meant to exclude as though it held. Until 2026-09-28 this asked for Jamf Pro 10.1.0, but a version filter goes upstream and is never relaxed: that search has no results.',
     tool: 'jamf_docs_search',
-    args: { query: 'FileVault escrow', product: 'jamf-pro', version: '10.1.0', responseFormat: 'json' },
+    args: { query: 'FileVault escrow', product: 'jamf-pro', topic: 'printers', responseFormat: 'json' },
   },
   {
     key: 'search-empty',
     label: 'Search — no results',
-    why: 'Exercises the empty state and the suggestions list.',
+    why: 'Exercises the empty state and the suggestions list, and the other-source matches it shows in either display mode: no documentation is at version 10.1.0, so nothing matched. Until 2026-09-28 this was "zzzqqq nonexistent topic", which had 50 results, such as "Advanced Topics".',
     tool: 'jamf_docs_search',
-    args: { query: 'zzzqqq nonexistent topic', responseFormat: 'json' },
+    args: { query: 'FileVault escrow', product: 'jamf-pro', version: '10.1.0', responseFormat: 'json' },
   },
   {
     key: 'search-other-sources',
@@ -120,7 +120,7 @@ const CAPTURES = [
   {
     key: 'article-zh',
     label: 'Article — zh-TW request',
-    why: 'Jamf publishes no translation for most pages, so this returns en-US with a localeNote. Also the RTL/CJK line-breaking case.',
+    why: 'A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. It does not reach the notice for an untranslated page, which reads contentLocale, and only an ArticleProvider sets that; until 2026-09-28 this said it returned en-US with a localeNote.',
     tool: 'jamf_docs_get_article',
     args: {
       url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html',
