@@ -32,7 +32,7 @@
  *
  * What the guard does not check is the shape of a hit. A value under a key
  * is what core stored there: a namespace whose value changes shape moves to a
- * new key (`cache-key.ts`, `ft-search-v2` and the other `-vN`), and the two
+ * new key (`cache-key.ts`, `ft-search-v3` and the other `-vN`), and the two
  * entries that can hold a stand-in answer, the product catalogue and its
  * availability, check what they read already. A store that hands back
  * something core did not store under that key is broken in a way no guard

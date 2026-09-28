@@ -102,8 +102,8 @@ describe('cacheKey', () => {
       query: 'q', contentLocale: null, sortId: null, page: 1,
       filters: [] as const,
     };
-    expect(() => cacheKey('ft-search-v2', { ...base, perPage: NaN })).toThrow(TypeError);
-    expect(() => cacheKey('ft-search-v2', { ...base, perPage: Infinity })).toThrow(/only finite numbers/);
-    expect(() => cacheKey('ft-search-v2', { ...base, perPage: 100 })).not.toThrow();
+    expect(() => cacheKey('ft-search-v3', { ...base, perPage: NaN })).toThrow(TypeError);
+    expect(() => cacheKey('ft-search-v3', { ...base, perPage: Infinity })).toThrow(/only finite numbers/);
+    expect(() => cacheKey('ft-search-v3', { ...base, perPage: 100 })).not.toThrow();
   });
 });

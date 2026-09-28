@@ -49,4 +49,17 @@ describe('cleanSnippet', () => {
     const snippet = 'A'.repeat(50);
     expect(cleanSnippet(snippet, 'Title', 'Product')).toBe(snippet);
   });
+
+  it('should decode character references once, after the tags are stripped', () => {
+    const snippet = '<span class="kwicstring">Set it to &quot;Basic&quot; in the user&#x27;s '
+      + '&lt;dict&gt;, and write the text &amp;lt;key&amp;gt; as it is.</span>';
+    expect(cleanSnippet(snippet, 'Title', 'Product'))
+      .toBe('Set it to "Basic" in the user\'s <dict>, and write the text &lt;key&gt; as it is.');
+  });
+
+  it('should keep a < decoded from a reference, and still strip a stray raw one', () => {
+    const snippet = 'A stray > from a cut fragment, then the text &lt;script&gt; a page shows as text.';
+    expect(cleanSnippet(snippet, 'Title', 'Product'))
+      .toBe('A stray  from a cut fragment, then the text <script> a page shows as text.');
+  });
 });
