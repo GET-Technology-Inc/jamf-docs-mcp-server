@@ -57,6 +57,32 @@ export interface DegradationStatus {
  */
 export interface MetadataReadOptions {
   revalidateFallback?: boolean;
+  /**
+   * The maps registry could not be read earlier in the caller's own call, and
+   * `failure` is what it threw. A lookup that finds no fallback in the cache
+   * then builds one from that failure, as if it had asked the registry and
+   * met it itself, and keeps it for the same minute ({@link FALLBACK_TTL_MS}),
+   * rather than ask again. `MapsRegistry` keeps no failure, so asking again
+   * builds it again, with every retry, moments after it failed: until
+   * 2026-09-28 a `list_products` call during an outage that found no
+   * stand-in cached, the first and then one each minute, asked for the maps
+   * list twice, 8 requests at MAX_RETRIES=3. Unset, the lookup asks the
+   * registry as it always has.
+   */
+  registryFailed?: { failure: unknown };
+}
+
+/**
+ * The registry's products, or, when the caller's call has already found the
+ * registry unreadable, the failure it met, thrown again without a request
+ * (see {@link MetadataReadOptions.registryFailed}).
+ */
+async function readRegistryProducts(
+  ctx: ServerContext,
+  options: MetadataReadOptions,
+): Promise<RegistryProductInfo[]> {
+  if (options.registryFailed !== undefined) { throw options.registryFailed.failure; }
+  return await ctx.mapsRegistry.getProducts();
 }
 
 /**
@@ -216,7 +242,7 @@ async function loadProductsMetadata(
   let products: ProductMetadata[];
 
   try {
-    const registryProducts = await ctx.mapsRegistry.getProducts();
+    const registryProducts = await readRegistryProducts(ctx, options);
 
     // Build a lookup by bundleStem for quick matching
     const registryMap = new Map<string, RegistryProductInfo>();
@@ -451,7 +477,7 @@ async function loadProductAvailability(
   let degraded = false;
 
   try {
-    const registryProducts = await ctx.mapsRegistry.getProducts();
+    const registryProducts = await readRegistryProducts(ctx, options);
 
     // Build a set of known bundleStems
     const knownStems = new Set(registryProducts.map(rp => rp.bundleStem));

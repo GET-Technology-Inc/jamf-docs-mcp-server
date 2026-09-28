@@ -248,11 +248,14 @@ describe('a MapsProvider that answers the publication half and then fails is nam
 
 // ── Both halves ─────────────────────────────────────────────────────────────
 
-describe('when both halves\' reads fail, and differently, the note names the publication half\'s', () => {
-  it('a MapsProvider that throws, then answers with nothing the registry can use and learn.jamf.com 503s', async () => {
-    // The publication half's read throws in the provider. The product half's
-    // gets an answer it cannot use, so asks learn.jamf.com in its place (#355),
-    // which fails: a request, whose note would name learn.jamf.com.
+describe('when the publication half\'s read fails, the product half does not read again, and the note names that failure', () => {
+  it('a MapsProvider that throws, and would then answer with nothing the registry can use while learn.jamf.com 503s', async () => {
+    // The publication half's read throws in the provider. The product half
+    // builds its stand-ins from that failure. Until 2026-09-28 it read the
+    // registry again: here it got an answer it could not use, so asked
+    // learn.jamf.com in its place (#355), which failed, and the note named
+    // the publication half's failure while the call had also sent a request
+    // to learn.jamf.com.
     const { ctx, requests, reads } = upstream({
       provider: [{ throws: new Error(KV_DOWN) }, [NO_ID]],
       learn: [{ throws: new HttpError(503, 'Service Unavailable', MAPS_LIST) }],
@@ -260,13 +263,36 @@ describe('when both halves\' reads fail, and differently, the note names the pub
 
     const incomplete = await incompleteOf(ctx);
 
-    expect(reads.provider).toBe(2);
-    expect(toLearnJamf(requests)).toEqual([`GET ${MAPS_LIST}`]);
+    expect(reads.provider).toBe(1);
+    expect(toLearnJamf(requests)).toEqual([]);
     expect(incomplete).toEqual({
       unavailable: ['maps-registry'],
       message: `The maps registry could not be read from the configured maps provider (${KV_DOWN}). ` +
         `The publication list has none of the documents the maps registry names. ${STAND_INS}`,
     });
+  });
+
+  it('a MapsProvider that throws once and then answers: the stand-ins for that call, and the registry\'s on the next', async () => {
+    // The product half does not read again, so a failure that a second read
+    // would not have met still costs it its versions and availability, as it
+    // costs the publication half its rows (#335: one reply pairs no
+    // registry answer with a stand-in). Until 2026-09-28 the product half
+    // read again here, and got the provider's answer. The next call's
+    // publication half answers, and the product half rebuilds its cached
+    // stand-ins from the registry (#345).
+    const { ctx, requests, reads } = upstream({ provider: [{ throws: new Error(KV_DOWN) }, [PRO_MAP]] });
+
+    const failed = await incompleteOf(ctx);
+
+    expect(reads.provider).toBe(1);
+    expect(failed).toEqual({
+      unavailable: ['maps-registry'],
+      message: `The maps registry could not be read from the configured maps provider (${KV_DOWN}). ` +
+        `The publication list has none of the documents the maps registry names. ${STAND_INS}`,
+    });
+
+    expect(await incompleteOf(ctx)).toBeUndefined();
+    expect(toLearnJamf(requests)).toEqual([]);
   });
 });
 
