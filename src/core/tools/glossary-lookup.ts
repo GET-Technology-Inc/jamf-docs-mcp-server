@@ -10,7 +10,7 @@ import { GlossaryLookupOutputSchema } from '../schemas/output.js';
 import { appToolMeta } from '../apps/index.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
-import type { ToolResult, GlossaryEntry, GlossaryLookupResult } from '../types.js';
+import type { ToolResult, GlossaryEntry, GlossaryLookupResult, TruncatedContentInfo } from '../types.js';
 import { lookupGlossaryTerm, GlossaryUnavailableError, type GlossaryLookupAnswer } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
@@ -133,13 +133,55 @@ function formatIncompleteMarkdown(incomplete: NonNullable<GlossaryLookupResult['
 }
 
 /**
+ * " Look up <which> by its own name to get it: …", naming each of `entries`
+ * that fits in the largest `maxTokens` on its own, or nothing when none does.
+ *
+ * For the entries no `maxTokens` brings into this answer: those left out of
+ * one cut at the largest, and those after a first entry larger than it. An
+ * entry looked up by its own name ranks first (see the service's
+ * `boundaryMatchRank`), so it is returned if it fits in the budget it is
+ * looked up with. `maxTokens` is the budget this lookup had. When a named
+ * entry costs more than that, the line gives the largest cost among those it
+ * names, a budget that gets each of them (", with `maxTokens: 20007` or
+ * more,"), so that the lookup it advises is not one that answers "does not
+ * fit" again.
+ */
+function lookUpByName(entries: TruncatedContentInfo['omittedItems'], which: string, maxTokens: number): string {
+  const fitting = entries.filter(e => e.estimatedTokens <= TOKEN_CONFIG.MAX_TOKENS_LIMIT);
+  if (fitting.length === 0) {
+    return '';
+  }
+  const needs = fitting.reduce((most, e) => Math.max(most, e.estimatedTokens), 0);
+  const budget = needs > maxTokens ? `, with \`maxTokens: ${String(needs)}\` or more,` : '';
+  const names = fitting.map(e => sanitizeMarkdownText(e.title)).join(', ');
+  return ` Look up ${which} by its own name${budget} to get it: ${names}.`;
+}
+
+/**
  * What to do when entries match and none fits `maxTokens`.
  *
  * "Increase `maxTokens` or narrow your search" is the note for a partial
  * answer, and half of it is no use here: a single match cannot be narrowed,
  * and narrowing several does not make the first one shorter. What does work is
  * a budget that holds it, and the service says what that is. A figure over the
- * schema's limit is not advice, so that case says so instead of offering it.
+ * schema's limit is not advice, so that case says so instead of offering it,
+ * and names the other matches a lookup by name can get, at any `maxTokens`.
+ *
+ * At the limit itself no budget is advice either. Until 2026-09-28 a reply
+ * that did not say what the first entry costs advised "a larger `maxTokens`"
+ * there too, the shape #364 fixed for `jamf_docs_get_toc`. It now says the
+ * budget is the largest there is, and, when several match, to narrow the
+ * search. That is the half of the partial answer's note that is left: no
+ * budget holds the first entry, but a narrower term can lead with another
+ * entry, one that fits.
+ *
+ * A `GlossaryProvider` can say its first entry costs no more than the budget
+ * it did not fit in: its cut and its costs disagree. Until 2026-09-28 the
+ * reply advised that figure, a `maxTokens` the lookup already had ("Repeat
+ * the lookup with `maxTokens: 80` or more" at 100). At the limit such a reply
+ * now gets the sentence above. Below it, the reply says the cost it was given
+ * and that it did not fit, and advises a larger `maxTokens` with no figure,
+ * as when no cost is given.
  */
 function formatNothingFits(result: GlossaryLookupResult): string {
   const { totalMatches } = result;
@@ -147,16 +189,25 @@ function formatNothingFits(result: GlossaryLookupResult): string {
   const omitted = result.truncatedContent?.omittedItems ?? [];
   const lead = omitted[0];
   const named = lead !== undefined ? `, ${sanitizeMarkdownText(lead.title)},` : '';
+  const budget = `\`maxTokens: ${String(maxTokens)}\``;
   const matched = totalMatches === 1
-    ? `The one matching entry${named} does not fit in \`maxTokens: ${String(maxTokens)}\`.`
-    : `${String(totalMatches)} entries match, but not even the first${named} fits in \`maxTokens: ${String(maxTokens)}\`.`;
+    ? `The one matching entry${named} does not fit in ${budget}`
+    : `${String(totalMatches)} entries match, but not even the first${named} fits in ${budget}`;
+  const larger = `Repeat the lookup with a larger \`maxTokens\` to get ${totalMatches === 1 ? 'it' : 'them'}.`;
 
-  if (lead === undefined) {
-    return `${matched} Repeat the lookup with a larger \`maxTokens\` to get ${totalMatches === 1 ? 'it' : 'them'}.`;
-  }
   const limit = TOKEN_CONFIG.MAX_TOKENS_LIMIT;
-  if (lead.estimatedTokens > limit) {
-    return `${matched} It needs ${String(lead.estimatedTokens)} tokens, more than \`maxTokens\` allows (${String(limit)}).`;
+  if (lead !== undefined && lead.estimatedTokens > limit) {
+    return `${matched}. It needs ${String(lead.estimatedTokens)} tokens, more than \`maxTokens\` allows ` +
+      `(${String(limit)}).${lookUpByName(omitted.slice(1), 'another entry', maxTokens)}`;
+  }
+  if (maxTokens >= limit) {
+    return `${matched}, which is the largest \`maxTokens\` can be.${totalMatches > 1 ? ' Narrow your search.' : ''}`;
+  }
+  if (lead === undefined) {
+    return `${matched}. ${larger}`;
+  }
+  if (lead.estimatedTokens <= maxTokens) {
+    return `${matched}, although its cost is given as ${String(lead.estimatedTokens)} tokens. ${larger}`;
   }
   let advice = `Repeat the lookup with \`maxTokens: ${String(lead.estimatedTokens)}\` or more to get it`;
   // Every match is listed when none fits, so their costs add up to the whole
@@ -165,16 +216,35 @@ function formatNothingFits(result: GlossaryLookupResult): string {
   if (totalMatches > 1 && omitted.length === totalMatches && all <= limit) {
     advice += `, or \`maxTokens: ${String(all)}\` for all ${String(totalMatches)}`;
   }
-  return `${matched} ${advice}.`;
+  return `${matched}. ${advice}.`;
+}
+
+/**
+ * The line under an answer that some matching entries were left out of.
+ *
+ * Below the largest `maxTokens` a larger one is the advice, and a reply at
+ * that limit says what then works. At the limit, until 2026-09-28 it still
+ * said "Increase `maxTokens`", as `jamf_docs_get_toc` did until #364. It now
+ * names the entries left out that a lookup by name gets, if any, or, when
+ * the result does not list them, says to narrow the search.
+ */
+function partialAnswerLine(result: GlossaryLookupResult): string {
+  const limit = TOKEN_CONFIG.MAX_TOKENS_LIMIT;
+  if (result.tokenInfo.maxTokens < limit) {
+    return 'Results truncated due to token limit. Increase `maxTokens` or narrow your search.';
+  }
+  const omitted = result.truncatedContent?.omittedItems ?? [];
+  const advice = omitted.length > 0
+    ? lookUpByName(omitted, 'an entry that was left out', result.tokenInfo.maxTokens)
+    : ' Narrow your search.';
+  return `Results truncated due to token limit, and \`maxTokens\` is already the largest it can be (${String(limit)}).${advice}`;
 }
 
 function formatTokenFooter(result: GlossaryLookupResult): string {
   const { tokenInfo, totalMatches } = result;
   let footer = `\n*${result.entries.length} of ${totalMatches} match(es) | ${tokenInfo.tokenCount.toLocaleString()} tokens*`;
   if (tokenInfo.truncated) {
-    footer += result.entries.length === 0
-      ? `\n*${formatNothingFits(result)}*`
-      : '\n*Results truncated due to token limit. Increase `maxTokens` or narrow your search.*';
+    footer += `\n*${result.entries.length === 0 ? formatNothingFits(result) : partialAnswerLine(result)}*`;
   }
   return `${footer}\n`;
 }
