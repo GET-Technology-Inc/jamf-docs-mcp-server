@@ -39,7 +39,8 @@ import { cleanHtml, htmlToMarkdown } from './content-parser.js';
 import type { ServerContext } from '../types/context.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/index.js';
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { askProvider } from './provider-error.js';
 import { estimateTokens, truncateItemsToTokenLimit } from './tokenizer.js';
 import { limitConcurrency } from '../utils/concurrency.js';
@@ -165,7 +166,8 @@ async function glossaryLocaleOf(
 /**
  * Fetch the glossary TOC from Fluid Topics via ft-client.
  * The TOC is a tree: root node has children, each child is a glossary term.
- * Cached with article TTL to avoid repeated requests.
+ * Cached with article TTL to avoid repeated requests, and requested once
+ * however many lookups want it at once (load-once.ts).
  *
  * A TOC that yields no terms is returned but not cached. The live glossary
  * has 123, so none means the response was not the glossary's TOC — a root
@@ -173,14 +175,23 @@ async function glossaryLocaleOf(
  * answered every lookup with "No glossary entries found" for the article TTL
  * (24 hours by default) after learn.jamf.com had recovered: reproduced
  * 2026-09-24 by serving a childless root for `/toc` once, then looking up
- * `MDM` and `Automated Device Enrollment` directly.
+ * `MDM` and `Automated Device Enrollment` directly. The lookups that share
+ * such a request share its answer, and the next one asks again.
  */
 async function fetchGlossaryToc(
   ctx: ServerContext,
   mapId: string
 ): Promise<FtTocNode[]> {
   const key = cacheKey('glossary-toc', { mapId });
+  return await loadOnce(ctx.cache, key, async () => await readGlossaryToc(ctx, mapId, key));
+}
 
+/** The cached terms, or the TOC's, fetched and stored: what {@link fetchGlossaryToc} shares. */
+async function readGlossaryToc(
+  ctx: ServerContext,
+  mapId: string,
+  key: CacheKey,
+): Promise<FtTocNode[]> {
   const cached = await ctx.cache.get<FtTocNode[]>(key);
   if (cached !== null) {
     return cached;
@@ -214,7 +225,11 @@ async function fetchGlossaryToc(
 }
 
 /**
- * Fetch the HTML content of a single glossary topic via ft-client.
+ * Fetch the HTML content of a single glossary topic via ft-client, in one
+ * request however many lookups want it at once (load-once.ts). Lookups of
+ * different terms share one when a topic is a candidate for both, as
+ * `mobile device management (MDM)` is for `MDM` and for `mobile device
+ * management`.
  */
 async function fetchGlossaryContent(
   ctx: ServerContext,
@@ -222,7 +237,16 @@ async function fetchGlossaryContent(
   contentId: string
 ): Promise<string> {
   const key = cacheKey('glossary-content', { mapId, contentId });
+  return await loadOnce(ctx.cache, key, async () => await readGlossaryContent(ctx, mapId, contentId, key));
+}
 
+/** The cached topic, or the one fetched and stored: what {@link fetchGlossaryContent} shares. */
+async function readGlossaryContent(
+  ctx: ServerContext,
+  mapId: string,
+  contentId: string,
+  key: CacheKey,
+): Promise<string> {
   const cached = await ctx.cache.get<string>(key);
   if (cached !== null) {
     return cached;

@@ -204,10 +204,9 @@ describe('one guard per provider', () => {
   it('is the one a MapsRegistry and a TopicResolver hold, and logs through the first server\'s logger', async () => {
     // What src/index.ts does over HTTP: one context, a server per request.
     // The glossary's and the static sources' Fuse indexes and the loads in
-    // flight (the map TOC's, and those of load-once.ts) are kept per
-    // CacheProvider, so a guard per server would rebuild them on every
-    // request. That the servers' tools read this same guard is
-    // test/unit/core/create-server-context.test.ts.
+    // flight of load-once.ts are kept per CacheProvider, so a guard per
+    // server would rebuild them on every request. That the servers' tools
+    // read this same guard is test/unit/core/create-server-context.test.ts.
     const cache = createMockCache();
     vi.mocked(cache.get).mockRejectedValue(KV_DOWN);
     const { loggers, warnings, created } = recordingLoggers();

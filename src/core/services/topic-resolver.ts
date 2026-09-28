@@ -17,6 +17,7 @@ import { createDefaultConfig } from '../config.js';
 import type { CacheProvider } from './interfaces/index.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
 import { guardCache } from './cache-guard.js';
+import { loadOnce } from './load-once.js';
 import { getMetaValue, FT_META } from '../utils/ft-metadata.js';
 import { isAllowedHostname } from '../utils/url.js';
 import {
@@ -124,10 +125,19 @@ interface BuildIndexOptions {
   http: HttpClient;
 }
 
-async function fetchAndBuildIndex(
+/**
+ * The cached index, or one built from the map's topics, fetched and stored:
+ * the load `TopicResolver.getTopicIndex` shares between calls.
+ */
+async function readOrBuildIndex(
   options: BuildIndexOptions,
 ): Promise<Map<string, string>> {
   const { mapId, cache, key, fetchTopicsFn, cacheTtl, http } = options;
+  const cached = await cache.get<[string, string][]>(key);
+  if (cached !== null) {
+    return new Map(cached);
+  }
+
   const topics = await fetchTopicsFn(http, mapId);
   const index = new Map<string, string>();
 
@@ -157,16 +167,6 @@ async function fetchAndBuildIndex(
 // ─── Resolver ───────────────────────────────────────────────────
 
 export class TopicResolver {
-  /**
-   * In-flight deduplication for fetchMapTopics calls.
-   * Prevents thundering-herd when batch-get-articles fires N concurrent
-   * workers that all need the topic index for the same mapId.
-   *
-   * Instance member (not module-level) so it is scoped to a single
-   * server lifetime and doesn't leak across requests in runtimes
-   * where module scope persists (e.g. Cloudflare Workers).
-   */
-  private readonly inflight = new Map<string, Promise<Map<string, string>>>();
   private readonly fetchMapTopicsFn: typeof fetchMapTopics;
   private readonly cacheTtl: number;
   private readonly cache: CacheProvider;
@@ -187,46 +187,31 @@ export class TopicResolver {
     this.cacheTtl = cacheTtl ?? DEFAULT_TOPICS_CACHE_TTL;
   }
 
+  /**
+   * A map's topic index, which a page URL is resolved with: one request for
+   * the map's topics however many calls want them at once (load-once.ts), as
+   * `batch_get_articles` does for up to five URLs in one map.
+   *
+   * Until 2026-09-28 this read the cache first and looked for a load in
+   * flight second, in a map this resolver kept for itself (#78), and the load
+   * did not read the cache again. With a cache that answers late, a call
+   * could read the index before the first call stored it, look for that
+   * call's load after it had cleared, and request the topics again: measured
+   * offline, with the index's reads answering 50 ms late and the topics
+   * taking 100 ms, twenty `jamf_docs_get_article` calls 10 ms apart requested
+   * them twice (test/unit/tools/cache-answering-late.test.ts). Live, Jamf Pro
+   * Documentation's topics weighed 2.16 MB and took 2.2 s (2026-09-28).
+   */
   private async getTopicIndex(mapId: string): Promise<Map<string, string>> {
     const key = cacheKey('ft-topic-index', { mapId });
-    const cached = await this.cache.get<[string, string][]>(key);
-    if (cached !== null) {
-      return new Map(cached);
-    }
-
-    // Return existing in-flight promise if one is already pending
-    const pending = this.inflight.get(mapId);
-    if (pending !== undefined) {
-      return await pending;
-    }
-
-    const promise = fetchAndBuildIndex({
+    return await loadOnce(this.cache, key, async () => await readOrBuildIndex({
       mapId,
       cache: this.cache,
       key,
       fetchTopicsFn: this.fetchMapTopicsFn,
       cacheTtl: this.cacheTtl,
       http: this.http,
-    });
-    this.inflight.set(mapId, promise);
-
-    // Clean up the in-flight entry once the promise settles.
-    //
-    // This has to be a `try`/`finally` around the await rather than
-    // `promise.finally(...)`. That call returns a *second* promise which
-    // rejects whenever `promise` does, and nothing ever handles it — so a
-    // single failed topic-index fetch became an unhandled rejection, which
-    // Node terminates the process on by default. The caller catching its own
-    // rejection does not help: the derived promise is a separate object with
-    // its own unhandled state.
-    //
-    // Concurrent callers take the `pending` branch above and never reach here,
-    // so the first caller owns the cleanup either way.
-    try {
-      return await promise;
-    } finally {
-      this.inflight.delete(mapId);
-    }
+    }));
   }
 
   /**

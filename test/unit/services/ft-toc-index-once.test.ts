@@ -184,8 +184,8 @@ describe('concurrent loads of one map TOC index', () => {
 
   it('shares one failed attempt between the callers in flight, and the next load tries again', async () => {
     // The guard holds a load only while it is in flight. Keeping a settled
-    // failure would make one blip at the upstream look permanent — the same
-    // reason `TopicResolver.inflight` deletes its entry on settle.
+    // failure would make one blip at the upstream look permanent, which is
+    // why loadOnce deletes a load when it settles (load-once.ts).
     failingMaps.add(MAP_ID);
     const cache = createMockCache();
     const loggers = [createMockLogger(), createMockLogger(), createMockLogger()];
@@ -206,9 +206,9 @@ describe('concurrent loads of one map TOC index', () => {
     expect(tocFetches()).toBe(2);
   });
 
-  // CONTROL. The guard is scoped to one cache, as TopicResolver's is to one
-  // server, so it cannot hand one server's index to another. Two caches in
-  // flight together each fetch their own.
+  // CONTROL. The guard (loadOnce) is scoped to one cache, so it cannot hand
+  // one server's index to another. Two caches in flight together each fetch
+  // their own.
   it('does not share a load between two caches', async () => {
     await Promise.all([createMockCache(), createMockCache()].map(async (cache) =>
       await fetchTopicNavigation({ http, cache, mapId: MAP_ID, contentId: 'content-1' })));
