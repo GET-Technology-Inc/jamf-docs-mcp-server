@@ -266,10 +266,10 @@ export const ArticleOutputSchema = z.object({
   contentId: z.string().optional(),
   /**
    * The three below are `ArticleProvider` signals, and `contentLocale` is a
-   * concepts.jamf.com and support.jamf.com one too. They are declared here
-   * because a key absent from this schema is a key the tool's structured
-   * output cannot promise, whatever the builder emits — and each one is a fact
-   * a reader has to act on, not decoration.
+   * learn.jamf.com, concepts.jamf.com and support.jamf.com one too. They are
+   * declared here because a key absent from this schema is a key the tool's
+   * structured output cannot promise, whatever the builder emits — and each
+   * one is a fact a reader has to act on, not decoration.
    *
    * `versionStatus`: whether this copy is from the release upstream still
    * flags as current, so a client can say "this page describes an older
@@ -283,8 +283,10 @@ export const ArticleOutputSchema = z.object({
    *
    * On a concepts.jamf.com or support.jamf.com page, since 2026-09-28, it is
    * the edition served, whose own address `url` is, and is absent where
-   * neither the page nor its url says which edition it is. The MCP App says
-   * "Shown in …" when it is not the host's locale.
+   * neither the page nor its url says which edition it is. On a learn.jamf.com
+   * topic, since the same day, it is the topic's own `ft:locale`: en-US for a
+   * `language` Jamf does not publish the topic in. The MCP App says "Shown in
+   * …" when it is not the host's locale.
    */
   contentLocale: z.string().optional(),
   /**
@@ -369,6 +371,12 @@ export const BatchArticlesOutputSchema = z.object({
     url: z.string(),
     status: z.enum(['success', 'error']),
     title: z.string().optional(),
+    /**
+     * The language of `content`, as `jamf_docs_get_article` gives it, on a
+     * result that says: absent on an error. Added 2026-09-28; until then which
+     * edition a result was could be read only from the note in `content`.
+     */
+    contentLocale: z.string().optional(),
     content: z.string().optional(),
     error: z.string().optional(),
     tokenCount: z.number().optional(),

@@ -424,7 +424,14 @@ export interface ParsedArticle {
    * Not the requested locale and not the locale in `url`, both of which still
    * say e.g. `th-TH` when Jamf has no translation and served English. A
    * concepts.jamf.com or support.jamf.com page sets it to the edition served
-   * (since 2026-09-28), and there `url` is that edition's own address.
+   * (since 2026-09-28), and there `url` is that edition's own address. A
+   * learn.jamf.com topic sets it to its `ft:locale` (since the same day).
+   *
+   * An `ArticleProvider` sets it to one of the tool's locale ids
+   * (`SUPPORTED_LOCALES`, such as `ja-JP`). The note that says whether
+   * `language` was served compares it with `language` exactly. It reads any
+   * other value, `ja`, `en` or `''`, as saying nothing, and then reads the
+   * language off the article's own address, if it has one.
    */
   contentLocale?: string | undefined;
   /** Where the page sits in its product's table of contents. */

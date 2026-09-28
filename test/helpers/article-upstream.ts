@@ -36,6 +36,8 @@ export const USE_LAPS = 'cS8N6f3zVb5pvf0xGCi_ug';
 export const LAPS_API = 'XD_dFGbPnBjOLmq~fF_mSw';
 
 export const POLICIES_URL = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Policies.html';
+/** Policies.html in th-TH, a locale Jamf Pro Documentation has no map in. */
+export const POLICIES_TH_URL = 'https://learn.jamf.com/th-TH/bundle/jamf-pro-documentation/page/Policies.html';
 export const CCP_URL = 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation/page/Computer_Configuration_Profiles.html';
 export const CCP_OWN = 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Computer_Configuration_Profiles';
 /** A search result's url for "Use LAPS" — a slug two topics in the map share. */
@@ -206,12 +208,13 @@ export function articleUpstream(bodies: Record<string, string> = {}): ArticleUps
  * `language` moves Policies.html to the ja-JP map. A language with no map of
  * its own leaves it on the en-US one but comes back as the requested locale,
  * as the live resolver does: `th-TH` on Policies.html resolved to the en-US
- * pair with `locale: "th-TH"` (2026-09-26).
+ * pair with `locale: "th-TH"` (2026-09-26). So does the th-TH url with no
+ * `language`.
  */
 export async function resolveFixtureUrl(input: TopicResolverInput): Promise<ResolvedTopic> {
   await Promise.resolve();
-  const locale = (input.locale ?? 'en-US') as LocaleId;
-  if (input.url === POLICIES_URL) {
+  const locale = (input.locale ?? (input.url === POLICIES_TH_URL ? 'th-TH' : 'en-US')) as LocaleId;
+  if (input.url === POLICIES_URL || input.url === POLICIES_TH_URL) {
     return locale === 'ja-JP'
       ? { mapId: PRO_MAP_JA, contentId: POLICIES_JA, locale }
       : { mapId: PRO_MAP, contentId: POLICIES, locale };

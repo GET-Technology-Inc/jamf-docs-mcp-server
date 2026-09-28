@@ -180,9 +180,21 @@ export interface ArticleProvider {
 export interface ArticleProviderOptions extends FetchArticleOptions {
   /**
    * The note core ends this reply with, given the address the article is
-   * labelled with and its place in the TOC; `undefined` for none. It says when
-   * one of the caller's arguments went unused: a url the pair overruled, or a
-   * `language` that could not apply.
+   * labelled with, its place in the TOC and the language it is in; `undefined`
+   * for none. It says when one of the caller's arguments went unused: a url
+   * the pair overruled, or a `language` that could not apply. And it names
+   * the edition a url's article is when that is not the page the url names in
+   * the language asked for, from its `contentLocale`, or, when it has none,
+   * from its own address.
+   *
+   * Pass the article's `contentLocale` with its url and navigation. The key
+   * is optional, so a call written before 2026-09-28 still compiles, but
+   * without it the note reads the language off the address alone, and for an
+   * article labelled with the caller's url and no navigation it says the
+   * language is not known, while the note core writes from the article itself
+   * names it: the reply then carries both. Only one of the tool's locale ids
+   * (`SUPPORTED_LOCALES`, such as `ja-JP`) counts as a language, compared
+   * exactly with `language`; `ja`, `en` or `''` says nothing.
    *
    * Only core can decide it, because it depends on things a provider is not
    * told: the caller's url, and whether the pair came from the caller or from
@@ -205,7 +217,7 @@ export interface ArticleProviderOptions extends FetchArticleOptions {
    * appends its own copy of the sentence prints it twice, so a provider that
    * passes `noteFor` on must drop any copy of its own.
    */
-  noteFor?: (labelled: Pick<FetchArticleResult, 'url' | 'navigation'>) => string | undefined;
+  noteFor?: (labelled: Pick<FetchArticleResult, 'url' | 'navigation' | 'contentLocale'>) => string | undefined;
 }
 
 /**

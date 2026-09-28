@@ -9,7 +9,7 @@ import { appToolMeta } from '../apps/index.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema, type ArticleStructuredOutput } from '../schemas/output.js';
-import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, type LocaleId } from '../constants.js';
+import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, DEFAULT_LOCALE, type LocaleId } from '../constants.js';
 import type {
   ToolResult,
   ArticleResponse,
@@ -227,7 +227,10 @@ const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be 
  * Until 2026-09-28 `language` was documented as having no effect on a
  * concepts.jamf.com or support.jamf.com url, and a support.jamf.com
  * collection url, 24 of which `jamf_docs_get_toc` lists for Jamf Pro alone,
- * was an error. See `fetchStaticArticle` for both.
+ * was an error. See `fetchStaticArticle` for both. Until the same date the
+ * note on a learn.jamf.com article in another language than `language` did
+ * not say which it was in, and nothing gave `contentLocale` for it (see
+ * `languageNote` in services/article-service.ts).
  */
 const TOOL_DESCRIPTION = `Retrieve the full content of a specific Jamf documentation article.
 
@@ -247,7 +250,7 @@ Args:
   - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}, at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Required unless mapId and contentId are given
   - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId, instead of url or alongside it
   - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId, instead of url or alongside it
-  - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no edition in it is served as the url names it, with a note. No effect on a mapId + contentId pair (a map is in one language)
+  - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. A learn.jamf.com publication Jamf does not publish in it is served in ${DEFAULT_LOCALE}, and a ${STATIC_SOURCE_HOSTNAMES.join(' or ')} page with no edition in it as the url names it, both with a note; contentLocale says which language was served. No effect on a mapId + contentId pair (a map is in one language)
   - section (string, optional): Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")
   - summaryOnly (boolean, optional): Return only article summary and outline instead of full content (default: false). Token-efficient way to preview an article and its sub-topics
   - includeRelated (boolean, optional): Include links to related articles (default: false)
@@ -263,6 +266,7 @@ Returns:
     "url": string,
     "product": string,
     "version": string,
+    "contentLocale": string,  // the language content is in, where the article says
     "breadcrumb": string[],
     "relatedArticles": [...],
     "tokenInfo": {

@@ -48,8 +48,8 @@ import { estimateTokens } from '../../../src/core/services/tokenizer.js';
 import { createMockCache, createMockContext, createTestHttpClient } from '../../helpers/mock-context.js';
 import { omitKey } from '../../helpers/fixtures.js';
 import {
-  CCP, CCP_HTML, CCP_URL, LAPS_API, LAPS_MAP, POLICIES, POLICIES_URL, PRO_MAP, PRO_MAP_PREVIOUS, USE_LAPS,
-  USING_LAPS_URL, articleUpstream, resolveFixtureUrl,
+  CCP, CCP_HTML, CCP_URL, LAPS_API, LAPS_MAP, POLICIES, POLICIES_TH_URL, POLICIES_URL, PRO_MAP, PRO_MAP_PREVIOUS,
+  USE_LAPS, USING_LAPS_URL, articleUpstream, resolveFixtureUrl,
 } from '../../helpers/article-upstream.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
 import type { ArticleProvider } from '../../../src/core/services/interfaces/providers.js';
@@ -191,9 +191,14 @@ const CASES: [string, Args, string | undefined][] = [
   ['B: a pair and `language`', { mapId: PRO_MAP, contentId: CCP, language: 'ja-JP' },
     '`language` has no effect on a mapId + contentId pair: this article comes from the pair\'s map, which is "en-US".'],
   ['C: a url and a `language` with no map of its own', { url: POLICIES_URL, language: 'th-TH' },
-    'Language "th-TH" was requested but this article was resolved from a "en-US" URL.'],
+    'Jamf does not publish this article in th-TH. Showing the en-US edition instead.'],
   ['C0: a pair and that `language`', { mapId: PRO_MAP, contentId: POLICIES, language: 'th-TH' },
     '`language` has no effect on a mapId + contentId pair: this article comes from the pair\'s map, which is "en-US".'],
+  // Labelled with the topic's own address with a provider or without one: the
+  // url alone chose it, but names it in a language it is not in. Until
+  // 2026-09-28 the reply without a provider kept the th-TH url as its label.
+  ['D: a url in that locale, with no `language`', { url: POLICIES_TH_URL },
+    'Jamf does not publish this article in th-TH. Showing the en-US edition instead.'],
   // Both pair notes at once: the longest note there is, and the tightest fit at maxTokens 100.
   ['A and B together', { url: POLICIES_URL, mapId: PRO_MAP, contentId: CCP, language: 'ja-JP' },
     'fetch follows the pair. Language "ja-JP" was requested, but `language` has no effect'],
@@ -289,7 +294,9 @@ describe('get_article with a provider that does not pass `noteFor` on', () => {
 
     const { text, sc } = await call(provided, { url: POLICIES_URL, language: 'th-TH', maxTokens: 100 });
 
-    expect(occurrences(text, 'resolved from a "en-US" URL')).toBe(1);
+    // The page carries no `contentLocale` and is labelled with the caller's
+    // url, so nothing says which language it is in.
+    expect(occurrences(text, 'this article does not say which language it is in')).toBe(1);
     expect(sc.tokenCount).toBe(estimateTokens(sc.content as string));
     expect(sc.tokenCount).toBeLessThanOrEqual(100);
     expect(sc.truncated).toBe(true);
@@ -297,9 +304,10 @@ describe('get_article with a provider that does not pass `noteFor` on', () => {
 
   it('does not add a note the provider already ended its reply with', async () => {
     // The one known consumer keeps a verbatim copy of the url + `language`
-    // sentence and prints it itself.
-    const sentence = 'Language "th-TH" was requested but this article was resolved from a "en-US" URL.'
-      + ' Content may be in the original language if a localized version is unavailable.';
+    // sentence and prints it itself. Its copy is of the sentence core wrote
+    // until 2026-09-28, which is no longer this one, so until it copies this
+    // one its replies carry both.
+    const sentence = 'Jamf does not publish this article in th-TH. Showing the en-US edition instead.';
     const inner = unawareProvider();
     providedCtx.articleProvider = {
       getArticleByIds: async (mapId, contentId, options) => {
@@ -327,7 +335,7 @@ describe('batch_get_articles with a provider', () => {
     const { without, with: withProvider } = await both(URL_AND_LANGUAGE, 'jamf_docs_batch_get_articles');
 
     expect(provider.getArticleByIds).toHaveBeenCalledTimes(1);
-    expect(without.text).toContain('resolved from a "en-US" URL');
+    expect(without.text).toContain('Showing the en-US edition instead.');
     expect(withProvider.text).toBe(without.text);
     expect(withProvider.sc).toEqual(without.sc);
   });
@@ -341,7 +349,7 @@ describe('batch_get_articles with a provider', () => {
     );
     const [article] = (JSON.parse(text) as { results: { content: string; tokenInfo: TokenInfo }[] }).results;
 
-    expect(occurrences(article.content, 'resolved from a "en-US" URL')).toBe(1);
+    expect(occurrences(article.content, 'Showing the en-US edition instead.')).toBe(1);
     expect(article.tokenInfo.tokenCount).toBe(estimateTokens(article.content));
     expect(article.tokenInfo.tokenCount).toBeLessThanOrEqual(100);
   });
