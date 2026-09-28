@@ -211,6 +211,7 @@ export type SearchInput = z.infer<typeof SearchInputSchema>;
  */
 export const GetArticleInputSchema = z.object({
   url: z.string()
+    .max(CONTENT_LIMITS.MAX_URL_LENGTH, `URL must not exceed ${String(CONTENT_LIMITS.MAX_URL_LENGTH)} characters`)
     .url('Must be a valid URL')
     .refine(
       (url) => isAllowedHostname(url),
@@ -218,7 +219,8 @@ export const GetArticleInputSchema = z.object({
     )
     .optional()
     .describe(
-      `Full https:// URL of the Jamf documentation article, on ${ALLOWED_HOSTNAME_LIST}. ` +
+      `Full https:// URL of the Jamf documentation article, on ${ALLOWED_HOSTNAME_LIST}, ` +
+      `at most ${String(CONTENT_LIMITS.MAX_URL_LENGTH)} characters. ` +
       'Alternative: use mapId + contentId for direct fetch. One of the two is required.'
     ),
 
@@ -376,11 +378,12 @@ export type GlossaryLookupInput = z.infer<typeof GlossaryLookupInputSchema>;
 export const GetBatchArticlesInputSchema = z.object({
   urls: z.array(
     z.string()
+      .max(CONTENT_LIMITS.MAX_URL_LENGTH, `Each URL must not exceed ${String(CONTENT_LIMITS.MAX_URL_LENGTH)} characters`)
       .url('Each item must be a valid URL')
   )
     .min(1, 'At least 1 URL is required')
     .max(10, 'Maximum 10 URLs allowed per batch')
-    .describe('Array of Jamf documentation article URLs (1-10)'),
+    .describe(`Array of Jamf documentation article URLs (1-10), each at most ${String(CONTENT_LIMITS.MAX_URL_LENGTH)} characters`),
 
   concurrency: z.number()
     .int()

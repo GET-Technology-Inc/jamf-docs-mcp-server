@@ -292,6 +292,21 @@ describe('FT API data contracts', () => {
       }
     });
 
+    it('every map `version` is a dotted version number (the registry reads no other as one)', () => {
+      // Since 2026-09-28 the registry reads a map's `version` only when it is
+      // a version number (namedVersion), as the search and the article read
+      // a topic's, because some topics hold Jamf's template text there. A
+      // versioned map whose `version` took another form ("11", or that text)
+      // would silently drop out of every version list and resolve as an
+      // unversioned map. 685 maps, 46 values, all dotted, on 2026-09-28.
+      const unread = maps.flatMap(map => metaOf(map)
+        .filter(meta => meta.key === 'version')
+        .flatMap(meta => meta.values)
+        .filter(version => namedVersion(version) === null)
+        .map(version => `${map.id}: "${version}"`));
+      expect(unread, 'maps whose version the registry would read as none').toEqual([]);
+    });
+
     it('proMapId resolved from maps is in opaque hash format', () => {
       expect(proMapId).toBeTruthy();
       expect(OPAQUE_ID_RE.test(proMapId)).toBe(true);

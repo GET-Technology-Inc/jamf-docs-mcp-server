@@ -192,7 +192,7 @@ support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com` |
+| `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com`, at most 2,048 characters |
 | `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId`, instead of `url` or alongside it |
 | `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId`, instead of `url` or alongside it |
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
@@ -232,7 +232,7 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`) |
+| `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`), each at most 2,048 characters |
 | `concurrency` | number (1–5) | `3` | Maximum parallel requests |
 | `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL; no effect on concepts.jamf.com or support.jamf.com URLs |
 | `maxTokens` | number (100–50000) | `5000` | Total token budget across all articles |

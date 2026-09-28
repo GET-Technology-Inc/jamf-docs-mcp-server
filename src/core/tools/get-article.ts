@@ -9,7 +9,7 @@ import { appToolMeta } from '../apps/index.js';
 import { GetArticleInputSchema } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { ArticleOutputSchema, type ArticleStructuredOutput } from '../schemas/output.js';
-import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
+import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, type LocaleId } from '../constants.js';
 import type {
   ToolResult,
   ArticleResponse,
@@ -22,8 +22,9 @@ import { failureReason } from '../services/failure-reason.js';
 import { HttpError } from '../http-client.js';
 import { ProviderError } from '../services/provider-error.js';
 import { ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
-import { STATIC_SOURCE_HOSTNAMES } from '../constants/sources.js';
+import { STATIC_SOURCE_HOSTNAMES, staticSourceForUrl } from '../constants/sources.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
+import { isTopicRequestUrl } from '../services/ft-client.js';
 import {
   buildArticleContentView,
   formatArticleCompact,
@@ -143,6 +144,29 @@ function buildArticleStructuredContent(
   };
 }
 
+/**
+ * Whether `failure` is one of the article's own addresses answering 404, the
+ * one failure the advice to look for the article elsewhere is for. On
+ * learn.jamf.com that is its map's topic index, which a url is resolved
+ * through and which answers 404 only when the whole map is gone, or the
+ * topic's metadata or body ({@link isTopicRequestUrl}). On a static source it
+ * is the page, the only request a static-source article makes.
+ *
+ * Read from the status and the address of the request, whoever sent it: this
+ * server, through `ctx.http`, or an ArticleProvider that threw an HttpError,
+ * whose ProviderError the catch unwraps as it does for a 429. So the advice
+ * needs an HttpError: an injected HttpClient that fails a 404 some other way,
+ * or a provider whose own words say 404, gets none, and neither does a
+ * provider's HttpError for an address of its own, such as an R2 object.
+ * Until 2026-09-28 the advice followed any reason that contained "404": a 404
+ * from the maps list, which says nothing of the article; a provider's
+ * message; and a 503 for a topic whose address has "404" in it.
+ */
+function isArticleNotFound(failure: unknown): boolean {
+  return failure instanceof HttpError && failure.status === 404
+    && (isTopicRequestUrl(failure.url) || staticSourceForUrl(failure.url) !== undefined);
+}
+
 /** Returned when neither addressing form is complete. Quoted in the description. */
 const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be provided.';
 
@@ -191,7 +215,7 @@ ${STATIC_SOURCE_HOSTNAMES.join(' or ')} url is fetched by url, and a note says
 the pair was ignored.
 
 Args:
-  - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}. Required unless mapId and contentId are given
+  - url (string, optional): Full https:// URL of the article, on ${ALLOWED_HOSTNAME_LIST}, at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Required unless mapId and contentId are given
   - mapId (string, optional): Fluid Topics map ID, from a search result or a TOC. Use with contentId, instead of url or alongside it
   - contentId (string, optional): Fluid Topics content ID, from a search result or a TOC entry. Use with mapId, instead of url or alongside it
   - language (string, optional): Documentation language/locale. Overrides the locale in url, which is used when this is omitted. No effect on a mapId + contentId pair (a map is in one language) or on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
@@ -239,6 +263,7 @@ Examples:
 Errors:
   - "${MISSING_ADDRESS_MESSAGE}" if neither url nor the full pair is given
   - "${ALLOWED_HOSTNAME_MESSAGE}" (an input validation error) if url is not https:// on one of those hosts
+  - "URL must not exceed ${CONTENT_LIMITS.MAX_URL_LENGTH} characters" (an input validation error) if url is longer
   - "Topic not found", "Cannot resolve bundleId" or "HTTP 404" if there is no article at that address
 
 Note: \`maxTokens\` bounds every reply: the article or one section, a
@@ -381,11 +406,13 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
         // message saying "rate limit" got the advice, as a provider's can, and
         // no error this server throws does ("HTTP 429 Too Many Requests:
         // <url>"), so a rate-limited request of this server's never got it.
+        // A 404 is read the same way, and from its address too: see
+        // isArticleNotFound.
         const cause = error instanceof ProviderError ? error.failure : error;
         let helpText = '';
         if ((cause instanceof HttpError && cause.status === 429) || errorMessage.includes('rate limit')) {
           helpText = '\n\nPlease wait a moment and try again.';
-        } else if (errorMessage.includes('404')) {
+        } else if (isArticleNotFound(cause)) {
           helpText = '\n\nThe article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.';
         }
 

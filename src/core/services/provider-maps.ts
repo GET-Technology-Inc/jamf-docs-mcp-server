@@ -1,6 +1,7 @@
 /**
  * What the maps registry reads from a MapsProvider's answer, before it reads
- * any map.
+ * any map, and from learn.jamf.com's since 2026-09-28 (readFetchedMaps in
+ * maps-registry.ts).
  *
  * The same rule as for every other provider (provider-results.ts), for the
  * one answer the registry is built from. Kept apart from that module, and
@@ -74,7 +75,9 @@ function readMap(row: unknown): FtMapInfo | null {
  *   whose every map is left out, is read as `null`. An empty array is the
  *   provider's own answer, and is kept.
  *
- * The registry keeps no logger, so none of this is logged.
+ * learn.jamf.com's answer is read by the same rule, and a `null` there is
+ * the failure (readFetchedMaps in maps-registry.ts). The registry keeps no
+ * logger, so none of this is logged.
  */
 export function readProviderMaps(answer: unknown): FtMapInfo[] | null {
   if (!Array.isArray(answer)) { return null; }

@@ -8,7 +8,7 @@ import type { ServerContext } from '../types/context.js';
 import { GetBatchArticlesInputSchema } from '../schemas/index.js';
 import { BatchArticlesOutputSchema } from '../schemas/output.js';
 import { reportProgress } from '../utils/progress.js';
-import { ResponseFormat, OutputMode, TOKEN_CONFIG, type LocaleId } from '../constants.js';
+import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, type LocaleId } from '../constants.js';
 import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
 import { failureReason } from '../services/failure-reason.js';
 import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
@@ -91,7 +91,8 @@ const TOOL_NAME = 'jamf_docs_batch_get_articles';
 /**
  * `language` was missing from Args until 2026-09-24, although the schema has
  * accepted it since the tool was added in #58. The schema checks only that each
- * url is a URL; the host check runs per article, so a URL on another host, or
+ * url is a URL of at most CONTENT_LIMITS.MAX_URL_LENGTH characters (since
+ * 2026-09-28); the host check runs per article, so a URL on another host, or
  * an http:// one, comes back as that article's error ("URL must be from …")
  * and the rest of the batch still runs.
  */
@@ -101,7 +102,7 @@ Fetches up to 10 articles in parallel with concurrency control. Useful for
 comparing articles, gathering information from multiple pages, or bulk research.
 
 Args:
-  - urls (string[], required): Array of 1-10 https:// article URLs on ${ALLOWED_HOSTNAME_LIST}. Any other URL fails as its own per-article error
+  - urls (string[], required): Array of 1-10 https:// article URLs on ${ALLOWED_HOSTNAME_LIST}, each at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Any other URL fails as its own per-article error, and a longer one fails the call's input validation
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
   - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. No effect on ${STATIC_SOURCE_HOSTNAMES.join(' or ')} URLs
   - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.

@@ -21,7 +21,17 @@ export const CONTENT_LIMITS = {
   FILTER_OVERFETCH_MULTIPLIER: 3,       // fetch 3x when client-side filters need post-filtering
   FILTER_OVERFETCH_CAP: 150,            // absolute cap on over-fetched results
   MAX_CONTENT_LENGTH: 100000,           // 100KB
-  MAX_SNIPPET_LENGTH: 500
+  MAX_SNIPPET_LENGTH: 500,
+  /**
+   * The longest `url` an article tool takes, in characters. The longest
+   * article url measured is far shorter: 273 characters over the 1,932 reader
+   * urls of three learn.jamf.com maps on 2026-09-28, and 381 for the 29 ja
+   * and zh-TW support.jamf.com articles captured on 2026-09-26, whose urls are
+   * percent-encoded. 2,048 is a common bound on a url, and over five times the
+   * longest of those. Until 2026-09-28 there was none, and the replies quote
+   * a url whole: a url of 100,023 characters got an error of 100,072.
+   */
+  MAX_URL_LENGTH: 2048
 } as const;
 
 // Token configuration (Context7 style)

@@ -4,8 +4,8 @@
  * Consolidates the duplicated fetch-parse-tokenize pipeline that was in
  * both get-article.ts and batch-get-articles.ts into a single function.
  *
- * Key optimization: metadata and content are fetched in parallel via
- * Promise.all when the cache misses.
+ * Key optimization: metadata and content are fetched in parallel when the
+ * cache misses.
  */
 
 import type { CacheProvider } from './interfaces/cache.js';
@@ -44,6 +44,7 @@ import type { Logger } from './interfaces/logger.js';
 import { cacheKey } from './cache-key.js';
 import { getMetaValue, bundleStemToDisplayName, FT_META } from '../utils/ft-metadata.js';
 import { extractSections } from './tokenizer.js';
+import { namedVersion } from './search-result-versions.js';
 import type { HttpClient } from '../http-client.js';
 
 // ─── Shared article fetch ──────────────────────────────────────
@@ -60,6 +61,12 @@ interface CachedArticle {
   parsed: ParsedArticleContent;
   displayUrl: string;
   product: string | undefined;
+  /**
+   * The topic's `version` metadata as Jamf sent it, or `current` for none, as
+   * every build has stored it, so that one sharing this cache reads what
+   * another wrote. Shown through `articleVersion`, which reads anything but a
+   * version number as `current`.
+   */
   version: string;
   /**
    * Per-topic edition date, cached alongside the parse because it comes from
@@ -153,10 +160,19 @@ export async function fetchArticleFromFt(
   const tocTtl = options.tocCacheTtl ?? options.cacheTtl;
 
   if (cached === null) {
-    const [topicMeta, html] = await Promise.all([
-      fetchTopicMetadata(options.http, mapId, contentId),
-      fetchTopicContent(options.http, mapId, contentId),
-    ]);
+    // Both requests go out at once. When both fail, the metadata's failure is
+    // the one thrown, whichever answered first: until 2026-09-28 it was the
+    // first to answer, so an unknown `contentId`, which both answer 404,
+    // quoted the metadata's url in 9 of 12 live calls and the body's in 3.
+    // The body is awaited only once the metadata has answered, so a metadata
+    // failure is thrown without waiting on the body. The body's own failure
+    // is caught here too, so that it is not an unhandled rejection when the
+    // metadata's is thrown instead.
+    const metadataRequest = fetchTopicMetadata(options.http, mapId, contentId);
+    const contentRequest = fetchTopicContent(options.http, mapId, contentId);
+    contentRequest.catch(() => undefined);
+    const topicMeta = await metadataRequest;
+    const html = await contentRequest;
 
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
     const ownUrl = topicOwnUrl(topicMeta);
@@ -282,7 +298,7 @@ export async function fetchArticleFromFt(
       options.articleUrlNamesTopic ?? articleUrl !== '',
     ),
     product,
-    version,
+    version: articleVersion(version),
     // `ParsedArticle` has declared `lastUpdated` and `formatFullMetadata` has
     // rendered a "**Last Updated**" line for it all along; nothing ever set it,
     // so the line never appeared and the field was always undefined. Sampled
@@ -633,6 +649,30 @@ function extractProductVersion(
     const prodname = getMetaValue(metadata, FT_META.PRODNAME);
     product = prodname !== '' ? prodname : undefined;
   }
+  // What is cached, as every build has cached it: see articleVersion for what
+  // is shown.
   const version = getMetaValue(metadata, FT_META.VERSION);
   return { product, version: version !== '' ? version : 'current' };
+}
+
+/**
+ * The version an article is shown at: its `version` metadata when that is a
+ * version number ({@link namedVersion}), and `current` otherwise, as for a
+ * topic that has none.
+ *
+ * Only a version number is a version, as on the search path since #363. Some
+ * topics carry Jamf's template text, "Enter the latest product version for
+ * which the topic was revised.", in their `version`. Live on 2026-09-28 the
+ * topic listings gave it to 9 of the 441 topics of the en-US Jamf Connect map
+ * and 9 of the 441 of the ja-JP one, 4 of the 382 of Jamf Protect and 79 of
+ * the 697 of Technical Articles, and no `version` to any other topic of those
+ * four maps. Until that day the article showed the text as its version.
+ *
+ * Read when the article is served rather than when it is cached. So an entry
+ * cached before then, which holds the text, is shown the same way, and the
+ * entry still holds what an earlier build would write, which that build,
+ * sharing the cache, reads as its own.
+ */
+function articleVersion(version: string): string {
+  return namedVersion(version) ?? 'current';
 }

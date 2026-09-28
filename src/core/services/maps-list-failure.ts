@@ -24,7 +24,7 @@
  * them: each read as a fetch from learn.jamf.com that failed.
  */
 
-import { MapsProviderError } from './maps-registry.js';
+import { MapsProviderError, UnreadableMapsListError } from './maps-registry.js';
 import {
   describeFetchFailure,
   isRequestFailure,
@@ -55,13 +55,21 @@ export interface MapsListFailure {
  *   was not asked. It is all this server knows of the failure.
  * - A request to learn.jamf.com: why it failed ({@link describeFetchFailure}),
  *   and "may be temporary" when {@link mayBeTemporary} says so.
- * - Anything else, such as a list from learn.jamf.com that is not a list, or
- *   a fetch that failed in a shape {@link isRequestFailure} does not know: an
- *   abort, or a network `TypeError` that neither says "fetch failed" nor has
- *   a `cause.code`, as another runtime's fetch may throw. Plain words, and
- *   the server log for what went wrong. The error itself is left out,
- *   because a raw JavaScript message ("maps.map is not a function") tells a
- *   caller nothing it can act on.
+ * - A list from learn.jamf.com that has no map the registry can use, or is
+ *   not a list at all ({@link UnreadableMapsListError}): learn.jamf.com, in
+ *   the words the other tools quote the error in, and "may be temporary", as
+ *   the search says of search results it could not read and the glossary of
+ *   a table of contents with no terms. Until 2026-09-28 it was a JavaScript
+ *   error ("maps.map is not a function"), worded as the next case is, or, for
+ *   a list of maps without ids, no failure at all: the list read as one with
+ *   no publications, which the search went on with and in which the glossary
+ *   found no glossary.
+ * - Anything else, such as a fetch that failed in a shape
+ *   {@link isRequestFailure} does not know: an abort, or a network
+ *   `TypeError` that neither says "fetch failed" nor has a `cause.code`, as
+ *   another runtime's fetch may throw. Plain words, and the server log for
+ *   what went wrong. The error itself is left out, because a raw JavaScript
+ *   message tells a caller nothing it can act on.
  */
 export function describeMapsListFailure(error: unknown): MapsListFailure {
   if (error instanceof MapsProviderError) {
@@ -74,6 +82,9 @@ export function describeMapsListFailure(error: unknown): MapsListFailure {
       failed: `could not be fetched from learn.jamf.com (${describeFetchFailure(error)})`,
       advice: mayBeTemporary(error) ? MAY_BE_TEMPORARY : undefined,
     };
+  }
+  if (error instanceof UnreadableMapsListError) {
+    return { failed: 'came back from learn.jamf.com in a form this server could not read', advice: MAY_BE_TEMPORARY };
   }
   return { failed: 'could not be read', advice: UNEXPECTED_FAILURE_ADVICE };
 }

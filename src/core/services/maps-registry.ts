@@ -15,12 +15,13 @@ import { fetchMaps } from './ft-client.js';
 import { createHttpClient, type HttpClient } from '../http-client.js';
 import { createDefaultConfig } from '../config.js';
 import { DEFAULT_LOCALE, type LocaleId } from '../constants.js';
-import type { FtMapInfo, FtMetadataEntry } from '../types.js';
+import { JamfDocsError, JamfDocsErrorCode, type FtMapInfo, type FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
 import { cacheKey } from './cache-key.js';
 import { guardCache } from './cache-guard.js';
 import { readProviderMaps } from './provider-maps.js';
+import { namedVersion } from './search-result-versions.js';
 import {
   compareVersions,
   extractVersionFromBundleId,
@@ -128,6 +129,25 @@ export function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): strin
   return stripVersionSuffix(stripCurrentSuffix(candidate));
 }
 
+/**
+ * A map's version as the registry reads it: a version number, or '' for
+ * none, as the search and the article read a topic's since 2026-09-28
+ * ({@link namedVersion}).
+ *
+ * No map carries anything else today (685 maps, 46 values, on 2026-09-28).
+ * A map whose version were Jamf's template text, as some topics' is, would
+ * otherwise be listed as a version, sorted as the newest.
+ *
+ * Read of a map from learn.jamf.com or a MapsProvider, and again of an entry
+ * read from the cache, which an earlier build wrote with the value as it
+ * came: the cached list is up to CACHE_TTL_PRODUCTS old. So the namespace
+ * stays `maps-registry-v4`, whose shape this does not change, and an earlier
+ * build reads this one's '' as the map with no version it is.
+ */
+function mapVersion(version: string | undefined): string {
+  return namedVersion(version) ?? '';
+}
+
 /** Convert an FT map payload into a registry entry. */
 function parseMap(map: FtMapInfo): MapEntry {
   const { metadata } = map;
@@ -139,7 +159,7 @@ function parseMap(map: FtMapInfo): MapEntry {
     // fallback to choose.
     title: map.title ?? '',
     bundleStem: deriveBundleStem(metadata),
-    version: getMetaValue(metadata, FT_META.VERSION),
+    version: mapVersion(getMetaValue(metadata, FT_META.VERSION)),
     locale: getMetaValue(metadata, FT_META.LOCALE),
     isLatest: getMetaValue(metadata, FT_META.LATEST_VERSION) === 'yes',
     bundleValues: getMetaValues(metadata, FT_META.BUNDLE),
@@ -202,6 +222,47 @@ export class MapsProviderError extends Error {
     this.name = 'MapsProviderError';
     this.failure = failure;
   }
+}
+
+/**
+ * learn.jamf.com's answer to the maps list, when it has no map the registry
+ * can use or is not a list at all ({@link readFetchedMaps}).
+ *
+ * A JamfDocsError (`PARSE_ERROR`) whose message says so in plain words, which
+ * the other tools quote whole (failure-reason.ts). Its own class so that the
+ * search, the glossary and `jamf_docs_list_products`, which word the list's
+ * failure themselves, can name learn.jamf.com too (describeMapsListFailure).
+ */
+export class UnreadableMapsListError extends JamfDocsError {
+  constructor() {
+    super(
+      'learn.jamf.com answered with the list of documentation maps in a form this server could not read',
+      JamfDocsErrorCode.PARSE_ERROR,
+    );
+  }
+}
+
+/**
+ * learn.jamf.com's maps, read as a MapsProvider's are ({@link readProviderMaps}):
+ * a map the registry cannot use is left out, and costs no other.
+ *
+ * An answer with no map it can use, or that is not a list at all, is an
+ * {@link UnreadableMapsListError}. Until 2026-09-28 learn.jamf.com's answer
+ * was read as it came. A `{}` failed every reader of the list with "maps.map
+ * is not a function", a `null` with "Cannot read properties of null (reading
+ * 'map')", and a list with one `null` in it with "Cannot destructure property
+ * 'metadata' of 'map' as it is null", which cost every other map too. A list
+ * of maps without ids read as a list with no publications: a TOC said
+ * "Could not resolve map for jamf-pro", the glossary that the list had no
+ * glossary in it, and `jamf_docs_list_products` nothing of the list, while it
+ * marked every product's table of contents unavailable.
+ */
+function readFetchedMaps(answer: unknown): FtMapInfo[] {
+  const maps = readProviderMaps(answer);
+  if (maps === null) {
+    throw new UnreadableMapsListError();
+  }
+  return maps;
 }
 
 /**
@@ -304,7 +365,7 @@ export class MapsRegistry {
     // past this registry's TTL, or read from the cache on every call until
     // the cache lets it go.
     if (isCachedMaps(cached) && Date.now() - cached.fetchedAt < this.cacheTtl) {
-      this.entries = cached.entries;
+      this.entries = cached.entries.map(entry => ({ ...entry, version: mapVersion(entry.version) }));
       this.fetchedAt = cached.fetchedAt;
       return;
     }
@@ -325,7 +386,7 @@ export class MapsRegistry {
       }
       provided = readProviderMaps(answer);
     }
-    const maps = provided ?? await this.fetchMapsFn(this.http);
+    const maps = provided ?? readFetchedMaps(await this.fetchMapsFn(this.http));
     this.entries = maps.map(m => parseMap(m));
     this.fetchedAt = Date.now();
 

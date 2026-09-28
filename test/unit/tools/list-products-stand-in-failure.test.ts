@@ -78,7 +78,6 @@ const SUPPORT_HOMES = new Set(Object.values(STATIC_DOC_SOURCES['jamf-support'].l
 
 const KV_DOWN = 'KV namespace unavailable';
 const STAND_INS = 'Product versions are compiled-in defaults. Every product is assumed to have a table of contents.';
-const UNEXPECTED_FAILURE_ADVICE = 'Trying again may help. If it keeps failing, the server log says what went wrong.';
 const MAY_BE_TEMPORARY = 'This may be temporary: try again in a minute.';
 
 // ── Harness ─────────────────────────────────────────────────────────────────
@@ -286,12 +285,15 @@ describe('learn.jamf.com answering the publication half and then failing', () =>
     expect(reads.learn).toBe(2);
   });
 
-  it('a list that is not a list: the words the publication half\'s read gets, and the server log', async () => {
+  it('a list that is not a list: the words the publication half\'s read gets, and the retry sentence', async () => {
+    // Until 2026-09-28 "could not be read", and the server log
+    // (maps-list-unreadable.test.ts).
     const { ctx } = upstream({ learn: [[PRO_MAP], 'not a list'] });
 
     expect(await incompleteOf(ctx)).toEqual({
       unavailable: ['maps-registry'],
-      message: `The maps registry could not be read. ${STAND_INS} ${UNEXPECTED_FAILURE_ADVICE}`,
+      message: 'The maps registry came back from learn.jamf.com in a form this server could not read. ' +
+        `${STAND_INS} ${MAY_BE_TEMPORARY}`,
     });
   });
 });
