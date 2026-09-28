@@ -67,9 +67,9 @@ import type {
  * newest first. Only versions are collapsed: several results for a topic at
  * one version (passages of one page, its `#fragment` and `?query` variants,
  * or one page Jamf lists under several breadcrumbs) all come back as you
- * returned them, where the Fluid Topics path keeps one entry per cluster. So
- * do results that name each topic at one version, including any
- * `otherVersions` you set.
+ * returned them, where the Fluid Topics path keeps one entry per topic
+ * (`mapId` + `contentId`). So do results that name each topic at one
+ * version, including any `otherVersions` you set.
  *
  * The topic and version are read from what a Fluid Topics result carries: a
  * learn.jamf.com (or docs.jamf.com) `url` in the `/r/{locale}/{bundle}/{slug}`

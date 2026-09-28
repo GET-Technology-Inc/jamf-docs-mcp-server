@@ -215,13 +215,46 @@ function formatPaginationFooter(view: SearchPageView, compact = false): string {
 
 /**
  * Format search result in compact mode (single line)
+ *
+ * `sharesUrl` marks a result whose url another result on the page has too.
+ * Its line then ends with what tells it apart, since its title and link may
+ * not: the breadcrumb entry above the result itself, and the `mapId` +
+ * `contentId` pair, which is what fetches it. Jamf publishes some different
+ * topics at one url, and the url fetches only one of them. Live on
+ * 2026-09-28, en-US "technical articles" returned 19 technical-article
+ * sections titled "Additional Information", all at
+ * `/r/en-US/technical-articles/Additional_Information`, and a page holding
+ * several of them showed as many lines of `[Additional Information](…)`,
+ * told apart only by a cut snippet.
  */
-function formatSearchResultCompact(result: SearchResult, index: number): string {
+function formatSearchResultCompact(result: SearchResult, index: number, sharesUrl = false): string {
   // Truncate snippet for compact display
   const snippetPreview = result.snippet.length > 80
     ? `${result.snippet.slice(0, 77)}...`
     : result.snippet;
-  return `${index}. [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)}) - ${sanitizeMarkdownText(snippetPreview)}\n`;
+  const apart = sharesUrl ? compactDistinction(result) : '';
+  return `${index}. [${sanitizeMarkdownText(result.title)}](${sanitizeMarkdownUrl(result.url)}) - ${sanitizeMarkdownText(snippetPreview)}${apart}\n`;
+}
+
+/** ` (in {parent}; mapId=…, contentId=…)`, each part when the result has it, or ''. */
+function compactDistinction(result: SearchResult): string {
+  const trail = result.breadcrumb ?? [];
+  // A topic's trail ends with its own title (all 16,750 topic entries in 70
+  // searches on 2026-09-28), which is what these results may share.
+  const parent = trail.at(-1) === result.title ? trail.at(-2) : trail.at(-1);
+  const parts = [
+    ...(parent !== undefined && parent !== '' ? [`in ${sanitizeMarkdownText(parent)}`] : []),
+    ...(hasIds(result)
+      ? [`mapId=${sanitizeMarkdownText(result.mapId)}, contentId=${sanitizeMarkdownText(result.contentId)}`]
+      : []),
+  ];
+  return parts.length > 0 ? ` (${parts.join('; ')})` : '';
+}
+
+/** Whether both halves of the pair `jamf_docs_get_article` accepts are present. */
+function hasIds(result: SearchResult): result is SearchResult & { mapId: string; contentId: string } {
+  return result.mapId !== undefined && result.mapId !== ''
+    && result.contentId !== undefined && result.contentId !== '';
 }
 
 /**
@@ -233,10 +266,16 @@ function formatSearchResultsAsCompact(view: SearchPageView): string {
   markdown += formatFiltersLine(filters);
   markdown += '\n\n';
 
+  const perUrl = new Map<string, number>();
+  for (const r of results) {
+    perUrl.set(r.url, (perUrl.get(r.url) ?? 0) + 1);
+  }
+  const sharesUrl = (r: SearchResult): boolean => (perUrl.get(r.url) ?? 0) > 1;
+
   // Numbered by rank across the whole result set. A page holds as many
   // results as fit `maxTokens`, so page 2 does not start at `limit` + 1.
   results.forEach((result, idx) => {
-    markdown += formatSearchResultCompact(result, view.offset + idx + 1);
+    markdown += formatSearchResultCompact(result, view.offset + idx + 1, sharesUrl(result));
   });
 
   markdown += formatPaginationFooter(view, true);
@@ -245,8 +284,19 @@ function formatSearchResultsAsCompact(view: SearchPageView): string {
   // stays out of it — printing both on every line roughly doubles the output
   // this mode exists to avoid. The full path renders them inline; say where
   // they are rather than leaving the documented workflow looking unavailable.
-  // Same trade get_toc already makes for its per-entry contentIds.
-  if (results.some((r) => r.mapId !== undefined && r.contentId !== undefined)) {
+  // Same trade get_toc already makes for its per-entry contentIds. The
+  // exception is a result that shares its url with another on the page
+  // (see formatSearchResultCompact), and the note then says so.
+  const omitted = results.some((r) => r.mapId !== undefined && r.contentId !== undefined && !(sharesUrl(r) && hasIds(r)));
+  const shown = results.some((r) => sharesUrl(r) && hasIds(r));
+  if (shown) {
+    const others = omitted
+      ? ' The other results\' pairs are omitted here; use `outputMode="full"` or read `structuredContent`.'
+      : '';
+    markdown +=
+      '*Results that share a url show the `mapId` + `contentId` pair `jamf_docs_get_article` accepts: ' +
+      `a url that several topics share fetches only one of them.${others}*\n`;
+  } else if (omitted) {
     markdown +=
       '*The `mapId` + `contentId` pair `jamf_docs_get_article` accepts is omitted here; ' +
       'use `outputMode="full"` or read `structuredContent`.*\n';

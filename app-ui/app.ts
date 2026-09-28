@@ -33,6 +33,8 @@ import {
 import { budgetNote, renderGlossaryList } from './glossary.js';
 import {
   type SearchTruncatedResult,
+  articleArgs,
+  hitIdAttributes,
   nextSearchPageArgs,
   otherSourceCount,
   renderElsewhere,
@@ -54,6 +56,9 @@ interface SearchResult {
   docType?: string;
   breadcrumb?: string[];
   otherVersions?: string[];
+  /** The pair that fetches this result's own article: see `articleArgs`. */
+  mapId?: string;
+  contentId?: string;
 }
 
 /**
@@ -916,7 +921,7 @@ function renderSearch(view: SearchView): string {
         : undefined,
     ].filter(renderableText);
     return `
-      <li><a class="hit" href="${esc(r.url)}" data-url="${esc(r.url)}">
+      <li><a class="hit" href="${esc(r.url)}" data-url="${esc(r.url)}"${hitIdAttributes(r)}>
         ${crumbs(r.breadcrumb, 'hit-path', r.title)}
         <span class="hit-title">${esc(r.title)}</span>
         ${renderableText(r.snippet) ? `<span class="hit-snippet">${inline(esc(r.snippet))}</span>` : ''}
@@ -1606,7 +1611,9 @@ async function openArticle(event: MouseEvent, target: HTMLElement): Promise<void
   event.preventDefault();
   target.setAttribute('aria-current', 'true');
 
-  const { url } = target.dataset;
+  // A search result also carries its `mapId` + `contentId` pair, which is
+  // what opens it when another result shares its url: see `articleArgs`.
+  const { url, mapId, contentId } = target.dataset;
   if (url === undefined) {
     return;
   }
@@ -1622,7 +1629,14 @@ async function openArticle(event: MouseEvent, target: HTMLElement): Promise<void
       // Fall through: the article is still worth opening.
     }
   }
-  await call('jamf_docs_get_article', { url }, true, label === '' ? 'Article' : label);
+  // `call` adds the same `language` to the arguments.
+  const forwarded: { language?: string } = toolLanguage();
+  await call(
+    'jamf_docs_get_article',
+    articleArgs({ url, mapId, contentId }, forwarded.language),
+    true,
+    label === '' ? 'Article' : label,
+  );
 }
 
 root.addEventListener('click', (event) => {

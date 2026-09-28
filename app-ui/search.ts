@@ -10,7 +10,8 @@
  * concepts.jamf.com page.
  *
  * It also holds what paging needs: the arguments for the next page, and the
- * note for a page that was cut.
+ * note for a page that was cut. And what opening a result needs: the
+ * arguments that fetch that result's own article.
  *
  * Kept out of app.ts so it can be tested on its own, as toc.ts is: importing
  * app.ts runs its top-level wiring and throws outside a browser.
@@ -198,4 +199,65 @@ export function searchBudgetNote(view: SearchPaging): string | undefined {
   return `${name} is too long for the token budget this page was given: its snippet is cut.${
     needs !== undefined ? ` The whole result needs ${String(needs)} tokens.` : ''
   }`;
+}
+
+/**
+ * What `jamf_docs_get_article` accepts as a `mapId` or `contentId`. Anything
+ * else would fail the call with a validation error, so it is not sent.
+ */
+const FT_ID = /^[\w~-]{1,200}$/;
+
+function ftId(value: unknown): value is string {
+  return typeof value === 'string' && FT_ID.test(value);
+}
+
+/** The locale in a learn.jamf.com url's path, `/r/en-US/…` or `/en-US/bundle/…`. */
+function urlLocale(url: string): string | undefined {
+  try {
+    return /^\/(?:r\/)?([a-z]{2}-[A-Z]{2})(?:\/|$)/.exec(new URL(url).pathname)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The attributes that carry a search result's `mapId` + `contentId` pair to
+ * the click that opens it (see {@link articleArgs}), or nothing when it has no
+ * pair to send.
+ */
+export function hitIdAttributes(hit: { mapId?: unknown; contentId?: unknown }): string {
+  const { mapId, contentId } = hit;
+  return ftId(mapId) && ftId(contentId)
+    ? ` data-map-id="${esc(mapId)}" data-content-id="${esc(contentId)}"`
+    : '';
+}
+
+/**
+ * The `jamf_docs_get_article` arguments that open a search result: its url,
+ * and its `mapId` + `contentId` pair when it has one.
+ *
+ * Until 2026-09-28 a result was opened by its url alone. Jamf publishes some
+ * different topics at one url, and the url fetches only one of them, so every
+ * other result at that url opened the wrong article: live that day,
+ * `/r/en-US/technical-articles/Additional_Information` opened the section of
+ * "Jamf Pro External Patch Source Endpoints" from any of the 19 results there,
+ * and the LAPS paper's "Use LAPS" opened its child "Using LAPS in the Jamf Pro
+ * API". With the pair, learn.jamf.com fetches the pair's topic.
+ *
+ * Except in another language. The panel asks every tool in the host's
+ * language (`language`), and on a url that fetches the page in that language;
+ * a pair names a topic of one map, which is in one language, and the server
+ * ignores `language` for it. So a result in another language than the one
+ * asked in is opened by its url alone, as before, and the reader still gets
+ * the page in theirs.
+ */
+export function articleArgs(
+  hit: { url: string; mapId?: string | undefined; contentId?: string | undefined },
+  language: string | undefined,
+): Record<string, string> {
+  const { url, mapId, contentId } = hit;
+  if (!ftId(mapId) || !ftId(contentId) || (language !== undefined && language !== urlLocale(url))) {
+    return { url };
+  }
+  return { url, mapId, contentId };
 }

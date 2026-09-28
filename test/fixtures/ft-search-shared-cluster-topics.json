@@ -1,0 +1,1008 @@
+{
+  "source": "POST https://learn.jamf.com/api/khub/clustered-search, 2026-09-28, perPage 50, no filters; entries trimmed to the fields the search reads. Each group lists the entries of one cluster in the order Fluid Topics returned them, except where noted.",
+  "usingLaps": {
+    "query": "LAPS",
+    "locale": "en-US",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "1ZN5bkFvUa6baRoUXR6Zog",
+          "contentId": "cS8N6f3zVb5pvf0xGCi_ug",
+          "tocId": "VN~_HlL~gTRFdtIP~ZP3kw",
+          "title": "Use LAPS",
+          "htmlTitle": "<span class=\"kwicstring\">Use </span><span class=\"kwicmatch\">LAPS</span>",
+          "mapTitle": "Technical Paper: Local Administrator Password Solution for Jamf Pro",
+          "breadcrumb": [
+            "Local Administrator Password Solution for Jamf Pro",
+            "Use LAPS"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">After you have enabled </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\">, you can use the Jamf Pro interface or the Jamf Pro API to implement </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\">.</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "technical-paper-laps-current/Using_LAPS"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-paper-laps-current/Using_LAPS"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "product-pro",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "1ZN5bkFvUa6baRoUXR6Zog",
+          "contentId": "XD_dFGbPnBjOLmq~fF_mSw",
+          "tocId": "pZaUv5ZbiUCDcZprz9NILw",
+          "title": "Using LAPS in the Jamf Pro API",
+          "htmlTitle": "<span class=\"kwicstring\">Using </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> in the Jamf Pro API</span>",
+          "mapTitle": "Technical Paper: Local Administrator Password Solution for Jamf Pro",
+          "breadcrumb": [
+            "Local Administrator Password Solution for Jamf Pro",
+            "Use LAPS",
+            "Using LAPS in the Jamf Pro API"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">management framework </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> account and an MDM LAPS account in the Jamf Pro interface and using </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> via the Jamf</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">should have two </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> accounts. View the </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> passwords using the</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">now see the entire </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> password rotation history for the </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> users that you have</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">displayed, all </span><span class=\"kwicmatch\">LAPS</span><span class=\"kwicstring\"> rotation processes have</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "technical-paper-laps-current/Using_LAPS"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-paper-laps-current/Using_LAPS"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "product-pro",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "generalRequirements": {
+    "query": "technical articles",
+    "locale": "en-US",
+    "note": "The first 3 of the 26 entries in the cluster.",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+          "contentId": "V8aIOHjM_mfgbvUyUjCeJQ",
+          "tocId": "Ic~_0fHXVIp4WHmL5I0zEg",
+          "title": "General Requirements",
+          "htmlTitle": "<span class=\"kwicstring\">General Requirements</span>",
+          "mapTitle": "Technical Articles",
+          "breadcrumb": [
+            "Jamf Pro Server Tools",
+            "Backing Up and Restoring the Database Using the Jamf Pro Server Tools Command-Line Interface",
+            "General Requirements"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">You must configure the CLI before performing these tasks. For instructions, see the Using the Jamf Pro Server Tools Command-Line Interface </span><span class=\"kwicmatch\">article</span><span class=\"kwicstring\">.</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+          "contentId": "EyT_moKeM2_mV2WZ6mlHwg",
+          "tocId": "kgYJMgw3_fPp85icOnsbQw",
+          "title": "General Requirements",
+          "htmlTitle": "<span class=\"kwicstring\">General Requirements</span>",
+          "mapTitle": "Technical Articles",
+          "breadcrumb": [
+            "Jamf Pro Server Tools",
+            "Creating the Jamf Pro Database Using the Jamf Pro Server Tools Command-Line Interface",
+            "General Requirements"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">MySQL should already be installed and running on the target server. For more information, see the Installing Java and MySQL for Jamf Pro 10.14.0 or Later </span><span class=\"kwicmatch\">article</span><span class=\"kwicstring\">.</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+          "contentId": "CrVH9wGYJC8b9vZayuLRFQ",
+          "tocId": "JOB~l5hoCWrtfbVJofwMeg",
+          "title": "General Requirements",
+          "htmlTitle": "<span class=\"kwicstring\">General Requirements</span>",
+          "mapTitle": "Technical Articles",
+          "breadcrumb": [
+            "Content Distribution",
+            "Configuring and Deploying the iboss cloud Enterprise App using Jamf Pro",
+            "General Requirements"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">To manage the iboss cloud enterprise app using Jamf Pro, you need the following: Mobile devices with iOS 10 or later An active iboss cloud subscription The required ports open For a list of the ports required, see the following webpage: https://support.ibosscloud.com/hc/en-us/</span><span class=\"kwicmatch\">articles</span><span class=\"kwicstring\">/115007869047</span>",
+          "metadata": [
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-articles/General_Requirements"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "customMenuBarActionItems": {
+    "query": "menu bar",
+    "locale": "en-US",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ovlpAWLVkl7iKw8_KJEqaQ",
+          "contentId": "Xie6Iggk6CxDpvmGtg_GsQ",
+          "tocId": "HFoWzUlYjBbellIcOki2yA",
+          "title": "Custom Menu Bar Action Items",
+          "htmlTitle": "<span class=\"kwicstring\">Custom </span><span class=\"kwicmatch\">Menu Bar</span><span class=\"kwicstring\"> Action Items</span>",
+          "mapTitle": "Jamf Connect Documentation 2.45.0",
+          "breadcrumb": [
+            "Jamf Connect App for macOS",
+            "Advanced Menu Bar Settings",
+            "Custom Menu Bar Action Items"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">action items in the </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> app. These items can open URLs or run any script in the background of the computer, allowing you to create a wide variety of powerful and convenient resources for the user. Custom </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> action items are added to the Jamf Connect </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> app by deploying an additional</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "2.45.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-connect-documentation-2.45.0/Custom_Menu_Bar_Action_Items"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/jamf-connect-documentation-2.45.0/Custom_Menu_Bar_Action_Items"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "product-connect",
+                "role-administrator",
+                "product-connect-2.45.0",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ovlpAWLVkl7iKw8_KJEqaQ",
+          "contentId": "Xie6Iggk6CxDpvmGtg_GsQ",
+          "tocId": "8tR63vx2vRBFS5X3MYNYGA",
+          "title": "Custom Menu Bar Action Items",
+          "htmlTitle": "<span class=\"kwicstring\">Custom </span><span class=\"kwicmatch\">Menu Bar</span><span class=\"kwicstring\"> Action Items</span>",
+          "mapTitle": "Jamf Connect Documentation 2.45.0",
+          "breadcrumb": [
+            "Jamf Connect App for macOS",
+            "Access Management",
+            "Custom Menu Bar Action Items"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">action items in the </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> app. These items can open URLs or run any script in the background of the computer, allowing you to create a wide variety of powerful and convenient resources for the user. Custom </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> action items are added to the Jamf Connect </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> app by deploying an additional</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "2.45.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-connect-documentation-2.45.0/Custom_Menu_Bar_Action_Items"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/jamf-connect-documentation-2.45.0/Custom_Menu_Bar_Action_Items"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "product-connect",
+                "role-administrator",
+                "product-connect-2.45.0",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": []
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": [
+                "Jamf Connect"
+              ]
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "criteriaOperators": {
+    "query": "inventory",
+    "locale": "ja-JP",
+    "note": "The 11.32.0 and 11.31.0 entries under the first two of the four breadcrumbs, of the 28 in the cluster.",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "GE9~jUeMhje7axrw1dW5VA",
+          "contentId": "iiWir~uadvuuCsjbeuvdEA",
+          "tocId": "8ahQ_V1guj52wLSDV4SZ8g",
+          "title": "クライテリア オペレータ",
+          "htmlTitle": "<span class=\"kwicstring\">クライテリア オペレータ</span>",
+          "mapTitle": "Jamf Pro ドキュメント 11.32.0",
+          "breadcrumb": [
+            "コンピュータ管理",
+            "コンピュータインベントリ",
+            "コンピュータの詳細検索",
+            "クライテリア オペレータ"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">指定した日付より前に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; before (yyyy-mm-dd) &#x27;2024-05-01&#x27;」</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">した日数以内に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; less than x days ago &#x27;14&#x27;」には、14日</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.32.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPro/Documentation/Topics/ja-jp_c_Criteria_Operators"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-pro-documentation-current/クライテリア-オヘレータ"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "GE9~jUeMhje7axrw1dW5VA",
+          "contentId": "iiWir~uadvuuCsjbeuvdEA",
+          "tocId": "FjB3SvxK3jWia0SmfOnsFw",
+          "title": "クライテリア オペレータ",
+          "htmlTitle": "<span class=\"kwicstring\">クライテリア オペレータ</span>",
+          "mapTitle": "Jamf Pro ドキュメント 11.32.0",
+          "breadcrumb": [
+            "モバイルデバイスの管理",
+            "モバイルデバイスのインベントリ",
+            "モバイルデバイスの詳細検索",
+            "クライテリア オペレータ"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">指定した日付より前に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; before (yyyy-mm-dd) &#x27;2024-05-01&#x27;」</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">した日数以内に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; less than x days ago &#x27;14&#x27;」には、14日</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.32.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPro/Documentation/Topics/ja-jp_c_Criteria_Operators"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-pro-documentation-current/クライテリア-オヘレータ"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "5OvAFtY3O0tTsVeKMLrhqw",
+          "contentId": "iiWir~uadvuuCsjbeuvdEA",
+          "tocId": "8ahQ_V1guj52wLSDV4SZ8g",
+          "title": "クライテリア オペレータ",
+          "htmlTitle": "<span class=\"kwicstring\">クライテリア オペレータ</span>",
+          "mapTitle": "Jamf Pro ドキュメント 11.31.0",
+          "breadcrumb": [
+            "コンピュータ管理",
+            "コンピュータインベントリ",
+            "コンピュータの詳細検索",
+            "クライテリア オペレータ"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">指定した日付より前に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; before (yyyy-mm-dd) &#x27;2024-05-01&#x27;」</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">した日数以内に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; less than x days ago &#x27;14&#x27;」には、14日</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.31.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPro/Documentation/Topics/ja-jp_c_Criteria_Operators"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-pro-documentation-current/クライテリア-オヘレータ"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "5OvAFtY3O0tTsVeKMLrhqw",
+          "contentId": "iiWir~uadvuuCsjbeuvdEA",
+          "tocId": "FjB3SvxK3jWia0SmfOnsFw",
+          "title": "クライテリア オペレータ",
+          "htmlTitle": "<span class=\"kwicstring\">クライテリア オペレータ</span>",
+          "mapTitle": "Jamf Pro ドキュメント 11.31.0",
+          "breadcrumb": [
+            "モバイルデバイスの管理",
+            "モバイルデバイスのインベントリ",
+            "モバイルデバイスの詳細検索",
+            "クライテリア オペレータ"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">指定した日付より前に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; before (yyyy-mm-dd) &#x27;2024-05-01&#x27;」</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">した日数以内に発生したイベントに一致する クライテリア「&#x27;Last </span><span class=\"kwicmatch\">Inventory</span><span class=\"kwicstring\"> Update&#x27; less than x days ago &#x27;14&#x27;」には、14日</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.31.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPro/Documentation/Topics/ja-jp_c_Criteria_Operators"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-pro-documentation-current/クライテリア-オヘレータ"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "configuringAzureAd": {
+    "query": "what is new",
+    "locale": "ja-JP",
+    "note": "Two clusters of one entry each.",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "JEc~s7Yc6BZM_8sDZDLNrg",
+          "contentId": "EN07tYt99KYjHfrWJ8QdfA",
+          "tocId": "tWPABzFV9aw~RUabd08nmw",
+          "title": "ステップ 2: Azure AD を構成する",
+          "htmlTitle": "<span class=\"kwicstring\">ステップ 2: Azure AD を構成する</span>",
+          "mapTitle": "Jamf Connect ドキュメント",
+          "breadcrumb": [
+            "Zero Trust ネットワークアクセス",
+            "クラウドアクセス制御を構成する",
+            "MFA をバイパスする",
+            "Azure AD：多要素認証をバイパスする",
+            "ステップ 2: Azure AD を構成する"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">Security (セキュリティ) &gt; Conditional Acess (条件付きアクセス) に移動します。 Named Locations (ネームドロケーション) をクリックし、</span><span class=\"kwicmatch\">New</span><span class=\"kwicstring\"> Location (新しい場所) を選択します。 適宜、プロファイルに Name (名前) (例：「Jamf の信頼できる</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "Enter the latest product version for which the topic was revised."
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPlatformSecurity/JamfConnect/Documentation/Capabilities/ZTNA/Topics/ja-jp_t_Configuring_Azure_AD_2"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-connect-documentation-current/ステッフ-2-Azure-AD-を構成する"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "JEc~s7Yc6BZM_8sDZDLNrg",
+          "contentId": "6BkjgOEAptNndmCRvatVzg",
+          "tocId": "U6FMVHuNQfGitrE~dLxTDg",
+          "title": "ステップ 2: Azure AD を構成する",
+          "htmlTitle": "<span class=\"kwicstring\">ステップ 2: Azure AD を構成する</span>",
+          "mapTitle": "Jamf Connect ドキュメント",
+          "breadcrumb": [
+            "Zero Trust ネットワークアクセス",
+            "クラウドアクセス制御を構成する",
+            "Microsoft 365：ログインアクセスを制限する",
+            "ステップ 2: Azure AD を構成する"
+          ],
+          "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">Security (セキュリティ) &gt; Conditional Acess (条件付きアクセス) に移動します。 Named Locations (ネームドロケーション) をクリックし、</span><span class=\"kwicmatch\">New</span><span class=\"kwicstring\"> Location (新しい場所) を選択します。 適宜、プロファイルに Name (名前) (例：「Jamf の信頼できる</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "Enter the latest product version for which the topic was revised."
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "JamfPlatformSecurity/JamfConnect/Documentation/Capabilities/ZTNA/Topics/ja-jp_t_Configuring_Azure_AD"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "ja-JP/jamf-connect-documentation-current/ステッフ-2-Azure-AD-を構成する"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "ja-JP"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "additionalInformation": {
+    "query": "technical articles",
+    "locale": "en-US",
+    "note": "The first of four such clusters, of one entry each.",
+    "entries": [
+      {
+        "type": "TOPIC",
+        "missingTerms": [],
+        "topic": {
+          "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+          "contentId": "OWmtH6K8XqVMpGfF1bsjmA",
+          "tocId": "h36i_7Lq6iT4QluDfhIIxg",
+          "title": "Additional Information",
+          "htmlTitle": "<span class=\"kwicstring\">Additional Information</span>",
+          "mapTitle": "Technical Articles",
+          "breadcrumb": [
+            "On-Premise Installation and Upgrades",
+            "Upgrading to MySQL 8.0",
+            "Upgrading to MySQL 8.0 on macOS",
+            "Additional Information"
+          ],
+          "htmlExcerpt": "<span class=\"kwicstring\">For more information on configuring MySQL 8.0 for Jamf Pro, see the following </span><span class=\"kwicmatch\">article</span><span class=\"kwicstring\">: Configuring MySQL 8.0 for Jamf Pro For additional information on Jamf Pro Server Tools, see the following </span><span class=\"kwicmatch\">article</span><span class=\"kwicstring\">: Jamf Pro Server Tools Overview For additional information on MySQL 8.0, see the following</span><span class=\"kwictruncate\">...</span>",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "Enter the latest product version for which the topic was revised."
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "TechnicalArticles/Topics/698-Upgrading_to_MySQL_8/r_Additional_Information_4"
+              ]
+            },
+            {
+              "key": "ft:prettyUrl",
+              "label": "ft:prettyUrl",
+              "values": [
+                "en-US/technical-articles/Additional-Information"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "releaseNotesMaps": {
+    "query": "release notes",
+    "locale": "en-US",
+    "note": "The 11.32.0 and 11.32.1 MAP entries, of the 45 in the cluster.",
+    "entries": [
+      {
+        "type": "MAP",
+        "missingTerms": [],
+        "map": {
+          "mapId": "OKOMoySz489sf0XO7Ifmvw",
+          "mapUrl": "https://learn.jamf.com/api/khub/maps/OKOMoySz489sf0XO7Ifmvw",
+          "readerUrl": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-current",
+          "title": "Jamf Pro Release Notes 11.32.0",
+          "htmlTitle": "<span class=\"kwicstring\">Jamf Pro </span><span class=\"kwicmatch\">Release Notes</span><span class=\"kwicstring\"> 11.32.0</span>",
+          "htmlExcerpt": "See what's new, key features, and installation guidelines with Jamf Pro.",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.32.0"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-pro-release-notes-current"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "product-pro",
+                "product-pro-11.32.0",
+                "content-releasenotes",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ],
+          "editorialType": "BOOK",
+          "openMode": "FLUIDTOPICS"
+        }
+      },
+      {
+        "type": "MAP",
+        "missingTerms": [],
+        "map": {
+          "mapId": "evuSCHS1Bf_3IYXencuvdw",
+          "mapUrl": "https://learn.jamf.com/api/khub/maps/evuSCHS1Bf_3IYXencuvdw",
+          "readerUrl": "https://learn.jamf.com/r/en-US/jamf-pro-release-notes-11.32.1",
+          "title": "Jamf Pro Release Notes 11.32.1",
+          "htmlTitle": "<span class=\"kwicstring\">Jamf Pro </span><span class=\"kwicmatch\">Release Notes</span><span class=\"kwicstring\"> 11.32.1</span>",
+          "htmlExcerpt": "See what's new, key features, and installation guidelines with Jamf Pro.",
+          "metadata": [
+            {
+              "key": "version",
+              "label": "version",
+              "values": [
+                "11.32.1"
+              ]
+            },
+            {
+              "key": "ft:clusterId",
+              "label": "ft:clusterId",
+              "values": [
+                "jamf-pro-release-notes-current"
+              ]
+            },
+            {
+              "key": "ft:locale",
+              "label": "ft:locale",
+              "values": [
+                "en-US"
+              ]
+            },
+            {
+              "key": "zoominmetadata",
+              "label": "Legacy Zoomin Metadata",
+              "values": [
+                "content-techdocs",
+                "role-administrator",
+                "product-pro-11.32.1",
+                "product-pro",
+                "content-releasenotes",
+                "release-status-ga"
+              ]
+            },
+            {
+              "key": "jamf:portal",
+              "label": "Portal",
+              "values": [
+                "Jamf Pro"
+              ]
+            },
+            {
+              "key": "jamf:app",
+              "label": "Application",
+              "values": []
+            },
+            {
+              "key": "jamf:utility",
+              "label": "Utilities & Services",
+              "values": []
+            }
+          ],
+          "editorialType": "BOOK",
+          "openMode": "FLUIDTOPICS"
+        }
+      }
+    ]
+  }
+}

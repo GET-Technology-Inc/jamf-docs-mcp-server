@@ -49,7 +49,7 @@ import {
   MAY_BE_TEMPORARY,
   UNEXPECTED_FAILURE_ADVICE,
 } from '../utils/fetch-failure.js';
-import { dedupeResultsToLatestVersions } from './search-result-versions.js';
+import { dedupeResultsToLatestVersions, namedVersion } from './search-result-versions.js';
 import { readSearchProviderResults } from './provider-results.js';
 import { estimateTokens, buildPaginationNote } from './tokenizer.js';
 import { pageStarts, pagesPastTheLastNote } from './budget-pages.js';
@@ -550,7 +550,10 @@ export function buildSearchFilters(
 /** A survivor of {@link dedupeToLatestVersions}, with the versions it stands for. */
 export interface DedupedEntry {
   entry: FtSearchEntry;
-  /** Versions collapsed into this one, newest first. Empty when nothing was. */
+  /**
+   * Versions collapsed into this one, newest first. Empty when nothing was,
+   * and on every entry of a cluster but the first.
+   */
   collapsedVersions: string[];
 }
 
@@ -559,12 +562,47 @@ export interface DedupedEntry {
  *
  * Jamf Pro documentation publishes a separate search entry for every product
  * version (11.13 … 11.29), all sharing the same `ft:clusterId`. We keep only the
- * highest-versioned entry per cluster so the user sees one (latest) result per
- * topic. Non-versioned products (Jamf School, Connect, Protect, …) carry a single
- * entry per topic and a distinct `ft:clusterId`, so they pass through untouched.
- * Entries with no `ft:clusterId` cannot be version-deduped and are each kept.
+ * highest-versioned entries of a cluster so the user sees one (latest) result
+ * per topic. A topic of a non-versioned product (Jamf School, Connect,
+ * Protect, …) carries a single entry, nearly always in a cluster of its own,
+ * so it passes through untouched. Entries with no `ft:clusterId` cannot be
+ * version-deduped and are each kept.
  *
- * First-seen (relevance) order is preserved.
+ * A cluster is not always one topic. A topic's cluster id is nearly always
+ * its url's bundle and slug, with `-current` for a version number (16,687 of
+ * 16,750 topic entries in 70 searches on 2026-09-28; the rest carry a source
+ * path or a title). And Jamf publishes some different topics at one url: the
+ * LAPS paper's "Use LAPS" and its child "Using LAPS in the Jamf Pro API", or
+ * 26 technical articles' "General Requirements" sections. So of the entries
+ * at the version kept, one is kept per topic, the `mapId` + `contentId` pair
+ * `jamf_docs_get_article` fetches it by. Until 2026-09-28 one was kept per
+ * cluster, and every topic but the first went missing, where a
+ * SearchProvider returning the same entries got every one back. The same page
+ * Jamf lists under several breadcrumbs, with an entry for each, is one pair
+ * and still one result. The pair cannot stand in for the cluster across
+ * versions, though. A topic's `contentId` can change from one version to
+ * the next: of the 653 clusters that held several versions in those
+ * searches, 43 carried more than one. So the cluster is still what makes two
+ * entries versions of one topic.
+ *
+ * Only a version number is a version ({@link namedVersion}, which the
+ * SearchProvider path reads by too). A few topics carry Jamf's template text,
+ * "Enter the latest product version for which the topic was revised.", in
+ * their `version`. Compared as a string, it sorted after every number, so it
+ * would have been kept over every real version in its cluster; it now counts
+ * as no version.
+ *
+ * First-seen (relevance) order is preserved, cluster by cluster: Fluid Topics
+ * ranks clusters, not the topics in one. Each cluster's first topic keeps the
+ * cluster's rank, and carries the versions collapsed. Its other topics come
+ * after the first topic of every cluster, in cluster order. So the results
+ * one per cluster gave come first, in the same order, and the topics it hid
+ * follow them. Placed at their cluster's rank instead, one cluster of generic
+ * sections could fill a page. Live on 2026-09-28, the first cluster of the
+ * en-US search "Additional Information" held 19 technical-article sections
+ * of that title; at their cluster's rank they took all 10 results of page 1,
+ * and pushed the 2nd to 10th back to 20th to 28th. A SearchProvider ranks
+ * each result itself, so its order is its own.
  *
  * Collapsing stays the default — one broad query returns roughly fifteen
  * snapshots per topic and a release-notes query returned 199 entries for ten
@@ -582,31 +620,44 @@ export function dedupeToLatestVersions(
   clusters: FtSearchCluster[]
 ): DedupedEntry[] {
   const order: string[] = [];
-  const best = new Map<string, { entry: FtSearchEntry; version: string; seen: Set<string> }>();
+  const best = new Map<string, {
+    /** The version kept, or '' while no entry has one. */
+    version: string;
+    /** One entry per topic at `version`, by first-seen order. */
+    topics: Map<string | FtSearchEntry, FtSearchEntry>;
+    seen: Set<string>;
+  }>();
   let anonCount = 0;
 
   for (const cluster of clusters) {
     for (const entry of cluster.entries) {
       const metadata = entry.topic?.metadata ?? entry.map?.metadata ?? [];
       const clusterId = getMetaValue(metadata, FT_META.CLUSTER_ID);
-      const version = getMetaValue(metadata, FT_META.VERSION);
+      const version = entryVersion(metadata);
+      const topic = topicOf(entry);
       // Entries without a cluster id can't be version-deduped — keep each.
       const key = clusterId !== '' ? clusterId : `anon-${anonCount++}`;
       const existing = best.get(key);
       if (existing === undefined) {
         order.push(key);
-        best.set(key, { entry, version, seen: new Set(version !== '' ? [version] : []) });
-      } else {
-        if (version !== '') { existing.seen.add(version); }
-        if (compareVersions(version, existing.version) > 0) {
-          existing.entry = entry;
-          existing.version = version;
-        }
+        best.set(key, { version, topics: new Map([[topic, entry]]), seen: new Set(version !== '' ? [version] : []) });
+        continue;
+      }
+      if (version !== '') { existing.seen.add(version); }
+      const newer = compareVersions(version, existing.version);
+      if (newer > 0) {
+        existing.version = version;
+        existing.topics = new Map([[topic, entry]]);
+      } else if (newer === 0 && !existing.topics.has(topic)) {
+        existing.topics.set(topic, entry);
       }
     }
   }
 
   const out: DedupedEntry[] = [];
+  // Every cluster's other topics, in cluster order, after every cluster's
+  // first: see "First-seen (relevance) order" above.
+  const overflow: DedupedEntry[] = [];
   for (const key of order) {
     const hit = best.get(key);
     if (hit === undefined) { continue; }
@@ -615,9 +666,34 @@ export function dedupeToLatestVersions(
     const collapsed = [...hit.seen]
       .filter(v => v !== hit.version)
       .sort((a, b) => compareVersions(b, a));
-    out.push({ entry: hit.entry, collapsedVersions: collapsed });
+    // Named on the first topic only, as the SearchProvider path names them on
+    // its first-ranked result. Which topic of a cluster an older version was
+    // of cannot be told. No cluster measured held two topics at one version
+    // number, though, so the question has not come up.
+    const [first, ...others] = hit.topics.values();
+    if (first === undefined) { continue; }
+    out.push({ entry: first, collapsedVersions: collapsed });
+    for (const entry of others) {
+      overflow.push({ entry, collapsedVersions: [] });
+    }
   }
-  return out;
+  return [...out, ...overflow];
+}
+
+/** An entry's `version`, or '' when it holds no version number. */
+function entryVersion(metadata: FtMetadataEntry[] | undefined): string {
+  return namedVersion(getMetaValue(metadata, FT_META.VERSION)) ?? '';
+}
+
+/**
+ * The topic an entry is, as `jamf_docs_get_article` addresses it: a topic by
+ * its `mapId` + `contentId` pair, a MAP entry by its map. An entry that is
+ * neither is a topic of its own.
+ */
+function topicOf(entry: FtSearchEntry): string | FtSearchEntry {
+  if (entry.topic !== undefined) { return JSON.stringify(['topic', entry.topic.mapId, entry.topic.contentId]); }
+  if (entry.map !== undefined) { return JSON.stringify(['map', entry.map.mapId]); }
+  return entry;
 }
 
 // ─── Result Transformation ─────────────────────────────────────
@@ -673,7 +749,6 @@ function buildSearchResult(fields: EntryFields): SearchResult {
     : 'Untitled';
   const product = extractProductFromClassification(metadata);
   const snippet = cleanSnippet(fields.htmlExcerpt, title, product);
-  const versionValues = getMetaValues(metadata, FT_META.VERSION);
   const docType = docTypeFromLabelKeys(docTypeLabelKeys(metadata));
 
   const result: SearchResult = {
@@ -692,9 +767,16 @@ function buildSearchResult(fields: EntryFields): SearchResult {
     result.contentId = fields.contentId;
   }
 
-  const firstVersion = versionValues[0];
-  if (firstVersion !== undefined) {
-    result.version = firstVersion;
+  // A version number only, as the dedupe above reads one. Until 2026-09-28
+  // whatever the field held was shown as the **Version**, and a few topics
+  // hold Jamf's template text there ("Enter the latest product version for
+  // which the topic was revised.": two ja-JP Jamf Connect topics and four
+  // en-US technical-article sections, measured that day). Each is in an
+  // unversioned publication, whose other topics carry no version, so the
+  // result gets none either.
+  const version = entryVersion(metadata);
+  if (version !== '') {
+    result.version = version;
   }
   if (fields.breadcrumb !== undefined && fields.breadcrumb.length > 0) {
     result.breadcrumb = fields.breadcrumb;
@@ -1027,8 +1109,11 @@ function paginateSearchResults(
 
   const notes = [
     buildPaginationNote({ pageWasClamped: current !== page, requestedPage: page, totalPages }),
-    // The Fluid Topics path asks for 50 results at most, so it never needs
-    // more than 50 pages; only a SearchProvider can return enough for this.
+    // The Fluid Topics path asks for 50 clusters and returns a result for
+    // each topic in them (see dedupeToLatestVersions), so it can pass 50
+    // results. The most measured on 2026-09-28 was 98, for en-US "technical
+    // articles", which is 87 pages at `maxTokens: 100`: under the cap. A
+    // SearchProvider can return enough to pass it.
     pagesPastTheLastNote(
       costs,
       { maxTokens, pageSize, totalPages, widestPageSize: CONTENT_LIMITS.MAX_SEARCH_RESULTS },
