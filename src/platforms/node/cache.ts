@@ -130,8 +130,10 @@ export class FileCache implements CacheProvider {
    * tries again: `mkdir` is cheap, and a directory that appears later (a
    * volume mounted after start, or one someone creates) is picked up without
    * a restart. The write still goes ahead either way, as it always has: a
-   * failed `mkdir` does not prove the write will fail (`CACHE_DIR=""` fails
-   * `mkdir` with ENOENT but writes into the working directory).
+   * failed `mkdir` does not prove the write will fail (a `cacheDir` of `''`
+   * fails `mkdir` with ENOENT but writes into the working directory; until
+   * 2026-09-28 the Node server passed one for `CACHE_DIR=`, which it now
+   * reads as unset).
    */
   private async ensureCacheDir(): Promise<void> {
     if (this.dirCreated) { return; }
@@ -143,8 +145,8 @@ export class FileCache implements CacheProvider {
       this.dirFailureLogged = true;
       this.log.error(
         `Cannot create cache directory "${this.cacheDir}": ${String(error)}. ` +
-        // Not "entries stay in memory": with CACHE_DIR="" mkdir fails but the
-        // writes still land in the working directory, and memory is an LRU.
+        // Not "entries stay in memory": with a cacheDir of '' mkdir fails but
+        // the writes still land in the working directory, and memory is an LRU.
         'Will try again on the next write.',
       );
     }

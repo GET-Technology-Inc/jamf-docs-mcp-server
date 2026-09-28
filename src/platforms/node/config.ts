@@ -5,6 +5,7 @@
  * All process.env / path / fs access is isolated here.
  */
 
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -66,10 +67,60 @@ export function getEnvNumber(
   return parsed;
 }
 
+/**
+ * The string `key` is set to, or `defaultValue`. An empty or blank value
+ * counts as unset, as it does for a number.
+ *
+ * Until 2026-09-28 only an unset one did. Measured through
+ * `createNodeContext` that day: with USER_AGENT= or USER_AGENT='   ' every
+ * request went out with an empty `User-Agent:` header, since fetch trims a
+ * header value. With CACHE_DIR= the cache wrote its entries into the working
+ * directory itself, and the startup sweep could not list `''`, so it
+ * reclaimed no expired entry there; with CACHE_DIR='   ' it wrote them into a
+ * directory named with three spaces. None of the four printed a warning.
+ */
 function getEnvString(key: string, defaultValue: string): string {
-  const value = process.env[key] ?? defaultValue;
+  const value = process.env[key];
+  if (value === undefined || value.trim() === '') {
+    return defaultValue;
+  }
   // Strip CRLF characters to prevent HTTP header injection
   return value.replace(/[\r\n]/g, '');
+}
+
+/**
+ * A character an HTTP header value cannot carry: anything but a tab, visible
+ * ASCII and the rest of Latin-1 (RFC 9110's field-vchar, obs-text and SP).
+ * CR and LF never get here; getEnvString strips them.
+ */
+const NOT_IN_A_HEADER = /[^\t\x20-\x7E\x80-\xFF]/u;
+
+/**
+ * USER_AGENT, or `defaultValue`, with a warning, when fetch could not send it.
+ *
+ * Until 2026-09-28 any value was taken. Measured that day on
+ * `createNodeContext`, jamf_docs_search called over MCP: with
+ * USER_AGENT='ops-bot (客戶)' each of its 5 requests failed before it was
+ * sent, fetch throwing "Cannot convert argument to a ByteString because the
+ * character at index 9 has a value of 23458", and the tool answered that the
+ * results could not be fetched from learn.jamf.com (a network error) and
+ * that this may be temporary. With an ESC in it, fetch threw "fetch failed"
+ * instead, and with MAX_RETRIES=2 the HTTP client, which takes a TypeError
+ * for a network error, made 17 attempts. Nothing was printed at startup. An
+ * emoji or DEL fails in fetch too; `ops-bot (Müller)`, Latin-1, is sent.
+ */
+function getUserAgent(defaultValue: string): string {
+  const value = getEnvString('USER_AGENT', defaultValue);
+  const bad = NOT_IN_A_HEADER.exec(value)?.[0].codePointAt(0);
+  if (bad === undefined) { return value; }
+  const codePoint = `U+${bad.toString(16).toUpperCase().padStart(4, '0')}`;
+  // Quoted by JSON.stringify, which writes a C0 control character, such as
+  // ESC, as an escape rather than sending it to the terminal.
+  console.error(
+    `[WARNING] [config] USER_AGENT ${JSON.stringify(value)} contains ${codePoint}, which an HTTP header `
+    + `cannot carry, so no request could be sent. Using default "${defaultValue}".`,
+  );
+  return defaultValue;
 }
 
 /**
@@ -117,6 +168,32 @@ function realLocation(p: string): string {
 }
 
 /**
+ * macOS's per-user temp directory, `/var/folders/<..>/T/`, as the system
+ * gives it (`confstr(_CS_DARWIN_USER_TEMP_DIR)`, through getconf), or
+ * nothing on another system or if getconf fails.
+ *
+ * `os.tmpdir()` is that directory only when TMPDIR says so, and a host need
+ * not pass TMPDIR: an MCP SDK stdio transport passes the server only HOME,
+ * LOGNAME, PATH, SHELL, TERM and USER, and `os.tmpdir()` is then `/tmp`.
+ * Until 2026-09-28 that was the only temp directory exempt. Measured that
+ * day, `env -i HOME=… PATH=… USER=… CACHE_DIR=$TMPDIR/x node dist/index.js`
+ * warned that `/private/var/folders/…` was a sensitive system directory and
+ * fell back to `.cache`; with TMPDIR it printed nothing.
+ */
+function darwinUserTempDir(): string[] {
+  if (process.platform !== 'darwin') { return []; }
+  try {
+    return [execFileSync('/usr/bin/getconf', ['DARWIN_USER_TEMP_DIR'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    }).trim()];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The OS temp directory and the user's home directory, where they really are.
  * A cache under either one is allowed even when it lies in a system directory.
  *
@@ -131,13 +208,16 @@ function realLocation(p: string): string {
  *   relative one from a project there too, since `process.cwd()` reports
  *   `/var/home/…`. v6.0.4 compared spellings and accepted `/home/<user>/…`.
  *
+ * On macOS the per-user temp directory is exempt too, whatever TMPDIR says;
+ * see darwinUserTempDir().
+ *
  * A directory is dropped if it contains one of the system directories
  * (`TMPDIR=/` or `HOME=/`, say), since it would otherwise cancel the whole
  * list. So is one that is not absolute: `HOME=""` makes `os.homedir()`
  * return `""`, which would resolve to the working directory and exempt it.
  */
 function ownDirs(roots: readonly string[]): string[] {
-  const dirs = [os.tmpdir()];
+  const dirs = [os.tmpdir(), ...darwinUserTempDir()];
   try {
     dirs.push(os.homedir());
   } catch {
@@ -172,23 +252,25 @@ function ownDirs(roots: readonly string[]): string[] {
 function isInSystemDir(location: string): boolean {
   if (process.platform === 'win32') { return false; }
   const roots = [...new Set(SENSITIVE_DIR_PREFIXES.flatMap(p => [p, realLocation(p)]))];
-  // Case-sensitive, so on a case-sensitive filesystem the exemption cannot
-  // reach a sibling that differs only in case.
-  if (ownDirs(roots).some(dir => isWithin(dir, location))) {
-    return false;
-  }
   // Case-insensitive, as before: macOS volumes are by default, and
   // `fs.realpathSync('/USR/Local')` there returns the spelling it was given.
   const lower = location.toLowerCase();
-  return roots.some(root => isWithin(root.toLowerCase(), lower));
+  if (!roots.some(root => isWithin(root.toLowerCase(), lower))) {
+    return false;
+  }
+  // Case-sensitive, so on a case-sensitive filesystem the exemption cannot
+  // reach a sibling that differs only in case. Asked only here, so getconf
+  // runs only for a path that would otherwise be rejected.
+  return !ownDirs(roots).some(dir => isWithin(dir, location));
 }
 
 function getValidatedCacheDir(): string {
   // The default is not checked. It is relative to the working directory, so a
   // server started from a system directory puts it there, but it is also
   // what a rejected value falls back to, so there is nothing better to offer.
-  if (process.env.CACHE_DIR === undefined) { return DEFAULT_CACHE_DIR; }
-  const raw = getEnvString('CACHE_DIR', DEFAULT_CACHE_DIR);
+  // An empty or blank CACHE_DIR is unset (getEnvString).
+  const raw = getEnvString('CACHE_DIR', '');
+  if (raw === '') { return DEFAULT_CACHE_DIR; }
   const resolved = path.resolve(raw);
 
   // Relative paths must resolve within cwd, by path segment (#313). This is
@@ -244,7 +326,7 @@ export function createNodeConfig(): ServerConfig {
       // 0 keeps parallel fetches parallel. batch_get_articles fans out, and a
       // non-zero default would stagger every one of those requests.
       rateLimitDelay: getEnvNumber('RATE_LIMIT_DELAY', 0, 0, 10000),
-      userAgent: getEnvString('USER_AGENT', defaultUserAgent(version)),
+      userAgent: getUserAgent(defaultUserAgent(version)),
     },
     cache: {
       maxEntries: getEnvNumber('CACHE_MAX_ENTRIES', 500, 10, 10000),

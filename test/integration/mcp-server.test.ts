@@ -3,7 +3,7 @@
  * Uses the official MCP Client SDK to test the server end-to-end
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject, resourceText } from '../helpers/fixtures.js';
 import { APP_RESOURCE_URI } from '../../src/core/apps/index.js';
@@ -11,6 +11,7 @@ import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 import { TOKEN_CONFIG } from '../../src/core/constants/limits.js';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 import { getFreePort, waitForServerStart } from '../helpers/server-process.js';
+import { serverCacheDir, type ServerCacheDir } from '../helpers/server-cache-dir.js';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { spawn, type ChildProcess } from 'child_process';
@@ -25,6 +26,7 @@ function countEntries(nodes: TocNode[]): number {
 describe('Jamf Docs MCP Server', () => {
   let client: Client;
   let transport: StdioClientTransport;
+  let cache: ServerCacheDir | undefined;
 
   beforeAll(async () => {
     // This suite asserts against the built server, not src/ — a stale dist
@@ -32,10 +34,13 @@ describe('Jamf Docs MCP Server', () => {
     requireFreshBuild();
 
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
+    // Not the working directory's .cache; see server-cache-dir.ts.
+    cache = serverCacheDir();
 
     transport = new StdioClientTransport({
       command: 'node',
-      args: [serverPath]
+      args: [serverPath],
+      env: cache.env,
     });
 
     client = new Client({
@@ -56,6 +61,11 @@ describe('Jamf Docs MCP Server', () => {
     // convenience, not a runtime guarantee.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     await client?.close();
+    cache?.remove();
+  });
+
+  it('keeps its cache in the directory it was given, not the working directory', async () => {
+    await vi.waitFor(() => { expect(cache?.swept()).toBe(true); }, { timeout: 5_000 });
   });
 
   describe('server instructions', () => {
@@ -358,11 +368,14 @@ describe('Jamf Docs MCP Server', () => {
     // A free port, not a fixed one (13579 before), so two runs on one machine
     // do not fail each other; see server-process.ts.
     let httpPort: number;
+    let httpCache: ServerCacheDir | undefined;
 
     beforeAll(async () => {
       httpPort = await getFreePort();
+      httpCache = serverCacheDir();
       const serverPath = path.resolve(process.cwd(), 'dist/index.js');
       const proc = spawn('node', [serverPath, '--transport', 'http', '--port', String(httpPort)], {
+        env: { ...process.env, ...httpCache.env },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       httpProcess = proc;
@@ -375,6 +388,11 @@ describe('Jamf Docs MCP Server', () => {
 
     afterAll(() => {
       httpProcess?.kill('SIGTERM');
+      httpCache?.remove();
+    });
+
+    it('keeps its cache in the directory it was given, not the working directory', async () => {
+      await vi.waitFor(() => { expect(httpCache?.swept()).toBe(true); }, { timeout: 5_000 });
     });
 
     it('should respond to health check', async () => {

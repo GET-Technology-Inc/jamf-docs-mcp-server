@@ -376,8 +376,8 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 
 ## 環境變數
 
-可選的環境變數設定。數值設定必須是有效範圍內的整數，其他值會被忽略，在 stderr 輸出警告並改用
-預設值；空值視同未設定。
+可選的環境變數設定。設定為空值或只有空白字元時，視同未設定。數值設定必須是有效範圍內的
+整數，其他值會被忽略，在 stderr 輸出警告並改用預設值。
 
 ### 快取設定
 
@@ -399,10 +399,12 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
   無法建立 `/.cache`，快取完全寫不進磁碟。
 - 位於 `/etc`、`/usr`、`/var`、`/sys`、`/proc`、`/dev`、`/sbin` 或 `/bin` 之下的
   路徑會被拒絕，相對路徑和絕對路徑都一樣。判斷前會先解析符號連結，所以在 macOS 上
-  `/private/etc/…` 和 `/etc/…` 一樣會被拒絕。未設定 `CACHE_DIR` 時不做這項檢查。
-- 使用者的家目錄和作業系統的暫存目錄即使位於上述目錄之下也允許使用。macOS 的
-  `$TMPDIR` 位於 `/private/var` 之下；在 Fedora Silverblue 等 ostree 系統上，
-  `/home` 是指向 `/var/home` 的連結。
+  `/private/etc/…` 和 `/etc/…` 一樣會被拒絕。`CACHE_DIR` 未設定或為空白時不做這項
+  檢查。
+- 使用者的家目錄和伺服器的暫存目錄（`TMPDIR`）即使位於上述目錄之下也允許使用。在
+  macOS 上，使用者專屬的暫存目錄（位於 `/private/var/folders` 之下）也允許使用，
+  即使 host 沒有把 `TMPDIR` 傳給伺服器（MCP SDK 的 stdio client 就不會傳）。在
+  Fedora Silverblue 等 ostree 系統上，`/home` 是指向 `/var/home` 的連結。
 - 被拒絕的值會改用 `.cache`，並在 stderr 輸出一行警告。`.cache` 同樣以工作目錄為
   基準解析，所以工作目錄本身位於系統目錄之下時，改用的 `.cache` 也會在那裡。
 
@@ -448,7 +450,7 @@ map TOC 索引沿用 `CACHE_TTL_ARTICLE`，concepts.jamf.com 與 support.jamf.co
 | `MAX_RETRIES` | 首次之後的重試次數。僅重試 429、 5xx、網路錯誤與逾時，採指數退避並尊重 `Retry-After`。`0` 表示不重試 | `0` | 0 - 10 |
 | `RETRY_DELAY` | 重試退避的基準時間 (ms)。`MAX_RETRIES` 為 `0` 時無作用 | `1000` | 100ms - 30 秒 |
 | `RATE_LIMIT_DELAY` | 對外請求 (含重試) 的最小間隔 (ms)。`0` 讓平行抓取維持平行 | `0` | 0 - 10 秒 |
-| `USER_AGENT` | 每個請求都會送出，讓 Jamf 能辨識這個 client | `jamf-docs-mcp-server/<version> (+<repo url>)` | 任意字串 |
+| `USER_AGENT` | 每個請求都會送出，讓 Jamf 能辨識這個 client。HTTP 標頭無法承載超過 U+00FF 的字元，也無法承載 tab 以外的控制字元。換行字元會被移除；含有其他這類字元的值會被忽略，在 stderr 輸出警告並改用預設值 | `jamf-docs-mcp-server/<version> (+<repo url>)` | Latin-1 字串 |
 
 ### HTTP 傳輸設定
 

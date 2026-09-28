@@ -7,13 +7,14 @@
  * These tests hit real external APIs (learn.jamf.com).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { readJsonRpc } from '../helpers/streamable-http.js';
 import { asJsonObject } from '../helpers/fixtures.js';
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import { requireFreshBuild } from '../helpers/require-fresh-build.js';
 import { getFreePort, waitForServerStart } from '../helpers/server-process.js';
+import { serverCacheDir, type ServerCacheDir } from '../helpers/server-cache-dir.js';
 import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 
 // ============================================================================
@@ -25,6 +26,8 @@ import { PRODUCT_IDS } from '../../src/core/constants/products.js';
 // server-process.ts.
 let baseUrl = '';
 let httpProcess: ChildProcess | undefined;
+// Not the working directory's .cache; see server-cache-dir.ts.
+let cache: ServerCacheDir | undefined;
 
 // Track session state for JSON-RPC
 let requestId = 0;
@@ -120,11 +123,12 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
     requireFreshBuild();
 
     const port = await getFreePort();
+    cache = serverCacheDir();
     const serverPath = path.resolve(process.cwd(), 'dist/index.js');
     const proc = spawn(
       'node',
       [serverPath, '--transport', 'http', '--port', String(port)],
-      { stdio: ['pipe', 'pipe', 'pipe'] }
+      { env: { ...process.env, ...cache.env }, stdio: ['pipe', 'pipe', 'pipe'] }
     );
     httpProcess = proc;
 
@@ -140,6 +144,11 @@ describe('HTTP Transport E2E', { timeout: 60000 }, () => {
 
   afterAll(() => {
     httpProcess?.kill('SIGTERM');
+    cache?.remove();
+  });
+
+  it('keeps its cache in the directory it was given, not the working directory', async () => {
+    await vi.waitFor(() => { expect(cache?.swept()).toBe(true); }, { timeout: 5_000 });
   });
 
   // --------------------------------------------------------------------------

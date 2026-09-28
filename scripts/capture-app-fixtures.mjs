@@ -13,6 +13,12 @@
  * So this drives the built server over stdio exactly as a host would, and
  * writes what came back. It needs network access to learn.jamf.com.
  *
+ * The server keeps its cache in a temp directory of its own, removed when the
+ * script ends, so every capture is a live answer. Until 2026-09-28 it was
+ * started from the checkout with no CACHE_DIR, so it kept its cache in the
+ * checkout's `.cache`, and a capture could record an answer that cache had
+ * kept for up to its TTL, 7 days for the maps list.
+ *
  *   npm run build && node scripts/capture-app-fixtures.mjs
  *
  * The output is committed. Re-run it when a tool's output schema changes; the
@@ -21,13 +27,20 @@
  */
 
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..');
 const outFile = path.join(repo, 'app-ui', 'dev', 'fixtures.json');
+
+// The server's cache, not the checkout's `.cache`; see the header. Removed
+// however the script ends, after the server has exited.
+const cacheDir = mkdtempSync(path.join(os.tmpdir(), 'jamf-docs-capture-cache-'));
+process.on('exit', () => { rmSync(cacheDir, { recursive: true, force: true }); });
 
 /**
  * The captures, in the order they appear in the harness picker.
@@ -169,7 +182,11 @@ const CAPTURES = [
 /** Minimal stdio MCP client. The SDK client would work too; this keeps the script dependency-free. */
 class StdioClient {
   constructor(command, args) {
-    this.child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'], cwd: repo });
+    this.child = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      cwd: repo,
+      env: { ...process.env, CACHE_DIR: cacheDir },
+    });
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = '';
@@ -224,9 +241,15 @@ class StdioClient {
     this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
   }
 
+  /** Resolves once the server has exited, so it writes nothing after the cache is removed. */
   close() {
-    this.child.stdin.end();
-    this.child.kill();
+    const { child } = this;
+    const exited = child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : new Promise((resolve) => { child.once('exit', resolve); });
+    child.stdin.end();
+    child.kill();
+    return exited;
   }
 }
 
@@ -266,7 +289,7 @@ for (const capture of CAPTURES) {
   }
 }
 
-client.close();
+await client.close();
 
 if (fixtures.length === 0) {
   console.error('\nNothing captured. The existing fixtures.json is left untouched.');
