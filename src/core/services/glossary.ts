@@ -710,12 +710,21 @@ function escapeRegExp(value: string): string {
  * four orderings of the live glossary (TOC order, locale sort, ASCII sort,
  * reversed), unranked scored 21/22 on two of them and ranked scored 22/22 on
  * all four: the unranked version was right by collation, not by rule.
+ *
+ * The parentheses may be full-width, as Jamf's zh-TW translations write
+ * them: 行動裝置管理（MDM）, 設定Apple推播通知服務（APNs）憑證 (live
+ * 2026-09-28; the ja-JP titles of the same pages write `(MDM)` and `(APNs)`,
+ * as does a zh-TW page left in English).
+ * Until 2026-09-28 only ASCII ones counted, so in a zh-TW glossary MDM描述檔
+ * ("MDM profile") ranked first, on starting with the term, and
+ * 行動裝置管理（MDM） after it. Jamf publishes the glossary in en-US only
+ * today, whose titles are all ASCII, so no live answer changed.
  */
 function boundaryMatchRank(title: string, term: string): number {
   const lowerTitle = title.toLowerCase();
   const lowerTerm = term.toLowerCase();
   if (lowerTitle === lowerTerm) { return 0; }
-  if (new RegExp(`\\(${escapeRegExp(lowerTerm)}\\)`).test(lowerTitle)) { return 1; }
+  if (new RegExp(`[(（]${escapeRegExp(lowerTerm)}[)）]`).test(lowerTitle)) { return 1; }
   if (lowerTitle.startsWith(lowerTerm)) { return 2; }
   return 3;
 }
@@ -1157,15 +1166,16 @@ export async function lookupGlossaryTerm(
 
   // What the budget left out, and what each would cost, in the shape
   // `searchDocumentation` reported the results its pages left out until
-  // 2026-09-28. A glossary lookup has no pages, so here a larger `maxTokens`
-  // is the one way to them. The cut stops at the first entry that
-  // does not fit and keeps no floor of one, so a leading entry over budget
-  // leaves `entries` empty beside `totalMatches > 0`. Until 2026-09-26 that
-  // was all the result said, and the tool read it as a no-match: live at
-  // `maxTokens: 100`, Apple School Manager (134) was "No glossary entries
-  // found". Each cost is the entry's share of `tokenCount`, the estimate the
-  // cut is made with, so when nothing fits, the first is the smallest
-  // `maxTokens` that returns anything.
+  // 2026-09-28. A glossary lookup has no pages, so a larger `maxTokens` is
+  // the way to them up to the largest, and past it a lookup of each by its
+  // own name, which ranks it first (the tool names them for that). The cut
+  // stops at the first entry that does not fit and keeps no floor of one, so
+  // a leading entry over budget leaves `entries` empty beside
+  // `totalMatches > 0`. Until 2026-09-26 that was all the result said, and
+  // the tool read it as a no-match: live at `maxTokens: 100`, Apple School
+  // Manager (134) was "No glossary entries found". Each cost is the entry's
+  // share of `tokenCount`, the estimate the cut is made with, so when nothing
+  // fits, the first is the smallest `maxTokens` that returns anything.
   const omittedEntries = matchedEntries.slice(includedEntries.length);
   const truncatedContent: TruncatedContentInfo | undefined = tokenInfo.truncated
     ? {

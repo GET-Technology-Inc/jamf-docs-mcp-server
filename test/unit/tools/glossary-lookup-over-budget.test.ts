@@ -303,6 +303,43 @@ describe('a GlossaryProvider result with no entries and matches', () => {
     expect(text).not.toContain('for all');
   });
 
+  it('does not advise a maxTokens the lookup already had when it says the first entry costs no more', async () => {
+    // Its cut and its costs disagree. Until 2026-09-28 this reply advised
+    // "`maxTokens: 80` or more ..., or `maxTokens: 110` for all 2" at 100.
+    overBudget(2, {
+      truncatedContent: {
+        omittedCount: 2,
+        omittedItems: [{ title: 'First', estimatedTokens: 80 }, { title: 'Second', estimatedTokens: 30 }],
+      },
+    });
+
+    const text = textOf(await lookup({ term: 'MDM', maxTokens: 100 }));
+    expect(text).toContain(
+      '2 entries match, but not even the first, First, fits in `maxTokens: 100`, ' +
+      'although its cost is given as 80 tokens. Repeat the lookup with a larger `maxTokens` to get them.*',
+    );
+    expect(text).not.toContain('`maxTokens: 80`');
+    expect(text).not.toContain('for all');
+  });
+
+  it('counts a cost equal to the budget as one it already had, and one more token as a figure to advise', async () => {
+    overBudget(1, {
+      truncatedContent: { omittedCount: 1, omittedItems: [{ title: 'First', estimatedTokens: 100 }] },
+    });
+    expect(textOf(await lookup({ term: 'MDM', maxTokens: 100 }))).toContain(
+      'The one matching entry, First, does not fit in `maxTokens: 100`, ' +
+      'although its cost is given as 100 tokens. Repeat the lookup with a larger `maxTokens` to get it.*',
+    );
+
+    overBudget(1, {
+      truncatedContent: { omittedCount: 1, omittedItems: [{ title: 'First', estimatedTokens: 101 }] },
+    });
+    expect(textOf(await lookup({ term: 'MDM', maxTokens: 100 }))).toContain(
+      'The one matching entry, First, does not fit in `maxTokens: 100`. ' +
+      'Repeat the lookup with `maxTokens: 101` or more to get it.*',
+    );
+  });
+
   it('escapes the title it names, as it does the entries', async () => {
     overBudget(1, {
       truncatedContent: { omittedCount: 1, omittedItems: [{ title: '[Click](https://example.com)', estimatedTokens: 150 }] },

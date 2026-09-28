@@ -339,7 +339,9 @@ describe('a glossary Jamf publishes in the language asked for', () => {
   });
 
   it('still holds a Latin abbreviation to a whole word, which a Chinese one bounds', async () => {
-    expect(await terms('MDM')).toEqual(['MDM描述檔', '行動裝置管理（MDM）']);
+    // The entry that defines it in full-width parentheses first: see
+    // glossary-fullwidth-parentheses.test.ts. Until 2026-09-28 MDM描述檔 was.
+    expect(await terms('MDM')).toEqual(['行動裝置管理（MDM）', 'MDM描述檔']);
     expect(await terms('DM')).toEqual([]);
   });
 
