@@ -295,7 +295,7 @@ describe('over FileCache', () => {
       ]);
       // Still served from memory, as FileCache always did.
       await expect(guard.get(TOPICS_KEY)).resolves.toEqual(['a']);
-      await expect(guard.get(cacheKey('ft-topic-index', { mapId: 'none' }))).resolves.toBeNull();
+      await expect(guard.get(cacheKey('ft-topic-index-v2', { mapId: 'none' }))).resolves.toBeNull();
       expect(warnings).toEqual([]);
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });

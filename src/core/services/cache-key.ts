@@ -127,7 +127,15 @@ export interface CacheKeySpaces {
   // those expire on their TTL (CACHE_TTL_ARTICLE, 24 hours by default).
   'ft-toc-v2': { locale: LocaleId; product: string; version: string };
   'ft-tocindex-v3': { mapId: string };
-  'ft-topic-index': { mapId: string };
+  // v2 (2026-09-28): a map's index holds each topic's own address, the page
+  // of its `readerUrl`, which is the page of the url a TOC entry lists it by
+  // (`readOrBuildIndex` in topic-resolver.ts). A v1 entry holds none, and for
+  // as long as CACHE_TTL_ARTICLE keeps it, 24 hours by default, would go on
+  // answering "Topic not found" for the urls only an address names: 49 of
+  // the 2,579 five en-US TOCs listed on 2026-09-28. The shape is unchanged,
+  // so nothing tells the two apart on read; the namespace moves and v1
+  // entries expire on their TTL.
+  'ft-topic-index-v2': { mapId: string };
   // `mapId` and nothing else. `fetchGlossaryToc` calls `fetchMapToc(mapId)`
   // and `fetchGlossaryContent` calls `fetchTopicContent(mapId, contentId)`;
   // the `locale` both functions also take never reaches the fetch, and a
@@ -270,7 +278,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-article-v3': true,
   'ft-toc-v2': true,
   'ft-tocindex-v3': true,
-  'ft-topic-index': true,
+  'ft-topic-index-v2': true,
   'glossary-toc': true,
   'glossary-content': true,
   'static-article-v2': true,

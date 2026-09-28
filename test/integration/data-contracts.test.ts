@@ -19,12 +19,14 @@ import {
 } from '../../src/core/services/ft-client.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP, TRAINING_CONTENT_TYPES } from '../../src/core/constants.js';
-import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
+import { deriveBundleStem, MapsRegistry } from '../../src/core/services/maps-registry.js';
+import { TopicResolver } from '../../src/core/services/topic-resolver.js';
+import { transformFtTocToTocEntries } from '../../src/core/services/toc-service.js';
 import { namedVersion } from '../../src/core/services/search-result-versions.js';
 import { transformFtSearchResult } from '../../src/core/services/search-service.js';
 import { classificationValuesFor, PRODUCT_IDS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
-import { createTestHttpClient } from '../helpers/mock-context.js';
+import { createMockCache, createTestHttpClient } from '../helpers/mock-context.js';
 
 const http = createTestHttpClient();
 
@@ -582,6 +584,72 @@ describe('FT API data contracts', () => {
       // Must contain at least one HTML tag
       expect(html).toMatch(/<[a-zA-Z]/);
     }, 30000);
+  });
+
+  // ─── A TOC url opens its own topic ────────────────────────────────────────
+  //
+  // What `jamf_docs_get_article` depends on to open a url `jamf_docs_get_toc`
+  // lists: the url `transformFtTocToTocEntries` builds from a TOC entry's
+  // `prettyUrl` names a page the topic index `TopicResolver` builds from the
+  // map's `/topics` list holds, for the topic the entry lists. The index reads
+  // each topic's `legacy_topicname`, the page of its `readerUrl` and its
+  // title, and it is the second that names the pages the other two do not:
+  // 49 of the 2,579 distinct urls five en-US TOCs listed on 2026-09-28, 1 of
+  // 427 in Jamf School ja-JP, 37 of 234 in Technical Articles ja-JP and 8 of
+  // 434 in Jamf Connect zh-TW (topic-resolver.ts). Where Jamf publishes
+  // several topics at one address, any of them is the one it lists.
+  //
+  // Six publications, for the shapes of address seen: Jamf Pro, which has a
+  // page with a `/` in it (`And/Or-Groupings`); Jamf Connect, with an address
+  // at `General-Requirements` and another at `General_Requirements`;
+  // Technical Articles, with 46 addresses shared by several topics; Jamf
+  // School in ja-JP, with an address that is not ASCII; and Technical
+  // Articles in ja-JP and Jamf Connect in zh-TW, where an address is the
+  // title key of another topic (追加情報, 一般需求), so that the address has to
+  // outrank the title. The maps list once, then two requests each, the TOC and
+  // the `/topics` list, and every url is resolved from those.
+  describe('a TOC url resolves to its own topic', () => {
+    const cache = createMockCache();
+    const registry = new MapsRegistry(cache, undefined, undefined, undefined, http);
+    const resolver = new TopicResolver(registry, cache, undefined, undefined, http);
+
+    it.each([
+      ['Jamf Pro', JAMF_PRODUCTS['jamf-pro'].bundleId, 'en-US'],
+      ['Jamf Connect', JAMF_PRODUCTS['jamf-connect'].bundleId, 'en-US'],
+      ['Technical Articles', 'technical-articles', 'en-US'],
+      ['Jamf School', JAMF_PRODUCTS['jamf-school'].bundleId, 'ja-JP'],
+      ['Technical Articles', 'technical-articles', 'ja-JP'],
+      ['Jamf Connect', JAMF_PRODUCTS['jamf-connect'].bundleId, 'zh-TW'],
+    ] as const)('%s (%s, %s)', async (_name, bundleStem, locale) => {
+      const map = await registry.resolveMap(bundleStem, undefined, locale);
+      expect(map, `no ${locale} map for ${bundleStem}`).not.toBeNull();
+      expect(map!.resolvedLocale).toBe(locale);
+
+      const listedAt = new Map<string, Set<string>>();
+      const walk = (entries: ReturnType<typeof transformFtTocToTocEntries>): void => {
+        for (const entry of entries) {
+          if (entry.contentId !== undefined) {
+            listedAt.set(entry.url, (listedAt.get(entry.url) ?? new Set()).add(entry.contentId));
+          }
+          walk(entry.children ?? []);
+        }
+      };
+      walk(transformFtTocToTocEntries(await fetchMapToc(http, map!.mapId)));
+      expect(listedAt.size, `${bundleStem} lists no urls`).toBeGreaterThan(0);
+
+      const unresolved: string[] = [];
+      for (const [url, contentIds] of listedAt) {
+        try {
+          const topic = await resolver.resolve({ url });
+          if (topic.mapId !== map!.mapId || !contentIds.has(topic.contentId)) {
+            unresolved.push(`${url} -> ${topic.mapId}/${topic.contentId}, not ${[...contentIds].join(' or ')}`);
+          }
+        } catch (error) {
+          unresolved.push(`${url} -> ${(error as Error).message}`);
+        }
+      }
+      expect(unresolved, `${unresolved.length} of ${listedAt.size} urls`).toEqual([]);
+    }, 60000);
   });
 
   // ─── Non-Pro / unversioned product contracts ──────────────────────────────
