@@ -147,8 +147,14 @@ export interface CacheKeySpaces {
    * rides along so two sources cannot collide on a path, even though the URL
    * alone already carries the hostname — it keeps the namespace readable on
    * disk, which is the stated reason these keys are not just hashes.
+   *
+   * v2 (2026-09-28): a support.jamf.com entry holds the page's editions, which
+   * `language` picks from, and is labelled with the page's own address. v1
+   * entries hold neither, and would have served a support.jamf.com article
+   * in the language its url names for 24 hours after an upgrade whatever
+   * `language` said. A support.jamf.com collection page is an entry now too.
    */
-  'static-article': { source: string; url: string };
+  'static-article-v2': { source: string; url: string };
   /** A static source's sitemap, whole. One per source, so no per-locale part. */
   'static-sitemap': { source: string };
   /**
@@ -254,7 +260,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'ft-topic-index': true,
   'glossary-toc': true,
   'glossary-content': true,
-  'static-article': true,
+  'static-article-v2': true,
   'static-sitemap': true,
   'static-search-index-v4': true,
   'intercom-collections': true,

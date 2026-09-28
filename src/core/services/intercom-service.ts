@@ -18,6 +18,7 @@ import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.j
 import type { ServerContext } from '../types/context.js';
 import { JamfDocsError, JamfDocsErrorCode, type FetchTocOptions, type FetchTocResult, type TocEntry } from '../types.js';
 import { DEFAULT_LOCALE, PAGINATION_CONFIG, TOKEN_CONFIG } from '../constants.js';
+import { sanitizeMarkdownText, sanitizeMarkdownUrl } from '../utils/sanitize.js';
 
 // ─── __NEXT_DATA__ ──────────────────────────────────────────────
 
@@ -414,6 +415,63 @@ export interface IntercomArticle {
   description?: string;
   lastUpdated?: string;
   breadcrumb: string[];
+  /**
+   * The page's editions, from its own `localeLinks`. Absent on a page that
+   * lists none, or does not say which edition it is.
+   */
+  editions?: IntercomEditions;
+}
+
+/**
+ * Which edition of an article or a collection a page is, and where its
+ * others are.
+ *
+ * Every Intercom page carries `localeLinks`, one entry per locale the Help
+ * Center publishes in: `available` where the page has an edition in that
+ * locale, with that edition's address, slug and all, as `absoluteUrl`, and
+ * `selected` on the edition the page is. An article or a collection keeps its
+ * Intercom id in every locale, so its editions differ only in locale and
+ * slug. Live on 2026-09-28, 21 of the 820 articles support.jamf.com's
+ * sitemap lists had an edition outside en, 11 of them in all six locales, and
+ * a page's `localeLinks` were the same on each of its editions. A url for a
+ * locale the page has no edition in is a 301 to the en edition, so the
+ * selected entry, not the url asked for, says which one a page is.
+ */
+export interface IntercomEditions {
+  /** The Help Center's code for the locale this page is in, e.g. `ja`. */
+  locale: string;
+  /** This page's own address, as the site spells it (a non-ASCII slug raw). */
+  url: string;
+  /**
+   * Each locale `localeLinks` names: the address of the page's edition in it,
+   * or null where the page has none.
+   */
+  editions: Readonly<Record<string, string | null>>;
+}
+
+/** The editions `localeLinks` lists, or undefined when it names none as selected. */
+function editionsFrom(props: Record<string, unknown>): IntercomEditions | undefined {
+  const links = props.localeLinks;
+  if (!Array.isArray(links)) { return undefined; }
+  const editions: Record<string, string | null> = {};
+  let own: { locale: string; url: string } | undefined;
+  for (const entry of links as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) { continue; }
+    const link = entry as { id?: unknown; absoluteUrl?: unknown; available?: unknown; selected?: unknown };
+    const locale = asString(link.id);
+    const url = asString(link.absoluteUrl);
+    if (locale === '') { continue; }
+    editions[locale] = link.available === true && url !== '' ? url : null;
+    if (link.selected === true && url !== '') { own = { locale, url }; }
+  }
+  return own === undefined ? undefined : { ...own, editions };
+}
+
+/** `breadcrumbs`, a sibling of the page's content under pageProps, as labels. */
+function breadcrumbsFrom(props: Record<string, unknown>): string[] {
+  return listOf(props.breadcrumbs as { label?: unknown; name?: unknown }[] | undefined)
+    .map(crumb => asString(crumb.label, asString(crumb.name)))
+    .filter(label => label !== '');
 }
 
 /**
@@ -425,13 +483,15 @@ export interface IntercomArticle {
  */
 export function parseIntercomArticle(html: string): IntercomArticle | null {
   const props = pageProps(html);
-  const article = props?.articleContent as Record<string, unknown> | undefined;
+  return props === null ? null : articleFrom(props);
+}
+
+function articleFrom(props: Record<string, unknown>): IntercomArticle | null {
+  const article = props.articleContent as Record<string, unknown> | undefined;
   if (article === undefined) { return null; }
 
   const blocks = (article.blocks ?? []) as IntercomBlock[];
-  // `breadcrumbs` is a sibling of `articleContent` under pageProps, not a key
-  // of it.
-  const crumbs = (props?.breadcrumbs ?? []) as { label?: string; name?: string }[];
+  const editions = editionsFrom(props);
 
   return {
     title: asString(article.title, 'Untitled'),
@@ -440,10 +500,84 @@ export function parseIntercomArticle(html: string): IntercomArticle | null {
       ? { description: article.description } : {}),
     ...(typeof article.lastUpdatedDate === 'string'
       ? { lastUpdated: article.lastUpdatedDate.slice(0, 10) } : {}),
-    breadcrumb: crumbs
-      .map(crumb => crumb.label ?? crumb.name ?? '')
-      .filter(label => label !== ''),
+    // `breadcrumbs` is a sibling of `articleContent` under pageProps, not a
+    // key of it.
+    breadcrumb: breadcrumbsFrom(props),
+    ...(editions !== undefined ? { editions } : {}),
   };
+}
+
+/** A Help Center page {@link parseIntercomPage} read, and which kind of page it is. */
+export interface IntercomPage extends IntercomArticle {
+  kind: 'article' | 'collection';
+}
+
+/**
+ * Parse one Help Center page that `jamf_docs_get_article` can be asked for:
+ * an article, or a collection, which reads as the list of its articles.
+ *
+ * A collection is what a support.jamf.com table of contents lists each
+ * subcollection by (62 of them across the 9 collections, 2026-09-28), and a
+ * collection page carries the collection whole: its name, description and
+ * article summaries, and each subcollection with its own. Until 2026-09-28
+ * only an article page was read, so every such URL in a TOC whose footer says
+ * "Use `jamf_docs_get_article` with any URL above" was an error.
+ *
+ * Returns null for a page that is neither, as a maintenance page is.
+ */
+export function parseIntercomPage(html: string, source: StaticDocSource): IntercomPage | null {
+  const props = pageProps(html);
+  if (props === null) { return null; }
+  const article = articleFrom(props);
+  if (article !== null) { return { ...article, kind: 'article' }; }
+  const collection = collectionFrom(props, source);
+  return collection !== null ? { ...collection, kind: 'collection' } : null;
+}
+
+function collectionFrom(props: Record<string, unknown>, source: StaticDocSource): IntercomArticle | null {
+  const raw = props.collection;
+  if (typeof raw !== 'object' || raw === null) { return null; }
+  const collection = raw as RawCollection;
+  const description = asString(collection.description);
+  const editions = editionsFrom(props);
+  const listing = renderCollection(collection, source, 2).trim();
+
+  return {
+    title: asString(collection.name, 'Untitled'),
+    content: listing !== '' ? listing : 'This collection lists no articles.',
+    ...(description !== '' ? { description } : {}),
+    breadcrumb: breadcrumbsFrom(props),
+    ...(editions !== undefined ? { editions } : {}),
+  };
+}
+
+/** The objects in a JSON array off the wire: none for anything but an array. */
+function listOf<T extends object>(value: T[] | undefined): T[] {
+  return Array.isArray(value)
+    ? value.filter((item: unknown): item is T => typeof item === 'object' && item !== null)
+    : [];
+}
+
+/**
+ * A collection as the site lays it out: its description, the articles filed
+ * in it directly, and then each subcollection under a heading of its name,
+ * one level down, so that `section` reads one of them. Each article is a
+ * link to the address `jamf_docs_get_toc` gives it, which
+ * `jamf_docs_get_article` reads.
+ */
+function renderCollection(collection: RawCollection, source: StaticDocSource, depth: number): string {
+  const description = asString(collection.description).trim();
+  const articles = listOf(collection.articleSummaries).map(summary =>
+    `- [${sanitizeMarkdownText(asString(summary.title, 'Untitled'))}](${
+      sanitizeMarkdownUrl(canonicalStaticUrl(source, asString(summary.url)))})`);
+  const subcollections = listOf(collection.subcollections).map(sub =>
+    `${'#'.repeat(Math.min(depth, 6))} ${asString(sub.name, 'Untitled').replace(/\s+/g, ' ').trim()}\n\n${
+      renderCollection(sub, source, depth + 1)}`);
+  return [
+    ...(description !== '' ? [description] : []),
+    ...(articles.length > 0 ? [articles.join('\n')] : []),
+    ...subcollections,
+  ].map(part => `${part.trimEnd()}\n\n`).join('');
 }
 
 // ─── Collections ────────────────────────────────────────────────

@@ -377,6 +377,8 @@ export async function resolveAndFetchArticle(
         + ' they address learn.jamf.com (Fluid Topics) topics, and a'
         + ` ${staticSource.hostname} url is fetched by url alone.`
       : undefined;
+    // `options.locale` goes along: on a static site too, `language` picks
+    // the page's edition, and a note says so when there is none.
     return await fetchStaticArticle(ctx, staticSource, articleUrl, { ...options, note });
   }
 

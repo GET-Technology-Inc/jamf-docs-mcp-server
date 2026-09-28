@@ -189,6 +189,8 @@ address, read from its metadata or else the table of contents; a note says so
 when the `url` you passed does not match it. Only if neither has the address
 does the result keep the `url` you passed. A concepts.jamf.com or
 support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
+A support.jamf.com collection URL, which `jamf_docs_get_toc` lists each
+subcollection by, returns the collection's list of articles.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -198,7 +200,7 @@ support.jamf.com `url` is fetched by URL, and a note says the pair was ignored.
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
 | `summaryOnly` | boolean | `false` | Return only article outline, and the article's sub-topics when it has any — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
-| `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`; no effect on concepts.jamf.com or support.jamf.com URLs, or on a `mapId` + `contentId` pair (each map is already one language) |
+| `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`. On concepts.jamf.com or support.jamf.com, a page with no edition in it is served as `url` names it, with a note. No effect on a `mapId` + `contentId` pair (each map is already one language) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
@@ -234,7 +236,7 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 |-----------|------|---------|-------------|
 | `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`), each at most 2,048 characters |
 | `concurrency` | number (1–5) | `3` | Maximum parallel requests |
-| `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL; no effect on concepts.jamf.com or support.jamf.com URLs |
+| `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL. On concepts.jamf.com or support.jamf.com, a page with no edition in it is served as its URL names it, with a note |
 | `maxTokens` | number (100–50000) | `5000` | Total token budget across all articles |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level per article |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |

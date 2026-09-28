@@ -378,8 +378,8 @@ describe('the tool description', () => {
     // Compact markdown shows neither half, as the Fluid Topics tests above check.
     expect(prose).not.toContain('Markdown output shows the mapId only');
     expect(prose).toContain('Full markdown shows the mapId only, and compact markdown shows neither;');
-    // Not "read its entries by url": a support.jamf.com subcollection's url
-    // is a collection page, which jamf_docs_get_article cannot read.
+    // That any of its entries is read by url, a support.jamf.com
+    // subcollection's too, is checked in get-article-support-collection.test.ts.
     expect(prose).toContain(
       'A concepts.jamf.com or support.jamf.com TOC has neither: it names no map, and its entries carry only ' +
       'title, url and children.',
