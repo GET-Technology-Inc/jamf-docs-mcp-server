@@ -25,6 +25,7 @@ import { ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js
 import { STATIC_SOURCE_HOSTNAMES, staticSourceForUrl } from '../constants/sources.js';
 import { resolveAndFetchArticle } from '../services/article-service.js';
 import { isTopicRequestUrl } from '../services/ft-client.js';
+import { TopicNotFoundError } from '../services/topic-resolver.js';
 import {
   buildArticleContentView,
   formatArticleCompact,
@@ -167,6 +168,28 @@ function isArticleNotFound(failure: unknown): boolean {
     && (isTopicRequestUrl(failure.url) || staticSourceForUrl(failure.url) !== undefined);
 }
 
+/**
+ * What a failure to find the article advises, or '' for any other failure.
+ *
+ * A url the topic resolver finds no topic for (its TopicNotFoundError) gets
+ * advice that names the `mapId` + `contentId` pair as well. The resolver
+ * reads its own copies of the maps list and of each map's topic index, or
+ * the maps an embedder gives, so its failure says the url named nothing in
+ * them, not that the page is gone. A search, which is live, or a TOC can
+ * still give the page's pair, which is fetched without either list (see
+ * TopicNotFoundError). Until 2026-09-28 such a url got no advice.
+ */
+function notFoundAdvice(failure: unknown): string {
+  if (isArticleNotFound(failure)) {
+    return '\n\nThe article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.';
+  }
+  if (failure instanceof TopicNotFoundError) {
+    return '\n\nThe article may have been moved or deleted, or its url may be one this server cannot resolve. '
+      + 'Find it with `jamf_docs_search` or `jamf_docs_get_toc`, and fetch it by the `mapId` and `contentId` they give for it.';
+  }
+  return '';
+}
+
 /** Returned when neither addressing form is complete. Quoted in the description. */
 const MISSING_ADDRESS_MESSAGE = 'Either url or both mapId and contentId must be provided.';
 
@@ -270,14 +293,15 @@ Errors:
   - "${MISSING_ADDRESS_MESSAGE}" if neither url nor the full pair is given
   - "${ALLOWED_HOSTNAME_MESSAGE}" (an input validation error) if url is not https:// on one of those hosts
   - "URL must not exceed ${CONTENT_LIMITS.MAX_URL_LENGTH} characters" (an input validation error) if url is longer
-  - "Topic not found", "Cannot resolve bundleId" or "HTTP 404" if there is no article at that address
+  - "Topic not found", "Cannot resolve bundleId", "Cannot resolve product" or "HTTP 404" if no article is found at that address, with advice on finding it
 
 Note: \`maxTokens\` bounds every reply: the article or one section, a
 \`summaryOnly\` outline, a missed section's reply, and any note about how the
 call was resolved, all counted in \`tokenInfo.tokenCount\`. Large articles are
 intelligently truncated with remaining sections listed, as many as fit; a list
 cut to fit says how many it left out, and \`truncated\` is true.
-Use the \`section\` parameter to retrieve specific sections for long articles.
+Use the \`section\` parameter, at most ${CONTENT_LIMITS.MAX_SECTION_LENGTH} characters, to retrieve
+specific sections for long articles.
 A \`section\` that matches no heading is not an error: the reply says
 'Section "<section>" not found' and lists the article's sections, or says it has
 none. Most learn.jamf.com topics have no headings; what the website shows as
@@ -413,14 +437,11 @@ export function registerGetArticleTool(server: McpServer, ctx: ServerContext): v
         // no error this server throws does ("HTTP 429 Too Many Requests:
         // <url>"), so a rate-limited request of this server's never got it.
         // A 404 is read the same way, and from its address too: see
-        // isArticleNotFound.
+        // isArticleNotFound, and notFoundAdvice for a url that names no topic.
         const cause = error instanceof ProviderError ? error.failure : error;
-        let helpText = '';
-        if ((cause instanceof HttpError && cause.status === 429) || errorMessage.includes('rate limit')) {
-          helpText = '\n\nPlease wait a moment and try again.';
-        } else if (isArticleNotFound(cause)) {
-          helpText = '\n\nThe article may have been moved or deleted. Try searching with `jamf_docs_search` to find the current URL.';
-        }
+        const helpText = (cause instanceof HttpError && cause.status === 429) || errorMessage.includes('rate limit')
+          ? '\n\nPlease wait a moment and try again.'
+          : notFoundAdvice(cause);
 
         return {
           isError: true,

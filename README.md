@@ -164,7 +164,7 @@ Searches across all Jamf product documentation.
 | `product` | string | — | Filter by product ID (e.g., `jamf-pro`) |
 | `topic` | string | — | Filter by topic category (e.g., `enrollment`, `security`) |
 | `docType` | string | — | Filter by document type: `documentation`, `release-notes`, `training`, `solution-guide`, `glossary`, `getting-started` |
-| `version` | string | — | Filter by version (e.g., `"11.13.0"`) or `"current"` |
+| `version` | string (at most 50 chars) | — | Filter by version (e.g., `"11.13.0"`) or `"current"` |
 | `language` | string | `en-US` | Documentation language/locale |
 | `limit` | number (1–50) | `10` | Results per page |
 | `page` | number (1–100) | `1` | Page number for pagination |
@@ -199,7 +199,7 @@ subcollection by, returns the collection's list of articles.
 | `url` | string | — | Full `https://` URL on `learn.jamf.com`, `docs.jamf.com`, `concepts.jamf.com` or `support.jamf.com`, at most 2,048 characters |
 | `mapId` | string | — | Fluid Topics map ID (from search results or the TOC). Use with `contentId`, instead of `url` or alongside it |
 | `contentId` | string | — | Fluid Topics content ID (from search results or the TOC). Use with `mapId`, instead of `url` or alongside it |
-| `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
+| `section` | string (at most 200 chars) | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
 | `summaryOnly` | boolean | `false` | Return only article outline, and the article's sub-topics when it has any — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
 | `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`. On concepts.jamf.com or support.jamf.com, a page with no edition in it is served as `url` names it, with a note. No effect on a `mapId` + `contentId` pair (each map is already one language) |
@@ -221,7 +221,7 @@ passing both, or neither, is an error. (Before 5.1, `product` was required and
 |-----------|------|---------|-------------|
 | `product` | string | — | Product ID (see supported products below) |
 | `publication` | string (1–200 chars) | — | Bundle family ID of one publication, e.g. `jamf-pro-release-notes` or `technical-paper-laps`. `jamf_docs_list_products` lists them |
-| `version` | string | latest | Specific version to fetch (e.g., `"11.13.0"`) or `"current"` |
+| `version` | string (at most 50 chars) | latest | Specific version to fetch (e.g., `"11.13.0"`) or `"current"` |
 | `language` | string | `en-US` | Documentation language/locale. A product or publication Jamf does not publish in it is served as its en-US edition, with a `localeNote` |
 | `page` | number (1–100) | `1` | Page number for paginated TOC |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
@@ -269,7 +269,7 @@ Static and dynamic reference data accessible without tool calls:
 | Product TOC | `jamf://products/{productId}/toc` | The whole table of contents of a product's current documentation (template resource; see below) |
 | Product versions | `jamf://products/{productId}/versions` | Available documentation versions for a specific product (template resource) |
 
-Template resources support tab-completion on `productId` in compatible clients.
+Template resources support tab-completion on `productId` in compatible clients. A `productId` of more than 100 characters is refused as invalid params, and one that names no product gets a body that says so and lists the product IDs.
 
 `jamf://products/{productId}/toc` holds the whole table of contents of the product's current en-US documentation, nested as `jamf_docs_get_toc` returns it in JSON, up to 20000 tokens counted from entry titles as that tool counts `maxTokens`. That is a bound on the titles, not on the size of the JSON, which also carries each entry's URL and ids. On 2026-09-28 every product fitted: the largest, Jamf Pro, was about 8,400 such tokens (794 entries, 267 KB of JSON). `complete` says whether `toc` is the whole tree. When it is not, `shownEntries` counts the entries it holds and `missing` says what is left out and, where `jamf_docs_get_toc` can return it, which call does. `mapId` is the map the entries were read from: with an entry's `contentId` it is the pair `jamf_docs_get_article` fetches that entry by. A map is one version in one language, so the pair needs no version or language beside it. `mapId` is absent when no one map is known for the entries; each entry's `url` still fetches it.
 
@@ -283,8 +283,8 @@ Guides the AI through a structured troubleshooting workflow: searching for relev
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `problem` | string (required) | Description of the issue to troubleshoot |
-| `product` | string (optional) | Jamf product ID to scope the search |
+| `problem` | string (required, at most 2,000 chars) | Description of the issue to troubleshoot |
+| `product` | string (optional, at most 100 chars) | Jamf product ID to scope the search |
 
 ### `jamf_setup_guide`
 
@@ -292,8 +292,8 @@ Directs the AI to generate a step-by-step setup guide for a Jamf feature, includ
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `feature` | string (required) | The feature or capability to set up |
-| `product` | string (optional) | Jamf product ID to scope the search |
+| `feature` | string (required, at most 2,000 chars) | The feature or capability to set up |
+| `product` | string (optional, at most 100 chars) | Jamf product ID to scope the search |
 
 ### `jamf_compare_versions`
 
@@ -301,9 +301,9 @@ Instructs the AI to compare table-of-contents structures and key articles betwee
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `product` | string (required) | Jamf product ID |
-| `version_a` | string (required) | First version to compare (e.g., `"11.13.0"`) |
-| `version_b` | string (required) | Second version to compare (e.g., `"11.32.0"`) |
+| `product` | string (required, at most 100 chars) | Jamf product ID |
+| `version_a` | string (required, at most 50 chars) | First version to compare (e.g., `"11.13.0"`) |
+| `version_b` | string (required, at most 50 chars) | Second version to compare (e.g., `"11.32.0"`) |
 
 ## Supported Products
 

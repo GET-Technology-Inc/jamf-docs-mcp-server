@@ -7,7 +7,10 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
-import { PRODUCT_ID_LIST } from '../constants.js';
+import { CONTENT_LIMITS, PRODUCT_ID_LIST } from '../constants.js';
+
+/** The tools' words for a `version` over the bound (see `VersionSchema`). */
+const VERSION_TOO_LONG = `Version must not exceed ${String(CONTENT_LIMITS.MAX_VERSION_LENGTH)} characters`;
 
 export function registerCompareVersionsPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -18,17 +21,24 @@ export function registerCompareVersionsPrompt(server: McpServer): void {
         'Compare documentation between two versions of a Jamf product to identify changes',
       argsSchema: {
         product: completable(
-          z.string().max(100).describe(
-            `Jamf product ID (${PRODUCT_ID_LIST})`
-          ),
+          z.string()
+            .max(
+              CONTENT_LIMITS.MAX_PRODUCT_LENGTH,
+              `Product must not exceed ${String(CONTENT_LIMITS.MAX_PRODUCT_LENGTH)} characters`
+            )
+            .describe(`Jamf product ID (${PRODUCT_ID_LIST})`),
           completeProduct
         ),
         // Both examples are versions Jamf publishes a TOC for, which the steps
         // below fetch. The previous pair, 11.5.0 and 11.12.0, both answer
         // jamf_docs_get_toc with 'Version "…" not found for Jamf Pro': live on
         // 2026-09-24, Jamf Pro documentation runs from 11.13.0 to 11.32.0.
-        version_a: z.string().max(50).describe('First version to compare (e.g., "11.13.0")'),
-        version_b: z.string().max(50).describe('Second version to compare (e.g., "11.32.0")'),
+        version_a: z.string()
+          .max(CONTENT_LIMITS.MAX_VERSION_LENGTH, VERSION_TOO_LONG)
+          .describe('First version to compare (e.g., "11.13.0")'),
+        version_b: z.string()
+          .max(CONTENT_LIMITS.MAX_VERSION_LENGTH, VERSION_TOO_LONG)
+          .describe('Second version to compare (e.g., "11.32.0")'),
       },
     },
     ({ product, version_a: versionA, version_b: versionB }) => {

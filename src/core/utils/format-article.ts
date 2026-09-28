@@ -8,6 +8,7 @@
 import type { TokenInfo, ArticleSection, FetchArticleResult } from '../types.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl } from './sanitize.js';
 import { estimateTokens } from '../services/tokenizer.js';
+import { TOKEN_CONFIG } from '../constants.js';
 
 // ============================================================================
 // Types
@@ -132,24 +133,41 @@ function formatSectionsList(
  * caller's budget. Pointing at it when the smallest section is already over
  * `maxTokens` sends the caller to an action that cannot succeed, so fall back to
  * the two things that can (a bigger budget, or an outline).
+ *
+ * Never a budget the schema rejects. Until 2026-09-28 it advised a bigger
+ * `maxTokens` whatever the smallest section cost, and under a lone section a
+ * bigger one for the whole article, at `maxTokens: 50000` too, the largest
+ * there is; #364 fixed the same shape in `jamf_docs_get_toc` and #372 in the
+ * glossary. A section's cost is known, so it is weighed against that largest
+ * budget at any `maxTokens`: when none fits one, the advice is an outline, or
+ * the start of a section, which `section` returns cut to `maxTokens`. The
+ * whole article's cost is not known, only that it did not fit, so the
+ * lone-section line goes by the budget the call had.
  */
 function formatSectionAdvice(
   sections: ArticleSection[],
   tokenInfo: TokenInfo
 ): string {
   const smallest = Math.min(...sections.map(section => section.tokenCount));
+  const limit = TOKEN_CONFIG.MAX_TOKENS_LIMIT.toLocaleString();
 
   if (smallest > tokenInfo.maxTokens) {
-    return `\n*No section fits within \`maxTokens\` (${tokenInfo.maxTokens.toLocaleString()}); `
-      + `the smallest is ~${smallest.toLocaleString()} tokens. `
-      + 'Raise `maxTokens`, or use `summaryOnly` for an outline.*\n';
+    const nothingFits = `\n*No section fits within \`maxTokens\` (${tokenInfo.maxTokens.toLocaleString()}); `
+      + `the smallest is ~${smallest.toLocaleString()} tokens`;
+    return smallest <= TOKEN_CONFIG.MAX_TOKENS_LIMIT
+      ? `${nothingFits}. Raise \`maxTokens\`, or use \`summaryOnly\` for an outline.*\n`
+      : `${nothingFits}, more than \`maxTokens\` allows (${limit}). `
+        + 'Use `summaryOnly` for an outline, or `section` to read the start of one.*\n';
   }
 
   // Exactly one section: there is nothing to choose between, so name the two
   // outcomes instead of implying a selection.
   if (sections.length === 1) {
-    return '\n*Use `section` to retrieve the one listed section, '
-      + 'or raise `maxTokens` to get the whole article.*\n';
+    return tokenInfo.maxTokens < TOKEN_CONFIG.MAX_TOKENS_LIMIT
+      ? '\n*Use `section` to retrieve the one listed section, '
+        + 'or raise `maxTokens` to get the whole article.*\n'
+      : '\n*Use `section` to retrieve the one listed section. '
+        + `The whole article is larger than \`maxTokens\` allows (${limit}).*\n`;
   }
 
   return '\n*Use `section` parameter to retrieve a specific section.*\n';

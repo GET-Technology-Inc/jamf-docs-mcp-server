@@ -677,3 +677,30 @@ describe('product-versions resource handler', () => {
     expect(result.contents[0].uri).toBe(uri.href);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A productId that is a key of every object
+// ---------------------------------------------------------------------------
+
+// Until 2026-09-28 the templates tested `productId in JAMF_PRODUCTS`, which
+// is true of `constructor`, `toString` and every other key an object
+// inherits: `/versions` answered `"product": "Object"` for `constructor`,
+// with versions `[null]`, and `/toc` an error reading `undefined`.
+describe('a productId that names no product, though every object has that key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])('%s', async (productId) => {
+    const { server, getHandler } = makeFakeServer();
+    registerResources(server, ctx);
+
+    for (const [name, tail] of [['product-toc', 'toc'], ['product-versions', 'versions']] as const) {
+      const result = await getHandler(name)(new URL(`jamf://products/${productId}/${tail}`), { productId });
+
+      expect(result.contents[0].text).toContain(`Invalid product ID: "${productId}"`);
+    }
+    expect(fetchTableOfContents).not.toHaveBeenCalled();
+    expect(getAvailableVersions).not.toHaveBeenCalled();
+  });
+});

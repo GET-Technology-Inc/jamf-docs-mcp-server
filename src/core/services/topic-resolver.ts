@@ -42,6 +42,39 @@ export interface TopicResolverInput {
   locale?: string | undefined;
 }
 
+/**
+ * A learn.jamf.com url that names no topic this resolver can find: the maps
+ * list has no map for its publication, or for that publication in its
+ * version ("Cannot resolve bundleId", "Cannot resolve product"), or that
+ * map's topic index has no key for its page ("Topic not found").
+ *
+ * A JamfDocsError (`NOT_FOUND`) with the message it always had, in its own
+ * class so that `jamf_docs_get_article` can advise on it: until 2026-09-28
+ * these failures got no advice, while a 404 of the article's own request got
+ * "The article may have been moved or deleted".
+ *
+ * Neither kind says the page is gone, only that it is not in what this
+ * resolver reads. The maps list is a copy kept for the registry's TTL
+ * (`CACHE_TTL_PRODUCTS`, 7 days by default, on Node), or what an embedder's
+ * MapsProvider gives, and it can be empty: a publication Jamf has published
+ * since, or one a MapsProvider leaves out, is not in it. A map's topic index
+ * is kept for this resolver's TTL (`CACHE_TTL_ARTICLE`, a day, on Node) and
+ * holds only the keys `readOrBuildIndex` makes. A `language` naming another
+ * locale looks the page up in that locale's map, where Jamf can publish it
+ * at another address. And live on 2026-09-28, with the index keyed by
+ * `legacy_topicname` and by title alone, the urls of 26 of the 794 entries
+ * in `jamf_docs_get_toc`'s Jamf Pro contents and 91 of the 697 in Technical
+ * Articles' answered "Topic not found", `…/Configuring-the-Branding-Settings`
+ * among them. Each of those entries has a `contentId`, and by the pair the
+ * Branding page read whole that day. So both kinds get the same advice,
+ * which names the pair.
+ */
+export class TopicNotFoundError extends JamfDocsError {
+  constructor(message: string) {
+    super(message, JamfDocsErrorCode.NOT_FOUND);
+  }
+}
+
 // ─── URL Parsers ────────────────────────────────────────────────
 
 interface ParsedLegacyUrl {
@@ -273,19 +306,13 @@ export class TopicResolver {
 
     const mapId = await this.registry.resolveFromBundleId(parsed.bundleId, locale);
     if (mapId === null) {
-      throw new JamfDocsError(
-        `Cannot resolve bundleId: ${parsed.bundleId}`,
-        JamfDocsErrorCode.NOT_FOUND
-      );
+      throw new TopicNotFoundError(`Cannot resolve bundleId: ${parsed.bundleId}`);
     }
 
     const index = await this.getTopicIndex(mapId);
     const contentId = index.get(parsed.pageSlug);
     if (contentId === undefined) {
-      throw new JamfDocsError(
-        `Topic not found: ${parsed.pageSlug} in bundle ${parsed.bundleId}`,
-        JamfDocsErrorCode.NOT_FOUND
-      );
+      throw new TopicNotFoundError(`Topic not found: ${parsed.pageSlug} in bundle ${parsed.bundleId}`);
     }
 
     return { mapId, contentId, locale };
@@ -326,19 +353,13 @@ export class TopicResolver {
       locale,
     );
     if (mapId === null) {
-      throw new JamfDocsError(
-        `Cannot resolve product: ${parsed.productSlug}`,
-        JamfDocsErrorCode.NOT_FOUND
-      );
+      throw new TopicNotFoundError(`Cannot resolve product: ${parsed.productSlug}`);
     }
 
     const index = await this.getTopicIndex(mapId);
     const contentId = index.get(parsed.topicSlug);
     if (contentId === undefined) {
-      throw new JamfDocsError(
-        `Topic not found: ${parsed.topicSlug} in ${parsed.productSlug}`,
-        JamfDocsErrorCode.NOT_FOUND
-      );
+      throw new TopicNotFoundError(`Topic not found: ${parsed.topicSlug} in ${parsed.productSlug}`);
     }
 
     return { mapId, contentId, locale };

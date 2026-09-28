@@ -31,7 +31,39 @@ export const CONTENT_LIMITS = {
    * longest of those. Until 2026-09-28 there was none, and the replies quote
    * a url whole: a url of 100,023 characters got an error of 100,072.
    */
-  MAX_URL_LENGTH: 2048
+  MAX_URL_LENGTH: 2048,
+  /**
+   * The longest `section` `jamf_docs_get_article` takes, in characters: 200,
+   * as for `mapId`, `contentId` and `publication`. A section is asked for by
+   * its heading or a sub-topic's title, and the longest topic title measured
+   * is 149 characters, over the 3,549 topics of six learn.jamf.com maps on
+   * 2026-09-28. At 200, the reply's 'Section "…" not found' line still fits
+   * the smallest `maxTokens`. Until 2026-09-28 there was none, and a section
+   * of 100,000 characters got a reply with an empty body and nothing saying
+   * it was not found: that line was larger than `maxTokens`.
+   */
+  MAX_SECTION_LENGTH: 200,
+  /**
+   * The longest `version` a tool takes, in characters: 50, as for
+   * `jamf_compare_versions`' `version_a` and `version_b`. The longest of the
+   * 46 versions in the maps list on 2026-09-28 was 7 (`11.32.1`). Until
+   * 2026-09-28 there was none: a 100,000-digit version went to Fluid Topics
+   * as a search body of 100,143 bytes, and `jamf_docs_get_toc` answered it
+   * with 100,063 characters.
+   */
+  MAX_VERSION_LENGTH: 50,
+  /**
+   * The longest product ID a prompt takes as `product`, and a resource
+   * template reads as `{productId}`, in characters: 100, as
+   * `jamf_compare_versions` has taken. The tools take one of the IDs, the
+   * longest of which is 31 (`jamf-cloud-distribution-service`). Until
+   * 2026-09-28 `jamf_troubleshoot` and `jamf_setup_guide` took a `product` of
+   * any length and wrote it into the prompt twice, and both templates quoted
+   * a `productId` of any length back, in the uri and in the text: offline
+   * that day, one of 100,000 characters got prompts of 200,773 and 200,902
+   * characters, and reads of 200,616 and 200,621.
+   */
+  MAX_PRODUCT_LENGTH: 100
 } as const;
 
 // Token configuration (Context7 style)

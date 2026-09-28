@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
-import { PRODUCT_ID_LIST } from '../constants.js';
+import { CONTENT_LIMITS, PRODUCT_ID_LIST } from '../constants.js';
 
 export function registerTroubleshootPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -17,10 +17,15 @@ export function registerTroubleshootPrompt(server: McpServer): void {
       description: 'Guide through troubleshooting a Jamf issue using official documentation',
       argsSchema: {
         problem: z.string().max(2000).describe('Description of the issue to troubleshoot'),
+        // Bounded since 2026-09-28: see CONTENT_LIMITS.MAX_PRODUCT_LENGTH.
         product: completable(
-          z.string().optional().describe(
-            `Jamf product ID (${PRODUCT_ID_LIST})`
-          ),
+          z.string()
+            .max(
+              CONTENT_LIMITS.MAX_PRODUCT_LENGTH,
+              `Product must not exceed ${String(CONTENT_LIMITS.MAX_PRODUCT_LENGTH)} characters`
+            )
+            .optional()
+            .describe(`Jamf product ID (${PRODUCT_ID_LIST})`),
           completeProduct
         ),
       },

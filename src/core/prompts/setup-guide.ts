@@ -7,7 +7,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { completable } from '@modelcontextprotocol/server';
 import { completeProduct } from '../completions.js';
-import { PRODUCT_ID_LIST } from '../constants.js';
+import { CONTENT_LIMITS, PRODUCT_ID_LIST } from '../constants.js';
 
 export function registerSetupGuidePrompt(server: McpServer): void {
   server.registerPrompt(
@@ -18,10 +18,15 @@ export function registerSetupGuidePrompt(server: McpServer): void {
         'Generate a step-by-step setup guide for a Jamf feature using official documentation',
       argsSchema: {
         feature: z.string().max(2000).describe('The feature or capability to set up'),
+        // Bounded since 2026-09-28: see CONTENT_LIMITS.MAX_PRODUCT_LENGTH.
         product: completable(
-          z.string().optional().describe(
-            `Jamf product ID (${PRODUCT_ID_LIST})`
-          ),
+          z.string()
+            .max(
+              CONTENT_LIMITS.MAX_PRODUCT_LENGTH,
+              `Product must not exceed ${String(CONTENT_LIMITS.MAX_PRODUCT_LENGTH)} characters`
+            )
+            .optional()
+            .describe(`Jamf product ID (${PRODUCT_ID_LIST})`),
           completeProduct
         ),
       },

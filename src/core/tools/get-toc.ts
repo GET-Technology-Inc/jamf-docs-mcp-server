@@ -10,7 +10,7 @@ import { GetTocInputSchema, type GetTocInput } from '../schemas/index.js';
 import { reportProgress } from '../utils/progress.js';
 import { TocOutputSchema } from '../schemas/output.js';
 import type { ProductId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, PRODUCT_ID_LIST, TOKEN_CONFIG, PAGINATION_CONFIG, DEFAULT_LOCALE, CONTENT_LIMITS } from '../constants.js';
 import type { ToolResult, TocResponse, TocEntry, TocTruncatedEntry, PaginationInfo, TokenInfo, FetchTocOptions, FetchTocResult } from '../types.js';
 import { fetchTableOfContents, type TocSource } from '../services/toc-service.js';
 import { fetchStaticToc } from '../services/sitemap-service.js';
@@ -312,7 +312,7 @@ Args:
   - publication (string): Bundle family id of any single publication, e.g.
     "technical-paper-laps" or "jamf-pro-release-notes". Call
     jamf_docs_list_products for the available ids
-  - version (string, optional): Specific version (e.g., "11.13.0") or "current" (defaults to latest)
+  - version (string, optional): Specific version (e.g., "11.13.0") or "current" (defaults to latest), at most ${CONTENT_LIMITS.MAX_VERSION_LENGTH} characters
   - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE}). A product or
     publication Jamf does not publish in it is served as its ${DEFAULT_LOCALE} edition, and localeNote says so
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
