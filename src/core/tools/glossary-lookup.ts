@@ -9,23 +9,95 @@ import { GlossaryLookupInputSchema } from '../schemas/index.js';
 import { GlossaryLookupOutputSchema } from '../schemas/output.js';
 import { appToolMeta } from '../apps/index.js';
 import type { ProductId, LocaleId } from '../constants.js';
-import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG } from '../constants.js';
+import { ResponseFormat, OutputMode, JAMF_PRODUCTS, TOKEN_CONFIG, DEFAULT_LOCALE } from '../constants.js';
 import type { ToolResult, GlossaryEntry, GlossaryLookupResult } from '../types.js';
-import { lookupGlossaryTerm, GlossaryUnavailableError } from '../services/glossary.js';
+import { lookupGlossaryTerm, GlossaryUnavailableError, type GlossaryLookupAnswer } from '../services/glossary.js';
 import { sanitizeMarkdownText, sanitizeMarkdownUrl, getSafeErrorMessage } from '../utils/sanitize.js';
 import { reportProgress } from '../utils/progress.js';
 import { failureReason } from '../services/failure-reason.js';
+import { NON_LATIN_LETTER } from '../utils/cjk.js';
 
 const ENGLISH_ONLY_WARNING =
   'Note: Glossary content is currently only available in English (en-US).' +
   ' Showing English results.';
 
-function isNonEnglishLocale(language: string | undefined): boolean {
+/** `language`, unless it is English (en-US or `en`) or not given. */
+function nonEnglishLocale(language: string | undefined): string | undefined {
   if (language === undefined) {
-    return false;
+    return undefined;
   }
   const normalised = language.toLowerCase();
-  return normalised !== 'en-us' && normalised !== 'en';
+  return normalised !== 'en-us' && normalised !== 'en' ? language : undefined;
+}
+
+/**
+ * Whether the answer came from the English glossary. The lookup says which
+ * glossary it read; a `GlossaryProvider`'s answer does not, and is taken to be
+ * English, as every answer was before the lookup said (2026-09-28).
+ */
+function fromEnglishGlossary(result: GlossaryLookupAnswer): boolean {
+  return (result.resolvedLocale ?? DEFAULT_LOCALE) === DEFAULT_LOCALE;
+}
+
+/**
+ * Why the English glossary may have had nothing for a term, and where to look
+ * instead; `code` marks up a name to type.
+ *
+ * Jamf publishes its glossary in en-US only (one glossary map in the live maps
+ * list, 2026-09-28) and names its entries in English. Until 2026-09-28 a term
+ * in another language that matched none of them got "No glossary entries
+ * found" and nothing more, and in JSON a warning that said "Showing English
+ * results." beside none: live that day, 憑證 and 密碼 in zh-TW, and 認証 and
+ * 証明書 in ja-JP.
+ *
+ * Only a term with a letter of a script other than Latin is told to look up
+ * the English term instead. A Latin one may already be English, mistyped or
+ * missing from the glossary, as `Smart Grup` asked in zh-TW is; it is told
+ * only which glossary was read.
+ *
+ * Undefined for a Latin term asked in English, and when the glossary read is
+ * in the language asked for.
+ */
+function englishGlossaryNote(
+  term: string,
+  language: string | undefined,
+  result: GlossaryLookupAnswer,
+  code: (name: string) => string,
+): string | undefined {
+  if (!fromEnglishGlossary(result)) { return undefined; }
+  const asked = nonEnglishLocale(language);
+  const notEnglish = NON_LATIN_LETTER.test(term);
+  if (asked === undefined && !notEnglish) { return undefined; }
+  const read = asked !== undefined
+    ? `Jamf does not publish the glossary in ${asked}, so the term was looked up in the English (en-US) glossary`
+    : 'The term was looked up in the English (en-US) glossary';
+  if (!notEnglish) { return `Note: ${read}, whose entries are named in English.`; }
+  const where = asked !== undefined ? `and ${code(`language: "${asked}"`)}` : 'in the language it is written in';
+  return `Note: ${read}, whose entries are named in English. Look up the English term instead, ` +
+    `or search for it with ${code('jamf_docs_search')} ${where}.`;
+}
+
+/**
+ * What a reply says about the glossary's language, if anything: for a
+ * no-match, {@link englishGlossaryNote}; for matches from the English glossary
+ * to a term asked in another language, that they are English.
+ */
+function languageNote(
+  params: { term: string; language?: string | undefined },
+  result: GlossaryLookupAnswer,
+  code: (name: string) => string,
+): string | undefined {
+  if (result.totalMatches === 0 && result.entries.length === 0) {
+    return englishGlossaryNote(params.term, params.language, result, code);
+  }
+  return nonEnglishLocale(params.language) !== undefined && fromEnglishGlossary(result)
+    ? ENGLISH_ONLY_WARNING
+    : undefined;
+}
+
+/** A name to type, in markdown. */
+function codeSpan(name: string): string {
+  return `\`${name}\``;
 }
 
 function formatEntryMarkdown(entry: GlossaryEntry): string {
@@ -160,6 +232,10 @@ const TOOL_NAME = 'jamf_docs_glossary_lookup';
  * the description said every such failure "may be temporary", which neither
  * a provider's failure nor, since #354, a 404 is. The description now says
  * the message decides.
+ *
+ * `warning` joined the JSON shape on 2026-09-28. It was already sent on a
+ * reply asked in another language than en-US, and that day it began to say
+ * why a no-match may have none (see englishGlossaryNote).
  */
 const TOOL_DESCRIPTION = `Look up a term in the Jamf official glossary and get its definition.
 
@@ -171,6 +247,8 @@ A 4-character term may be a plural, or miss a letter or swap two ("MDMs", "LDPA"
 
 Note: Glossary content is currently only available in English (en-US).
 Non-English language parameters are accepted but results will be in English.
+A reply with no match says so when the term was asked in another language or
+written in a script other than Latin, such as Chinese.
 
 Args:
   - term (string, required): Glossary term to look up (2-100 characters). Supports fuzzy matching.
@@ -188,7 +266,10 @@ Returns:
     "entries": [{ "term": string, "definition": string, "url": string }],
     "tokenInfo": { "tokenCount": number, "truncated": boolean, "maxTokens": number },
     "truncatedContent"?: { "omittedCount": number, "omittedItems": [{ "title": string, "estimatedTokens": number }] },
-    "incomplete"?: { "unfetched": [{ "term": string, "url": string }], "message": string }
+    "incomplete"?: { "unfetched": [{ "term": string, "url": string }], "message": string },
+    // Set when the English glossary answered a term asked in another language,
+    // or found no match for one written in a script other than Latin.
+    "warning"?: string
   }
 
   For Markdown format:
@@ -272,8 +353,6 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
 
         await reportProgress(extra, { progress: 2, total: 3, message: 'Formatting output...' });
 
-        const nonEnglish = isNonEnglishLocale(params.language);
-
         // JSON format, whatever the result: the body the description
         // documents is the answer to a no-match as well, `totalMatches: 0`.
         // Until 2026-09-26 the no-match check came first and answered JSON
@@ -291,8 +370,9 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
           if (result.incomplete !== undefined) {
             jsonPayload.incomplete = result.incomplete;
           }
-          if (nonEnglish) {
-            jsonPayload.warning = ENGLISH_ONLY_WARNING;
+          const warning = languageNote(params, result, name => name);
+          if (warning !== undefined) {
+            jsonPayload.warning = warning;
           }
           await reportProgress(extra, { progress: 3, total: 3 });
           return {
@@ -311,7 +391,10 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
         // what budget holds them. Until 2026-09-26 that case answered this
         // sentence too, for a term the glossary has.
         if (result.totalMatches === 0 && result.entries.length === 0) {
-          const noResultText = `No glossary entries found for "${params.term}".\n\n*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
+          const note = languageNote(params, result, codeSpan);
+          const noResultText = `No glossary entries found for "${params.term}".\n\n${
+            note !== undefined ? `> ${note}\n\n` : ''
+          }*Tip: Try using \`jamf_docs_search\` with \`docType: "glossary"\` for broader results.*`;
 
           await reportProgress(extra, { progress: 3, total: 3 });
           return {
@@ -321,7 +404,8 @@ export function registerGlossaryLookupTool(server: McpServer, ctx: ServerContext
         }
 
         // Markdown format
-        const langWarning = nonEnglish ? `> ${ENGLISH_ONLY_WARNING}\n\n` : '';
+        const note = languageNote(params, result, codeSpan);
+        const langWarning = note !== undefined ? `> ${note}\n\n` : '';
         const incompleteNote = result.incomplete !== undefined
           ? formatIncompleteMarkdown(result.incomplete)
           : '';

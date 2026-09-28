@@ -21,6 +21,7 @@ import Fuse, { type FuseIndex, type FuseOptionKey, type IFuseOptions } from 'fus
 import { cacheKey } from './cache-key.js';
 import { parseSitemap, titleFromSlug, type SitemapEntry } from './sitemap-service.js';
 import { STATIC_DOC_SOURCES, type StaticDocSource } from '../constants/sources.js';
+import { CJK_CHARACTER } from '../utils/cjk.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { ServerContext } from '../types/context.js';
 
@@ -128,9 +129,6 @@ const FUSE_OPTIONS: IFuseOptions<StaticSearchEntry> = {
   ignoreLocation: true,
 };
 
-/** A Chinese, Japanese or Korean character: Han, Hiragana, Katakana or Hangul. */
-const CJK_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-
 /**
  * The shortest run of matched characters, for a query with no Chinese,
  * Japanese or Korean character in it, and the cap for one with.
@@ -162,8 +160,9 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * happens to have a space beside the word: live, `密碼 ` found nothing in
  * zh-TW where 密碼 found one (2026-09-28). Lengths are UTF-16 code units, as
  * Fuse and the tool's schema both count them. So one character such as 鎖,
- * which `jamf_docs_search`'s schema lets through only padded, is held to one
- * and matches the titles that hold it.
+ * which `jamf_docs_search`'s schema has accepted on its own since 2026-09-28
+ * (until then, only padded), is held to one and matches the titles that hold
+ * it.
  *
  * Capped at the query's length, not lowered to two for every such query.
  * Measured over the live titles on 2026-09-28, with queries taken from the ja

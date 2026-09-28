@@ -46,6 +46,7 @@ import { limitConcurrency } from '../utils/concurrency.js';
 import { describeFetchFailure, mayBeTemporary, MAY_BE_TEMPORARY } from '../utils/fetch-failure.js';
 import { describeMapsListFailure } from './maps-list-failure.js';
 import { readGlossaryProviderResult } from './provider-results.js';
+import { CJK_CHARACTER } from '../utils/cjk.js';
 
 /**
  * The glossary could not be read, so the lookup has no answer to give. That
@@ -111,13 +112,52 @@ function titleOf(node: FtTocNode): string {
   return node.title ?? node.contentId;
 }
 
+/**
+ * What `lookupGlossaryTerm` answers: the result, and which glossary it read.
+ */
+export interface GlossaryLookupAnswer extends GlossaryLookupResult {
+  /**
+   * The locale of the glossary that was read: the one asked for where Jamf
+   * publishes a glossary in it, and otherwise en-US, which on 2026-09-28 was
+   * the only one. `jamf_docs_glossary_lookup` says when it is en-US and the
+   * term was asked in another language. Absent from a `GlossaryProvider`'s
+   * answer, which the tool takes to be from the en-US glossary, as it always
+   * has.
+   */
+  resolvedLocale?: string | undefined;
+}
+
 /** Return a zero-entry result when there is nothing to report. */
-function emptyGlossaryResult(maxTokens: number): GlossaryLookupResult {
+function emptyGlossaryResult(maxTokens: number, resolvedLocale: string | undefined): GlossaryLookupAnswer {
   return {
     entries: [],
     totalMatches: 0,
     tokenInfo: { tokenCount: 0, truncated: false, maxTokens },
+    ...(resolvedLocale !== undefined ? { resolvedLocale } : {}),
   };
+}
+
+/**
+ * The locale of the glossary `mapId`, which `resolveGlossaryMapId` gave for
+ * `locale`: that locale, or en-US where it fell back to the English glossary
+ * for want of one in `locale`. The registry says which only by giving the
+ * same map for both.
+ *
+ * It has read the maps list by now, so asking again reads memory. Undefined
+ * if that fails anyway, which the tool reads as the English glossary, as it
+ * did before it was told: the lookup answers either way.
+ */
+async function glossaryLocaleOf(
+  ctx: ServerContext,
+  locale: LocaleId,
+  mapId: string,
+): Promise<string | undefined> {
+  if (locale === DEFAULT_LOCALE) { return locale; }
+  try {
+    return await ctx.mapsRegistry.resolveGlossaryMapId(DEFAULT_LOCALE) === mapId ? DEFAULT_LOCALE : locale;
+  } catch {
+    return undefined;
+  }
 }
 
 // ─── Fluid Topics API helpers ───────────────────────────────────
@@ -434,6 +474,12 @@ const TOC_FUSE_OPTIONS: IFuseOptions<FtTocNode> = {
  * fraction of the *pattern* length — so a value tuned for a multi-word term is
  * wildly permissive on a three-letter one. `DEP` at 0.4 returned `patch
  * definition`, which shares no substring with it at all.
+ *
+ * A Chinese, Japanese or Korean query this short is not an abbreviation but
+ * an ordinary word (憑證, 密碼), and the arithmetic is the same for it: at
+ * 0.4, one of three characters may be wrong. So it gets the same threshold,
+ * and `titleNamesShortQuery` asks the same of it by rules that read its
+ * script (see there).
  */
 const SHORT_QUERY_LENGTH = 4;
 
@@ -507,6 +553,13 @@ function thresholdFor(term: string): number {
  * that one letter is a third of the query, and `OS` one slip from `DoS` is not
  * a typo. The downstream `D1GlossaryProvider` applies the same idea: a query
  * of four characters or fewer does not qualify for its prefix tier (#208).
+ *
+ * A Chinese, Japanese or Korean query is a word, not an abbreviation, and a
+ * title names it where it appears: `hasWordBoundaryMatch` asks for no
+ * delimiter beside such a character, except that a Katakana end must not
+ * have another Katakana letter beside it (see there). The slips are of Latin
+ * words (`wordsOf`), so none is allowed it. One wrong character makes
+ * another Chinese word, as a changed letter makes another abbreviation.
  */
 function titleNamesShortQuery(title: string, term: string): boolean {
   if (hasWordBoundaryMatch(title, term)) { return true; }
@@ -561,11 +614,60 @@ function wordsOf(text: string): string[] {
  * This is what makes `MDM` prefer `mobile device management (MDM)` over `User
  * Approved MDM`: both contain it, but ranking by fuzzy distance alone put the
  * shorter title first, and fuzzy relevance is not term relevance.
+ *
+ * An end of `term` that is a Chinese, Japanese or Korean character needs no
+ * delimiter on that side. Those languages put nothing between words, and
+ * Jamf's zh-TW titles write a Latin word straight against a Chinese one:
+ * PKI憑證 ("PKI certificate"), 解決APNs憑證不符問題. Until 2026-09-28 the
+ * `I` before 憑證 ("certificate") meant 憑證 was not a word of PKI憑證. That
+ * mattered most to a short query, which must name a word of a title
+ * (`titleNamesShortQuery`), and two characters are a whole Chinese word.
+ * No live title had such a character that day, because Jamf publishes the
+ * glossary in en-US only, but `resolveGlossaryMapId` reads the glossary of
+ * the language asked for once Jamf publishes one. A Latin end is delimited
+ * as before, so a Latin term gets the same answer: `MDM` names a word of
+ * MDM描述檔 and `DM` does not.
+ *
+ * A Katakana end is the exception. Katakana spells loanwords letter by letter,
+ * as Latin does, so one can hold another the way `block` holds `lock`: ロック
+ * ("lock") is in ブロック ("block"). So a Katakana end must have no Katakana
+ * letter beside it, as a Latin end must have no Latin letter or digit, and
+ * ロック is not a word of ブロックページ ("block page"). Until 2026-09-28 it
+ * was: any character but a Latin letter or digit was a delimiter, Katakana
+ * too. What that costs is a compound written solid: ロック is not a word of
+ * アクティベーションロック ("Activation Lock") either, as `lock` would not be
+ * of `activationlock`, so a short query does not find it. A Latin letter, Han
+ * or Hiragana beside it bounds it: ロック is a word of
+ * デバイスのロックまたはロック解除.
  */
 function hasWordBoundaryMatch(title: string, term: string): boolean {
-  const escaped = escapeRegExp(term.toLowerCase());
-  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(title.toLowerCase());
+  const lower = term.toLowerCase();
+  return new RegExp(`${boundaryBefore(lower)}${escapeRegExp(lower)}${boundaryAfter(lower)}`, 'u')
+    .test(title.toLowerCase());
 }
+
+/** What must come before `term` for it to start a word of a title (see hasWordBoundaryMatch). */
+function boundaryBefore(term: string): string {
+  if (KATAKANA_AT_START.test(term)) { return String.raw`(?<!\p{Script=Katakana})`; }
+  return CJK_AT_START.test(term) ? '' : '(^|[^a-z0-9])';
+}
+
+/**
+ * What must come after `term` for it to end a word of a title (see
+ * hasWordBoundaryMatch). The long vowel mark ー is in the Common script, not
+ * a Katakana letter, so it may follow: サーバ ("server") is a word of
+ * サーバーの設定, which spells the same word with the mark.
+ */
+function boundaryAfter(term: string): string {
+  if (KATAKANA_AT_END.test(term)) { return String.raw`(?!\p{Script=Katakana})`; }
+  return CJK_AT_END.test(term) ? '' : '([^a-z0-9]|$)';
+}
+
+/** A term that starts with a Katakana letter, or ends with one or with ー. */
+const KATAKANA_AT_START = /^\p{Script=Katakana}/u;
+const KATAKANA_AT_END = /[\p{Script=Katakana}ー]$/u;
+const CJK_AT_START = new RegExp(`^${CJK_CHARACTER.source}`, 'u');
+const CJK_AT_END = new RegExp(`${CJK_CHARACTER.source}$`, 'u');
 
 /**
  * Whether a word of three letters or more from `query` starts a word of
@@ -890,7 +992,7 @@ export async function lookupGlossaryTerm(
     language?: LocaleId | undefined;
     maxTokens?: number | undefined;
   }
-): Promise<GlossaryLookupResult> {
+): Promise<GlossaryLookupAnswer> {
   const log = ctx.logger.createLogger('glossary');
   const { glossaryProvider } = ctx;
   if (glossaryProvider !== undefined) {
@@ -949,6 +1051,7 @@ export async function lookupGlossaryTerm(
   }
 
   log.info(`Resolved glossary mapId: ${mapId} (locale=${locale})`);
+  const resolvedLocale = await glossaryLocaleOf(ctx, locale, mapId);
 
   // Step 1: Fetch glossary TOC (cached after first call)
   let tocEntries: FtTocNode[];
@@ -1014,7 +1117,7 @@ export async function lookupGlossaryTerm(
 
   if (matchedTocEntries.length === 0) {
     log.info(`No matching glossary terms found for "${term}"`);
-    return emptyGlossaryResult(maxTokens);
+    return emptyGlossaryResult(maxTokens, resolvedLocale);
   }
 
   log.info(
@@ -1038,7 +1141,7 @@ export async function lookupGlossaryTerm(
   throwIfUnanswerable(term, toFetch.length, failures, matchedEntries);
 
   if (allEntries.length === 0) {
-    return emptyGlossaryResult(maxTokens);
+    return emptyGlossaryResult(maxTokens, resolvedLocale);
   }
 
   const glossaryEntryToString = (e: GlossaryEntry): string =>
@@ -1088,6 +1191,7 @@ export async function lookupGlossaryTerm(
     ...(failures.length > 0
       ? { incomplete: incompleteNote(term, toFetch.length, failures) }
       : {}),
+    ...(resolvedLocale !== undefined ? { resolvedLocale } : {}),
   };
 }
 

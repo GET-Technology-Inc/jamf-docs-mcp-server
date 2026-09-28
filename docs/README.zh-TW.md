@@ -177,7 +177,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
-| `query` | string | 是 | 搜尋關鍵字 (2-200 字元) |
+| `query` | string | 是 | 搜尋關鍵字 (2-200 字元，或單一個中文、日文或韓文字) |
 | `product` | string | 否 | 依產品 ID 篩選 (詳見支援產品表) |
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
 | `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`training`、`solution-guide`、`glossary`、`getting-started` |
@@ -191,7 +191,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 搜尋結果依 `maxTokens` 分頁。每頁最多 `limit` 筆結果，放得下多少就放多少，下一頁從第一筆放不下的結果開始。每筆結果都恰好出現在某一頁，但在第幾頁取決於 `limit` 與 `maxTokens`，所以翻頁時請維持這兩個參數不變。當它們不是預設值時，markdown 頁尾會在下一個 `page` 旁註明；`structuredContent` 會回傳翻頁時該重送的參數：`filters`、`limit` 與 `maxTokens`。MCP App 的「Show more」會全部重送。若某筆結果本身就超過 `maxTokens`，它會獨佔一頁，摘要 (snippet) 會截短到放得下為止並以 `…` 結尾。只有這種頁面的 `tokenInfo.truncated` 為 `true`，`truncatedResult` 會註明是哪一筆結果，以及整筆結果需要多少 token (`estimatedTokens`)；`outputMode: "full"` 的 markdown 會註明重新呼叫時該用多少 `maxTokens`。若 `limit` 與 `maxTokens` 使頁數超過 `page` 可接受的上限 (100)，第 100 頁不會再提供下一頁，`paginationNote` 會說明如何讀到其餘結果。
 
-「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
+「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若查詢含有中文、日文或韓文字詞，而搜尋的語言其文件並非以這些文字撰寫（例如預設的 `en-US`，其文件為英文），則不會建議這些字詞，回應會說明可改用英文術語搜尋，或改用哪個 `language` 搜尋（JSON 為 `localeNote`）。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
 
 ### jamf_docs_get_article
 
@@ -253,7 +253,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 ### jamf_docs_glossary_lookup
 
-查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。
+查詢 Jamf 官方術語表，支援模糊比對。4 個字元以內的查詢會視為縮寫，必須與術語名稱中的完整單字相符，因此 `DEP` 不會比對到 `zero-touch deployment`。4 個字元的查詢可容許複數形、漏打一個字母或兩個字母前後對調（如 `MDMs`、`LDPA`）。目前術語表僅提供英文版，傳入非英文 `language` 仍會回傳英文結果。若以其他語言查詢，或術語以拉丁字母以外的文字（如中文）書寫，查無結果時回應也會說明這一點（JSON 為 `warning`）。
 
 「No glossary entries found」表示已讀取術語表，但沒有符合的條目（使用 `responseFormat: "json"` 時，則是 `totalMatches: 0` 的 JSON 內容）。若有符合的條目，但連排在第一位的條目都超出 `maxTokens`，回應會說明符合的條目數，以及第一個條目所需的 `maxTokens`；`truncatedContent` 會列出每個被省略的條目及其估計 token 數。若無法讀取術語表（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的文件地圖清單來源 `MapsProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗，以及重試是否可能有幫助。若部分符合的條目無法取得，回應會以其餘條目作答並加以註明：`incomplete` 會列出可能缺少的條目。若其中有原本應排在回應第一位的條目（其名稱比所有已取得的條目都更貼近查詢術語），則改為回傳錯誤，不會以其他較不相關的條目代替作答。
 

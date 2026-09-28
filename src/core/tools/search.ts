@@ -29,6 +29,7 @@ import {
   searchStaticSources,
   type StaticSearchHit,
 } from '../services/static-search-service.js';
+import { NON_LATIN_LETTER, cjkWritingOf, documentationCanHaveCjkOf, type CjkWriting } from '../utils/cjk.js';
 
 interface SearchFilters {
   product?: string;
@@ -405,6 +406,13 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * JSON shape describe the pages that replaced them. That Note sends the reader
  * to `paginationNote`, which the JSON shape did not list, so the notes a JSON
  * reply can carry were listed the same day; each was already sent.
+ *
+ * `query` took 2-200 characters until 2026-09-28. One Chinese, Japanese or
+ * Korean character is now enough, since one Han character can be a word (see
+ * SearchInputSchema); the bullet says so, as the schema's description does.
+ * The same day, `localeNote` began to be set in en-US too, for a query with
+ * words in a script the documentation searched is not written in (see
+ * `noResultsLocaleNote`), and its comment says so.
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -413,7 +421,7 @@ Jamf School, Jamf Connect, Jamf Protect, Jamf Now, Jamf Safe Internet, and more.
 Results include article titles, snippets, and direct links.
 
 Args:
-  - query (string, required): Search keywords (2-200 characters)
+  - query (string, required): Search keywords (2-200 characters, or one Chinese, Japanese or Korean character)
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
@@ -460,7 +468,9 @@ Returns:
     "otherSources"?: [{ "title": string, "url": string, "source": string }],
     // Queries to try instead, when "results" is empty.
     "suggestions"?: [string],
-    // When "results" is empty and language is not ${DEFAULT_LOCALE}: not all documentation is in it.
+    // When "results" is empty and language is not ${DEFAULT_LOCALE}, as not all documentation is
+    // in it, or the query has Chinese, Japanese or Korean words and the documentation in
+    // language is not written in them: which documentation to search instead, and how.
     "localeNote"?: string,
     // Only on a page that is one result cut to fit; see the Note on paging.
     "truncatedResult"?: { "title": string, "estimatedTokens": number }
@@ -808,7 +818,9 @@ function buildNoResultsResponse(
   otherSources: StaticSearchHit[],
 ): ToolResult {
   const { query } = params;
-  const suggestions = generateSearchSuggestions(query, params.product !== undefined, params.topic !== undefined);
+  const suggestions = generateSearchSuggestions(
+    query, params.product !== undefined, params.topic !== undefined, params.language,
+  );
 
   /**
    * Queries a client can run, and nothing else.
@@ -846,10 +858,7 @@ function buildNoResultsResponse(
 
   // The locale caveat is advice, so it rides the text channel with the rest of
   // the advice rather than being mixed into the runnable list above.
-  const localeNote =
-    params.language !== undefined && params.language !== DEFAULT_LOCALE
-      ? `Not all documentation is available in "${params.language}". Try searching with language: "${DEFAULT_LOCALE}".`
-      : undefined;
+  const localeNote = noResultsLocaleNote(query, params.language);
 
   if (params.responseFormat === ResponseFormat.JSON) {
     // The JSON body of a search with results, with no results in it, the
@@ -884,6 +893,63 @@ function buildNoResultsResponse(
     content: [{ type: 'text', text: markdown }],
     structuredContent,
   };
+}
+
+/**
+ * The locale caveat on a search with no results: which documentation to
+ * search instead, or undefined when there is nothing to say.
+ *
+ * - A query with Chinese, Japanese or Korean words, in a language whose
+ *   documentation is not written as they are (see `cjkWritingOf`), is told so,
+ *   and sent to the English terms and to the languages whose documentation is
+ *   written as they are. That includes en-US, the default: its documentation
+ *   is in English. Until
+ *   2026-09-28 such a query had no note in en-US, and nothing said that its
+ *   words were not in the documentation searched: live that day,
+ *   推送 證書 續約 ("push certificate renewal") had no results in en-US and
+ *   50 in zh-TW. Such a query is suggested its Latin words only there (see
+ *   `generateSearchSuggestions`).
+ * - Otherwise, in a language other than en-US: not all documentation is in
+ *   it, and the en-US documentation may have what it does not. A query with
+ *   a letter of a script other than Latin is told to search that for the
+ *   English terms, as its own words are not in English.
+ */
+function noResultsLocaleNote(query: string, language: string | undefined): string | undefined {
+  const searched = language ?? DEFAULT_LOCALE;
+  const writing = cjkWritingOf(query);
+  if (writing !== undefined && !documentationCanHaveCjkOf(query, searched)) {
+    return cjkElsewhereNote(writing, searched, language === undefined);
+  }
+  if (searched === DEFAULT_LOCALE) { return undefined; }
+  const unavailable = `Not all documentation is available in "${searched}".`;
+  return NON_LATIN_LETTER.test(query)
+    ? `${unavailable} The ${DEFAULT_LOCALE} documentation is in English: to search it, ` +
+      `use the English terms, with language: "${DEFAULT_LOCALE}".`
+    : `${unavailable} Try searching with language: "${DEFAULT_LOCALE}".`;
+}
+
+/**
+ * The note for a query with words in `writing`, searched in `language`, whose
+ * documentation is not written that way: the English terms, which en-US has,
+ * and the languages whose documentation is written as the query is.
+ */
+function cjkElsewhereNote(writing: CjkWriting, language: string, byDefault: boolean): string {
+  const has = `This query has words in ${writing.name}, and the documentation in "${language}"`;
+  const english = language === DEFAULT_LOCALE
+    ? `${has}${byDefault ? ' (the default language)' : ''} is in English, so it does not have them. ` +
+      'Search it with the English terms.'
+    : `${has} is not in ${writing.name}, so it does not have them. The ${DEFAULT_LOCALE} documentation is ` +
+      `in English: to search it, use the English terms, with language: "${DEFAULT_LOCALE}".`;
+  const elsewhere = writing.locales.length > 0
+    ? `Or search with language: ${orList(writing.locales.map(locale => `"${locale}"`))}, ` +
+      `where the documentation is in ${writing.name}.`
+    : `Jamf publishes no documentation in ${writing.name}.`;
+  return `${english} ${elsewhere}`;
+}
+
+/** `a`, `a or b`, `a, b or c`. */
+function orList(items: readonly string[]): string {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items.slice(-1).join('')}`;
 }
 
 /**

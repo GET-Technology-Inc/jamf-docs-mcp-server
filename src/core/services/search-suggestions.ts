@@ -4,7 +4,8 @@
  * Generates helpful suggestions when a search returns no results.
  */
 
-import { JAMF_TOPICS, type TopicId } from '../constants.js';
+import { DEFAULT_LOCALE, JAMF_TOPICS, type TopicId } from '../constants.js';
+import { CJK_CHARACTER, documentationCanHaveCjkOf, splitCjkWords } from '../utils/cjk.js';
 
 /**
  * Search suggestion result
@@ -58,14 +59,51 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
+ * The words of a query, lowercased, with empty strings where it had runs of
+ * spaces or punctuation.
+ *
+ * Latin text is split as it always was: each character that is not `\w`,
+ * whitespace or a hyphen is read as a space. A Chinese, Japanese or Korean run
+ * is cut into its words instead (see `splitCjkWords`). Until 2026-09-28 it
+ * went the Latin way, and since none of its characters is `\w` it was all
+ * read as spaces. So a Chinese or Japanese query had no keywords, and its
+ * no-results reply suggested nothing to run: live that day, the quoted
+ * `"推送 證書 續約 失敗"` ("push certificate renewal failure") in zh-TW, while
+ * `"renew push certificate failed"` gets `renew push certificate`. A query
+ * with none of those characters goes the Latin way whole, so it has the words
+ * it had.
+ */
+function wordsOf(query: string): string[] {
+  return splitCjkWords(
+    query.toLowerCase(),
+    part => part.replace(/[^\w\s-]/g, ' ').split(/\s+/),
+  );
+}
+
+/**
+ * A word written in Hiragana alone. In Japanese that is a particle, an
+ * auxiliary or an inflection, and the meaning is in the Kanji and Katakana
+ * around it: of the 16 such words of two characters or more in the 107 live
+ * Japanese titles (2026-09-28), all but ようこそ ("welcome") were, such as
+ * する "do", ない "not" and から "from". It is to a Japanese query what a stop
+ * word is to an English one, read from the script rather than listed.
+ */
+const HIRAGANA_ONLY = /^\p{Script=Hiragana}+$/u;
+
+/**
  * Extract meaningful keywords from a query
+ *
+ * One character is never one, in any script: a Latin letter is not a word,
+ * and the one-character words of Chinese and Japanese include particles, such
+ * as の and を, which the English stop words do not cover. Nor is a longer
+ * Japanese word in Hiragana alone (see `HIRAGANA_ONLY`). Kept, such words
+ * take the place of ones that carry meaning: the simpler query for
+ * アカウントチームからのサポートを受ける ("get support from the account team")
+ * would be `アカウント チーム から`, "account team from".
  */
 function extractKeywords(query: string): string[] {
-  return query
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(word => word.length > 1 && !STOP_WORDS.has(word));
+  return wordsOf(query)
+    .filter(word => word.length > 1 && !STOP_WORDS.has(word) && !HIRAGANA_ONLY.test(word));
 }
 
 /**
@@ -76,10 +114,7 @@ function extractKeywords(query: string): string[] {
  * literal query the caller ran.
  */
 function normalizeQuery(query: string): string {
-  return query
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
+  return wordsOf(query)
     .filter(word => word.length > 0)
     .join(' ');
 }
@@ -230,21 +265,39 @@ function generateTips(query: string, hasFilters: boolean): string[] {
   return tips;
 }
 
+/** Each Chinese, Japanese or Korean character, for `replace`. */
+const CJK_CHARACTERS = new RegExp(CJK_CHARACTER.source, 'gu');
+
 /**
- * Generate search suggestions for a query that returned no results
+ * Generate search suggestions for a query that returned no results, searched
+ * in `language`.
+ *
+ * A suggestion is made of the query's words, and only a word the
+ * documentation in `language` can have is one to search it for. So a query's
+ * Chinese, Japanese and Korean words are its words only in a language whose
+ * documentation is written as they are (see `cjkWritingOf`). Elsewhere those
+ * characters are read as spaces, as they were until 2026-09-28, and the
+ * query's Latin words are what it is suggested: in en-US, the default, whose
+ * documentation is in English, `"Jamf Pro 版本資訊 失敗 11.32.0"` gets
+ * `pro 11 32`, not `pro 版本 資訊`. Live that day, 推送 證書 續約 ("push
+ * certificate renewal") had 50 results in zh-TW and none in en-US. The reply
+ * says where such words can be found instead (`noResultsLocaleNote` in
+ * search.ts).
  */
 export function generateSearchSuggestions(
   query: string,
   hasProductFilter = false,
-  hasTopicFilter = false
+  hasTopicFilter = false,
+  language: string = DEFAULT_LOCALE
 ): SearchSuggestions {
   const hasFilters = hasProductFilter || hasTopicFilter;
+  const searchable = documentationCanHaveCjkOf(query, language) ? query : query.replace(CJK_CHARACTERS, ' ');
 
   return {
-    simplifiedQuery: simplifyQuery(query),
-    alternativeKeywords: findAlternativeKeywords(query),
-    suggestedTopics: findRelevantTopics(query),
-    tips: generateTips(query, hasFilters)
+    simplifiedQuery: simplifyQuery(searchable),
+    alternativeKeywords: findAlternativeKeywords(searchable),
+    suggestedTopics: findRelevantTopics(searchable),
+    tips: generateTips(searchable, hasFilters)
   };
 }
 
