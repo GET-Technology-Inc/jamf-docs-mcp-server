@@ -262,10 +262,13 @@ function classificationForMap(mapId: string): FixtureClassification | null {
  *
  * `contentLabels` are the `content-*` values FT publishes under
  * `zoominmetadata` alongside the product label — the vocabulary the docType
- * post-filter reads. `contentType` is the separate `jamf:contentType` metadata,
- * which only ever narrows the upstream FT query; an entry that needs a docType
- * has to declare `contentLabels`, because the two are not interchangeable
- * ('Technical Documentation' covers four docTypes).
+ * post-filter reads. `contentType` is the separate `jamf:contentType` metadata.
+ * The server sends that upstream only for `docType: 'training'`, and reads a
+ * docType from it only on an entry with no `content-*` label that carries a
+ * training value (a Jamf Training Catalog course); an entry that needs a
+ * docType has to declare `contentLabels`, because the two are not
+ * interchangeable (a release note carries 'Technical Documentation' as well
+ * as 'Release Notes').
  */
 export function makeFtSearchResponse(
   entries: {

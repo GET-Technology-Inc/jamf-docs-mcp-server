@@ -291,7 +291,7 @@ describe('a source that cannot be read is named, not passed off as the whole cat
     await listProducts();
     registryUp = false;
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v4'));
+    await ctx.cache.delete(cacheKey('maps-registry-v5'));
     if (options.availabilityToo) {
       await ctx.cache.delete(cacheKey('metadata-product-availability-v2'));
     }

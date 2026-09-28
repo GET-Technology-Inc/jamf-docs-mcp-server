@@ -65,11 +65,14 @@ there are ten, not the seven this line claimed before 2026-09-18. The
 See `DOC_TYPE_LABEL_MAP` in `src/core/constants/doc-types.ts`.
 
 One exception, since 2026-09-28: `docType: "training"` is searched first by
-`jamf:contentType` with Jamf's "Training Content" in every language at once
-(`TRAINING_CONTENT_TYPES`), because that is the only filter that reaches the
-Jamf Training Catalog courses (see the `DOCUMENT` entry below), which carry no
-`content-*` label. Values inside one filter union, so the one filter holds in
-every language. When it finds nothing, the search asks by `content-training`.
+`jamf:contentType` with Jamf's "Training Content" in every language at once,
+because that is the only filter that reaches the Jamf Training Catalog courses
+(see the `DOCUMENT` entry below), which carry no `content-*` label. Values
+inside one filter union, so the one filter holds in every language. The values
+are read from `/api/khub/maps` (`MapsRegistry.contentTypesOf`): those the maps
+labelled `content-training` carry and no other map does, six on 2026-09-28.
+While the maps list cannot be read, the search uses those six, compiled in as a
+stand-in. When the filter finds nothing, the search asks by `content-training`.
 
 **Filter objects intersect; values inside one filter union.** Product and
 content type share the `zoominmetadata` key, so they must be sent as two

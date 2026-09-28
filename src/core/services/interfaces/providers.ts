@@ -289,6 +289,15 @@ export interface TocProvider {
  * `jamf_docs_get_toc`, `jamf_docs_get_article`,
  * `jamf_docs_batch_get_articles` and the TOC resource quoted the message as
  * it was, the resource with file paths and stack lines included.
+ *
+ * Since 2026-09-28 the registry also reads each map's `zoominmetadata` (its
+ * `content-*` labels) and `jamf:contentType`, and a map should carry them as
+ * learn.jamf.com returns them: the search reads from them which
+ * `jamf:contentType` values are Jamf's training content
+ * (`MapsRegistry.contentTypesOf`). Maps without them pair no value with
+ * `content-training`, so a Jamf Training Catalog course in the results has
+ * no docType, and `docType: "training"` asks by `content-training` alone,
+ * which finds no course.
  */
 export interface MapsProvider {
   getMaps: () => Promise<FtMapInfo[]>;

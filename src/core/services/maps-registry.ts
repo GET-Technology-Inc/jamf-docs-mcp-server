@@ -14,7 +14,7 @@
 import { fetchMaps } from './ft-client.js';
 import { createHttpClient, type HttpClient } from '../http-client.js';
 import { createDefaultConfig } from '../config.js';
-import { DEFAULT_LOCALE, type LocaleId } from '../constants.js';
+import { DEFAULT_LOCALE, LABEL_KEY_DOC_TYPE_MAP, type LocaleId } from '../constants.js';
 import { JamfDocsError, JamfDocsErrorCode, type FtMapInfo, type FtMetadataEntry } from '../types.js';
 import type { CacheProvider, MapsProvider } from './interfaces/index.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
@@ -57,6 +57,21 @@ export interface MapEntry {
   app: string[];
   /** `jamf:utility` — the utilities this publication documents. */
   utility: string[];
+  /**
+   * The docType labels Jamf gives this map: the `content-*` values of
+   * `zoominmetadata` that {@link LABEL_KEY_DOC_TYPE_MAP} knows, in Jamf's
+   * order. Most maps carry one; a release note, a solution guide or a
+   * getting-started guide is often `content-techdocs` too.
+   */
+  labelKeys: string[];
+  /**
+   * `jamf:contentType` — what Jamf calls the kind of document this map is, in
+   * the map's own language ("Training Content", "Schulungsinhalt"), in
+   * Jamf's order. On 2026-09-28 each map carried one value for each of its
+   * `labelKeys`, but for the eight in it-IT, pt-BR, th-TH and zh-CN, which
+   * carry none.
+   */
+  contentType: string[];
 }
 
 export interface RegistryProductInfo {
@@ -139,10 +154,10 @@ export function deriveBundleStem(metadata: FtMetadataEntry[] | undefined): strin
  * otherwise be listed as a version, sorted as the newest.
  *
  * Read of a map from learn.jamf.com or a MapsProvider, and again of an entry
- * read from the cache, which an earlier build wrote with the value as it
- * came: the cached list is up to CACHE_TTL_PRODUCTS old. So the namespace
- * stays `maps-registry-v4`, whose shape this does not change, and an earlier
- * build reads this one's '' as the map with no version it is.
+ * read from the cache. Until the namespace moved to `maps-registry-v5`, later
+ * the same day, that entry could be one an earlier build wrote with the value
+ * as it came, the cached list being up to CACHE_TTL_PRODUCTS old; no build
+ * that writes v5 does, so the second read now only guards the rule.
  */
 function mapVersion(version: string | undefined): string {
   return namedVersion(version) ?? '';
@@ -172,6 +187,9 @@ function parseMap(map: FtMapInfo): MapEntry {
     portal: getMetaValues(metadata, FT_META.PORTAL),
     app: getMetaValues(metadata, FT_META.APP),
     utility: getMetaValues(metadata, FT_META.UTILITY),
+    labelKeys: getMetaValues(metadata, FT_META.ZOOMIN_METADATA)
+      .filter(value => LABEL_KEY_DOC_TYPE_MAP[value] !== undefined),
+    contentType: getMetaValues(metadata, FT_META.CONTENT_TYPE),
   };
 }
 
@@ -198,9 +216,15 @@ function parseMap(map: FtMapInfo): MapEntry {
 // fetch. A v3 payload has no time to count from, and read as the entries it
 // still is, it would be served for a whole TTL from the read, as it was before.
 //
+// v5 (2026-09-28): MapEntry gained `labelKeys` and `contentType`, which
+// `contentTypesOf` reads. A v4 entry has neither, so read as this shape it
+// would pair no content type with any label: a `docType: 'training'` search
+// would be asked by its label alone, and no course would be training, for as
+// long as the entry lasts, up to CACHE_TTL_PRODUCTS (7 days by default).
+//
 // Entries left under the old namespace expire on their TTL and are reclaimed
 // by the startup sweep in `src/index.ts`.
-const CACHE_KEY = cacheKey('maps-registry-v4');
+const CACHE_KEY = cacheKey('maps-registry-v5');
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GLOSSARY_BUNDLE_STEM = 'jamf-technical-glossary';
 
@@ -693,6 +717,74 @@ export class MapsRegistry {
       if (entry.utility.includes(value)) { return FT_META.UTILITY; }
     }
     return null;
+  }
+
+  /**
+   * The `jamf:contentType` values Jamf pairs with `labelKey`, a `content-*`
+   * label, in every language it has one in: what Jamf calls that kind of
+   * document there. Sorted; empty when no map is labelled so.
+   *
+   * `jamf:contentType` is Jamf's other label for the kind, and the one it
+   * translates, so its values cannot be written down once for every locale.
+   * The maps list pairs each `content-*` label with one value per locale, and
+   * this reads the pairing from it. A value pairs with the label every map
+   * that carries it has. A map with two labels carries both their values, so
+   * a value only ever seen beside another label, as de-DE's solution guide
+   * "Leitfaden zur Lösung" is only seen on a map that is `content-techdocs`
+   * too, is paired with the one of them whose every map in its locale
+   * carries it. A value some map without the label carries is not paired
+   * with it: on an entry with no `content-*` label it would not say which
+   * kind the entry is.
+   *
+   * Measured 2026-09-28 over the 685 maps: the 21 `content-training` maps
+   * carry "Training Content" or its translation, one value in each of six
+   * languages, and no other map carries one of the six; every other label
+   * is likewise paired with one value in each locale it is used in, but
+   * it-IT, pt-BR, th-TH and zh-CN, whose eight maps carry no content type.
+   *
+   * The search asks for `docType: 'training'` by these values, and reads an
+   * entry with no `content-*` label as training when it carries one
+   * (`docTypeLabelKeys` in search-service.ts), as every Jamf Training Catalog
+   * course is. Until 2026-09-28 the six were a list kept by hand, and a
+   * language Jamf added training in was searched without its courses until
+   * the list was edited. The search now keeps them only to stand in for a
+   * list it cannot read (search-service.ts).
+   *
+   * Read from the entries on every call, like {@link classificationAxis}:
+   * some 700 entries and 40 values cost nothing worth caching, and nothing
+   * can go stale.
+   */
+  async contentTypesOf(labelKey: string): Promise<string[]> {
+    await this.ensureBuilt();
+    const carriers = new Map<string, MapEntry[]>();
+    for (const entry of this.entries) {
+      for (const value of entry.contentType) {
+        const maps = carriers.get(value);
+        if (maps === undefined) {
+          carriers.set(value, [entry]);
+        } else {
+          maps.push(entry);
+        }
+      }
+    }
+    const paired: string[] = [];
+    for (const [value, maps] of carriers) {
+      // The labels every map that carries the value has.
+      const shared = maps.reduce<string[]>(
+        (labels, map) => labels.filter(label => map.labelKeys.includes(label)),
+        maps[0]?.labelKeys ?? [],
+      );
+      if (!shared.includes(labelKey)) { continue; }
+      if (shared.length > 1) {
+        const locales = new Set(maps.map(map => map.locale));
+        const everyMapCarries = this.entries
+          .filter(entry => locales.has(entry.locale) && entry.labelKeys.includes(labelKey))
+          .every(entry => entry.contentType.includes(value));
+        if (!everyMapCarries) { continue; }
+      }
+      paired.push(value);
+    }
+    return paired.sort();
   }
 
   /**

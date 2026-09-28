@@ -10,7 +10,7 @@ describe('cacheKey', () => {
   it('is readable', () => {
     expect(cacheKey('ft-toc-v2', { locale: 'en-US', product: 'jamf-pro', version: '11.5' }))
       .toBe('ft-toc-v2:{"locale":"en-US","product":"jamf-pro","version":"11.5"}');
-    expect(cacheKey('maps-registry-v4')).toBe('maps-registry-v4');
+    expect(cacheKey('maps-registry-v5')).toBe('maps-registry-v5');
   });
 
   it('no value can forge a neighbouring key', () => {
@@ -38,7 +38,7 @@ describe('cacheKey', () => {
   });
 
   it('gives a single-entry cache the bare namespace as its key', () => {
-    expect(cacheKey('maps-registry-v4')).toBe('maps-registry-v4');
+    expect(cacheKey('maps-registry-v5')).toBe('maps-registry-v5');
   });
 
   it('declares no duplicate namespaces', () => {

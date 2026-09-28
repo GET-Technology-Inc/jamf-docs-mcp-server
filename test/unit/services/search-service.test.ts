@@ -270,10 +270,10 @@ describe('buildSearchFilters()', () => {
   });
 
   // `training` used to map through DOC_TYPE_CONTENT_TYPE_MAP onto 'Technical
-  // Documentation', which four docTypes share — so the upstream query widened
-  // to all technical documentation and only the client-side post-filter
-  // narrowed it back. `content-training` is one-to-one, so the narrowing now
-  // happens at the API where it belongs.
+  // Documentation', which four docTypes then shared — so the upstream query
+  // widened to all technical documentation and only the client-side
+  // post-filter narrowed it back. `content-training` is one-to-one, so the
+  // narrowing now happens at the API where it belongs.
   it('narrows training to its own label rather than the shared techdocs value', () => {
     expect(buildSearchFilters({ docType: 'training' })).toEqual([
       { key: 'zoominmetadata', values: ['content-training'] },
@@ -483,11 +483,12 @@ describe('transformFtSearchResult()', () => {
     // ── docType derivation ──────────────────────────────────────────────────
     //
     // FT ships the answer as `content-*` values under `zoominmetadata`, whose
-    // vocabulary is exactly DOC_TYPES' labelKey set. `jamf:contentType` is
-    // many-to-one ('Technical Documentation' covers four docTypes) and so
+    // vocabulary is exactly DOC_TYPES' labelKey set. `jamf:contentType`
     // cannot be reversed: reverse-looking it up in DOC_TYPE_CONTENT_TYPE_MAP's
     // insertion order labelled every release note `documentation`, because
-    // release notes carry BOTH values and `documentation` is declared first.
+    // release notes carry BOTH values and `documentation` is declared first
+    // (and the map sent three other docTypes to 'Technical Documentation'
+    // until 2026-09-28).
     it('should derive docType from the zoominmetadata content-* label', () => {
       const entry = makeTopicEntry({
         metadata: makeMetadata({

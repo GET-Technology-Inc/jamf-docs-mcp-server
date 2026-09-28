@@ -2,10 +2,10 @@
  * Guard tests for doc-type constants.
  *
  * Background: search results used to derive their docType by reverse-looking-up
- * `DOC_TYPE_CONTENT_TYPE_MAP`, a many-to-one map, in object-literal insertion
- * order. Release notes carry both 'Technical Documentation' and 'Release Notes',
- * `documentation` is declared first, so every release note was labelled
- * documentation and its own docType filter then dropped it.
+ * `DOC_TYPE_CONTENT_TYPE_MAP`, then a many-to-one map, in object-literal
+ * insertion order. Release notes carry both 'Technical Documentation' and
+ * 'Release Notes', `documentation` is declared first, so every release note
+ * was labelled documentation and its own docType filter then dropped it.
  *
  * The derivation now reads FT's `content-*` labels, whose vocabulary is exactly
  * the DOC_TYPES labelKey set. These tests pin the two structures that direction

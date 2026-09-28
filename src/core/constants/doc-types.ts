@@ -50,7 +50,8 @@ export const DOC_TYPE_LABEL_MAP: Record<DocTypeId, string> = Object.fromEntries(
  * FT publishes these under the `zoominmetadata` key on every topic, and the
  * vocabulary is exactly the {@link DOC_TYPES} labelKey set. That makes it —
  * not `jamf:contentType` — the authoritative answer to "what kind of document
- * is this", and unlike `jamf:contentType` it is not many-to-one.
+ * is this", and unlike `jamf:contentType`, whose values Jamf translates, it
+ * is the same in every locale.
  */
 export const LABEL_KEY_DOC_TYPE_MAP: Record<string, DocTypeId> = Object.fromEntries(
   Object.entries(DOC_TYPES).map(([id, dt]) => [dt.labelKey, id])
@@ -87,50 +88,36 @@ export const DOC_TYPE_PRECEDENCE: readonly DocTypeId[] = [
  * 'Versionshinweise' under de-DE, and so on. Sending the English string as an
  * upstream filter matched topics under en-US and exactly 0 under every
  * other locale this server supports. {@link DOC_TYPE_LABEL_MAP}'s `content-*`
- * vocabulary is locale-invariant and is what `buildSearchFilters` uses.
+ * vocabulary is locale-invariant and is what `buildSearchFilters` uses. The
+ * one `jamf:contentType` filter the search does send, for `docType:
+ * 'training'`, carries the value in every language, read from the maps list
+ * (`MapsRegistry.contentTypesOf`), not from here.
  *
  * Kept because it is a published export and still describes a real FT field,
- * but it is not a query-building map. The mapping is also many-to-one
- * ('Technical Documentation' covers four docTypes) and so cannot be reversed —
- * use {@link LABEL_KEY_DOC_TYPE_MAP} to go the other way.
+ * but it is not a query-building map. Each value is the one Jamf gives the
+ * maps it labels with the docType's `content-*` label, in en-US: measured on
+ * 2026-09-28 over the 685 maps, every en-US map with the label carries the
+ * value and no en-US map without it does (172 maps carry 'Technical
+ * Documentation', 53 'Release Notes', 16 'Training Content', 5 'Solution
+ * Guide', 2 'Getting Started Guide' and 1 'Glossary'). A map with two labels,
+ * such as a release note, which is `content-techdocs` too, carries both
+ * values, so a topic's values cannot be reversed into one docType either:
+ * use {@link LABEL_KEY_DOC_TYPE_MAP} on its labels to go the other way.
+ *
+ * Until 2026-09-28 `training`, `solution-guide` and `getting-started` were
+ * mapped to 'Technical Documentation', which is `content-techdocs`' value:
+ * none of the 16 training maps carries it, and the solution guides and
+ * getting-started guides that do carry it because Jamf labels them techdocs
+ * too.
  */
 export const DOC_TYPE_CONTENT_TYPE_MAP: Record<string, string> = {
   'documentation': 'Technical Documentation',
   'release-notes': 'Release Notes',
   'glossary': 'Glossary',
-  'training': 'Technical Documentation',
-  'solution-guide': 'Technical Documentation',
-  'getting-started': 'Technical Documentation',
+  'training': 'Training Content',
+  'solution-guide': 'Solution Guide',
+  'getting-started': 'Getting Started Guide',
 };
-
-/**
- * The `jamf:contentType` values Jamf gives its training content, "Training
- * Content", in every language Jamf has any in.
- *
- * They reach what `content-training` cannot: a course or learning path of
- * the Jamf Training Catalog, which Jamf's search lists among the
- * documentation (a DOCUMENT entry, see `FtSearchDocument`), carries one of
- * them and no `content-*` label. So `docType: 'training'` is searched for by
- * these, which select what Jamf classifies as training content, courses
- * included, and a result with no `content-*` label is training when it
- * carries one (see `docTypeLabelKeys` in search-service.ts).
- *
- * Listed in every language, not the one searched, so that one filter serves
- * them all: values within a filter are a union. Measured live on 2026-09-28:
- * the 21 maps labelled `content-training` carry one of these each, and none
- * of the other 664 maps does. Filtered by them, 13 searches in six languages
- * returned the `content-training` topics, in the same order, with the
- * courses among them (see trainingContentFilters in search-service.ts).
- * `data-contracts` checks that the maps still pair them so.
- */
-export const TRAINING_CONTENT_TYPES: readonly string[] = [
-  'Training Content',
-  'Schulungsinhalt',
-  'Contenido de formación',
-  'Contenu de la formation',
-  'トレーニングコンテンツ',
-  '培訓內容',
-];
 
 // Derived ID array (shared by schemas, completions, etc.)
 export const DOC_TYPE_IDS = Object.keys(DOC_TYPES) as [string, ...string[]];
