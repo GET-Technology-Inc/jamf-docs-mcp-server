@@ -94,7 +94,7 @@ describe('Integration: Search filter fallback flow', () => {
     const relaxation: FilterRelaxation = {
       removed: ['docType'],
       original: { docType: 'release-notes' },
-      message: 'No results with all filters applied. Removed filter(s): docType. Try broader search terms or fewer filters.',
+      message: 'No results with all filters applied. Removed filter(s): docType. These results are not filtered by docType "release-notes".',
     };
 
     vi.mocked(searchDocumentation).mockResolvedValue({

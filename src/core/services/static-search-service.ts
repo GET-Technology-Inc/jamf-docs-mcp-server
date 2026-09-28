@@ -253,11 +253,10 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * written.
  *
  * Three, for a query with no Chinese, Japanese or Korean character in it,
- * which is every Latin one, and that query is passed on as typed. Fuse matches
- * anywhere in a title, not word by word, and two Latin letters are mostly
- * part of a longer word: `id` is in 78 of the 913 en titles and is the word
- * ID in only 15. In the rest it is part of Provider, Android and the like
- * (2026-09-28).
+ * which is every Latin one. Fuse matches anywhere in a title, not word by
+ * word, and two Latin letters are mostly part of a longer word: `id` is in 78
+ * of the 913 en titles and is the word ID in only 15. In the rest it is part
+ * of Provider, Android and the like (2026-09-28).
  *
  * A query with such a character in it is held to its own length, up to that
  * three. Two of those characters are a word: 密碼 is "password", 憑證
@@ -267,15 +266,20 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * day, 20 of 20 two-character ja-JP and zh-TW queries returned no
  * other-source match, while Fluid Topics answered 18 of them.
  *
- * Such a query is trimmed of whitespace first, the ideographic space (U+3000)
+ * Every query is trimmed of whitespace first, the ideographic space (U+3000)
  * a Chinese or Japanese keyboard types included. Padded, 密碼 is three
  * characters long and so held to three, a run it has only where a title
  * happens to have a space beside the word: live, `密碼 ` found nothing in
- * zh-TW where 密碼 found one (2026-09-28). Lengths are UTF-16 code units, as
- * Fuse and the tool's schema both count them. So one character such as 鎖,
- * which `jamf_docs_search`'s schema has accepted on its own since 2026-09-28
- * (until then, only padded), is held to one and matches the titles that hold
- * it.
+ * zh-TW where 密碼 found one (2026-09-28). Until that day a Latin query was
+ * searched as typed, and a space around it counted in its runs: ` AI ` found
+ * the pages on AI Governance, whose titles have `AI ` in them, where `AI`
+ * found none. Measured offline over the live titles that day, with the Latin
+ * ones of the queries `exactShortTitles` was measured with (13,195, in eight
+ * locales), a space after or around the query changed what it found in
+ * 55,711 of 211,120 answers. Lengths are UTF-16 code units, as Fuse and the
+ * tool's schema both count them. So one character such as 鎖, which
+ * `jamf_docs_search`'s schema has accepted on its own since 2026-09-28 (until
+ * then, only padded), is held to one and matches the titles that hold it.
  *
  * Capped at the query's length, not lowered to two for every such query.
  * Measured over the live titles on 2026-09-28, with queries taken from the ja
@@ -286,19 +290,61 @@ const MIN_MATCH_CHAR_LENGTH = 3;
  * (IDを found Android Enterprise).
  *
  * So, by construction rather than by measurement, two kinds of query get the
- * pattern and options they got before, and so the same matches: one with no
- * such character, and an unpadded one of three characters or more. A shorter
- * one now matches; at two characters the threshold allows no error, so it
- * matches exactly the titles that hold it. A padded one is searched without
- * its padding.
+ * pattern and options they got before, and so the same matches: an unpadded
+ * one with no such character, and an unpadded one of three characters or
+ * more. A shorter one with such a character now matches; at two characters
+ * the threshold allows no error, so it matches exactly the titles that hold
+ * it. A padded one is searched without its padding. A query shorter than
+ * three is also matched against whole titles (see `exactShortTitles`).
  */
 function fuseQueryFor(query: string): { pattern: string; minMatchCharLength: number } {
-  const folded = foldFullWidthLatin(query);
-  if (!CJK_CHARACTER.test(folded)) {
-    return { pattern: folded, minMatchCharLength: MIN_MATCH_CHAR_LENGTH };
+  const pattern = foldFullWidthLatin(query).trim();
+  if (!CJK_CHARACTER.test(pattern)) {
+    return { pattern, minMatchCharLength: MIN_MATCH_CHAR_LENGTH };
   }
-  const pattern = folded.trim();
   return { pattern, minMatchCharLength: Math.min(MIN_MATCH_CHAR_LENGTH, pattern.length) };
+}
+
+/**
+ * The pages of `entries` titled exactly `pattern`, ignoring case, when it is
+ * shorter than `MIN_MATCH_CHAR_LENGTH`: those whose listed title it is, then
+ * those whose slug's title it is (see `FUSE_KEYS`). `pattern` is the query as
+ * Fuse is asked for it (see `fuseQueryFor`), so without the spaces around it
+ * and with its full-width letters in ASCII: `ＡＩ` finds what `AI` finds.
+ * A longer one gets none, and its hits are Fuse's alone, as they were.
+ *
+ * A Latin query that short has no run of three characters to match, so Fuse
+ * finds a page for it only where a title repeats its letters, as `p` finds
+ * "PPPC Utility". Until 2026-09-28 that was all it found, and the one page
+ * either site titles with fewer than three Latin letters, the category page
+ * concepts.jamf.com titles "AI" in en, ja, nl, zh-TW and zh-CN, "KI" in de
+ * and "IA" in es and fr, could not be found in any locale: live that day,
+ * `AI`, `KI` in de-DE and `IA` in fr-FR had no other-source match. Measured
+ * offline over the live titles that day, with 13,720 queries in each of the
+ * eight locales (each title, each word and each pair of adjacent words, and
+ * every query of one or two ASCII letters or digits), 47 of the 109,760
+ * answers changed, each that of `AI`, `KI` or `IA` in some case or padding.
+ * 31 had found nothing. The other 16 now list that page before what they
+ * found, which pushed one weak match past its source's three in one of them:
+ * "Control de acceso a recursos" for ` AI ` in es-ES. A Chinese or Japanese
+ * query that short is matched at its own length (see `fuseQueryFor`), which
+ * already ranks a page titled with it first, and none of its answers changed.
+ *
+ * Only a whole title is matched, so a two-letter query finds no page that
+ * merely has its letters in a word: `id` is in 78 of the 913 en titles and is
+ * the word ID in 15 (see `fuseQueryFor`). Nor is a longer query matched so:
+ * Fuse ranks the guide "Platform SSO for macOS" a hair ahead of the category
+ * page the guides index links by that name, and whole titles would come in
+ * the sitemap's order.
+ */
+function exactShortTitles(entries: StaticSearchEntry[], pattern: string): StaticSearchEntry[] {
+  const wanted = pattern.toLowerCase();
+  if (wanted === '' || wanted.length >= MIN_MATCH_CHAR_LENGTH) { return []; }
+  const titled = (title: string | undefined): boolean => title?.trim().toLowerCase() === wanted;
+  return [
+    ...entries.filter(entry => titled(entry.title)),
+    ...entries.filter(entry => !titled(entry.title) && titled(entry.slugTitle)),
+  ];
 }
 
 function fuseFor(
@@ -358,10 +404,14 @@ export async function searchStaticSources(
     try {
       const entries = await loadStaticIndex(ctx, source, sourceLocale);
       if (entries.length === 0) { return []; }
-      return fuseFor(ctx, `${source.id}:${sourceLocale}`, entries, minMatchCharLength)
+      const exact = exactShortTitles(entries, pattern)
+        .map((item): StaticSearchHit => ({ title: item.title, url: item.url, source: item.source, score: 0 }));
+      const fuzzy = fuseFor(ctx, `${source.id}:${sourceLocale}`, entries, minMatchCharLength)
         .search(pattern, { limit })
         .map(({ item, score }): StaticSearchHit =>
           ({ title: item.title, url: item.url, source: item.source, score: score ?? 1 }));
+      if (exact.length === 0) { return fuzzy; }
+      return [...exact, ...fuzzy.filter(hit => !exact.some(match => match.url === hit.url))].slice(0, limit);
     } catch (error) {
       log.warning(`Could not search ${source.name}: ${String(error)}`);
       return [];

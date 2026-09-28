@@ -40,7 +40,9 @@ const mockArticleResult: FetchArticleResult = {
 };
 
 const mockTocResult: FetchTocResult = {
-  toc: [{ title: 'Chapter 1', url: '/page/chapter1.html' }],
+  // An absolute https url: since 2026-09-28 an entry with a relative one, which
+  // the markdown lists as a link to `#`, is left out (provider-results.ts).
+  toc: [{ title: 'Chapter 1', url: 'https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Chapter_1' }],
   pagination: { page: 1, pageSize: 10, totalPages: 1, totalItems: 1, hasNext: false, hasPrev: false },
   tokenInfo: { tokenCount: 10, maxTokens: 5000, truncated: false },
 };

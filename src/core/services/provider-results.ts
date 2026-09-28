@@ -26,6 +26,8 @@
  *   that stand-in instead, as a Fluid Topics row would. A count the provider
  *   set for the rows (a glossary's `totalMatches`, a TOC's `totalItems`) is
  *   reduced by the rows left out, so it describes the rows the reply has.
+ * - A row whose url is a string no link can be made of is left out too: a
+ *   search result, or a glossary or TOC entry (see {@link unlinkable}).
  * - An answer core cannot use as a whole is read as `null`: the default
  *   implementation answers, as it does when the provider returns `null`. So
  *   is a list whose every row was left out, which would otherwise say that
@@ -33,7 +35,9 @@
  *
  * What is left out, read as absent or replaced is logged once per answer,
  * naming the fields: as a warning, except for an optional field that is
- * `null`, which is how a database row says "absent", and is logged at debug.
+ * `null`, which is how a database row says "absent", and a row left out for
+ * its url, such as the '' a column holds for a row with no page. Those are
+ * logged at debug.
  * An answer that needs none of it comes back as the same objects.
  *
  * A field's declared type is taken from the outputSchema that publishes it,
@@ -67,6 +71,7 @@ import type {
 } from '../types.js';
 import type { Logger } from './interfaces/index.js';
 import { titleProductSnippet } from './snippet.js';
+import { sanitizeMarkdownUrl } from '../utils/sanitize.js';
 
 // ─── Reading one object ─────────────────────────────────────────
 
@@ -116,6 +121,13 @@ interface RowName {
   why: string;
 }
 
+/** "left out 2 of 5 results": `count` rows of what `rows` names, `of` those given. */
+function leftOutText(count: number, rows: RowName & { of?: number }): string {
+  const of = rows.of !== undefined ? ` of ${String(rows.of)}` : '';
+  const name = count === 1 && rows.of === undefined ? rows.one : rows.many;
+  return `left out ${String(count)}${of} ${name}`;
+}
+
 /** What one answer lost, gathered for its log lines. */
 class Departures {
   /**
@@ -129,6 +141,12 @@ class Departures {
   /** Required fields given a stand-in. */
   private readonly replaced = new Set<string>();
   private leftOut = 0;
+  /**
+   * Rows left out for a url no link can be made of (see {@link unlinkable}).
+   * Logged at debug: a backend that stores rows without a page, as '', can
+   * return some on every answer.
+   */
+  private unlinked = 0;
 
   constructor(private readonly what: string) {}
 
@@ -146,6 +164,11 @@ class Departures {
     this.leftOut += 1;
   }
 
+  /** Note a row left out for its url (see {@link unlinkable}). */
+  unlink(): void {
+    this.unlinked += 1;
+  }
+
   /**
    * Log what there is to say. `rows` names what a left-out row is, and `of`
    * how many were given.
@@ -153,9 +176,7 @@ class Departures {
   report(log: Logger, rows?: RowName & { of?: number }): void {
     const parts: string[] = [];
     if (this.leftOut > 0 && rows !== undefined) {
-      const of = rows.of !== undefined ? ` of ${String(rows.of)}` : '';
-      const name = this.leftOut === 1 && rows.of === undefined ? rows.one : rows.many;
-      parts.push(`left out ${String(this.leftOut)}${of} ${name} (${rows.why})`);
+      parts.push(`${leftOutText(this.leftOut, rows)} (${rows.why})`);
     }
     if (this.mistyped.size > 0) {
       parts.push(`read as absent, not being of the declared type: ${[...this.mistyped].join(', ')}`);
@@ -168,7 +189,27 @@ class Departures {
     if (this.nulls.size > 0) {
       log.debug(`${this.what}: read as absent, being null: ${[...this.nulls].join(', ')}`);
     }
+    if (this.unlinked > 0 && rows !== undefined) {
+      log.debug(`${this.what}: ${leftOutText(this.unlinked, rows)} (a url that is not an absolute https URL)`);
+    }
   }
+}
+
+/**
+ * Whether `row` has a url string that no link can be made of: one that is
+ * blank, or is not an absolute https URL. Markdown writes each such url as
+ * `#` (`sanitizeMarkdownUrl`), so its row would be listed as a link to
+ * nowhere, and nothing could fetch it.
+ *
+ * Until 2026-09-28 any url string was kept. Offline over MCP that day, a
+ * SearchProvider result with `url: ""` was listed as `### [Kept](#)`, and
+ * one with `url: " "` as `### [Blank](#)`; a TocProvider entry as
+ * `- [Nowhere](#)`, under a footer that says to fetch any url above; and a
+ * GlossaryProvider entry's source as `**Source**: [Nowhere](#)`. A row
+ * without a url string is left out as before, and logged as a warning.
+ */
+function unlinkable(row: Row): boolean {
+  return typeof row.url === 'string' && sanitizeMarkdownUrl(row.url) === '#';
 }
 
 /** Name what a provider answered with, for a warning. */
@@ -241,7 +282,9 @@ const SEARCH_STAND_INS: ReadonlySet<string> = new Set<keyof SearchResult>(['titl
  *
  * - No `url` string: left out. Nothing can fetch it or tell it from another
  *   version of its topic, and the Fluid Topics path drops a result with no url.
- *   So is a result without any other required field that has no stand-in.
+ *   So is a result without any other required field that has no stand-in, and
+ *   one whose url no link can be made of (see {@link unlinkable}), which the
+ *   Fluid Topics path drops too when it comes out ''.
  * - No `title` string: "Untitled", as `buildSearchResult` titles a Fluid
  *   Topics result without one.
  * - No `snippet` string: the title and product, which is what `cleanSnippet`
@@ -253,6 +296,10 @@ const SEARCH_STAND_INS: ReadonlySet<string> = new Set<keyof SearchResult>(['titl
 function readSearchResult(row: unknown, departures: Departures): SearchResult | null {
   if (!isRow(row)) {
     departures.drop();
+    return null;
+  }
+  if (unlinkable(row)) {
+    departures.unlink();
     return null;
   }
   const { kept, absent, missing } = read(row, SEARCH_RESULT_FIELDS);
@@ -296,7 +343,7 @@ export function readSearchProviderResults(answer: unknown, log: Logger): SearchR
     return result === null ? [] : [result];
   });
   if (answer.length > 0 && results.length === 0) {
-    return unusable(log, what, answer, 'results none of which is an object with a url string');
+    return unusable(log, what, answer, 'results none of which is an object with an https url');
   }
   departures.report(log, { one: 'result', many: 'results', why: 'not an object with a url string', of: answer.length });
   return results;
@@ -370,8 +417,10 @@ const GLOSSARY_RESULT_FIELDS = {
  * in the glossary on learn.jamf.com instead.
  *
  * An entry without a `term`, `definition` and `url` string is left out, and
- * `totalMatches` is reduced by the entries left out: it counts the entries
- * shown and those `truncatedContent` lists, and the ones left out are neither.
+ * so is one whose url no link can be made of (see {@link unlinkable}), which
+ * a reply would cite as its source. `totalMatches` is reduced by the entries
+ * left out: it counts the entries shown and those `truncatedContent` lists,
+ * and the ones left out are neither.
  * `null` is also the reading of an answer without usable `entries`,
  * `totalMatches` or `tokenInfo`, which the reply is decided on, and of one
  * whose every entry was left out: read as it stands, that answer would say
@@ -391,13 +440,14 @@ export function readGlossaryProviderResult(answer: unknown, log: Logger): Glossa
   const given = kept.entries as unknown[];
   const entries = given.flatMap((row: unknown) => {
     if (!isRow(row)) { departures.drop(); return []; }
+    if (unlinkable(row)) { departures.unlink(); return []; }
     const entry = read(row, GLOSSARY_ENTRY_FIELDS);
     if (entry.missing.length > 0) { departures.drop(); return []; }
     departures.absent(row, entry.absent);
     return [entry.kept];
   });
   if (given.length > 0 && entries.length === 0) {
-    return unusable(log, what, answer, 'entries none of which is an object with a term, definition and url string');
+    return unusable(log, what, answer, 'entries none of which is an object with a term and definition string and an https url');
   }
   departures.report(log, {
     one: 'entry', many: 'entries', why: 'not an object with a term, definition and url string', of: given.length,
@@ -436,14 +486,20 @@ const TOC_RESULT_FIELDS = {
 /**
  * TOC entries as core reads them. One without a `url` string is left out with
  * its sub-entries, which have no place without it, and so is one without any
- * other required field but its title. One without a `title` string is
- * "Untitled", as `transformFtTocToTocEntries` titles a Fluid Topics node
+ * other required field but its title. So is one whose url no link can be made
+ * of (see {@link unlinkable}): a TocProvider answers for a Fluid Topics table
+ * of contents, and every entry of one has a page. One without a `title` string
+ * is "Untitled", as `transformFtTocToTocEntries` titles a Fluid Topics node
  * without one. Returns `rows` itself when nothing changed.
  */
 function readTocEntries(rows: readonly unknown[], departures: Departures): TocEntry[] {
   const entries = rows.flatMap((row: unknown): TocEntry[] => {
     if (!isRow(row)) {
       departures.drop();
+      return [];
+    }
+    if (unlinkable(row)) {
+      departures.unlink();
       return [];
     }
     const { kept, absent, missing } = read(row, TOC_ENTRY_FIELDS);
@@ -504,7 +560,7 @@ export function readTocProviderResult(answer: unknown, log: Logger): FetchTocRes
   const given = kept.toc as unknown[];
   const toc = readTocEntries(given, departures);
   if (given.length > 0 && toc.length === 0) {
-    return unusable(log, what, answer, 'a toc none of whose entries is an object with a url string');
+    return unusable(log, what, answer, 'a toc none of whose entries is an object with an https url');
   }
   // Counted at every depth, so not out of the top-level entries given.
   departures.report(log, {

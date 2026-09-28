@@ -17,6 +17,9 @@
  * Now an optional field that is not of its declared type is read as absent,
  * on every channel. An entry without a `term`, `definition` and `url` string
  * is left out, the others are shown, and `totalMatches` no longer counts it.
+ * So, since 2026-09-28, is one whose url is blank or not an absolute https
+ * URL: until then its source was cited as `**Source**: [Nowhere](#)`. That is
+ * logged at debug, as a `null` is.
  * An answer without a usable `entries`, `totalMatches` or `tokenInfo`, or
  * whose every entry was left out, is read as the provider answering `null`,
  * and the glossary on learn.jamf.com answers. A `null` optional field is
@@ -217,6 +220,38 @@ describe('a GlossaryProvider entry without a term, definition or url string', ()
     expect(JSON.parse(json.text)).toMatchObject({ totalMatches: 2 });
     expect(markdown.text).toContain('Found 2 matches');
     expect(markdown.text).toContain('*1 of 2 match(es)');
+  });
+});
+
+describe('a GlossaryProvider entry whose url no link can be made of', () => {
+  const UNLINKABLE: [string, string][] = [
+    ['empty', ''],
+    ['blank', ' '],
+    ['http', 'http://learn.jamf.com/r/en-US/jamf-technical-glossary/mobile_device_management_MDM_'],
+    ['relative', '/r/en-US/jamf-technical-glossary/mobile_device_management_MDM_'],
+  ];
+
+  it.each(UNLINKABLE)('%s: is left out, is not counted, and a debug line says so', async (_label, url) => {
+    const harness = backends(answer({ entries: [{ ...MDM, url }, UAMDM] }));
+
+    for (const format of FORMATS) {
+      const reply = await lookup(harness.ctx, format);
+      expect(reply.sc.entries.map(e => e.term)).toEqual([UAMDM.term]);
+      expect(reply.sc.totalMatches).toBe(2);
+      expect(reply.text).not.toContain('](#)');
+    }
+    expect(harness.debugs).toEqual(Array<string>(FORMATS.length)
+      .fill('GlossaryProvider: left out 1 of 2 entries (a url that is not an absolute https URL)'));
+    expect(harness.warnings).toEqual([]);
+  });
+
+  it('on every entry, is read as null, and the glossary on learn.jamf.com answers', async () => {
+    const harness = backends(answer({ entries: UNLINKABLE.map(([, url]) => ({ ...MDM, url })) }));
+
+    const reply = await lookup(harness.ctx, { responseFormat: 'json' });
+
+    expect(reply.sc.entries[0]?.term).toBe('mobile device management (MDM)');
+    expect(harness.warnings).toHaveLength(1);
   });
 });
 

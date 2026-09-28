@@ -874,7 +874,8 @@ function buildNoResultsResponse(
   const { query } = params;
   // Which backend found nothing says which queries can find something: Fluid
   // Topics matches a page on any one word of a query (see
-  // generateSearchSuggestions). "current" is no version filter (see
+  // generateSearchSuggestions), and it, unlike a SearchProvider, is searched
+  // again without the docType. "current" is no version filter (see
   // buildSearchFilters). A queryNote says the query's 「」 or « » phrase was
   // searched as loose words too, and found nothing either.
   const suggestions = generateSearchSuggestions(
@@ -883,6 +884,7 @@ function buildNoResultsResponse(
       searchedBy: found.rankedBy,
       hasVersionFilter: params.version !== undefined && params.version !== 'current',
       searchedLoosely: found.queryNote !== undefined,
+      hasDocTypeFilter: params.docType !== undefined,
     },
   );
 
