@@ -11,7 +11,8 @@
  */
 
 import * as cheerio from 'cheerio';
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
@@ -490,9 +491,10 @@ function slugFromUrl(url: string): string {
  * A minute, as long as #345 keeps an answer the registry outage forced
  * (`FALLBACK_TTL_MS` in metadata.ts), and for the same reason. Not longer,
  * because a page that is back should be read again within the minute
- * `incomplete` tells a client to wait. Not zero, because a burst of calls
- * during an outage would each wait on a page that has just failed, up to the
- * request timeout (15 s by default).
+ * `incomplete` tells a client to wait. Not zero, because calls one after
+ * another during an outage would each wait on a page that has just failed, up
+ * to the request timeout (15 s by default). Calls made while the page is
+ * being requested share that request (load-once.ts).
  */
 const FAILED_LISTING_TTL_MS = 60 * 1000;
 
@@ -506,7 +508,8 @@ export interface ListCollectionsOptions {
    *
    * `jamf_docs_list_products` asks this of the listings it reads only for
    * its rows' `locales`. `jamf_docs_get_toc` does not: a call in one locale
-   * needs that locale's page, and asks for it every time (#352).
+   * needs that locale's page, and asks for it every time (#352), unless a
+   * request for it is already in flight, which it shares.
    */
   rememberFailure?: boolean;
 }
@@ -551,34 +554,94 @@ export async function listIntercomCollections(
   locale: string,
   options: ListCollectionsOptions = {},
 ): Promise<IntercomCollection[]> {
-  const isDefault = locale === source.locales[DEFAULT_LOCALE];
-  const key = cacheKey('intercom-collections', { source: source.id, locale });
-  const cached = await ctx.cache.get<IntercomCollection[]>(key);
-  if (cached !== null && (cached.length > 0 || !isDefault)) { return cached; }
+  const at: ListingAt = {
+    key: cacheKey('intercom-collections', { source: source.id, locale }),
+    home: `${source.baseUrl}/${locale}/`,
+    isDefault: locale === source.locales[DEFAULT_LOCALE],
+  };
+  // One request for the page however many calls want it at once
+  // (load-once.ts), whether or not they remember a failure.
+  const listing = async (): Promise<IntercomCollection[]> =>
+    await loadOnce(ctx.cache, at.key, async () => await readListing(ctx, source, at));
+  if (options.rememberFailure !== true) { return await listing(); }
 
-  const home = `${source.baseUrl}/${locale}/`;
+  // Only the calls that remember a failure share this load, so `get_toc`
+  // never joins one that throws a failure it remembered, and asks for its
+  // page on each call that finds no request for it in flight.
   const failureKey = cacheKey('intercom-collections-failure', { source: source.id, locale });
-  if (options.rememberFailure === true) {
-    const failed = await ctx.cache.get<unknown>(failureKey);
-    if (isFailedListing(failed)) {
-      throw new JamfDocsError(`${failed.message} (not asked again: it failed less than a minute ago)`, failed.code, home);
-    }
+  return await loadOnce(ctx.cache, failureKey, async () => await listingUnlessFailed(ctx, at, failureKey, listing));
+}
+
+/** Where one locale's listing is cached and read from. */
+interface ListingAt {
+  key: CacheKey;
+  home: string;
+  /** Whether it is the default locale's, which must list something. */
+  isDefault: boolean;
+}
+
+/**
+ * The load {@link listIntercomCollections} shares between the calls that
+ * remember a failure: the cached listing, or else the failure remembered,
+ * thrown again without a request, or else the listing read, with a failure
+ * to read it remembered before this settles.
+ *
+ * The failure is read here, inside the load, and stored here, before the
+ * load settles. So a call that finds no such load in flight reads the
+ * failure the last one stored. Were it read before the load and stored after
+ * it, a call that read it just before it was stored, and looked for a load
+ * just after that one had cleared, would ask for the page again.
+ */
+async function listingUnlessFailed(
+  ctx: ServerContext,
+  at: ListingAt,
+  failureKey: CacheKey,
+  listing: () => Promise<IntercomCollection[]>,
+): Promise<IntercomCollection[]> {
+  const cached = await cachedListing(ctx, at);
+  if (cached !== null) { return cached; }
+
+  const failed = await ctx.cache.get<unknown>(failureKey);
+  if (isFailedListing(failed)) {
+    throw new JamfDocsError(`${failed.message} (not asked again: it failed less than a minute ago)`, failed.code, at.home);
   }
 
-  let listed: unknown[];
   try {
-    listed = collectionsOn(await ctx.http.getText(home), source, home, isDefault);
+    return await listing();
   } catch (error) {
-    if (options.rememberFailure === true) {
-      const failure: FailedListing = {
-        message: error instanceof Error ? error.message : String(error),
-        code: error instanceof JamfDocsError ? error.code : JamfDocsErrorCode.NETWORK_ERROR,
-      };
-      await ctx.cache.set(failureKey, failure, FAILED_LISTING_TTL_MS);
-    }
+    const failure: FailedListing = {
+      message: error instanceof Error ? error.message : String(error),
+      code: error instanceof JamfDocsError ? error.code : JamfDocsErrorCode.NETWORK_ERROR,
+    };
+    await ctx.cache.set(failureKey, failure, FAILED_LISTING_TTL_MS);
     throw error;
   }
+}
 
+/**
+ * The listing cached at `at`, or null for a miss. An empty default-locale
+ * entry is a miss (see {@link listIntercomCollections}).
+ */
+async function cachedListing(ctx: ServerContext, at: ListingAt): Promise<IntercomCollection[] | null> {
+  const cached = await ctx.cache.get<IntercomCollection[]>(at.key);
+  return cached !== null && (cached.length > 0 || !at.isDefault) ? cached : null;
+}
+
+/**
+ * The cached listing, or the one its home page carries, read and stored: the
+ * load {@link listIntercomCollections} shares between calls, whether or not
+ * they remember a failure.
+ */
+async function readListing(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  at: ListingAt,
+): Promise<IntercomCollection[]> {
+  const cached = await cachedListing(ctx, at);
+  if (cached !== null) { return cached; }
+
+  const { key, home, isDefault } = at;
+  const listed = collectionsOn(await ctx.http.getText(home), source, home, isDefault);
   const collections = (listed as RawCollection[]).map((collection): IntercomCollection => {
     const url = asString(collection.url);
     return {
@@ -640,6 +703,20 @@ export async function fetchIntercomCollectionToc(
 ): Promise<TocEntry[]> {
   const url = canonicalStaticUrl(source, collection.url);
   const key = cacheKey('intercom-collection-toc-v3', { source: source.id, url });
+  // One request for the page however many calls want it at once (load-once.ts).
+  return await loadOnce(ctx.cache, key, async () => await readCollectionToc(ctx, source, url, key));
+}
+
+/**
+ * The cached tree, or the one the page at `url` carries, read and stored: the
+ * load {@link fetchIntercomCollectionToc} shares between calls.
+ */
+async function readCollectionToc(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  url: string,
+  key: CacheKey,
+): Promise<TocEntry[]> {
   const cached = await ctx.cache.get<TocEntry[]>(key);
   if (cached !== null && cached.length > 0) { return cached; }
 

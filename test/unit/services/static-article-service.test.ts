@@ -248,6 +248,46 @@ describe('fetchStaticArticle', () => {
   });
 });
 
+describe('fetchStaticArticle: related links', () => {
+  beforeEach(() => { mockHttpGetText.mockReset(); });
+
+  // Neither a live concepts.jamf.com guide nor a tool page carries a link
+  // RELATED matches (2026-09-28). A page that does:
+  const WITH_RELATED = pageHtml({
+    h1: 'T',
+    body: '<p>Body.</p><div class="related-links"><a href="/en/guides/other">Other guide</a></div>',
+  });
+  const PAGE = 'https://concepts.jamf.com/en/guides/t';
+  const RELATED = [{ title: 'Other guide', url: 'https://concepts.jamf.com/en/guides/other' }];
+
+  it('serves them to a call that asks after one that did not', async () => {
+    // Until 2026-09-28 the parse cached for 24 hours had them only when the
+    // call that cached it had asked.
+    mockHttpGetText.mockResolvedValue(WITH_RELATED);
+    const ctx = createMockContext();
+
+    expect((await fetchStaticArticle(ctx, CONCEPTS, PAGE)).relatedArticles).toBeUndefined();
+    expect((await fetchStaticArticle(ctx, CONCEPTS, PAGE, { includeRelated: true })).relatedArticles).toEqual(RELATED);
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves each of two calls at once what it asked for, from one request', async () => {
+    // The calls share one load (load-once.ts), which reads what either could
+    // ask for.
+    mockHttpGetText.mockResolvedValue(WITH_RELATED);
+    const ctx = createMockContext();
+
+    const [without, withRelated] = await Promise.all([
+      fetchStaticArticle(ctx, CONCEPTS, PAGE),
+      fetchStaticArticle(ctx, CONCEPTS, PAGE, { includeRelated: true }),
+    ]);
+
+    expect(without.relatedArticles).toBeUndefined();
+    expect(withRelated.relatedArticles).toEqual(RELATED);
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('fetchStaticArticle: concepts.jamf.com titles', () => {
   beforeEach(() => { mockHttpGetText.mockReset(); });
 

@@ -12,7 +12,8 @@
 import { parseArticle } from './content-parser.js';
 import { buildArticleView, type ArticleViewOptions } from './article-view.js';
 import { extractSections } from './tokenizer.js';
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { TOKEN_CONFIG } from '../constants.js';
 import { canonicalStaticUrl, type StaticDocSource } from '../constants/sources.js';
 import type { ServerContext } from '../types/context.js';
@@ -86,63 +87,86 @@ export async function fetchStaticArticle(
   const displayUrl = canonicalStaticUrl(source, url);
   const key = cacheKey('static-article', { source: source.id, url: displayUrl });
 
-  let cached = await ctx.cache.get<CachedStaticArticle>(key);
+  // One request for the page however many calls want it at once (load-once.ts).
+  const cached = await loadOnce(ctx.cache, key, async () => await readStaticArticle(ctx, source, displayUrl, key));
+  return renderStaticArticle(cached, source, options, maxTokens);
+}
 
-  if (cached === null) {
-    const html = await ctx.http.getText(displayUrl);
+/**
+ * The cached parse of the page at `displayUrl`, or the page read, parsed and
+ * stored: the load {@link fetchStaticArticle} shares between calls.
+ *
+ * Takes none of a call's options, so what one call loads is what any other
+ * would. The related links are read whether or not the call asked for them,
+ * as the Fluid Topics path reads them (article-service.ts), and the reply
+ * shows them only to a call that did ({@link renderStaticArticle}). Until
+ * 2026-09-28 they were read only for a call that asked, and the parse was
+ * cached for `cacheTtl.article`, 24 hours by default, so a call that asked
+ * after one that did not was served none. That day concepts.jamf.com's
+ * RELATED selector matched nothing on a guide or a tool page, and the
+ * Intercom parser reads no related links at all.
+ */
+async function readStaticArticle(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  displayUrl: string,
+  key: CacheKey,
+): Promise<CachedStaticArticle> {
+  const hit = await ctx.cache.get<CachedStaticArticle>(key);
+  if (hit !== null) { return hit; }
 
-    // An Intercom Help Center's body is a block list in `__NEXT_DATA__`, not
-    // markup — no selector set can read it, so the parser is chosen per
-    // source rather than per page.
-    if (source.parser === 'intercom') {
-      const article = parseIntercomArticle(html);
-      if (article === null) {
-        throw new JamfDocsError(
-          `Could not read a ${source.name} article at ${displayUrl}`,
-          JamfDocsErrorCode.PARSE_ERROR,
-        );
-      }
-      cached = {
-        title: article.title,
-        parsed: {
-          title: article.title,
-          content: article.content,
-          breadcrumb: article.breadcrumb,
-          relatedArticles: [],
-        },
-        displayUrl,
-        ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
-      };
-      await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
-      return renderStaticArticle(cached, source, options, maxTokens);
+  const html = await ctx.http.getText(displayUrl);
+
+  // An Intercom Help Center's body is a block list in `__NEXT_DATA__`, not
+  // markup — no selector set can read it, so the parser is chosen per
+  // source rather than per page.
+  if (source.parser === 'intercom') {
+    const article = parseIntercomArticle(html);
+    if (article === null) {
+      throw new JamfDocsError(
+        `Could not read a ${source.name} article at ${displayUrl}`,
+        JamfDocsErrorCode.PARSE_ERROR,
+      );
     }
-
-    const documentTitle = extractDocumentTitle(html);
-    const parsed = parseArticle(html, displayUrl, {
-      // The source's own markup rules. Parsing a static page with Fluid
-      // Topics' selectors finds no content wrapper and falls through to
-      // <body>, which is the whole site chrome.
-      selectors: source.selectors,
-      // Root-relative links belong to this source, not learn.jamf.com.
-      linkBase: source.baseUrl,
-      ...(options.includeRelated !== undefined ? { includeRelated: options.includeRelated } : {}),
-    });
-    // `parseArticle` reads the first match for the source's TITLE selector
-    // that survives cleaning. On a static site the page heading often lives
-    // outside the content wrapper: concepts.jamf.com's tool pages put their
-    // only <h1> in the stripped header, so every one of the 37 came back
-    // "Untitled", and its TITLE is scoped to the article so that a guide's
-    // hero <h1> is never taken as the title (see sources.ts). So most pages
-    // there — 800 of 990, measured 2026-09-24 — reach this line with no title
-    // of their own. The document's own title is the reliable answer when the
-    // body has none; Fluid Topics never needs this because its titles arrive
-    // as metadata.
-    const title = parsed.title !== 'Untitled' ? parsed.title : documentTitle ?? parsed.title;
-    cached = { title, parsed, displayUrl };
+    const cached: CachedStaticArticle = {
+      title: article.title,
+      parsed: {
+        title: article.title,
+        content: article.content,
+        breadcrumb: article.breadcrumb,
+        relatedArticles: [],
+      },
+      displayUrl,
+      ...(article.lastUpdated !== undefined ? { lastUpdated: article.lastUpdated } : {}),
+    };
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
+    return cached;
   }
 
-  return renderStaticArticle(cached, source, options, maxTokens);
+  const documentTitle = extractDocumentTitle(html);
+  const parsed = parseArticle(html, displayUrl, {
+    // The source's own markup rules. Parsing a static page with Fluid
+    // Topics' selectors finds no content wrapper and falls through to
+    // <body>, which is the whole site chrome.
+    selectors: source.selectors,
+    // Root-relative links belong to this source, not learn.jamf.com.
+    linkBase: source.baseUrl,
+    includeRelated: true,
+  });
+  // `parseArticle` reads the first match for the source's TITLE selector
+  // that survives cleaning. On a static site the page heading often lives
+  // outside the content wrapper: concepts.jamf.com's tool pages put their
+  // only <h1> in the stripped header, so every one of the 37 came back
+  // "Untitled", and its TITLE is scoped to the article so that a guide's
+  // hero <h1> is never taken as the title (see sources.ts). So most pages
+  // there — 800 of 990, measured 2026-09-24 — reach this line with no title
+  // of their own. The document's own title is the reliable answer when the
+  // body has none; Fluid Topics never needs this because its titles arrive
+  // as metadata.
+  const title = parsed.title !== 'Untitled' ? parsed.title : documentTitle ?? parsed.title;
+  const cached: CachedStaticArticle = { title, parsed, displayUrl };
+  await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
+  return cached;
 }
 
 /** Assemble the response from a parsed page, whichever parser produced it. */

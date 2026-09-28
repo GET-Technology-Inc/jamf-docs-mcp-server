@@ -12,10 +12,11 @@
  * `ctx.config.version` while the server is built throws.
  *
  * The guard, because the in-memory state core keeps per `CacheProvider`, the
- * glossary's and the static sources' Fuse indexes and the map TOC loads in
- * flight, is keyed on the object the tools read as `ctx.cache`. src/index.ts
- * builds a server per HTTP request over one context, so every one of those
- * servers has to read the same guard, or each would start that state over.
+ * glossary's and the static sources' Fuse indexes and the loads in flight
+ * (the map TOC's, and those of load-once.ts), is keyed on the object the
+ * tools read as `ctx.cache`. src/index.ts builds a server per HTTP request
+ * over one context, so every one of those servers has to read the same
+ * guard, or each would start that state over.
  */
 
 import { describe, it, expect, vi, type Mock } from 'vitest';

@@ -15,7 +15,8 @@ import {
 } from '../constants.js';
 import type { ProductId, LocaleId } from '../constants.js';
 import type { ServerContext } from '../types/context.js';
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import { paginateTocEntries } from './toc-helpers.js';
 import { readTocProviderResult } from './provider-results.js';
 import { askProvider } from './provider-error.js';
@@ -147,6 +148,29 @@ export async function fetchTableOfContents(
   const locale: LocaleId = options.locale ?? DEFAULT_LOCALE;
   const key = cacheKey('ft-toc-v2', { locale, product: source, version });
 
+  // One request for the tree however many calls want it at once (load-once.ts).
+  const cached = await loadOnce(ctx.cache, key, async () => await readTableOfContents(ctx, source, version, locale, key));
+
+  // ─── Pagination & token truncation ───────────────────────────
+
+  return {
+    ...paginateTocEntries(cached.toc, page, maxTokens),
+    mapId: cached.mapId,
+    resolvedLocale: cached.resolvedLocale,
+  };
+}
+
+/**
+ * The cached tree, or the one the registry's map for it carries, fetched and
+ * stored: the load {@link fetchTableOfContents} shares between calls.
+ */
+async function readTableOfContents(
+  ctx: ServerContext,
+  source: TocSource,
+  version: string,
+  locale: LocaleId,
+  key: CacheKey,
+): Promise<CachedToc> {
   let cached = await ctx.cache.get<CachedToc>(key);
 
   if (cached === null) {
@@ -176,11 +200,5 @@ export async function fetchTableOfContents(
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.toc);
   }
 
-  // ─── Pagination & token truncation ───────────────────────────
-
-  return {
-    ...paginateTocEntries(cached.toc, page, maxTokens),
-    mapId: cached.mapId,
-    resolvedLocale: cached.resolvedLocale,
-  };
+  return cached;
 }

@@ -18,6 +18,7 @@ import {
   loadStaticIndex,
   searchStaticSources,
 } from '../../../src/core/services/static-search-service.js';
+import { loadSitemap } from '../../../src/core/services/sitemap-service.js';
 import { STATIC_DOC_SOURCES } from '../../../src/core/constants/sources.js';
 import { createMockContext } from '../../helpers/mock-context.js';
 
@@ -91,6 +92,21 @@ describe('loadStaticIndex', () => {
 
     expect(mockHttpGetText).toHaveBeenCalledTimes(1);
     expect(mockHttpGetText).toHaveBeenCalledWith('https://concepts.jamf.com/sitemap.xml');
+  });
+
+  it('builds every locale\'s index from the one sitemap request get_toc\'s tree is built from', async () => {
+    // The sitemap lists every locale. Until 2026-09-28 each locale's index
+    // requested it for itself, apart from the one `loadSitemap` caches.
+    mockHttpGetText.mockResolvedValue(sitemap(['/en/guides/english', '/ja/guides/japanese']));
+    const ctx = createMockContext();
+
+    const en = await loadStaticIndex(ctx, CONCEPTS, 'en');
+    const ja = await loadStaticIndex(ctx, CONCEPTS, 'ja');
+    await loadSitemap(ctx, CONCEPTS);
+
+    expect(en.map(e => e.title)).toEqual(['English']);
+    expect(ja.map(e => e.title)).toEqual(['Japanese']);
+    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
   });
 });
 
