@@ -337,18 +337,39 @@ export function createHttpClient(config: RequestConfig): HttpClient {
     };
   }
 
+  /**
+   * Run `once`, one attempt, and retry it as `settings` say, each attempt
+   * waiting its turn.
+   *
+   * The retries are made here, and `once` is given none of its own, so that a
+   * retry is spaced from the request before it like any other request. Until
+   * 2026-09-28 the turn was taken once per call, and the retries inside the
+   * call went out on their backoff alone: with RATE_LIMIT_DELAY=400,
+   * MAX_RETRIES=3 and RETRY_DELAY=150, the maps list's 503 was retried 152 ms
+   * after the first attempt, and a later retry 55 ms after another request.
+   */
+  async function attempts<T>(settings: RetryOptions, once: () => Promise<T>): Promise<T> {
+    return await fetchWithRetry(async () => {
+      await waitForTurn();
+      return await once();
+    }, settings);
+  }
+
   return {
     async getText(url: string, options?: HttpGetOptions): Promise<string> {
-      await waitForTurn();
-      return await httpGetText(url, { ...options, ...bound(options) });
+      const settings = bound(options);
+      return await attempts(settings, async () =>
+        await httpGetText(url, { ...options, ...settings, maxRetries: 0 }));
     },
     async getJson<T>(url: string, options?: HttpGetOptions): Promise<T> {
-      await waitForTurn();
-      return await httpGetJson<T>(url, { ...options, ...bound(options) });
+      const settings = bound(options);
+      return await attempts(settings, async () =>
+        await httpGetJson<T>(url, { ...options, ...settings, maxRetries: 0 }));
     },
     async postJson<T>(url: string, body: unknown, options?: HttpPostJsonOptions): Promise<T> {
-      await waitForTurn();
-      return await httpPostJson<T>(url, body, { ...options, ...bound(options) });
+      const settings = bound(options);
+      return await attempts(settings, async () =>
+        await httpPostJson<T>(url, body, { ...options, ...settings, maxRetries: 0 }));
     },
   };
 }

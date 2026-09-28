@@ -28,6 +28,18 @@ const DEFAULT_CACHE_DIR = '.cache';
 // Environment variable helpers
 // ============================================================================
 
+/**
+ * The whole number `key` is set to, or `defaultValue`, with a warning that
+ * quotes the value as written, when it is not a whole number or is outside
+ * `min`–`max`. An empty or blank value counts as unset.
+ *
+ * Until 2026-09-28 this used `parseInt`, which reads up to the first
+ * character that is not a digit. Measured through `createNodeConfig` that
+ * day: REQUEST_TIMEOUT=1e4 warned "REQUEST_TIMEOUT=1 is below minimum 1000"
+ * and used 15000, and `2.5e3` and `0x10` did the same, quoting 2 and 0.
+ * `1500ms` and `1500.5` were taken as 1500, and MAX_RETRIES=2.5 as 2, with
+ * no warning, and `fast` fell back to the default with none either.
+ */
 export function getEnvNumber(
   key: string,
   defaultValue: number,
@@ -35,19 +47,20 @@ export function getEnvNumber(
   max?: number
 ): number {
   const value = process.env[key];
-  if (value === undefined) {
+  if (value === undefined || value.trim() === '') {
     return defaultValue;
   }
-  const parsed = parseInt(value, 10);
-  if (isNaN(parsed)) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    console.error(`[WARNING] [config] ${key}=${value} is not a whole number. Using default ${defaultValue}.`);
     return defaultValue;
   }
   if (min !== undefined && parsed < min) {
-    console.error(`[WARNING] [config] ${key}=${parsed} is below minimum ${min}. Using default ${defaultValue}.`);
+    console.error(`[WARNING] [config] ${key}=${value} is below minimum ${min}. Using default ${defaultValue}.`);
     return defaultValue;
   }
   if (max !== undefined && parsed > max) {
-    console.error(`[WARNING] [config] ${key}=${parsed} exceeds maximum ${max}. Using default ${defaultValue}.`);
+    console.error(`[WARNING] [config] ${key}=${value} exceeds maximum ${max}. Using default ${defaultValue}.`);
     return defaultValue;
   }
   return parsed;
@@ -201,16 +214,21 @@ function getValidatedCacheDir(): string {
 // Config factory
 // ============================================================================
 
+/** This package's version, read from its package.json. */
+export function packageVersion(): string {
+  const require = createRequire(import.meta.url);
+  return (require('../../../package.json') as { version: string }).version;
+}
+
 /**
  * Create a ServerConfig by reading Node.js environment variables
  * and package.json version.
  */
 export function createNodeConfig(): ServerConfig {
-  const require = createRequire(import.meta.url);
-  const pkg = require('../../../package.json') as { version: string };
+  const version = packageVersion();
 
   return createDefaultConfig({
-    version: pkg.version,
+    version,
     cacheTtl: {
       search: getEnvNumber('CACHE_TTL_SEARCH', 30 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
       article: getEnvNumber('CACHE_TTL_ARTICLE', 24 * 60 * 60 * 1000, CACHE_TTL_MIN, CACHE_TTL_MAX),
@@ -226,7 +244,7 @@ export function createNodeConfig(): ServerConfig {
       // 0 keeps parallel fetches parallel. batch_get_articles fans out, and a
       // non-zero default would stagger every one of those requests.
       rateLimitDelay: getEnvNumber('RATE_LIMIT_DELAY', 0, 0, 10000),
-      userAgent: getEnvString('USER_AGENT', defaultUserAgent(pkg.version)),
+      userAgent: getEnvString('USER_AGENT', defaultUserAgent(version)),
     },
     cache: {
       maxEntries: getEnvNumber('CACHE_MAX_ENTRIES', 500, 10, 10000),

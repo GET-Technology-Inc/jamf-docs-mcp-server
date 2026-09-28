@@ -60,7 +60,7 @@ vi.mock('@modelcontextprotocol/server', () => ({
 }));
 
 vi.mock('../../../src/platforms/node/config.js', () => ({
-  createNodeConfig: () => ({ version: '1.0.0-test' }),
+  packageVersion: () => '1.0.0-test',
   getEnvNumber: (_key: string, defaultValue: number) => defaultValue,
 }));
 

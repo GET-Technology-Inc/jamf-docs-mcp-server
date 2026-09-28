@@ -168,9 +168,35 @@ describe('getEnvNumber', () => {
     expect(warnings()[0]).toContain(`${KEY}=101 exceeds maximum 100`);
   });
 
-  it.each(['abc', '', 'NaN', ' '])('falls back to the default for the non-numeric value %j', value => {
+  it.each(['', ' '])('treats %j as unset, without a warning', value => {
     vi.stubEnv(KEY, value);
     expect(getEnvNumber(KEY, 42, 0, 100)).toBe(42);
+    expect(warnings()).toEqual([]);
+  });
+
+  // Until 2026-09-28 parseInt read a value up to its first character that is
+  // not a digit: 1500ms and 1500.5 as 1500 and 12abc as 12, without a
+  // warning. abc, NaN and Infinity fell back to the default without one.
+  it.each(['1500ms', '1500.5', '12abc', 'abc', 'NaN', 'Infinity'])(
+    'falls back to the default for %j, which is not a whole number, and says so',
+    value => {
+      vi.stubEnv(KEY, value);
+      expect(getEnvNumber(KEY, 42, 0, 20_000)).toBe(42);
+      expect(warnings()).toEqual([`[WARNING] [config] ${KEY}=${value} is not a whole number. Using default 42.`]);
+    },
+  );
+
+  it.each([['1e4', 10_000], ['2.5e3', 2_500], [' 2000 ', 2_000]])('reads %j as %d', (value, expected) => {
+    vi.stubEnv(KEY, value);
+    expect(getEnvNumber(KEY, 42, 0, 20_000)).toBe(expected);
+    expect(warnings()).toEqual([]);
+  });
+
+  it('quotes a value out of range as it was written', () => {
+    // parseInt read 0x10 as 0, and the warning quoted that.
+    vi.stubEnv(KEY, '0x10');
+    expect(getEnvNumber(KEY, 42, 1000, 20_000)).toBe(42);
+    expect(warnings()).toEqual([`[WARNING] [config] ${KEY}=0x10 is below minimum 1000. Using default 42.`]);
   });
 
   it('applies no range when no bounds are given', () => {
@@ -217,6 +243,14 @@ describe('numeric settings', () => {
     expect(node.cache.maxEntries).toBe(core.cache.maxEntries);
   });
 
+  it('reads REQUEST_TIMEOUT=1e4 as 10000', () => {
+    // Until 2026-09-28 it warned "REQUEST_TIMEOUT=1 is below minimum 1000"
+    // and used 15000.
+    vi.stubEnv('REQUEST_TIMEOUT', '1e4');
+    expect(createNodeConfig().request.timeout).toBe(10_000);
+    expect(warnings()).toEqual([]);
+  });
+
   describe.each(NUMERIC)('$key', ({ key, read, def, min, max }) => {
     it(`defaults to ${def} when unset`, () => {
       expect(read(createNodeConfig())).toBe(def);
@@ -248,9 +282,10 @@ describe('numeric settings', () => {
       expect(warnings().some(w => w.includes(`${key}=${max + 1} exceeds maximum`))).toBe(true);
     });
 
-    it('falls back to the default for a non-numeric value', () => {
+    it('falls back to the default for a non-numeric value, with a warning', () => {
       vi.stubEnv(key, 'fast');
       expect(read(createNodeConfig())).toBe(def);
+      expect(warnings().some(w => w.includes(`${key}=fast is not a whole number`))).toBe(true);
     });
   });
 });

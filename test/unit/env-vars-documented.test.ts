@@ -19,27 +19,19 @@
  *
  * What this catches is a documented variable src/ never mentions. Whether a
  * value takes effect takes a test that sets it and looks at what it changed:
- * cache-ttl-documented.test.ts is that test for the CACHE_TTL_* variables.
+ * cache-ttl-documented.test.ts is that test for the CACHE_TTL_* variables,
+ * and env-vars-take-effect.test.ts for every other one. The latter also
+ * checks the other way round: that the server reads no variable the READMEs
+ * leave out, when its platform entry starts in either transport and while
+ * each tool is called.
  */
 
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ENV_DOCS as DOCS, documentedEnvVars } from '../helpers/documented-env-vars.js';
 
 const ROOT = path.resolve(__dirname, '../..');
-const DOCS = ['README.md', 'docs/README.zh-TW.md'];
-
-/**
- * Names in the leading cell of a documentation table row, which is how both
- * READMEs list configuration variables. Deliberately not every backticked
- * token: prose mentions Node's own `ERR_MODULE_NOT_FOUND`, which is not ours.
- */
-function documentedEnvVars(doc: string): string[] {
-  const text = fs.readFileSync(path.join(ROOT, doc), 'utf8');
-  return [...new Set(
-    [...text.matchAll(/^\| {0,2}`([A-Z][A-Z0-9_]*)` {0,2}\|/gm)].map(m => m[1]),
-  )].sort();
-}
 
 /** Every line of shipped source, concatenated. */
 function sourceText(): string {
