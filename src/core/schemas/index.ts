@@ -74,11 +74,18 @@ const LANGUAGE_DESCRIPTION = `Documentation language/locale (default: ${DEFAULT_
  * had none: a concepts.jamf.com or support.jamf.com page asked for in ja-JP
  * was the page the URL named, in English, with no note. It now picks that
  * page's edition there too, where the site publishes one.
+ *
+ * Until the same day it said nothing of learn.jamf.com, where a publication
+ * Jamf does not publish in the language asked for is served in en-US, and
+ * the note there did not say which language was served; it now does, and
+ * `contentLocale` names it. The tools' Args say the same.
  */
 const URL_LANGUAGE_DESCRIPTION =
   'Documentation language/locale. Overrides the locale in the article URL, which is ' +
-  `used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no ` +
-  'edition in it is served as the URL names it, with a note';
+  'used when this is omitted. A learn.jamf.com publication Jamf does not publish in it is ' +
+  `served in ${DEFAULT_LOCALE}, and a ${STATIC_SOURCE_HOSTNAMES.join(' or ')} page with no ` +
+  'edition in it as the URL names it, both with a note; contentLocale says which language ' +
+  'was served';
 const LANGUAGE_OPTIONS = `Options: ${SUPPORTED_LOCALE_IDS.join(', ')}`;
 
 // Common page parameter schema

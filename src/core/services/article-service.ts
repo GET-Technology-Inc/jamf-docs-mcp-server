@@ -11,7 +11,7 @@
 import type { CacheProvider } from './interfaces/cache.js';
 import type { ArticleProvider, ArticleProviderOptions } from './interfaces/providers.js';
 import type { ServerContext } from '../types/context.js';
-import { TOKEN_CONFIG } from '../constants.js';
+import { SUPPORTED_LOCALES, TOKEN_CONFIG, type LocaleId } from '../constants.js';
 import type {
   ArticleSection,
   FetchArticleOptions,
@@ -82,6 +82,12 @@ interface CachedArticle {
    * without it is labelled from the TOC instead.
    */
   ownUrl?: string | undefined;
+  /**
+   * The language the topic is in: its `ft:locale` metadata, from the same
+   * fetch. Optional for the same reason as `lastUpdated`; an entry without it
+   * reads its language off `ownUrl` instead ({@link articleLocale}).
+   */
+  contentLocale?: string | undefined;
 }
 
 /**
@@ -111,6 +117,9 @@ export interface FetchArticleFromFtOptions extends FetchArticleOptions {
    * another locale's map — because then `articleUrl` may name a different
    * page, and the article is labelled with its own reader URL instead.
    * Defaults to `articleUrl !== ''`.
+   *
+   * Even when true, a topic in another language than the url names is
+   * labelled with its own address (see {@link labelUrl}).
    */
   articleUrlNamesTopic?: boolean;
   /**
@@ -123,7 +132,7 @@ export interface FetchArticleFromFtOptions extends FetchArticleOptions {
 }
 
 /** What a note about an article's resolution reads off the article. */
-type LabelledArticle = Pick<FetchArticleResult, 'url' | 'navigation'>;
+type LabelledArticle = Pick<FetchArticleResult, 'url' | 'navigation' | 'contentLocale'>;
 
 /**
  * Fetch, parse, and tokenize a single article from the FT API.
@@ -177,6 +186,7 @@ export async function fetchArticleFromFt(
     const displayUrl = deriveDisplayUrl(topicMeta.readerUrl, articleUrl);
     const ownUrl = topicOwnUrl(topicMeta);
     const lastEdition = getMetaValue(topicMeta.metadata, FT_META.LAST_EDITION);
+    const topicLocale = getMetaValue(topicMeta.metadata, FT_META.LOCALE);
     const { product, version } = extractProductVersion(topicMeta.metadata);
 
     // FT's in-documentation links are hrefless spans addressed by TOC node id,
@@ -258,6 +268,7 @@ export async function fetchArticleFromFt(
       // two of twelve sampled topics publish no edition date at all.
       lastUpdated: lastEdition !== '' ? lastEdition : undefined,
       ownUrl,
+      contentLocale: topicLocale !== '' ? topicLocale : undefined,
     };
     await cache.set(key, cached, options.cacheTtl);
   }
@@ -290,12 +301,18 @@ export async function fetchArticleFromFt(
 
   // Build base result (shared across all code paths)
   const allSections: ArticleSection[] = extractSections(parsed.content);
+  const address = ownUrl ?? navigation?.self.url;
+  // Until 2026-09-28 only an `ArticleProvider` and a concepts.jamf.com or
+  // support.jamf.com page set it, so the MCP App's "Shown in …" notice
+  // never showed for a learn.jamf.com topic served in another language.
+  const contentLocale = articleLocale(cached.contentLocale, address);
   const base = {
     title,
     url: labelUrl(
       displayUrl,
-      ownUrl ?? navigation?.self.url,
+      address,
       options.articleUrlNamesTopic ?? articleUrl !== '',
+      { url: parseUrl(articleUrl)?.locale, topic: contentLocale },
     ),
     product,
     version: articleVersion(version),
@@ -310,6 +327,7 @@ export async function fetchArticleFromFt(
       ? parsed.relatedArticles : undefined,
     mapId,
     contentId,
+    contentLocale,
     navigation,
     sections: allSections,
   };
@@ -344,7 +362,10 @@ export async function fetchArticleFromFt(
  * for the url was used whatever it was, under the pair's ids (#332): another
  * topic at the same url, the `-current` page for an older version's pair
  * (a topic keeps its contentId across versions), or, with a `language` that
- * moved the lookup, the original-language page.
+ * moved the lookup, the original-language page. What the note reads off the
+ * article is the language it is in (since 2026-09-28), which a provider's
+ * article says with its `contentLocale`, one of this server's locale ids, or
+ * its own address; one that says neither gets a note that says so.
  */
 export async function resolveAndFetchArticle(
   ctx: ServerContext,
@@ -541,6 +562,29 @@ function topicOwnUrl(topicMeta: FtTopicInfo): string | undefined {
 }
 
 /**
+ * The language an article is in, as one of this server's locale ids: its
+ * `contentLocale` (a Fluid Topics topic's `ft:locale`), or else the locale
+ * its own address starts with, which is what an entry an earlier build cached
+ * without `ft:locale` has. Sampled 2026-09-28, two topics of one map in each
+ * of the 11 locales Jamf publishes in: all 22 carried an `ft:locale`, their
+ * map's, and each one's `ft:prettyUrl` started with it.
+ *
+ * Only a locale id counts, because the note compares it with `language`,
+ * which is one: anything else, `''` included, is not known. Counted as it
+ * came, a provider's `contentLocale` of `''` asked for in th-TH would make
+ * the note say `Showing the  edition instead.`, and a Japanese page's `ja`,
+ * asked for in ja-JP, that Jamf does not publish it in ja-JP.
+ */
+function articleLocale(contentLocale: string | undefined, address: string | undefined): LocaleId | undefined {
+  return localeId(contentLocale) ?? localeId(address !== undefined ? parseUrl(address)?.locale : undefined);
+}
+
+/** `value` when it is one of this server's locale ids, else `undefined`. */
+function localeId(value: string | undefined): LocaleId | undefined {
+  return value !== undefined && Object.hasOwn(SUPPORTED_LOCALES, value) ? value as LocaleId : undefined;
+}
+
+/**
  * The address to label a Fluid Topics article with: the page it is.
  *
  * `displayUrl` is the caller's url in practice (see {@link topicOwnUrl}). That
@@ -556,13 +600,23 @@ function topicOwnUrl(topicMeta: FtTopicInfo): string | undefined {
  * address — from its metadata, else from the map TOC — and the caller's url
  * only when neither is known, which is still right for the 46 of 48 sampled
  * search results whose url resolves to their own pair.
+ *
+ * Nor does a url name a topic in another language than the url's, so that
+ * topic is labelled with its own address too. Until 2026-09-28 a url in a
+ * locale the publication has no map in, with no `language`, was the label of
+ * the en-US topic it was answered with: a th-TH Policies.html url came back
+ * as the en-US Policies under the th-TH url (live), while an en-GB one, a
+ * locale this server does not have, came back under `/r/en-US/…` (offline).
  */
 function labelUrl(
   displayUrl: string,
   ownUrl: string | undefined,
   articleUrlNamesTopic: boolean,
+  locales: { url: string | undefined; topic: string | undefined },
 ): string {
-  return articleUrlNamesTopic ? displayUrl : ownUrl ?? displayUrl;
+  const namesTopic = articleUrlNamesTopic
+    && (locales.url === undefined || locales.topic === undefined || locales.url === locales.topic);
+  return namesTopic ? displayUrl : ownUrl ?? displayUrl;
 }
 
 /**
@@ -574,6 +628,10 @@ function labelUrl(
  * the Computer Configuration Profiles pair produced `Language "ja-JP" was
  * requested but this article was resolved from a "en-US" URL` — about a url
  * that resolved nothing (measured 2026-09-24).
+ *
+ * Which language the article is in is read off the article: its
+ * `contentLocale`, else its own address, whichever is one of this server's
+ * locale ids ({@link articleLocale}). A provider's article may give neither.
  */
 function resolutionNote(
   result: LabelledArticle,
@@ -585,9 +643,9 @@ function resolutionNote(
   // the caller's url when nothing better was found, and reading the locale off
   // that is the very claim this replaces — so a label equal to the caller's
   // url is only trusted when the TOC vouches for it.
-  const ownUrl = result.url !== articleUrl && result.url !== ''
-    ? result.url
-    : result.navigation?.self.url;
+  const relabelled = result.url !== articleUrl && result.url !== '';
+  const ownUrl = relabelled ? result.url : result.navigation?.self.url;
+  const served = articleLocale(result.contentLocale, ownUrl);
 
   if (pairGiven) {
     const notes: string[] = [];
@@ -605,26 +663,71 @@ function resolutionNote(
       );
     }
     if (requested !== undefined) {
-      const mapLocale = ownUrl !== undefined ? parseUrl(ownUrl)?.locale : undefined;
       const prefix = `Language "${requested}" was requested, but \`language\` has no effect`
         + ' on a mapId + contentId pair: this article comes from the pair\'s map,';
-      if (mapLocale === undefined) {
+      if (served === undefined) {
         notes.push(`${prefix} which is in one language.`);
-      } else if (mapLocale !== requested) {
-        notes.push(`${prefix} which is "${mapLocale}".`);
+      } else if (served !== requested) {
+        notes.push(`${prefix} which is "${served}".`);
       }
     }
     return notes.length > 0 ? notes.join(' ') : undefined;
   }
 
-  // `?? null` is load-bearing, and the reason this is not the identically
-  // named export from utils/url.ts: that one falls back to DEFAULT_LOCALE,
-  // which would make the guard below always true and attach a
-  // language-mismatch note to every en-US article.
-  const urlLocale = parseUrl(articleUrl)?.locale ?? null;
-  if (requested !== undefined && urlLocale !== null && urlLocale !== requested) {
-    return `Language "${requested}" was requested but this article was resolved from a "${urlLocale}" URL.`
-      + ' Content may be in the original language if a localized version is unavailable.';
+  // The locale the url names, if any: not `extractLocaleFromUrl` from
+  // utils/url.ts, which answers DEFAULT_LOCALE for a url that names none, and
+  // such a url asks for no language.
+  return languageNote(requested, parseUrl(articleUrl)?.locale, served, relabelled);
+}
+
+/**
+ * What to tell the caller about the language of an article fetched by url:
+ * which edition it is, when that is not the one the url names in the
+ * language the call asked for. `undefined` when it is.
+ *
+ * Without `language`, the locale the url names is the one asked for, as it is
+ * for a support.jamf.com url (static-article-service.ts): a th-TH url of a
+ * page Jamf publishes in en-US only is answered with the en-US page.
+ *
+ * Until 2026-09-28 the note did not say which language was served. Live that
+ * day, the en-US Policies.html asked for in ja-JP came back as ポリシー, and in
+ * th-TH or zh-CN as the en-US Policies, and all three ended with `Language
+ * "…" was requested but this article was resolved from a "en-US" URL.
+ * Content may be in the original language if a localized version is
+ * unavailable.` Nor did a th-TH url with no `language` get a note. It now
+ * says what `jamf_docs_get_toc`'s `localeNote` and a static page's note say
+ * of an edition Jamf does not publish.
+ *
+ * `relabelled` is whether the article is labelled with another address than
+ * the url passed, which is its own.
+ */
+function languageNote(
+  requested: string | undefined,
+  urlLocale: string | undefined,
+  served: string | undefined,
+  relabelled: boolean,
+): string | undefined {
+  const asked = requested ?? urlLocale;
+  if (asked === undefined) {
+    return undefined;
+  }
+  if (served === undefined) {
+    // A provider's article can say nothing of its language, and so can a
+    // topic with no `ft:locale`, no address and no place in its TOC, which no
+    // sampled topic is. What it is cannot be told, only that the call asked
+    // for another than the url's.
+    return requested !== undefined && urlLocale !== undefined && urlLocale !== requested
+      ? `Language "${requested}" was requested for a url in ${urlLocale}, and this article does not say which language it is in.`
+      : undefined;
+  }
+  if (served !== asked) {
+    return `Jamf does not publish this article in ${asked}. Showing the ${served} edition instead.`;
+  }
+  // The edition asked for, which is not the one the url names: `language`
+  // moved the lookup. It is labelled with its own address when it has one.
+  if (urlLocale !== undefined && urlLocale !== served) {
+    return `Showing the ${served} edition of this article, as \`language\` asked`
+      + `${relabelled ? ', under its own address' : ''}: the url passed is in ${urlLocale}.`;
   }
   return undefined;
 }

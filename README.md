@@ -202,7 +202,7 @@ subcollection by, returns the collection's list of articles.
 | `section` | string | — | Extract only a named section (e.g., `"Prerequisites"`). A section that matches no heading is not an error: the reply lists the article's sections, or says it has none, and lists its sub-topics with their URLs — on learn.jamf.com, what a page shows as sections are mostly sub-topics |
 | `summaryOnly` | boolean | `false` | Return only article outline, and the article's sub-topics when it has any — token-efficient way to preview before fetching full content |
 | `includeRelated` | boolean | `false` | Include links to related articles |
-| `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`. On concepts.jamf.com or support.jamf.com, a page with no edition in it is served as `url` names it, with a note. No effect on a `mapId` + `contentId` pair (each map is already one language) |
+| `language` | string | locale in the URL | Documentation language/locale. Overrides the locale in `url`. A learn.jamf.com publication Jamf does not publish in it is served in en-US, and a concepts.jamf.com or support.jamf.com page with no edition in it as `url` names it, both with a note; `contentLocale` says which language was served. No effect on a `mapId` + `contentId` pair (each map is already one language) |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level; `"compact"` shows a ~500-token preview with available sections list |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |
@@ -238,7 +238,7 @@ Fetches multiple documentation articles in a single call. Each URL is fetched co
 |-----------|------|---------|-------------|
 | `urls` | string[] (1–10) | required | Array of Jamf documentation URLs (same hosts as `jamf_docs_get_article`), each at most 2,048 characters |
 | `concurrency` | number (1–5) | `3` | Maximum parallel requests |
-| `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL. On concepts.jamf.com or support.jamf.com, a page with no edition in it is served as its URL names it, with a note |
+| `language` | string | locale in each URL | Documentation language/locale. Overrides the locale in each URL. A learn.jamf.com publication Jamf does not publish in it is served in en-US, and a concepts.jamf.com or support.jamf.com page with no edition in it as its URL names it, both with a note; each result's `contentLocale` says which language was served |
 | `maxTokens` | number (100–50000) | `5000` | Total token budget across all articles |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Detail level per article |
 | `responseFormat` | `"markdown"` \| `"json"` | `"markdown"` | Output format |

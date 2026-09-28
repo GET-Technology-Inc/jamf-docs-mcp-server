@@ -16,7 +16,9 @@ import {
   fetchMaps,
   fetchMapToc,
   fetchTopicContent,
+  fetchTopicMetadata,
 } from '../../src/core/services/ft-client.js';
+import { SUPPORTED_LOCALES } from '../../src/core/constants/locales.js';
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP, TRAINING_CONTENT_TYPES } from '../../src/core/constants.js';
 import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
@@ -530,6 +532,49 @@ describe('FT API data contracts', () => {
         expect(root.tocId, `Root TOC node "${root.title ?? '<no title>'}" should have a tocId`).toBeTruthy();
       }
     });
+  });
+
+  // ─── Topic metadata response contracts ───────────────────────────────────
+  //
+  // `jamf_docs_get_article` reads the language a learn.jamf.com topic is in
+  // off its own `ft:locale` (article-service.ts, since 2026-09-28): that is
+  // its `contentLocale`, and it is what the note compares with `language` to
+  // say whether the language asked for was served. So it has to be its map's
+  // locale, as one of this server's locale ids. A value in another form (`ja`,
+  // `ja_JP`), or none, sends the tool to the topic's address instead, which
+  // holds only while the address starts with the locale. Another locale id
+  // than the map's would make a translated article say Jamf does not publish
+  // it in its own language. A translated map, because an en-US topic would
+  // pass even if the key said en-US on every topic.
+  describe('topic metadata response', () => {
+    it('a ja-JP Jamf Pro topic carries one ft:locale, its map\'s, which is a locale id', async () => {
+      const jaMap = maps.find(m =>
+        metaOf(m).some(meta => meta.key === 'version_bundle_stem' && meta.values[0] === 'jamf-pro-documentation') &&
+        metaOf(m).some(meta => meta.key === 'latestVersion' && meta.values[0] === 'yes') &&
+        metaOf(m).some(meta => meta.key === 'ft:locale' && meta.values[0] === 'ja-JP')
+      );
+      expect(jaMap, 'no latest ja-JP Jamf Pro Documentation map').toBeDefined();
+      const mapLocale = metaOf(jaMap!).find(meta => meta.key === 'ft:locale')?.values;
+      expect(mapLocale).toEqual(['ja-JP']);
+
+      function findLeaf(nodes: FtTocNode[]): FtTocNode | null {
+        for (const node of nodes) {
+          if ((node.children ?? []).length === 0 && node.contentId !== '') {return node;}
+          const found = findLeaf(node.children ?? []);
+          if (found !== null) {return found;}
+        }
+        return null;
+      }
+      const leaf = findLeaf(await fetchMapToc(http, jaMap!.id));
+      expect(leaf, 'the ja-JP map\'s TOC has no leaf').not.toBeNull();
+
+      const topic = await fetchTopicMetadata(http, jaMap!.id, leaf!.contentId);
+      const topicLocale = metaOf(topic).filter(meta => meta.key === 'ft:locale');
+
+      expect(topicLocale, 'the topic carries one ft:locale entry').toHaveLength(1);
+      expect(topicLocale[0].values, 'with one value, its map\'s').toEqual(mapLocale);
+      expect(Object.hasOwn(SUPPORTED_LOCALES, topicLocale[0].values[0])).toBe(true);
+    }, 30000);
   });
 
   // ─── Topic content response contracts ────────────────────────────────────

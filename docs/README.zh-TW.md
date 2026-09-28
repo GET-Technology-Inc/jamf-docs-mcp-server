@@ -215,7 +215,7 @@ support.jamf.com 的每個子 collection，傳入這種網址會回傳該 collec
 | `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱 (文章有子主題時一併列出)，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
-| `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系。在 concepts.jamf.com、support.jamf.com 上，頁面若沒有該語系的版本，會回傳 `url` 所指的頁面並附註說明。對 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
+| `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系。learn.jamf.com 上 Jamf 未以該語系發布的出版品，會回傳 en-US 版本；concepts.jamf.com、support.jamf.com 上沒有該語系版本的頁面，會回傳 `url` 所指的頁面；兩者皆附註說明，`contentLocale` 會標明實際回傳的語系。對 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"`；compact 模式顯示約 500 token 預覽加上段落清單 (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |
@@ -249,7 +249,7 @@ support.jamf.com 的每個子 collection，傳入這種網址會回傳該 collec
 |------|------|------|------|
 | `urls` | string[] | 是 | Jamf 文件 URL 陣列 (1-10 筆，網域限制同 `jamf_docs_get_article`，每筆最長 2,048 個字元) |
 | `concurrency` | number | 否 | 最大平行請求數 1-5 (預設: 3) |
-| `language` | string | 否 | 文件語系 (預設: 各網址本身的語系)。會覆寫每個網址中的語系。在 concepts.jamf.com、support.jamf.com 上，頁面若沒有該語系的版本，會回傳該網址所指的頁面並附註說明 |
+| `language` | string | 否 | 文件語系 (預設: 各網址本身的語系)。會覆寫每個網址中的語系。learn.jamf.com 上 Jamf 未以該語系發布的出版品，會回傳 en-US 版本；concepts.jamf.com、support.jamf.com 上沒有該語系版本的頁面，會回傳該網址所指的頁面；兩者皆附註說明，每筆結果的 `contentLocale` 會標明實際回傳的語系 |
 | `maxTokens` | number | 否 | 所有文章的總 token 預算 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 每篇文章的輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
 | `responseFormat` | string | 否 | 輸出格式: `"markdown"` 或 `"json"` (預設: `"markdown"`) |

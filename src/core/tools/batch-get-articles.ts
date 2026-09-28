@@ -8,7 +8,7 @@ import type { ServerContext } from '../types/context.js';
 import { GetBatchArticlesInputSchema } from '../schemas/index.js';
 import { BatchArticlesOutputSchema } from '../schemas/output.js';
 import { reportProgress } from '../utils/progress.js';
-import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, type LocaleId } from '../constants.js';
+import { ResponseFormat, OutputMode, TOKEN_CONFIG, CONTENT_LIMITS, DEFAULT_LOCALE, type LocaleId } from '../constants.js';
 import type { ToolResult, TokenInfo, FetchArticleResult, FetchArticleOptions } from '../types.js';
 import { failureReason } from '../services/failure-reason.js';
 import { isAllowedHostname, ALLOWED_HOSTNAME_LIST, ALLOWED_HOSTNAME_MESSAGE } from '../utils/url.js';
@@ -82,6 +82,14 @@ function formatBatchAsMarkdown(results: FetchResult[], compact: boolean): string
   return parts.join('\n\n---\n\n');
 }
 
+/**
+ * A result's `contentLocale`, where the article says which language it is
+ * in: omitted rather than emitted as `undefined`, as get-article does.
+ */
+function servedIn(article: FetchArticleResult): { contentLocale?: string } {
+  return article.contentLocale !== undefined ? { contentLocale: article.contentLocale } : {};
+}
+
 // ============================================================================
 // Tool registration
 // ============================================================================
@@ -96,7 +104,9 @@ const TOOL_NAME = 'jamf_docs_batch_get_articles';
  * of at most CONTENT_LIMITS.MAX_URL_LENGTH characters (since 2026-09-28); the
  * host check runs per article, so a URL on another host, or an http:// one,
  * comes back as that article's error ("URL must be from …") and the rest of
- * the batch still runs.
+ * the batch still runs. Until 2026-09-28 a result did not carry
+ * `contentLocale`, which `jamf_docs_get_article` does, so which language a
+ * result was served in could be read only from the note in its content.
  */
 const TOOL_DESCRIPTION = `Retrieve multiple Jamf documentation articles in a single request.
 
@@ -106,7 +116,7 @@ comparing articles, gathering information from multiple pages, or bulk research.
 Args:
   - urls (string[], required): Array of 1-10 https:// article URLs on ${ALLOWED_HOSTNAME_LIST}, each at most ${CONTENT_LIMITS.MAX_URL_LENGTH} characters. Any other URL fails as its own per-article error, and a longer one fails the call's input validation
   - concurrency (number, optional): Max parallel requests 1-5 (default: 3)
-  - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. On ${STATIC_SOURCE_HOSTNAMES.join(' or ')}, a page with no edition in it is served as its URL names it, with a note
+  - language (string, optional): Documentation language/locale. Overrides the locale in each URL, which is used when this is omitted. A learn.jamf.com publication Jamf does not publish in it is served in ${DEFAULT_LOCALE}, and a ${STATIC_SOURCE_HOSTNAMES.join(' or ')} page with no edition in it as its URL names it, both with a note; each result's contentLocale says which language was served
   - maxTokens (number, optional): Total token budget across all articles ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS}). Distributed evenly.
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for brief output.
   - responseFormat ('markdown' | 'json'): Output format (default: 'markdown')
@@ -114,6 +124,7 @@ Args:
 Returns:
   An array of article results. Each article independently succeeds or fails.
   For JSON format, returns a BatchResponse object with results, summary, and tokenInfo.
+  A result carries contentLocale, the language its content is in, where the article says.
 
 Examples:
   - Compare two products: urls=["https://learn.jamf.com/.../page/A.html", "https://learn.jamf.com/.../page/B.html"]
@@ -231,6 +242,7 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
               url: r.url,
               status: 'success' as const,
               title: r.article.title,
+              ...servedIn(r.article),
               content: view.content,
               tokenCount: view.tokenCount,
               truncated: view.truncated
@@ -257,6 +269,7 @@ export function registerBatchGetArticlesTool(server: McpServer, ctx: ServerConte
                 url: r.url,
                 status: 'success',
                 title: r.article.title,
+                ...servedIn(r.article),
                 content: view.content,
                 tokenInfo: {
                   ...r.article.tokenInfo,

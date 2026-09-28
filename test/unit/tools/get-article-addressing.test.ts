@@ -385,7 +385,9 @@ describe('get_article with a url and a mapId + contentId pair', () => {
 
     expect(text).toContain('`language` has no effect on a mapId + contentId pair');
     expect(text).toContain('"en-US"');
-    expect(text).not.toContain('resolved from a "en-US" URL');
+    // Not the url's language note: the url did not choose the article.
+    expect(text).not.toContain('Jamf does not publish this article');
+    expect(text).not.toContain('the url passed is in');
   });
 
   it('says nothing about `language` when the pair\'s map is in that language', async () => {
@@ -597,7 +599,7 @@ describe('get_article keeps every reply within maxTokens, notes included', () =>
     const structured = (result.structuredContent as { results: { content: string; tokenCount: number }[] }).results;
 
     const [article] = json.results;
-    expect(article.content).toContain('*Note: Language "ja-JP" was requested');
+    expect(article.content).toContain('*Note: Showing the ja-JP edition of this article');
     expect(article.tokenInfo.tokenCount).toBe(estimateTokens(article.content));
     expect(article.tokenInfo.tokenCount).toBeLessThanOrEqual(100);
     expect(article.tokenInfo.truncated).toBe(true);
