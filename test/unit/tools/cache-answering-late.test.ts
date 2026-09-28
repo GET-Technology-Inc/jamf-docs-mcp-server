@@ -268,7 +268,7 @@ describe('a call whose cache read answers late does not request the page again',
   it('a map\'s topic index, which a page URL is resolved with', async () => {
     const [first, second] = await secondReadsLate({
       matches: path => path === TOPICS_PATH,
-      entry: 'ft-topic-index:',
+      entry: 'ft-topic-index-v2:',
       first: async () => await call('jamf_docs_get_article', { url: articleUrl(0) }),
       second: async () => await call('jamf_docs_get_article', { url: articleUrl(1) }),
     });

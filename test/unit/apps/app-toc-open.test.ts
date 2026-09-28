@@ -8,12 +8,14 @@
  * LAPS" and "Using LAPS in the Jamf Pro API" at `…/Using_LAPS`, which opens
  * the second, and "Enable LAPS" and "Enabling LAPS in the Jamf Pro API" at
  * `…/Implementing_LAPS`, which opens the second too. The Technical Articles
- * contents have 46 such urls, for 178 entries. And some urls open nothing at
- * all: `jamf_docs_get_article` answers "Topic not found" for at least 48 urls
- * in the Jamf Pro, Jamf Connect, Jamf School, Jamf Protect and Technical
- * Articles contents, such as
+ * contents have 46 such urls, for 178 entries. And until 2026-09-28 some urls
+ * opened nothing at all: `jamf_docs_get_article` answered "Topic not found"
+ * for 48 urls in the Jamf Pro, Jamf Connect, Jamf School, Jamf Protect and
+ * Technical Articles contents, such as
  * `…/jamf-pro-documentation-current/Configuring-the-Branding-Settings`, and
- * opens each of those by its pair. `jamf_docs_get_toc` returns the
+ * opened each of those by its pair. It opens them by url alone too now,
+ * without a `language` that moves the lookup to another locale
+ * (get-article-toc-urls.test.ts). `jamf_docs_get_toc` returns the
  * map's `mapId` and each entry's `contentId`, which learn.jamf.com fetches
  * by, and a row now carries the pair to the click, as a search result does.
  *

@@ -5,6 +5,8 @@
  * 1. Direct IDs: {mapId, contentId} passthrough (from search/TOC results)
  * 2. Legacy bundle URL: /bundle/{bundleId}/page/{page}.html
  * 3. FT prettyUrl: /r/{locale}/{product}/{page}
+ *
+ * A url's page is looked up in its map's topic index (`readOrBuildIndex`).
  */
 
 import { DOCS_BASE_URL, DEFAULT_LOCALE, type LocaleId } from '../constants.js';
@@ -61,6 +63,28 @@ interface ParsedPrettyUrl {
 type ParsedUrl = ParsedLegacyUrl | ParsedPrettyUrl;
 
 /**
+ * The page of a reader address as Jamf spells it: `segment` with its
+ * percent-escapes decoded, or as it is when they do not decode.
+ *
+ * Jamf publishes some pages at an address that is not ASCII, and spells it
+ * raw: the Jamf School topic "Jamf School から管理者データを削除する" is at
+ * `/r/ja-JP/jamf-school-documentation/Jamf-School-から管理者テータを削除する`,
+ * in its `readerUrl` and in the TOC alike, and no `readerUrl` of the six
+ * publications measured holds a percent-escape (2026-09-28). `new URL`
+ * percent-encodes a pathname, so until 2026-09-28 the url
+ * `jamf_docs_get_toc` lists for that page was looked up as
+ * `Jamf-School-%E3%81%8B…` and matched nothing. A browser copies it encoded
+ * as well. Both spellings now read the same.
+ */
+function decodePage(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/**
  * Parse a legacy bundle URL:
  * /en-US/bundle/jamf-pro-documentation-current/page/MDM_Profile_Settings.html
  */
@@ -84,9 +108,14 @@ function parseLegacyUrl(pathname: string): ParsedLegacyUrl | null {
 /**
  * Parse a FT prettyUrl:
  * /r/en-US/jamf-pro-documentation/MDM_Profile_Settings
+ *
+ * The page is the rest of the path, `/` and all. Jamf publishes "And/Or
+ * Groupings", which the Jamf Pro TOC lists four times, at
+ * `/r/en-US/jamf-pro-documentation-current/And/Or-Groupings` (2026-09-28),
+ * and until that day its url was not recognised as a Fluid Topics url at all.
  */
 function parsePrettyUrl(pathname: string): ParsedPrettyUrl | null {
-  const match = /^\/r\/([a-z]{2}-[A-Z]{2})\/([^/]+)\/([^/?#]+)$/.exec(pathname);
+  const match = /^\/r\/([a-z]{2}-[A-Z]{2})\/([^/]+)\/([^?#]+)$/.exec(pathname);
   if (match === null) {return null;}
   const locale = match[1];
   const productSlug = match[2];
@@ -98,7 +127,7 @@ function parsePrettyUrl(pathname: string): ParsedPrettyUrl | null {
     type: 'pretty',
     locale,
     productSlug,
-    topicSlug,
+    topicSlug: decodePage(topicSlug),
   };
 }
 
@@ -126,8 +155,68 @@ interface BuildIndexOptions {
 }
 
 /**
+ * The page of a topic's `readerUrl`, read as a url's page is, so that the two
+ * cannot disagree: `Configuring-the-Branding-Settings` for
+ * `/r/en-US/jamf-pro-documentation-current/Configuring-the-Branding-Settings`.
+ * '' for a topic Fluid Topics sent without one.
+ */
+function readerPage(readerUrl: unknown): string {
+  if (typeof readerUrl !== 'string') {
+    return '';
+  }
+  const parsed = parseUrl(readerUrl);
+  return parsed?.type === 'pretty' ? parsed.topicSlug : '';
+}
+
+/**
  * The cached index, or one built from the map's topics, fetched and stored:
  * the load `TopicResolver.getTopicIndex` shares between calls.
+ *
+ * A page is looked up by three keys, each one only where no stronger one
+ * names that page:
+ *
+ *  1. `legacy_topicname`, the page of the topic's legacy url,
+ *     `/bundle/{bundle}/page/{legacy_topicname}.html`.
+ *  2. The page of the topic's `readerUrl`, its address on the site. A TOC
+ *     entry's `prettyUrl` is that address, and a search result's
+ *     `ft:prettyUrl` is too, without the `/r/`: the `/topics` list is the TOC
+ *     flattened, entry for entry, in the 2,742 TOC entries of Jamf Pro, Jamf
+ *     Connect, Jamf School, Jamf Protect and Technical Articles in en-US and
+ *     the 428 of Jamf School in ja-JP (2026-09-28).
+ *  3. The topic's title with each run of spaces made `_`.
+ *
+ * Until 2026-09-28 the index held only 1 and 3, and a topic Jamf publishes
+ * without a `legacy_topicname`, at an address that is not its title so
+ * spelled, could not be opened by its url: `jamf_docs_get_article` answered
+ * "Topic not found: Configuring-the-Branding-Settings in
+ * jamf-pro-documentation-current" for a url `jamf_docs_get_toc` lists. Live,
+ * 49 of the 2,579 urls those five en-US TOCs list could not be opened, and 1
+ * of the 427 of Jamf School in ja-JP (test/unit/tools/get-article-toc-urls.test.ts).
+ * The address is read as Jamf spells it, not derived: Jamf Connect publishes
+ * one "General Requirements" at `General_Requirements` and another at
+ * `General-Requirements`, and the Jamf School page in {@link decodePage} is at
+ * テータ where its title reads データ.
+ *
+ * A `legacy_topicname` comes first, so a key one gave names the topic it
+ * named before. Jamf publishes some topics at one shared address, and a url
+ * cannot say which of them it means (the `mapId` + `contentId` pair can):
+ * Jamf Connect's two topics at `Troubleshooting` are one with that
+ * `legacy_topicname` and one with none, and the url still opens the first.
+ *
+ * An address comes before a title, so it can displace a title key, and that
+ * is what the urls a TOC lists need. The first of five Technical Articles
+ * topics titled 追加情報 in ja-JP is published at `Additional_Information`,
+ * and the fifth at `追加情報`; were titles first, the url of that address
+ * would open the first, which the TOC does not list there. Measured on the
+ * topics served on 2026-09-28: of the 4,278 keys the indexes of seven
+ * publications held until then, the six above among them, no title key was
+ * displaced; in Jamf Connect and Technical Articles in ja-JP and zh-TW, 9
+ * were, 追加情報 among them, none of them ASCII. No url reached those 9
+ * before, as a url's page was looked up percent-encoded.
+ *
+ * Where several topics share one key of a kind, a legacy name names the last
+ * of them in the list and a title the first, as before, and an address the
+ * last, as a legacy name does.
  */
 async function readOrBuildIndex(
   options: BuildIndexOptions,
@@ -139,27 +228,35 @@ async function readOrBuildIndex(
   }
 
   const topics = await fetchTopicsFn(http, mapId);
-  const index = new Map<string, string>();
+  const byLegacyName = new Map<string, string>();
+  const byAddress = new Map<string, string>();
+  const byTitle = new Map<string, string>();
 
   for (const topic of topics) {
-    // Index by legacy_topicname metadata
     const legacyName = getMetaValue(topic.metadata, FT_META.LEGACY_TOPICNAME);
     if (legacyName !== '') {
-      index.set(legacyName, topic.id);
+      byLegacyName.set(legacyName, topic.id);
     }
 
-    // Also index by title (normalized). A topic Fluid Topics sent without one
-    // simply has no title key — it is still reachable by `legacy_topicname`
-    // above. Reading through blindly would throw and lose the entire index for
-    // that map, taking every other topic in it down with the one bad entry.
+    const address = readerPage(topic.readerUrl);
+    if (address !== '') {
+      byAddress.set(address, topic.id);
+    }
+
+    // A topic Fluid Topics sent without a title simply has no title key — it
+    // is still reachable by the keys above. Reading through blindly would
+    // throw and lose the entire index for that map, taking every other topic
+    // in it down with the one bad entry.
     if (topic.title !== undefined) {
       const titleKey = topic.title.replace(/\s+/g, '_');
-      if (!index.has(titleKey)) {
-        index.set(titleKey, topic.id);
+      if (!byTitle.has(titleKey)) {
+        byTitle.set(titleKey, topic.id);
       }
     }
   }
 
+  // Of two entries for one key, the later one's value is kept.
+  const index = new Map([...byTitle, ...byAddress, ...byLegacyName]);
   await cache.set(key, [...index.entries()], cacheTtl);
   return index;
 }
@@ -203,7 +300,7 @@ export class TopicResolver {
    * Documentation's topics weighed 2.16 MB and took 2.2 s (2026-09-28).
    */
   private async getTopicIndex(mapId: string): Promise<Map<string, string>> {
-    const key = cacheKey('ft-topic-index', { mapId });
+    const key = cacheKey('ft-topic-index-v2', { mapId });
     return await loadOnce(this.cache, key, async () => await readOrBuildIndex({
       mapId,
       cache: this.cache,
