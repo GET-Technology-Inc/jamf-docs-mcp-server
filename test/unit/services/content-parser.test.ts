@@ -509,7 +509,9 @@ describe('htmlToMarkdown renders tables as tables', () => {
     // column after it shifts.
     //
     // Flagged by CodeQL as js/incomplete-sanitization on the first version of
-    // this rule.
+    // this rule. The backslash is Turndown's to escape, as it escapes every
+    // backslash of a page's text; until 2026-09-28 the cell escaped it again,
+    // and wrote `C:\\\\\|next`, which renders as "C:\\|next".
     const markdown = htmlToMarkdown(
       '<table><tr><th>Path</th><th>Note</th></tr>'
       + '<tr><td>C:\\|next</td><td>ok</td></tr></table>',
@@ -521,7 +523,49 @@ describe('htmlToMarkdown renders tables as tables', () => {
     // two columns, not three.
     const cells = (rows[2] ?? '').split(/(?<!\\)\|/).filter((cell) => cell.trim() !== '');
     expect(cells).toHaveLength(2);
-    expect(rows[2]).toContain('\\\\');
+    // An escaped backslash, then an escaped pipe: "C:\|next".
+    expect(rows[2]).toBe('| C:\\\\\\|next | ok |');
+  });
+
+  it('writes a code span holding `\\|` in a cell as GitHub reads it', () => {
+    // A BRE alternation such as `grep 'a\|b'`. The span's backslash is the
+    // page's own, and only the pipe is escaped: `a\\|b`, which GitHub
+    // (cmark-gfm) and markdown-it show as `a\|b`. Renderers disagree here,
+    // and no output suits them all: micromark and marked read the `\\` as an
+    // escaped backslash and end the cell at the pipe. Until 2026-09-28 the
+    // cell wrote `a\\\|b`, which kept the row whole everywhere and showed
+    // `a\\|b` in every renderer. No live cell holds one.
+    const markdown = htmlToMarkdown(
+      '<table><tr><th>Pattern</th><th>Note</th></tr>'
+      + '<tr><td><code>a\\|b</code></td><td>z</td></tr></table>',
+    );
+
+    const rows = markdown.split('\n').filter((line) => line.startsWith('|'));
+    expect(rows[2]).toBe('| `a\\\\|b` | z |');
+  });
+
+  it('gives each pipe in a cell one backslash, whatever comes before it', () => {
+    // The pipe escape reads a backslash and the character after it as one,
+    // so that it is not taken for escaping that leaves backslashes out
+    // (CodeQL's js/incomplete-sanitization). Each pipe must still gain one
+    // backslash, and nothing else change: after a run of a code span's own
+    // backslashes, at either end of a span, twice in a row, after a span that
+    // ends in a backslash, and after a text backslash Turndown escaped.
+    const cases: [cell: string, row: string][] = [
+      ['<code>a\\\\|b</code>', '| `a\\\\\\|b` | z |'],
+      ['<code>|a|</code>', '| `\\|a\\|` | z |'],
+      ['a || b', '| a \\|\\| b | z |'],
+      ['<code>a\\</code>|b', '| `a\\`\\|b | z |'],
+      ['x\\\\|y', '| x\\\\\\\\\\|y | z |'],
+    ];
+
+    for (const [cell, row] of cases) {
+      const markdown = htmlToMarkdown(
+        `<table><tr><th>H</th><th>N</th></tr><tr><td>${cell}</td><td>z</td></tr></table>`,
+      );
+      const rows = markdown.split('\n').filter((line) => line.startsWith('|'));
+      expect(rows[2], cell).toBe(row);
+    }
   });
 
   it('still emits a divider for a table with no header row', () => {

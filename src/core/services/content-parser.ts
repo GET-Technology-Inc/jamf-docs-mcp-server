@@ -46,28 +46,99 @@ turndown.addRule('stripScripts', {
 });
 
 /**
- * A cell's text, flattened onto one line and safe inside a pipe row.
+ * `<`, and the `&` that starts a character reference, named or numeric.
+ * CommonMark reads both in text, and Turndown escapes neither.
+ *
+ * Turndown escapes each text node on its own, so a reference the page splits
+ * across elements (`&amp;<span>lt;</span>`) is not seen, and is decoded.
+ */
+const MARKUP_IN_TEXT = /<|&(?=[A-Za-z][A-Za-z0-9]*;|#[0-9]+;|#[Xx][0-9A-Fa-f]+;)/g;
+
+const escapeMarkdownSyntax = turndown.escape.bind(turndown);
+
+/**
+ * A page's text, escaped as Turndown escapes it, and its `<` and the `&` of
+ * each character reference as well.
+ *
+ * Turndown escapes what would be Markdown syntax (`*`, `_`, `[`, a leading
+ * `>` or `#`, …) but not `<` or `&`, and CommonMark passes a `<` that opens
+ * something tag-shaped through as HTML and decodes `&lt;`, `&amp;` or
+ * `&#60;`. The text is decoded by the time Turndown sees it, so until
+ * 2026-09-28 a page that shows `<name>` or the text "&lt;" was written as
+ * `<name>` and `&lt;`, which render as a tag, showing nothing, and as "<".
+ * Live that day, the options `-target <target volume>` and `-name <name>` of
+ * "Updating the Hostname and the Local Hostname Using a Policy" rendered as
+ * `-target` and `-name`, and the table of "Entity Equivalents for Disallowed
+ * XML Characters" gave `<` as the entity of `<`.
+ *
+ * Added after Turndown's escapes, which escape every backslash of the text,
+ * so no backslash is escaped twice. Code is not text: Turndown hands the text
+ * of a `<code>`, inline or in a `<pre>`, over unescaped, and CommonMark reads
+ * neither escapes nor references in it. A `<pre>` with no `<code>` in it is
+ * not code to Turndown, so its text is escaped like any other, inside the
+ * fence the codeBlocks rule writes.
+ *
+ * GFM's extended autolinks (GitHub, micromark, marked) read a bare URL in
+ * text up to a space or a `<`, backslashes and all. So a `\<` or `\&` right
+ * after one gives the link its backslash, as Turndown's own `\_` in a bare
+ * URL does, and a placeholder after it is read as a tag again. Writing the
+ * `<` as `&lt;` instead does not help: the link takes that in too, and shows
+ * it as written.
+ */
+turndown.escape = (text: string): string => escapeMarkdownSyntax(text).replace(MARKUP_IN_TEXT, '\\$&');
+
+/**
+ * A cell's Markdown, flattened onto one line and safe inside a pipe row.
  *
  * Cells are converted through Turndown again so inline markup survives — a
  * `<code>` in a settings table is half the reason the row is worth reading —
- * but a cell holding a nested table falls back to plain text, because a table
- * cannot be nested inside a Markdown pipe row at all and the recursion would
- * not terminate usefully.
+ * but a cell holding a nested table falls back to its text, escaped as
+ * Turndown escapes a text node, because a table cannot be nested inside a
+ * Markdown pipe row at all and the recursion would not terminate usefully.
  */
 function cellMarkdown(cell: { innerHTML: string; textContent: string | null }): string {
   const nested = /<table[\s>]/i.test(cell.innerHTML);
-  const raw = nested ? (cell.textContent ?? '') : turndown.turndown(cell.innerHTML);
-  return raw
+  const markdown = nested ? turndown.escape(cell.textContent ?? '') : turndown.turndown(cell.innerHTML);
+  return markdown
     // A pipe row is one line by definition, so paragraphs and list items in a
     // cell collapse to sentences rather than breaking the table apart.
     .replace(/\s*\n+\s*/g, ' ')
-    // Backslash first, then pipe. Escaping the pipe alone is not enough: a cell
-    // containing `\|` becomes `\\|`, where the doubled backslash is itself an
-    // escaped backslash and the pipe is live again — so the row breaks at
-    // exactly the input the escaping exists to handle.
-    .replace(/\\/g, '\\\\')
-    .replace(/\|/g, '\\|')
+    // The pipe, and nothing else. Every backslash of the cell's text is
+    // escaped already, as Turndown escaped it, so a `\|` the page shows is
+    // `\\|` here and `\\\|` below: an escaped backslash, then an escaped
+    // pipe. Until 2026-09-28 the backslashes were escaped again, which undid
+    // Turndown's escapes: `*` and `\d` in the table of "Common Regex
+    // Patterns" read `\\*` and `\\\\d`, which render as "\*" and "\\d". A
+    // backslash in a code span is the page's own, and is left as it is: GFM
+    // reads `\|` as `|` there too. So a span holding `\|` is `\\|` here, which
+    // GitHub (cmark-gfm) and markdown-it show as `\|`; micromark and marked
+    // read the `\\` as an escaped backslash and end the cell at the pipe.
+    // Until that day the span read `\\\|`, which kept the row whole in every
+    // renderer and showed `\\|` in each.
+    //
+    // So each pipe gains one backslash, and nothing else changes. The pattern
+    // takes a backslash together with the character after it, so a pipe is
+    // met either on its own or right after a backslash, and is escaped either
+    // way; any other backslash pair is kept as it is.
+    .replace(/\\[\s\S]|\|/g, escapeCellPipe)
     .trim();
+}
+
+/**
+ * A pipe escaped: `|` as `\|`, and a code span's `\|` as `\\|`. Any other
+ * backslash pair, an escape Turndown wrote or a code span's own, is returned
+ * as it is.
+ *
+ * A replace of each pipe on its own writes the same, but CodeQL reads it as
+ * escaping that leaves backslashes out (js/incomplete-sanitization), as it
+ * read the first version of this rule. Here that is not so: every backslash
+ * of a cell's text is Turndown's escape already, and until 2026-09-28 the
+ * cell escaped them again, doubling each one.
+ */
+function escapeCellPipe(token: string): string {
+  if (token === '|') { return '\\|'; }
+  if (token === '\\|') { return '\\\\|'; }
+  return token;
 }
 
 /**

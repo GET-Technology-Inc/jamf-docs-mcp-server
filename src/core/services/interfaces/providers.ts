@@ -75,7 +75,11 @@ import type {
  * renderer read such a tag (one with an unquoted attribute) as HTML, and
  * `&amp;` as "&". A backend that holds HTML excerpts should return their
  * text, the tags stripped and each character reference decoded once, as the
- * Fluid Topics path does (`cleanSnippet`).
+ * Fluid Topics path does (`cleanSnippet`). Markdown escapes the `product`,
+ * `version` and `otherVersions` too, which it wrote as they came until
+ * 2026-09-28. And since that day it writes each of these on one line: a line
+ * break or tab, with the spaces around it, is one space, and the other
+ * control characters and the bidi marks and overrides are dropped.
  *
  * Return all matched results as a flat array, in the order you rank them:
  * the core keeps that order, and a JSON reply says the configured search
