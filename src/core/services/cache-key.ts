@@ -185,7 +185,12 @@ export interface CacheKeySpaces {
    * page it holds is another's.
    */
   'intercom-collection-toc-v3': { source: string; url: string };
-  'maps-registry-v3': null;
+  /**
+   * learn.jamf.com's maps list, with when it was fetched (`CachedMaps` in
+   * maps-registry.ts). v4 since 2026-09-28, when the time was added: see the
+   * note on the key there.
+   */
+  'maps-registry-v4': null;
   'metadata-products-v2': null;
   'metadata-topics': null;
   'metadata-product-availability-v2': null;
@@ -246,7 +251,7 @@ const CACHE_NAMESPACE_REGISTRY: {
   'intercom-collections': true,
   'intercom-collections-failure': true,
   'intercom-collection-toc-v3': true,
-  'maps-registry-v3': true,
+  'maps-registry-v4': true,
   'metadata-products-v2': true,
   'metadata-topics': true,
   'metadata-product-availability-v2': true,

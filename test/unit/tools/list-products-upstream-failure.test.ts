@@ -274,42 +274,34 @@ describe('a source that cannot be read is named, not passed off as the whole cat
     expect(full).toContain('Every document Jamf publishes');
   });
 
-  it('does not blame the product versions when they are not the fallback', async () => {
-    // The products were read while the registry was up and are cached; then
-    // the registry's own entry lapses and the next build fails. The
-    // publication list loses learn.jamf.com, the products do not, and the
-    // note has to say which.
+  // The availability map is cached for an hour, on a clock of its own. The
+  // product versions are not cached at all: since 2026-09-28 they are read
+  // from the maps list on every call, so that one reply cannot give Jamf Pro
+  // two sets of versions (list-products-maps-list-age.test.ts). So once the
+  // maps list cannot be read, the versions are the stand-in, while the
+  // availability map can still be the one the registry built. The note names
+  // only what is a stand-in.
+  //
+  // Until then the versions could be what the registry built, cached before
+  // the maps list lapsed, beside an availability map that was the stand-in.
+  // That pair can no longer arise: the versions are never older than the
+  // maps list, and a reply after it has lapsed has no maps list to read them
+  // from.
+  async function lapseDuringOutage(options: { availabilityToo: boolean }): Promise<ListResult> {
     await listProducts();
     registryUp = false;
     ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v3'));
-
-    const result = await listProducts();
-
-    expect(result.structuredContent?.incomplete?.unavailable).toEqual(['maps-registry']);
-    expect(jamfPro(result)?.availableVersions).toEqual(['11.31.0', '11.30.0']);
-    expect(result.structuredContent?.incomplete?.message).not.toMatch(/version/i);
-    expect(result.structuredContent?.incomplete?.message).not.toContain('table of contents');
-  });
-
-  // The product versions and the availability map are cached on their own
-  // clocks, a day and an hour, so during an outage either can be the stand-in
-  // while the other is still what the registry built. The note names only the
-  // one that is.
-  async function lapseDuringOutage(
-    key: 'metadata-products-v2' | 'metadata-product-availability-v2',
-  ): Promise<ListResult> {
-    await listProducts();
-    registryUp = false;
-    ctx.mapsRegistry.reset();
-    await ctx.cache.delete(cacheKey('maps-registry-v3'));
-    await ctx.cache.delete(cacheKey(key));
+    await ctx.cache.delete(cacheKey('maps-registry-v4'));
+    if (options.availabilityToo) {
+      await ctx.cache.delete(cacheKey('metadata-product-availability-v2'));
+    }
     return await listProducts();
   }
 
-  it('blames only the product versions when only they are the fallback', async () => {
-    const result = await lapseDuringOutage('metadata-products-v2');
+  it('gives the product versions as the fallback once the maps list cannot be read, whatever it gave before', async () => {
+    const result = await lapseDuringOutage({ availabilityToo: false });
 
+    expect(result.structuredContent?.incomplete?.unavailable).toEqual(['maps-registry']);
     expect(jamfPro(result)?.availableVersions).toEqual(['current']);
     // The availability map the registry built, which does not list Jamf School.
     expect(result.structuredContent?.products.find(p => p.id === 'jamf-school')?.hasContent).toBe(false);
@@ -318,14 +310,14 @@ describe('a source that cannot be read is named, not passed off as the whole cat
     expect(message).not.toContain('table of contents');
   });
 
-  it('blames only the table-of-contents flags when only they are the fallback', async () => {
-    const result = await lapseDuringOutage('metadata-product-availability-v2');
+  it('blames the table-of-contents flags as well once the availability map has lapsed too', async () => {
+    const result = await lapseDuringOutage({ availabilityToo: true });
 
-    expect(jamfPro(result)?.availableVersions).toEqual(['11.31.0', '11.30.0']);
+    expect(jamfPro(result)?.availableVersions).toEqual(['current']);
     expect(result.structuredContent?.products.find(p => p.id === 'jamf-school')?.hasContent).toBe(true);
     const message = result.structuredContent?.incomplete?.message;
+    expect(message).toContain('Product versions are compiled-in defaults.');
     expect(message).toContain('Every product is assumed to have a table of contents.');
-    expect(message).not.toMatch(/version/i);
   });
 });
 
@@ -404,5 +396,24 @@ describe('a fallback does not outlive the outage', () => {
     expect(after.jamfPro).toEqual(['11.31.0', '11.30.0']);
     expect(after.ttlMs).toBeUndefined();
     expect(after.cacheScope).toBeUndefined();
+  });
+
+  it('stops serving jamf://products the fallback once list_products has seen the registry answer', async () => {
+    registryUp = false;
+    await listProducts();
+
+    // list_products hears from the registry, rebuilds the versions from it,
+    // and drops the fallback, which nothing replaces in the cache.
+    registryUp = true;
+    expect(jamfPro(await listProducts())?.availableVersions).toEqual(['11.31.0', '11.30.0']);
+
+    // So jamf://products, which has no news of the registry of its own, is
+    // not served the fallback for the rest of its minute.
+    const result = await client.readResource({ uri: 'jamf://products' }) as {
+      contents: { text: string }[]; ttlMs?: number;
+    };
+    const body = JSON.parse(result.contents[0]?.text ?? '{}') as { products: { id: string; availableVersions: string[] }[] };
+    expect(body.products.find(p => p.id === 'jamf-pro')?.availableVersions).toEqual(['11.31.0', '11.30.0']);
+    expect(result.ttlMs).toBeUndefined();
   });
 });

@@ -323,7 +323,7 @@ describe('an entry of the table-of-contents resource, fetched by the pair the bo
 // ── A tree the registry has moved on from ──────────────────────────────────
 
 describe('a table of contents read from the cache after the registry names another map', () => {
-  // The tree is cached for CACHE_TTL_ARTICLE (24 hours by default) and the
+  // The tree is cached for CACHE_TTL_TOC (24 hours by default) and the
   // registry's maps for CACHE_TTL_PRODUCTS (7 days in the Node server), each
   // written at its own time. Here the registry names 11.31.0's map while the
   // tree is fetched and cached, as it did before 11.32.0 was published, and

@@ -62,10 +62,10 @@ export function transformFtTocToTocEntries(nodes: FtTocNode[]): TocEntry[] {
  * the map it was fetched from, with that map's locale.
  *
  * Until 2026-09-28 the cache (`ft-toc`) held the tree alone, and a hit named
- * it by asking the registry again. The tree is kept for `cacheTtl.article`
- * (CACHE_TTL_ARTICLE, 24 hours by default) and the registry's list of maps
- * for the TTL it was built with (CACHE_TTL_PRODUCTS in the Node server, 7
- * days by default). The two are written at different times, so once the
+ * it by asking the registry again. The tree is kept for `cacheTtl.toc`
+ * (CACHE_TTL_TOC, 24 hours by default) and the registry's list of maps for
+ * the TTL it was built with (CACHE_TTL_PRODUCTS in the Node server, 7 days
+ * by default). The two are written at different times, so once the
  * registry named a newer map, after Jamf published a version, a tree fetched
  * from the old one was named with the new one: a `mapId` its entries were not
  * read from. A hit now names the map the tree was read from, and asks the
@@ -120,7 +120,10 @@ function bundleStemFor(source: TocSource): string {
  *
  * Results are cached under the `ft-toc-v2` namespace, keyed on locale, product
  * and version — see {@link CacheKeySpaces} — with the map they were fetched
- * from (see {@link CachedToc}).
+ * from (see {@link CachedToc}), for `cacheTtl.toc`. Until 2026-09-28 that was
+ * `cacheTtl.article`, and nothing read `cacheTtl.toc`, though the README
+ * documents `CACHE_TTL_TOC`, which the Node server reads into it, as the TTL
+ * of a table of contents.
  */
 export async function fetchTableOfContents(
   ctx: ServerContext,
@@ -170,7 +173,7 @@ export async function fetchTableOfContents(
       resolvedLocale: resolved.resolvedLocale,
     };
 
-    await ctx.cache.set(key, cached, ctx.config.cacheTtl.article);
+    await ctx.cache.set(key, cached, ctx.config.cacheTtl.toc);
   }
 
   // ─── Pagination & token truncation ───────────────────────────

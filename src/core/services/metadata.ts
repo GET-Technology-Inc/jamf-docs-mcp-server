@@ -51,7 +51,9 @@ export interface DegradationStatus {
  * reads the publication axis first for exactly this, so one reply cannot pair
  * the registry's publications with the fallback's products (#335). A caller
  * with no such news leaves it unset, so an outage does not send it back to an
- * endpoint that has just failed. A real cached answer is served either way.
+ * endpoint that has just failed. A real availability map in the cache is
+ * served either way; a real product catalogue is never cached (see
+ * {@link CachedProductsMetadata}).
  */
 export interface MetadataReadOptions {
   revalidateFallback?: boolean;
@@ -145,13 +147,25 @@ function buildFallbackMetadata(productId: ProductId): ProductMetadata {
 // ============================================================================
 
 /**
- * What the products cache entry holds.
+ * What the products cache entry holds: a catalogue the registry outage forced,
+ * kept for a minute ({@link FALLBACK_TTL_MS}), and nothing else.
  *
- * The list alone is not enough: a caller has to be able to tell an answer
- * built from the live registry apart from one the registry outage forced, and
- * a cache hit is no different from a miss in that. So the flag is stored
- * *with* the value — a cache hit reports its provenance as accurately as a
- * miss does, for the minute a forced answer is kept ({@link FALLBACK_TTL_MS}).
+ * A catalogue the registry answered is not cached at all. It is built from the
+ * maps list the registry holds, on every call, so it is never older than that
+ * list, and the versions `list_products` gives under `products` are the ones
+ * it gives under `publications`. Cached apart from the list, on a clock of its
+ * own, it could outlive the list it was built from by up to its own TTL: until
+ * 2026-09-28 it was kept for the article TTL, so a version Jamf published
+ * showed under `publications` up to 24 hours before it showed under
+ * `products`. Building it costs no request, since the registry holds the list
+ * in memory, and about 0.14 ms over the 685 maps learn.jamf.com listed on
+ * 2026-09-28, less than the publication list `list_products` builds from the
+ * same maps on every call.
+ *
+ * The flag is stored *with* the value, as when real catalogues were cached
+ * too: a cache hit reports its provenance as accurately as a miss does. It
+ * also tells a fallback apart from a real catalogue an earlier build wrote
+ * under this key, which is read as a miss and expires unread.
  *
  * The key carries a `:v2` suffix because entries written by earlier versions
  * are a bare `ProductMetadata[]`. Bumping it retires those without any
@@ -181,7 +195,8 @@ function isCachedProductsMetadata(value: unknown): value is CachedProductsMetada
 }
 
 /**
- * Build (or fetch from cache) the product catalogue and its provenance.
+ * Build the product catalogue from the registry, or serve the fallback an
+ * outage forced, with its provenance.
  */
 async function loadProductsMetadata(
   ctx: ServerContext,
@@ -190,14 +205,15 @@ async function loadProductsMetadata(
 ): Promise<CachedProductsMetadata> {
   const log = ctx.logger.createLogger('metadata');
 
+  // Only a fallback is served from the cache: see CachedProductsMetadata.
   const cached = await ctx.cache.get<unknown>(PRODUCTS_CACHE_KEY);
-  if (isCachedProductsMetadata(cached) && !isStaleFallback(cached, options)) {
-    return cached;
+  const fallback = isCachedProductsMetadata(cached) && cached.degraded ? cached : null;
+  if (fallback !== null && !isStaleFallback(fallback, options)) {
+    return fallback;
   }
 
   const productIds = Object.keys(JAMF_PRODUCTS) as ProductId[];
   let products: ProductMetadata[];
-  let degraded = false;
 
   try {
     const registryProducts = await ctx.mapsRegistry.getProducts();
@@ -218,7 +234,7 @@ async function loadProductsMetadata(
 
       // Not a degradation: the registry answered, and it has nothing for this
       // product. That is a steady-state fact, identical on the next request,
-      // so it is as cacheable as any other answer.
+      // so it is as real an answer as any other.
       log.debug(`No registry entry for ${productId} (stem=${bundleStem}), using fallback`);
       return buildFallbackMetadata(productId);
     });
@@ -226,23 +242,23 @@ async function loadProductsMetadata(
     // This one *is* a degradation: the registry could not be reached at all,
     // and the whole catalogue is compiled-in constants standing in for it.
     log.error(`MapsRegistry failed, using static fallback: ${String(error)}`);
-    degraded = true;
-    products = productIds.map((productId) => buildFallbackMetadata(productId));
     // Not cached with the entry: see DegradationStatus.failure.
     if (status !== undefined) { status.failure = error; }
+    const entry: CachedProductsMetadata = {
+      products: productIds.map((productId) => buildFallbackMetadata(productId)),
+      degraded: true,
+    };
+    await ctx.cache.set(PRODUCTS_CACHE_KEY, entry, FALLBACK_TTL_MS);
+    return entry;
   }
 
-  const entry: CachedProductsMetadata = { products, degraded };
+  // The registry has answered since the fallback was cached, so a caller with
+  // no news of it, `jamf://products`, is not served it either.
+  if (fallback !== null) {
+    await ctx.cache.delete(PRODUCTS_CACHE_KEY);
+  }
 
-  // A real catalogue for the article TTL (24 hours by default); a forced one
-  // for a minute (FALLBACK_TTL_MS).
-  await ctx.cache.set(
-    PRODUCTS_CACHE_KEY,
-    entry,
-    degraded ? FALLBACK_TTL_MS : ctx.config.cacheTtl.article,
-  );
-
-  return entry;
+  return { products, degraded: false };
 }
 
 /**

@@ -72,7 +72,17 @@ export function parseSitemap(sourceOrXml: StaticDocSource | string, maybeXml?: s
   return out;
 }
 
-/** Fetch and cache a source's sitemap. */
+/**
+ * Fetch and cache a source's sitemap.
+ *
+ * The entry is read only for the source's tables of contents
+ * ({@link buildStaticToc}), so it is kept for `cacheTtl.toc`, as a Fluid
+ * Topics map's and a support.jamf.com collection's are. Until 2026-09-28 it
+ * was kept for `cacheTtl.products`, 7 days by default, while CACHE_TTL_TOC,
+ * documented as the TTL of a table of contents, did nothing. The title index
+ * search builds is an entry of its own, read from its own download of the
+ * same sitemap, and kept for `cacheTtl.products` as before.
+ */
 export async function loadSitemap(
   ctx: ServerContext,
   source: StaticDocSource,
@@ -83,7 +93,7 @@ export async function loadSitemap(
 
   const xml = await ctx.http.getText(`${source.baseUrl}/sitemap.xml`);
   const entries = parseSitemap(source, xml);
-  await ctx.cache.set(key, entries, ctx.config.cacheTtl.products);
+  await ctx.cache.set(key, entries, ctx.config.cacheTtl.toc);
   return entries;
 }
 
