@@ -166,10 +166,11 @@ describe('jamf_docs_get_toc tool', () => {
     // line for the whole page is printed here. The per-entry contentIds are
     // not — they would be a line's worth of tokens each against a truncation
     // budget computed from titles alone — and the footer says where to get
-    // them rather than leaving the workflow silently unreachable.
+    // them rather than leaving the workflow silently unreachable. It says so
+    // only of entries that have one: get-toc-footer-claims.test.ts.
     it('should show the map id in the summary line and point at where the contentIds live', async () => {
       vi.mocked(fetchTableOfContents).mockResolvedValueOnce(
-        buildTocResponse({ mapId: 'JAMF~PRO~MAP' })
+        buildTocResponse({ mapId: 'JAMF~PRO~MAP', toc: [createTocEntry({ contentId: 'content-1' })] })
       );
 
       const result = await client.callTool({

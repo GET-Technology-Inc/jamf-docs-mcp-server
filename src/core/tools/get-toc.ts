@@ -89,7 +89,11 @@ function formatTocCompact(
 interface TocFullFormatInput {
   productName: string;
   version: string;
-  /** Absent when the map could not be resolved; the header line then omits it. */
+  /**
+   * Absent for a concepts.jamf.com or support.jamf.com TOC, which has no map,
+   * and when a `TocProvider` names none. The header line then omits it, and
+   * the footer says nothing of the `mapId` + `contentId` pair.
+   */
   mapId: string | undefined;
   toc: TocEntry[];
   pagination: PaginationInfo;
@@ -109,11 +113,16 @@ interface TocFullFormatInput {
  * than `maxTokens` on its own, and the line says which, how much of it is
  * shown, and the budget that shows it whole — never one the schema rejects.
  * A `TocProvider` can report `truncated` without saying what it cut; that
- * gets the one piece of advice that holds for any cut.
+ * gets the one piece of advice that holds for any cut, unless the page was
+ * cut to the largest `maxTokens` the schema accepts. Until 2026-09-28 it
+ * advised increasing `maxTokens` there too, which no request can.
  */
 function truncationLine(tokenInfo: TokenInfo, truncatedEntry: TocTruncatedEntry | undefined): string {
   if (truncatedEntry === undefined) {
-    return 'TOC truncated due to token limit: entries on this page were left out. Increase `maxTokens` to see them.';
+    return tokenInfo.maxTokens < TOKEN_CONFIG.MAX_TOKENS_LIMIT
+      ? 'TOC truncated due to token limit: entries on this page were left out. Increase `maxTokens` to see them.'
+      : 'TOC truncated due to token limit: entries on this page were left out, and `maxTokens` is already ' +
+        `the largest it can be (${String(TOKEN_CONFIG.MAX_TOKENS_LIMIT)}).`;
   }
   const { title, shownEntries, totalEntries, estimatedTokens } = truncatedEntry;
   const cut = `"${sanitizeMarkdownText(title)}" is larger than \`maxTokens: ${String(tokenInfo.maxTokens)}\` on its own, ` +
@@ -122,6 +131,53 @@ function truncationLine(tokenInfo: TokenInfo, truncatedEntry: TocTruncatedEntry 
     ? `${cut} Repeat with \`maxTokens: ${String(estimatedTokens)}\` or more to see it whole; ` +
       'pages are cut to `maxTokens`, so it may then be on a different page.'
     : `${cut} It needs ${String(estimatedTokens)} tokens, more than \`maxTokens\` allows (${String(TOKEN_CONFIG.MAX_TOKENS_LIMIT)}).`;
+}
+
+/** Whether every entry on the page, at every depth, has a `contentId`, some do, or none. */
+function contentIdCoverage(toc: TocEntry[]): 'every' | 'some' | 'none' {
+  let withId = 0;
+  let without = 0;
+  const visit = (entries: TocEntry[]): void => {
+    for (const entry of entries) {
+      if (entry.contentId !== undefined && entry.contentId !== '') { withId++; } else { without++; }
+      visit(entry.children ?? []);
+    }
+  };
+  visit(toc);
+  if (withId === 0) { return 'none'; }
+  return without === 0 ? 'every' : 'some';
+}
+
+/**
+ * The footer line that says where the entries' `contentId`s are, or nothing.
+ *
+ * They are deliberately not rendered inline: at roughly a line's worth of
+ * tokens each they would push a full page past `maxTokens`, and the page is
+ * cut to `maxTokens` by its titles alone, so the reported token count would
+ * understate what was actually sent. They are carried in the JSON body and in
+ * `structuredContent.entries` instead, and this line says so.
+ *
+ * Until 2026-09-28 it closed every full TOC, whatever the source. A
+ * concepts.jamf.com or support.jamf.com TOC names no map, and none of its
+ * entries has a `contentId`: live, `jamf-concepts-guides` said it of its 56
+ * entries and `jamf-support-jamf-pro` of its 384, with neither half of the
+ * pair in the reply. It is now said only when it is so: the TOC names a map,
+ * and entries on this page have a `contentId` to pair with it. A
+ * `TocProvider` can give one to some entries and not others (its sections
+ * none, its articles one), and the line then says "where it has one".
+ */
+function contentIdLine(mapId: string | undefined, toc: TocEntry[]): string | undefined {
+  if (mapId === undefined || mapId === '') { return undefined; }
+  switch (contentIdCoverage(toc)) {
+    case 'none':
+      return undefined;
+    case 'every':
+      return '*Each entry\'s `contentId` — the other half of the `mapId` + `contentId` pair — is in the ' +
+        'structured output; request `responseFormat="json"` to see it inline.*';
+    case 'some':
+      return '*Each entry\'s `contentId`, where it has one, is the other half of the `mapId` + `contentId` ' +
+        'pair, and is in the structured output; request `responseFormat="json"` to see it inline.*';
+  }
 }
 
 /**
@@ -133,7 +189,7 @@ function formatTocFull(input: TocFullFormatInput): string {
   markdown += `**Version**: ${version} | **Page ${pagination.page} of ${pagination.totalPages}** | ${tokenInfo.tokenCount.toLocaleString()} tokens`;
   // Half of the `mapId` + `contentId` pair `jamf_docs_get_article` documents.
   // One line for the whole page, unlike the per-entry `contentId`s, which stay
-  // out of markdown — see the footer note below.
+  // out of markdown — see contentIdLine.
   if (mapId !== undefined && mapId !== '') {
     markdown += ` | **Map ID**: ${sanitizeMarkdownText(mapId)}`;
   }
@@ -155,12 +211,10 @@ function formatTocFull(input: TocFullFormatInput): string {
     markdown += `\n*${truncationLine(tokenInfo, truncatedEntry)}*`;
   }
   markdown += '\n\n*Use `jamf_docs_get_article` with any URL above to read the full content.*\n';
-  // Per-entry `contentId`s are deliberately not rendered inline: at roughly a
-  // line's worth of tokens each they would push a full page past `maxTokens`,
-  // and the truncation budget upstream is computed from titles alone, so the
-  // reported token count would understate what was actually sent. They are
-  // carried in the JSON body and in `structuredContent.entries` instead.
-  markdown += '*Each entry\'s `contentId` — the other half of the `mapId` + `contentId` pair — is in the structured output; request `responseFormat="json"` to see it inline.*\n';
+  const pairLine = contentIdLine(mapId, toc);
+  if (pairLine !== undefined) {
+    markdown += `${pairLine}\n`;
+  }
 
   return markdown;
 }
@@ -230,6 +284,18 @@ const TOOL_NAME = 'jamf_docs_get_toc';
  * text is `TocResponse`, which never did (checked through tools/call on
  * 2026-09-24: product, version, mapId, toc, tokenInfo, pagination). The Note
  * now says where they are instead.
+ *
+ * Until 2026-09-28 it also said `mapId` was omitted "when the map could not
+ * be resolved", and that each entry carries a `contentId`. A Fluid Topics
+ * TOC whose map cannot be resolved is an error, and since #358 a cached one
+ * names the map it was read from too. The TOCs with no `mapId` are the
+ * concepts.jamf.com and support.jamf.com ones, whose entries have no
+ * `contentId` either, and a `TocProvider`'s that names no map. The Note said
+ * "Markdown output shows the mapId only" until the same date, though compact
+ * markdown shows neither half. It does not tell a caller to read a
+ * concepts.jamf.com or support.jamf.com entry by its url: a support.jamf.com
+ * subcollection's url is a collection page, which jamf_docs_get_article
+ * cannot read.
  */
 const TOOL_DESCRIPTION = `Get the table of contents for Jamf documentation.
 
@@ -255,8 +321,9 @@ Returns:
   {
     "product": string,
     "version": string,
-    "mapId": string,   // omitted when the map could not be resolved
-    "toc": [...],      // each entry carries title, url and contentId
+    "mapId": string,   // absent for a concepts.jamf.com or support.jamf.com TOC,
+                       // and when a TOC provider names no map
+    "toc": [...],      // each entry: title, url, and contentId when from a map
     "tokenInfo": {
       "tokenCount": number,
       "truncated": boolean,
@@ -303,9 +370,11 @@ truncatedEntry.estimatedTokens is what the whole entry costs. If maxTokens
 makes more pages than page accepts (${PAGINATION_CONFIG.MAX_PAGE}), page ${PAGINATION_CONFIG.MAX_PAGE} offers no next
 page and paginationNote names a maxTokens that reaches the rest.
 The response-level mapId and an entry's contentId together form the pair
-jamf_docs_get_article accepts for a direct fetch. Markdown output shows the
-mapId only; use responseFormat="json" (or read structuredContent) for the
-per-entry contentIds.
+jamf_docs_get_article accepts for a direct fetch. Full markdown shows the
+mapId only, and compact markdown shows neither; use responseFormat="json" (or
+read structuredContent) for both. A concepts.jamf.com or support.jamf.com TOC
+has neither: it names no map, and its entries carry only title, url and
+children.
 structuredContent also carries what to send back for the next page:
 productId (or publicationId), version, language (when one was asked for) and
 maxTokens. The JSON text has no id or language, and has the budget as
