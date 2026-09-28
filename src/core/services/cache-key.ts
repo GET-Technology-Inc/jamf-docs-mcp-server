@@ -169,9 +169,21 @@ export interface CacheKeySpaces {
    * titles cased by `titleFromSlug`'s table as it was until 2026-09-28, when
    * 347 of the 1,638 live ones changed ("Apns Certificate and Jamf Now" is
    * now "APNs Certificate and Jamf Now"), and would go on showing the old
-   * casing for the same 7 days.
+   * casing for the same 7 days. v5 because v4 entries hold every title as
+   * its slug gives it, where since 2026-09-28 an entry holds the title the
+   * source lists the page by (`loadListedTitles`), all 894 of
+   * support.jamf.com's and concepts.jamf.com's in each locale, with the
+   * slug's beside it, and v4 entries would go on showing theirs for the same
+   * 7 days. v4 was in no release either (6.0.13 has v3), so from 6.0.13 this
+   * too is one move, not two.
    */
-  'static-search-index-v4': { source: string; locale: string };
+  'static-search-index-v5': { source: string; locale: string };
+  /**
+   * The titles one section of a static source lists for its pages on its
+   * index page, in one locale (`loadListedTitles`), in the order the page
+   * gives them, or why that page could not be read, for a minute.
+   */
+  'static-section-titles': { source: string; section: string; locale: string };
   /** An Intercom Help Center's top-level collections, per locale. */
   'intercom-collections': { source: string; locale: string };
   /**
@@ -179,7 +191,8 @@ export interface CacheKeySpaces {
    * a minute for a caller that asks (`listIntercomCollections`'
    * `rememberFailure`): the failure's message and code. `list_products` asks,
    * so that with support.jamf.com down each call does not wait again on the
-   * five pages it reads only for its rows' `locales`.
+   * five pages it reads only for its rows' `locales`, and so does a search
+   * title index, which reads a listing only for its articles' titles.
    */
   'intercom-collections-failure': { source: string; locale: string };
   /**
@@ -262,7 +275,8 @@ const CACHE_NAMESPACE_REGISTRY: {
   'glossary-content': true,
   'static-article-v2': true,
   'static-sitemap': true,
-  'static-search-index-v4': true,
+  'static-search-index-v5': true,
+  'static-section-titles': true,
   'intercom-collections': true,
   'intercom-collections-failure': true,
   'intercom-collection-toc-v3': true,

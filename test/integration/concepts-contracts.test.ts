@@ -31,12 +31,15 @@
  *
  * Cost, measured 2026-09-14: one sitemap (~6 KB) plus SAMPLE_SIZE pages,
  * CONCURRENCY at a time — a few seconds against the job's 5-minute timeout.
+ * Since 2026-09-28 each declared locale's two section index pages too, 16 of
+ * 108 to 181 KB, where the titles are listed (static-titles.ts).
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as cheerio from 'cheerio';
 import { parseSitemap, type SitemapEntry } from '../../src/core/services/sitemap-service.js';
 import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
+import { titlesOnIndexPage } from '../../src/core/services/static-titles.js';
 import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../src/core/constants/sources.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
@@ -79,6 +82,8 @@ interface Fetched {
 let xml: string;
 let entries: SitemapEntry[];
 let sampled: Fetched[];
+/** What each declared locale's section index pages title, keyed `{locale}/{section path}`. */
+let listedTitles: Map<string, Map<string, string>>;
 
 async function getText(url: string): Promise<string> {
   const response = await fetch(url, {
@@ -127,6 +132,13 @@ beforeAll(async () => {
       },
     },
   });
+  const indexes = Object.values(SOURCE.locales).flatMap(locale =>
+    SOURCE.sections.map(section => ({ locale, section })));
+  listedTitles = new Map(await mapLimit(indexes, async ({ locale, section }) => {
+    const html = await getText(canonicalStaticUrl(SOURCE, `${SOURCE.baseUrl}/${locale}/${section.path}`));
+    return [`${locale}/${section.path}`, new Map(titlesOnIndexPage(html, SOURCE, section, locale))] as const;
+  }));
+
   sampled = await mapLimit(sample, async (entry) => {
     const article = await fetchStaticArticle(ctx, SOURCE, entry.url);
     const html = served.get(canonicalStaticUrl(SOURCE, entry.url)) ?? '';
@@ -291,6 +303,35 @@ describe('concepts.jamf.com contracts', () => {
       'Something other than the page title is being read as the title: an ' +
       '<h1> outside the article, or one from further down its body.'
     ).toEqual([]);
+  });
+
+  /**
+   * A table of contents and a search title index title each page as its
+   * section's index page lists it (static-titles.ts): in the data the page
+   * streams into itself, under the key the section declares
+   * (`StaticSection.titleList`), found by the URL the sitemap gives the page.
+   * A page the listing does not title keeps the title its slug gives, without
+   * a word: in every locale but en, the English one. So this pins that the
+   * listing is still there and still names the sitemap's pages. Live, each
+   * declared locale's index pages titled every page of their section the
+   * sitemap lists: 56 guides and categories, and 37 tools (2026-09-28). A
+   * floor, not a count.
+   */
+  it('titles, on each section\'s index page, nearly every page of the section in every declared locale', () => {
+    for (const locale of Object.values(SOURCE.locales)) {
+      for (const section of SOURCE.sections) {
+        const titles = listedTitles.get(`${locale}/${section.path}`) ?? new Map<string, string>();
+        const pages = entries
+          .filter(entry => entry.segments[0] === locale && entry.segments[1] === section.path && entry.segments.length > 2)
+          .map(entry => entry.url);
+        const untitled = pages.filter(url => !titles.has(url));
+        expect(pages.length, `${locale}/${section.path} pages in the sitemap`).toBeGreaterThan(0);
+        expect(
+          untitled.length / pages.length,
+          `${locale}/${section.path} pages its index page does not title: ${untitled.slice(0, 10).join(', ')}`,
+        ).toBeLessThanOrEqual(0.1);
+      }
+    }
   });
 
   it('reads the breadcrumb trail off the guides that publish one', () => {

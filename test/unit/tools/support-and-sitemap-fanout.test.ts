@@ -33,6 +33,10 @@
  * Every page answers on a timer, as the TOC does in
  * article-toc-index-fanout.test.ts: calls made at once reach each page
  * within a few milliseconds of each other, well inside one request.
+ *
+ * Since 2026-09-28 a search title index and a concepts.jamf.com table of
+ * contents also read the pages the sites list their titles on
+ * (static-titles.ts), and calls made at once share those requests too.
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -51,6 +55,8 @@ import type { Logger } from '../../../src/core/services/interfaces/index.js';
 import type { FtClusteredSearchResponse, FtTocNode } from '../../../src/core/types.js';
 import { collectionIn, createSupportUpstream, homeUrl, listedUrl, nextDataPage } from '../../helpers/support-upstream.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
+import { SUPPORT_COLLECTIONS_BY_LOCALE } from '../../fixtures/support-collections-by-locale.js';
+import { conceptsIndexPages, conceptsIndexUrl } from '../../helpers/concepts-index-pages.js';
 
 interface TextContent { type: 'text'; text: string }
 
@@ -117,8 +123,12 @@ const ARTICLES: Readonly<Record<string, string>> = {
   }),
 };
 
-/** The pages served here rather than by support.jamf.com's stub. */
-const PAGES: Readonly<Record<string, string>> = { ...SITEMAPS, ...ARTICLES };
+/** The pages served here rather than by support.jamf.com's stub, concepts.jamf.com's index pages among them. */
+const PAGES: Readonly<Record<string, string>> = {
+  ...SITEMAPS,
+  ...ARTICLES,
+  ...Object.fromEntries(conceptsIndexPages()),
+};
 
 /** Learn.jamf.com's search, finding nothing: the other sites' matches are what is under test. */
 const NO_RESULTS: FtClusteredSearchResponse = {
@@ -213,6 +223,20 @@ async function atOnce(make: () => Promise<CallResult>): Promise<CallResult[]> {
 /** A collection's page as the reader requests it: the slug percent-encoded. */
 function collectionPage(code: string, id: string): string {
   return canonicalStaticUrl(SUPPORT, listedUrl(code, collectionIn(code, id)!));
+}
+
+/**
+ * The pages a search index in one language lists its titles from
+ * (static-titles.ts): support.jamf.com's home page and every collection page
+ * it lists, and concepts.jamf.com's two section index pages.
+ */
+function titleListings(code: string): string[] {
+  return [
+    homeUrl(code),
+    ...(SUPPORT_COLLECTIONS_BY_LOCALE[code] ?? []).map(collection => collectionPage(code, collection.id)),
+    conceptsIndexUrl(code, 'guides'),
+    conceptsIndexUrl(code, 'concepts'),
+  ];
 }
 
 /** Every warning the server logged, across its loggers. */
@@ -476,7 +500,12 @@ describe('a sitemap', () => {
     const results = await Promise.all(sections.map(async section =>
       [section, await atOnce(async () => await getToc(client, section))] as const));
 
-    expect(Object.fromEntries(requestCounts())).toEqual({ [CONCEPTS_SITEMAP]: 1 });
+    // And each section's index page, where its titles are listed.
+    expect(Object.fromEntries(requestCounts())).toEqual({
+      [CONCEPTS_SITEMAP]: 1,
+      [conceptsIndexUrl('en', 'guides')]: 1,
+      [conceptsIndexUrl('en', 'concepts')]: 1,
+    });
     for (const [section, replies] of results) {
       expect(alone.get(section)?.isError, section).not.toBe(true);
       for (const reply of replies) {
@@ -491,8 +520,9 @@ describe('a sitemap', () => {
 
     const results = await atOnce(async () => await search(client));
 
-    expect(requestCounts().get(CONCEPTS_SITEMAP)).toBe(1);
-    expect(requestCounts().get(SUPPORT_SITEMAP)).toBe(1);
+    // Every page the index lists its titles from, once too.
+    expect(Object.fromEntries(requestCounts())).toEqual(Object.fromEntries(
+      [CONCEPTS_SITEMAP, SUPPORT_SITEMAP, ...titleListings('en')].map(url => [url, 1])));
     for (const result of results) {
       expect(result.structuredContent).toEqual(alone.structuredContent);
     }
@@ -508,7 +538,10 @@ describe('a sitemap', () => {
 
     const results = await Promise.all(LANGUAGES.map(async ([language]) => [language, await search(client, language)] as const));
 
-    expect(Object.fromEntries(requestCounts())).toEqual({ [CONCEPTS_SITEMAP]: 1, [SUPPORT_SITEMAP]: 1 });
+    // And each language's title listings once: concepts.jamf.com has no de
+    // index page here, which costs only its titles.
+    expect(Object.fromEntries(requestCounts())).toEqual(Object.fromEntries(
+      [CONCEPTS_SITEMAP, SUPPORT_SITEMAP, ...LANGUAGES.flatMap(([, code]) => titleListings(code))].map(url => [url, 1])));
     for (const [language, result] of results) {
       const code = LANGUAGES.find(([id]) => id === language)?.[1] ?? '';
       expect(JSON.stringify(result.structuredContent)).toContain(`${CONCEPTS.baseUrl}/${code}/concepts/jamformer/`);
@@ -526,6 +559,9 @@ describe('a sitemap', () => {
     }
     expect((await getToc(client, 'jamf-concepts-guides')).isError).not.toBe(true);
 
-    expect(Object.fromEntries(requestCounts())).toEqual({ [CONCEPTS_SITEMAP]: 1, [SUPPORT_SITEMAP]: 1 });
+    // The get_toc reads nothing the en search has not: the sitemap, and the
+    // guides index page its titles are listed on.
+    expect(Object.fromEntries(requestCounts())).toEqual(Object.fromEntries(
+      [CONCEPTS_SITEMAP, SUPPORT_SITEMAP, ...LANGUAGES.flatMap(([, code]) => titleListings(code))].map(url => [url, 1])));
   });
 });

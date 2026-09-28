@@ -30,6 +30,15 @@ export interface StaticSection {
   readonly path: string;
   /** Title for listings. */
   readonly title: string;
+  /**
+   * Where the section's own index page, `{locale}/{path}/`, lists its pages'
+   * titles in that locale's language, in the data a Next.js page streams into
+   * itself (static-titles.ts): under `nav`, a tree of categories each listing
+   * its guides, which also gives their order (`navOrder`), or under
+   * `concepts`, a flat list, which gives none. Unset for a section whose
+   * index lists none, whose pages are titled from their slugs.
+   */
+  readonly titleList?: 'nav' | 'concepts';
 }
 
 export interface StaticDocSource {
@@ -103,7 +112,8 @@ export interface StaticDocSource {
    * the titles. Unset where each locale's slugs are in its own language, as
    * Intercom writes them. `titleFromSlug` is told which, so that a word it
    * spells as a term stays an ordinary word where the slug's language has one
-   * (a Spanish "os" is not "OS").
+   * (a Spanish "os" is not "OS"), and so that it keeps that language's minor
+   * words in lower case.
    */
   readonly slugLocale?: string;
   /**
@@ -208,10 +218,12 @@ export const STATIC_DOC_SOURCES = {
     // Each of the sitemap's ten locale codes lists the same 99 paths as en,
     // and a page's title is translated where its slug is not: the og:title of
     // /ja/guides/threat-and-risk-management/ is 脅威とリスク管理 (2026-09-28).
+    // Each section's index page lists those titles (`titleList`); a page it
+    // does not list is titled from its en slug.
     slugLocale: 'en',
     sections: [
-      { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides' },
-      { id: 'jamf-concepts-tools', path: 'concepts', title: 'Jamf Concepts: Open Source Tools' },
+      { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides', titleList: 'nav' },
+      { id: 'jamf-concepts-tools', path: 'concepts', title: 'Jamf Concepts: Open Source Tools', titleList: 'concepts' },
     ],
   },
 

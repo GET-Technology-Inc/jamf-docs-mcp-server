@@ -64,3 +64,16 @@ export function sanitizeErrorMessage(message: string): string {
 
   return sanitized;
 }
+
+/**
+ * Characters a title must not carry: the controls, of which a newline would
+ * end the Markdown list item a title is written into; the line and paragraph
+ * separators; and the bidi marks, embeddings, overrides and isolates, which
+ * reorder the text around them when it is displayed.
+ *
+ * A slug can spell any of them as an escape, which `titleFromSlug` keeps as
+ * written. A title a static source lists for a page is stripped of them
+ * (static-titles.ts), since 2026-09-28, when this moved here from
+ * sitemap-service.ts. `sanitizeMarkdownText` removes none of them.
+ */
+export const UNSAFE_IN_TITLE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;

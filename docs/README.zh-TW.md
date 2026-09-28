@@ -415,11 +415,13 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
   讀出，因此 `jamf_docs_list_products` 與 `jamf://products` 列出的產品與版本不會比它舊）；
   support.jamf.com 的 collection 清單；以及 `jamf_docs_search` 搜尋 concepts.jamf.com
   與 support.jamf.com 時使用的標題索引。map 清單的存放時間從取得時起算，稍後啟動、
-  從快取讀取它的伺服器也一樣。
+  從快取讀取它的伺服器也一樣。若建立標題索引時，列出其標題的頁面有無法讀取者，
+  該索引只保存一分鐘。
 - `CACHE_TTL_TOC`：`jamf_docs_get_toc` 與 `jamf://products/{productId}/toc` 提供的
   每一份目錄，不論是從 learn.jamf.com 的 map、concepts.jamf.com 的 sitemap，還是
-  support.jamf.com 的 collection 頁面讀出；以及文章 `navigation` 所依據的 map TOC
-  索引。術語表的詞條清單雖然也是從 map 的目錄讀出，但隨術語表沿用 `CACHE_TTL_ARTICLE`。
+  support.jamf.com 的 collection 頁面讀出；concepts.jamf.com 各區段索引頁列出的標題
+  （其目錄與標題索引所用）；以及文章 `navigation` 所依據的 map TOC 索引。術語表的
+  詞條清單雖然也是從 map 的目錄讀出，但隨術語表沿用 `CACHE_TTL_ARTICLE`。
 
 文章的 breadcrumb 與內部連結是在取得文章時由 map TOC 索引建立，隨文章保存
 `CACHE_TTL_ARTICLE` 的時間；`navigation` 則每次呼叫都從索引讀取。因此

@@ -1,10 +1,12 @@
 /**
  * Unit tests for searching the non-Fluid-Topics sources.
  *
- * The index is titles recovered from each source's sitemap, so these cover
- * what a path has to survive to become one: the locale segment, the section
+ * The index holds the pages each source's sitemap lists, so these cover what
+ * a path has to survive to become an entry: the locale segment, the section
  * index pages, the JS-only shells that are in the sitemap, and Intercom's
- * numeric id prefix.
+ * numeric id prefix. Nothing here serves the pages the sites list their
+ * titles on (static-titles.ts), so each title is made from its slug, as it
+ * is for a page no listing names.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -90,8 +92,13 @@ describe('loadStaticIndex', () => {
     await loadStaticIndex(ctx, CONCEPTS, 'en');
     await loadStaticIndex(ctx, CONCEPTS, 'en');
 
-    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
-    expect(mockHttpGetText).toHaveBeenCalledWith('https://concepts.jamf.com/sitemap.xml');
+    // And each section's index page, where its titles are listed
+    // (static-titles.ts): served the sitemap here, it lists none.
+    expect(mockHttpGetText.mock.calls.map(([url]) => url).sort()).toEqual([
+      'https://concepts.jamf.com/en/concepts/',
+      'https://concepts.jamf.com/en/guides/',
+      'https://concepts.jamf.com/sitemap.xml',
+    ]);
   });
 
   it('builds every locale\'s index from the one sitemap request get_toc\'s tree is built from', async () => {
@@ -106,7 +113,8 @@ describe('loadStaticIndex', () => {
 
     expect(en.map(e => e.title)).toEqual(['English']);
     expect(ja.map(e => e.title)).toEqual(['Japanese']);
-    expect(mockHttpGetText).toHaveBeenCalledTimes(1);
+    // Besides each locale's own section index pages.
+    expect(mockHttpGetText.mock.calls.filter(([url]) => url.endsWith('/sitemap.xml'))).toHaveLength(1);
   });
 });
 
