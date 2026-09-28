@@ -20,6 +20,7 @@ import {
 import type { FtSearchCluster, FtMapInfo, FtTocNode, FtMetadataEntry } from '../../src/core/types.js';
 import { JAMF_PRODUCTS, DOC_TYPE_LABEL_MAP } from '../../src/core/constants.js';
 import { deriveBundleStem } from '../../src/core/services/maps-registry.js';
+import { namedVersion } from '../../src/core/services/search-result-versions.js';
 import { classificationValuesFor, PRODUCT_IDS } from '../../src/core/constants.js';
 import type { ProductId } from '../../src/core/constants.js';
 import { createTestHttpClient } from '../helpers/mock-context.js';
@@ -721,7 +722,9 @@ describe('FT API data contracts', () => {
     it('Jamf Pro search entries carry ft:clusterId + version (the version-dedup precondition)', () => {
       // dedupeToLatestVersions groups by ft:clusterId and keeps the highest
       // version. If Jamf drops either field, dedup silently floods results with
-      // duplicate version snapshots.
+      // duplicate version snapshots. Since 2026-09-28 it reads a `version`
+      // only when it is a dotted version number (namedVersion), so a value in
+      // another form ("11", "11.32.0-beta") would do the same.
       const proEntries = searchClusters
         .flatMap(c => c.entries)
         .filter(e => e.topic?.metadata?.some(
@@ -736,6 +739,10 @@ describe('FT API data contracts', () => {
         const version = md.find(m => m.key === 'version')?.values[0] ?? '';
         expect(clusterId, 'Pro entry missing ft:clusterId — version dedup would break').toBeTruthy();
         expect(version, 'Pro entry missing version — version dedup would break').toBeTruthy();
+        expect(
+          namedVersion(version),
+          `Pro entry version "${version}" is not a dotted version number — version dedup would break`,
+        ).not.toBeNull();
         clusterIds.push(clusterId);
       }
       // At least one cluster id should repeat across version snapshots, proving the

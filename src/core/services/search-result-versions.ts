@@ -16,12 +16,12 @@
  * It collapses versions and nothing else. Several results for one topic at
  * one version, such as passages of one page or its `#fragment` and `?query`
  * variants, are not versions of it, and come back as the provider returned
- * them. There the Fluid Topics path, which keeps one entry per cluster,
- * differs. Jamf can list one page under several breadcrumbs, with an entry
- * for each at every version; in the queries measured, the ja-JP
- * "クライテリア オペレータ" (Criteria Operators) page, under four. Those four
- * come back as one result from Fluid Topics, and as four from a provider that
- * returns each entry.
+ * them. There the Fluid Topics path, which keeps one entry per topic
+ * (`mapId` + `contentId`) of a cluster, differs. Jamf can list one page under
+ * several breadcrumbs, with an entry for each at every version; in the
+ * queries measured, the ja-JP "クライテリア オペレータ" (Criteria Operators)
+ * page, under four. Those four come back as one result from Fluid Topics,
+ * and as four from a provider that returns each entry.
  *
  * @module
  */
@@ -122,9 +122,9 @@ function addressOf(url: URL): Address | null {
  *
  * No unversioned publication carries a version, so none is read (see below),
  * and each of their results passes through. Fluid Topics puts different
- * topics that share one url in one cluster, and so returns one of them (the
- * LAPS paper's "Use LAPS" and "Using LAPS in the Jamf Pro API"); here both
- * stay.
+ * topics that share one url in one cluster (the LAPS paper's "Use LAPS" and
+ * "Using LAPS in the Jamf Pro API"). Both stay, here as on the Fluid Topics
+ * path, which until 2026-09-28 returned only the first.
  *
  * A few topics carry a source path as their cluster id instead
  * (`JamfPro/Documentation/Topics/ja-jp_c_Criteria_Operators`). Each such
@@ -137,7 +137,8 @@ function addressOf(url: URL): Address | null {
  * version" would merge Connect's current pages with its 2.45.0 ones. Nor is a
  * `version` that is not a number a version. Two ja-JP Jamf Connect topics
  * carry Jamf's template text "Enter the latest product version for which the
- * topic was revised." there.
+ * topic was revised." there, and on 2026-09-28 so did four en-US
+ * technical-article sections.
  *
  * So a result with no version to read is not a version of anything. Nothing
  * is merged into it, and it is never merged away. The same goes for a url in
@@ -174,8 +175,11 @@ export function versionedTopicOf(result: SearchResult): VersionedTopic | null {
 /**
  * A `version` value that is a version number. Not the `current` alias, and
  * not whatever else a `version` field was left holding.
+ *
+ * The Fluid Topics path reads an entry's `version` metadata by this too
+ * (search-service.ts), so the two paths agree on what a version is.
  */
-function namedVersion(version: string | undefined): string | null {
+export function namedVersion(version: string | undefined): string | null {
   return version !== undefined && VERSION_NUMBER.test(version) ? version : null;
 }
 
