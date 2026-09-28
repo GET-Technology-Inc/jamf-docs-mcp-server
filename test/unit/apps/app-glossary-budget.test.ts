@@ -131,7 +131,10 @@ describe('the built bundle', () => {
   // Asserted on the compiled template, as the other bundle checks are: the
   // renderer is not importable. esbuild renames identifiers but keeps template
   // literals, so the layouts are recognisable by their markup.
-  const single = /<div class="prose">\$\{[\w$]+\([\w$]+\.definition\)\}<\/div>\s*\$\{([\w$]+)\}`;/.exec(APP_HTML);
+  // `markdown(only.definition, { copy: env.canCopy })`: the options argument
+  // since 2026-09-28, when the renderer moved to app-ui/markdown.ts.
+  const single = /<div class="prose">\$\{[\w$]+\([\w$]+\.definition,\{copy:[\w$]+\.canCopy\}\)\}<\/div>\s*\$\{([\w$]+)\}`;/
+    .exec(APP_HTML);
 
   it('ships the note, and renders it in the single-definition layout too', () => {
     expect(APP_HTML).toContain('none fits in the token budget this lookup was given');

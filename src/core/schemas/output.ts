@@ -293,7 +293,8 @@ export const ArticleOutputSchema = z.object({
    * neither the page nor its url says which edition it is. On a learn.jamf.com
    * topic, since the same day, it is the topic's own `ft:locale`: en-US for a
    * `language` Jamf does not publish the topic in. The MCP App says "Shown in
-   * …" when it is not the host's locale.
+   * …" when it is not the language the page was asked for in, or the host's
+   * locale is none a `language` value names (app-ui/language.ts).
    */
   contentLocale: z.string().optional(),
   /**

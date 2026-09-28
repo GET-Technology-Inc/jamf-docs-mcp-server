@@ -20,6 +20,7 @@
  */
 
 import { esc } from './escape.js';
+import { toolLocale } from './language.js';
 
 /** One other-source match, as `structuredContent.otherSources` carries it. */
 export interface OtherSourceHit {
@@ -140,7 +141,8 @@ function filtersOf(view: { filters?: unknown }): Record<string, unknown> {
 
 /**
  * The `jamf_docs_search` arguments that run a suggestion from a search with
- * no results: the suggestion, in the language the search ran in.
+ * no results: the suggestion, in the language the search ran in, and under
+ * its topic.
  *
  * A suggestion is made for that language: a query's Chinese and Japanese
  * words are suggested only in a language whose documentation has them (see
@@ -150,12 +152,37 @@ function filtersOf(view: { filters?: unknown }): Record<string, unknown> {
  * suggested "磁碟 加密 復原", which has 50 results in zh-TW and none in en-US,
  * so on an en-US host the suggestion found nothing too.
  *
- * The search's other filters are not sent: a suggestion is a broader search,
- * as it always was.
+ * Of the other filters, a suggestion keeps the one that cannot be why the
+ * search found nothing, and drops those that can:
+ *
+ * - `topic` is kept. The server applies it to what Fluid Topics found, and
+ *   sets it aside, saying so, when it would leave nothing, so it narrows a
+ *   suggestion's results to the topic the search was about and never empties
+ *   them. Live on 2026-09-28, "sso" in Jamf Teacher under the topic `sso`
+ *   found nothing and suggested "authentication", which has 10 results
+ *   under the topic and 50 without.
+ * - `product`, `version` and `docType` are dropped. Fluid Topics searches
+ *   under them and finds nothing outside them, and a suggestion is words,
+ *   made without asking what the documentation under them has, so where one
+ *   of them is why the search found nothing, a suggestion that kept it found
+ *   nothing again. The server's advice for a search under a product or a
+ *   version says first to remove it. Live that day, 12 suggestions from 8
+ *   searches with no results under a product found nothing in 8 cases under
+ *   all of the search's filters, in 6 under its product alone, and in none
+ *   under none of them:
+ *   "FileVault escrow" in Jamf Pro 10.1.0, at which Jamf publishes nothing,
+ *   suggested "encryption", which has 0 results there, 49 in Jamf Pro and 50
+ *   in all; "sso" in Jamf Teacher suggested "single sign-on", 0 in Jamf
+ *   Teacher and 51 in all. With no product filter, each result names its
+ *   product.
  */
 export function suggestionArgs(view: { filters?: unknown }, suggestion: string): Record<string, string> {
-  const { language } = filtersOf(view);
-  return { query: suggestion, ...(text(language) ? { language } : {}) };
+  const { topic, language } = filtersOf(view);
+  return {
+    query: suggestion,
+    ...(text(topic) ? { topic } : {}),
+    ...(text(language) ? { language } : {}),
+  };
 }
 
 /** A result too large for the budget on its own, as its page shows it. */
@@ -252,13 +279,41 @@ function ftId(value: unknown): value is string {
   return typeof value === 'string' && FT_ID.test(value);
 }
 
-/** The locale in a learn.jamf.com url's path, `/r/en-US/…` or `/en-US/bundle/…`. */
-function urlLocale(url: string): string | undefined {
+/**
+ * The sites whose urls start with a locale code of their own, `/ja/…`:
+ * `STATIC_SOURCE_HOSTNAMES` in src/core/constants/sources.ts, which the
+ * bundle does not carry.
+ */
+const CODED_SITES: ReadonlySet<string> = new Set(['concepts.jamf.com', 'support.jamf.com']);
+
+/**
+ * The tool locale a url names, or undefined when it names none: the one in
+ * a learn.jamf.com url's path, `/r/en-US/…` or `/en-US/bundle/…`, or the
+ * locale code a concepts.jamf.com or support.jamf.com url's path starts
+ * with, read as the server reads it: `ja` is ja-JP and `zh-TW` zh-TW, and
+ * concepts.jamf.com's `ko` and `pl`, which no `language` value names, are
+ * none.
+ *
+ * Until 2026-09-28 it read learn.jamf.com's form only, which was all
+ * {@link articleArgs} needs, since a concepts.jamf.com or support.jamf.com
+ * result has no pair to open it by. It now also says what a call with a url
+ * and no `language` asked for (see `asked` in app.ts).
+ */
+export function urlLocale(url: unknown): string | undefined {
+  if (typeof url !== 'string') {
+    return undefined;
+  }
+  let parsed: URL;
   try {
-    return /^\/(?:r\/)?([a-z]{2}-[A-Z]{2})(?:\/|$)/.exec(new URL(url).pathname)?.[1];
+    parsed = new URL(url);
   } catch {
     return undefined;
   }
+  const learn = /^\/(?:r\/)?([a-z]{2}-[A-Z]{2})(?:\/|$)/.exec(parsed.pathname)?.[1];
+  if (learn !== undefined || !CODED_SITES.has(parsed.hostname)) {
+    return learn;
+  }
+  return toolLocale(parsed.pathname.split('/')[1]);
 }
 
 /**

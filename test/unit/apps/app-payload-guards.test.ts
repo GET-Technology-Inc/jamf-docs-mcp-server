@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 
 import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
 import { esc } from '../../../app-ui/escape.js';
+import { inline } from '../../../app-ui/markdown.js';
 
 /** Mirrors `renderableText` in app-ui/app.ts. */
 function renderableText(value: unknown): value is string {
@@ -77,14 +78,10 @@ describe('section ids are stamped on a rendered-output match', () => {
    * sanitization). As logic, it asked whether two plain texts coincide when
    * the question is whether the heading was rendered *from* that title.
    *
-   * Mirrored rather than imported for the reason app-ui/escape.ts documents:
-   * importing app.ts runs its top-level wiring and throws outside a browser.
+   * `inline` itself, which is in app-ui/markdown.ts since 2026-09-28. Until
+   * then it was in app.ts, which throws on import outside a browser, and this
+   * test mirrored two of its rules.
    */
-  function inline(escaped: string): string {
-    return escaped
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  }
 
   it('matches a heading the renderer produced from that title', () => {
     const title = 'Jamf `recon` Requirements';

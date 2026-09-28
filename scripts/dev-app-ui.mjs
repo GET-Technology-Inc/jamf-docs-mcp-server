@@ -16,7 +16,8 @@
  * change up. Serving `app-ui/app.html` as a static file would serve a document
  * with no script in it at all.
  *
- * The second is live reload. `fs.watch` on `app-ui/` pushes an event down an
+ * The second is live reload. `fs.watch` on `app-ui/`, and on each file
+ * outside it that a bundle is built from, pushes an event down an
  * `EventSource`, and the harness reloads the frame — so the loop is "save,
  * look", with no click and no reconnect. Nothing is written to disk: esbuild
  * rebuilds into memory, which also means an interrupted run leaves no stray
@@ -54,6 +55,9 @@ const shared = {
   sourcemap: 'inline',
   write: false,
   logLevel: 'silent',
+  // What each build read, for `watchInputs`, by paths from the repo root.
+  metafile: true,
+  absWorkingDir: repo,
 };
 
 const appCtx = await context({
@@ -82,6 +86,7 @@ const harnessCtx = await context({
 async function bundle(ctx, label) {
   try {
     const result = await ctx.rebuild();
+    watchInputs(result.metafile);
     return result.outputFiles[0].text;
   } catch (error) {
     const message = (error.errors ?? [])
@@ -156,20 +161,64 @@ const server = createServer((req, res) => {
 // Coalesced because an editor save fires several `fs.watch` events for one
 // write, and each one would otherwise reload the frame mid-handshake.
 let pending = null;
-watch(uiDir, { recursive: true }, (_event, filename) => {
-  if (filename === null || /\.(ts|html|json|css)$/.test(filename) === false) {
-    return;
-  }
+function reload(changed) {
   clearTimeout(pending);
   pending = setTimeout(() => {
-    console.log(`↻ ${filename}`);
+    console.log(`↻ ${changed}`);
     for (const res of listeners) {
       res.write('event: rebuild\ndata: 1\n\n');
     }
   }, 60);
+}
+
+watch(uiDir, { recursive: true }, (_event, filename) => {
+  if (filename === null || /\.(ts|html|json|css)$/.test(filename) === false) {
+    return;
+  }
+  reload(filename);
 });
+
+/** Each directory outside app-ui/ that is watched, and the names in it a build read. */
+const watchedOutside = new Map();
+
+/**
+ * Watch the files outside app-ui/ that a build read, as app-ui/ is watched.
+ *
+ * The viewer bundles src/core/constants/locales.ts (app-ui/language.ts,
+ * since #377), and until 2026-09-28 an edit to it did not reload the frame.
+ * They are read off each build's metafile rather than listed here, so a file
+ * the viewer comes to import from src/ is watched from its next build on.
+ * node_modules is left out. A file is watched through its directory: an
+ * editor that saves by renaming a new file over the old one ends a watch on
+ * the file itself.
+ */
+function watchInputs(metafile) {
+  for (const input of Object.keys(metafile?.inputs ?? {})) {
+    const file = path.resolve(repo, input);
+    if (file.startsWith(`${uiDir}${path.sep}`) || file.split(path.sep).includes('node_modules')) {
+      continue;
+    }
+    const dir = path.dirname(file);
+    let names = watchedOutside.get(dir);
+    if (names === undefined) {
+      const watching = new Set();
+      names = watching;
+      watchedOutside.set(dir, watching);
+      watch(dir, (_event, filename) => {
+        if (filename !== null && watching.has(filename)) {
+          reload(path.relative(repo, path.join(dir, filename)));
+        }
+      });
+    }
+    names.add(path.basename(file));
+  }
+}
+
+// Built once now, so what they read is watched before a harness asks for them.
+await bundle(appCtx, 'app-ui/app.ts');
+await bundle(harnessCtx, 'app-ui/dev/harness.ts');
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Jamf docs viewer — dev harness\n  http://127.0.0.1:${PORT}\n`);
-  console.log('  Edit app-ui/*.ts and the frame reloads. Ctrl-C to stop.\n');
+  console.log('  Edit app-ui/, or a file of src/ it bundles, and the frame reloads. Ctrl-C to stop.\n');
 });

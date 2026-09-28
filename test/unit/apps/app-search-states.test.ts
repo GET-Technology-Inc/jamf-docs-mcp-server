@@ -173,11 +173,13 @@ describe('the built bundle', () => {
   it('shows a failed result from the host as an error view, and drops what the panel was doing', () => {
     // The same `seq` and `history` a result that did not fail resets: a panel
     // call still in flight must not draw over the error, and Back must not
-    // lead into what the host has moved on from.
+    // lead into what the host has moved on from. The view a result that did
+    // not fail shows is `asked(view, toolArguments)` since 2026-09-28: see
+    // app-translation-note.test.ts.
     expect(APP_HTML).toMatch(new RegExp(
       `\\.ontoolresult=([\\w$]+)=>\\{let ([\\w$]+)=${literal(errorTextFn)}\\(\\1\\);` +
       'if\\(\\2!==void 0\\)\\{([\\w$]+)\\+\\+,([\\w$]+)\\.length=0,([\\w$]+)\\(\\{kind:"error",message:\\2\\},!1\\);return\\}' +
-      '[^}]*&&\\(\\3\\+\\+,\\4\\.length=0,\\5\\([\\w$]+,!1\\)\\)\\}',
+      '[^}]*&&\\(\\3\\+\\+,\\4\\.length=0,\\5\\([\\w$]+\\([\\w$]+,[\\w$]+\\),!1\\)\\)\\}',
     ));
   });
 

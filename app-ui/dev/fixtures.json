@@ -2,7 +2,7 @@
   {
     "key": "search",
     "label": "Search — typical",
-    "why": "The common case: ten hits, breadcrumbs, mixed docTypes.",
+    "why": "The common case: ten hits of a product's documentation, each with its breadcrumb. Until 2026-09-28 this said their docTypes were mixed; all ten were documentation then too. \"Search — filter relaxed\" mixes documentation and training.",
     "tool": "jamf_docs_search",
     "arguments": {
       "query": "automated device enrollment",
@@ -14,7 +14,7 @@
       "filters": {
         "product": "jamf-pro"
       },
-      "totalResults": 47,
+      "totalResults": 50,
       "page": 1,
       "totalPages": 5,
       "limit": 10,
@@ -180,7 +180,7 @@
         {
           "title": "Creating or Editing a Computer PreStage Enrollment",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Computer_PreStage_Enrollment",
-          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
+          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment's General...",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
@@ -218,7 +218,7 @@
         {
           "title": "Creating or Editing a Mobile Device PreStage Enrollment",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Configuring_a_Mobile_Device_PreStage_Enrollment",
-          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment&#x27;s General...",
+          "snippet": "PreStage enrollments allow you to configure and...sidebar. On the PreStage enrollments page, do one of the following: Click New to create a new PreStage enrollment. Select an...new devices to the PreStage scope, select the Automatically assign new devices checkbox in the PreStage enrollment's General...",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
@@ -344,12 +344,12 @@
           "source": "Jamf Support Knowledge Base"
         },
         {
-          "title": "Setting Up Automated Device Enrollment in Jamf School",
+          "title": "Setting up Automated Device Enrollment in Jamf School",
           "url": "https://support.jamf.com/en/articles/11028768-setting-up-automated-device-enrollment-in-jamf-school",
           "source": "Jamf Support Knowledge Base"
         },
         {
-          "title": "Restoring iCloud Backup During Automated Device Enrollment ADE",
+          "title": "Restoring iCloud Backup During Automated Device Enrollment (ADE)",
           "url": "https://support.jamf.com/en/articles/11571202-restoring-icloud-backup-during-automated-device-enrollment-ade",
           "source": "Jamf Support Knowledge Base"
         }
@@ -374,7 +374,7 @@
         "product": "jamf-pro",
         "topic": "printers"
       },
-      "totalResults": 49,
+      "totalResults": 50,
       "page": 1,
       "totalPages": 5,
       "limit": 10,
@@ -687,7 +687,7 @@
         {
           "title": "Disk Encryption Category",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Disk_Encryption_Category",
-          "snippet": "...Validation (&quot;FileVault 2 Individual Key Validation&quot; criteria) Displays whether the personal (also known as &quot;individual&quot;) recovery key on a computer matches the personal recovery key escrowed for that computer in...If the PRK was escrowed using a Jamf Pro...a specified FileVault disk encryption...",
+          "snippet": "...Validation (\"FileVault 2 Individual Key Validation\" criteria) Displays whether the personal (also known as \"individual\") recovery key on a computer matches the personal recovery key escrowed for that computer in...If the PRK was escrowed using a Jamf Pro...a specified FileVault disk encryption...",
           "version": "11.32.0",
           "docType": "documentation",
           "mapId": "A4LI4vM0BILraYeOD89WGg",
@@ -748,7 +748,7 @@
       },
       "otherSources": [
         {
-          "title": "Enabling FileVault Encryption Using Jamf Now",
+          "title": "Enabling FileVault Encryption using Jamf Now",
           "url": "https://support.jamf.com/en/articles/11030979-enabling-filevault-encryption-using-jamf-now",
           "source": "Jamf Support Knowledge Base"
         },
@@ -791,7 +791,7 @@
       "results": [],
       "otherSources": [
         {
-          "title": "Enabling FileVault Encryption Using Jamf Now",
+          "title": "Enabling FileVault Encryption using Jamf Now",
           "url": "https://support.jamf.com/en/articles/11030979-enabling-filevault-encryption-using-jamf-now",
           "source": "Jamf Support Knowledge Base"
         },
@@ -814,6 +814,195 @@
     }
   },
   {
+    "key": "search-nothing",
+    "label": "Search — nothing matched",
+    "why": "A search with no results, no suggestion to run and no match on another site, so the view says \"Nothing matched.\" and gives no advice: \"xyzzyq\" has none of the three in en-US (live 2026-09-28). Until that day the harness had no such search.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "xyzzyq",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "xyzzyq",
+      "totalResults": 0,
+      "page": 1,
+      "totalPages": 0,
+      "limit": 10,
+      "hasMore": false,
+      "results": [],
+      "suggestions": []
+    }
+  },
+  {
+    "key": "search-training",
+    "label": "Search — training courses",
+    "why": "Jamf Training Catalog courses among the results, marked external: each opens in a browser rather than in the panel, and names trainingcatalog.jamf.com where an article shows its breadcrumb. The third result is one, so the inline view shows it (live 2026-09-28). Until that day the search dropped them.",
+    "tool": "jamf_docs_search",
+    "arguments": {
+      "query": "FileVault",
+      "docType": "training",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "query": "FileVault",
+      "filters": {
+        "docType": "training"
+      },
+      "totalResults": 18,
+      "page": 1,
+      "totalPages": 2,
+      "limit": 10,
+      "maxTokens": 5000,
+      "hasMore": true,
+      "results": [
+        {
+          "title": "Video: How to Troubleshoot FileVault Status in Jamf Pro",
+          "url": "https://learn.jamf.com/r/en-US/training-video-shorts-jamf-pro/How_to_Troubleshoot_FileVault_Status_in_Jamf_Pro",
+          "snippet": "...how to troubleshoot FileVault status in Jamf Pro. Jamf Pro can be used to enforce FileVault on managed computers and securely store recovery keys. This video provides a demonstration of how to troubleshoot FileVault status in Jamf Pro. Resources Jamf Pro Documentation - FileVault Management Jamf Pro...",
+          "docType": "training",
+          "mapId": "IevK7QeFZja2KotG9~RDrQ",
+          "contentId": "AoepGoOYyx7KFrSGSfQG4g",
+          "mapTitle": "Jamf Training and Support Videos: Jamf Pro",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Jamf Pro Training and Support Shorts",
+            "Video: How to Troubleshoot FileVault Status in Jamf Pro"
+          ]
+        },
+        {
+          "title": "Video: How to Use a FileVault Recovery Key in Jamf Now",
+          "url": "https://learn.jamf.com/r/en-US/training-video-shorts-jamf-now/How_to_Use_a_FileVault_Recovery_Key",
+          "snippet": "...FileVault using a recovery key stored in Jamf Now! Managed computers in Jamf Now can be encrypted with FileVault to protect their data from unauthorized access. However, if a computer needs to be unlocked, a recovery key can be used. This video covers how to find an encrypted computer's FileVault...",
+          "docType": "training",
+          "mapId": "H8VDEyejEO87Ebarib6qqA",
+          "contentId": "dAngdYCf7F4a97kT5J2Z~Q",
+          "mapTitle": "Jamf Training and Support Videos: Jamf Now",
+          "product": "Jamf Now",
+          "breadcrumb": [
+            "Jamf Now Training and Support Shorts",
+            "Video: How to Use a FileVault Recovery Key in Jamf Now"
+          ]
+        },
+        {
+          "title": "Administer FileVault with Jamf Pro",
+          "url": "https://trainingcatalog.jamf.com/administer-filevault-with-jamf-pro",
+          "snippet": "Enforce disk encryption and manage recovery keys with FileVault and Jamf Pro.",
+          "docType": "training",
+          "external": true,
+          "product": "Jamf Pro"
+        },
+        {
+          "title": "Identify Authentication Screens with FileVault and Jamf Connect",
+          "url": "https://trainingcatalog.jamf.com/identify-authentication-screens-with-filevault-and-jamf-connect",
+          "snippet": "Understand the login process with FileVault enabled. Determine how to configure Jamf Connect with FileVault enabled and identify authentication screens.",
+          "docType": "training",
+          "external": true,
+          "product": "Jamf Connect"
+        },
+        {
+          "title": "Lesson 2: Security Settings for Apple Devices",
+          "url": "https://learn.jamf.com/r/en-US/jamf-170-course-current/Lesson_2",
+          "snippet": "...be encrypted by enabling FileVault. A FileVault-encrypted computer can only be unlocked by a FileVault-enabled user or...payload and click FileVault. For the Enable FileVault switch, select Include. For Event to prompt FileVault enablement, select the...and complete the FileVault process. View the...",
+          "docType": "training",
+          "mapId": "YGPeGpLY~GqSgHNadbBCUA",
+          "contentId": "MJ6xYY1jg7U2_Q2_6e1sNg",
+          "mapTitle": "Jamf 170 Course",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Section 1: Apple Security",
+            "Lesson 2: Security Settings for Apple Devices"
+          ]
+        },
+        {
+          "title": "Practice Exam",
+          "url": "https://learn.jamf.com/r/en-US/jamf-170-course-current/Practice_Exam",
+          "snippet": "...Jamf Trust By enabling FileVault By setting a password...App Settings A FileVault-encrypted Mac can be unlocked by authenticating with a FileVault-enabled user account. What is the other method by which a FileVault-encrypted computer can...to open? Doorman FileVault XProtect Gatekeeper By default,...",
+          "docType": "training",
+          "mapId": "YGPeGpLY~GqSgHNadbBCUA",
+          "contentId": "sS~r2Swn_MTmKcCIjyRS7g",
+          "mapTitle": "Jamf 170 Course",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Practice Exam"
+          ]
+        },
+        {
+          "title": "Practice Exam Answers",
+          "url": "https://learn.jamf.com/r/en-US/jamf-170-course-current/Practice_Exam_Answers",
+          "snippet": "...Jamf Trust By enabling FileVault By setting a password...App Settings A FileVault-encrypted Mac can be unlocked by authenticating with a FileVault-enabled user account. What is the other method by which a FileVault-encrypted computer can...to open? Doorman FileVault XProtect Gatekeeper By default,...",
+          "docType": "training",
+          "mapId": "YGPeGpLY~GqSgHNadbBCUA",
+          "contentId": "Bqkvh7FnW9DI9jS4mJNKRg",
+          "mapTitle": "Jamf 170 Course",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Practice Exam Answers"
+          ]
+        },
+        {
+          "title": "Lesson 2: macOS System Settings",
+          "url": "https://learn.jamf.com/r/en-US/jamf-140-course-current/Lesson_2",
+          "snippet": "...or microphone access Screen recording FileVault Some settings are locked to prevent...system in the macOS section. Determine if FileVault is enabled on your computer. Navigate to System Settings > Privacy & Security. Scroll down to the Security section and find FileVault to see if it is enabled. Using...",
+          "docType": "training",
+          "mapId": "0hIorB_Kw29DgMb9ceQzfw",
+          "contentId": "yM9wRr6BtNK9gf64vPopDQ",
+          "mapTitle": "Jamf 140 Course",
+          "product": "Jamf Safe Internet",
+          "breadcrumb": [
+            "Section 1: Device Fundamentals",
+            "Lesson 2: macOS System Settings"
+          ]
+        },
+        {
+          "title": "Lesson 16: Device Groups",
+          "url": "https://learn.jamf.com/r/en-US/jamf-100-course-current/Lesson_16",
+          "snippet": "...the latest version of iOS installed Mac computers that do not have FileVault enabled iOS devices that have not updated inventory in more than two...the group. Create a smart computer group that finds all computers without FileVault enabled. Navigate to Computers > Smart Computer Groups. Click New to...",
+          "docType": "training",
+          "mapId": "rwZ~TKTGRZdL7OMZbgJ7sg",
+          "contentId": "CW~lc9wuDg5rXnULbJmNAg",
+          "mapTitle": "Jamf 100 Course",
+          "product": "Jamf Pro",
+          "breadcrumb": [
+            "Section 3: Jamf Pro Management",
+            "Lesson 16: Device Groups"
+          ]
+        },
+        {
+          "title": "Section 1 Review",
+          "url": "https://learn.jamf.com/r/en-US/jamf-140-course-current/Section_1_Review",
+          "snippet": "...a test iPad. (Lesson 1) On a test iPad, check for available updates and install them. (Lesson 1) On a test Mac, check the status of FileVault. (Lesson 2) On a test Mac, install the Mozilla Firefox web browser. (Lesson 3) Objectives recap Navigate the Settings app in iOS and iPadOS to customize a...",
+          "docType": "training",
+          "mapId": "0hIorB_Kw29DgMb9ceQzfw",
+          "contentId": "hIWs_2xZvHBNnToy3bgmdw",
+          "mapTitle": "Jamf 140 Course",
+          "product": "Jamf Safe Internet",
+          "breadcrumb": [
+            "Section 1: Device Fundamentals",
+            "Section 1 Review"
+          ]
+        }
+      ],
+      "otherSources": [
+        {
+          "title": "Cancel FileVault Enablement",
+          "url": "https://support.jamf.com/en/articles/11016666-cancel-filevault-enablement",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "FileVault Behavior with Jamf Connect",
+          "url": "https://support.jamf.com/en/articles/11003606-filevault-behavior-with-jamf-connect",
+          "source": "Jamf Support Knowledge Base"
+        },
+        {
+          "title": "Managing FileVault with Jamf School",
+          "url": "https://support.jamf.com/en/articles/11038269-managing-filevault-with-jamf-school",
+          "source": "Jamf Support Knowledge Base"
+        }
+      ],
+      "relevanceNote": "Results are ordered by relevance, as ranked by the Fluid Topics search API. The API returns no numeric relevance score, so none is included."
+    }
+  },
+  {
     "key": "search-other-sources",
     "label": "Search — other sources",
     "why": "Populates otherSources, the separate population the server refuses to interleave.",
@@ -824,13 +1013,21 @@
     },
     "structuredContent": {
       "query": "Jamf Pro API authentication",
-      "totalResults": 49,
+      "totalResults": 50,
       "page": 1,
       "totalPages": 5,
       "limit": 10,
       "maxTokens": 5000,
       "hasMore": true,
       "results": [
+        {
+          "title": "Jamf Pro API Authentication",
+          "url": "https://trainingcatalog.jamf.com/jamf-pro-api-authentication",
+          "snippet": "Learn how to create API roles and clients in Jamf Pro and use them to authenticate API commands in a script.",
+          "docType": "training",
+          "external": true,
+          "product": "Jamf Pro"
+        },
         {
           "title": "FIDO2 Authentication",
           "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/FIDO2_Authentication",
@@ -1144,48 +1341,11 @@
             "API Roles and Clients",
             "Creating an API Role"
           ]
-        },
-        {
-          "title": "Creating an API Client",
-          "url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Client",
-          "snippet": "You can create an API client in Jamf Pro to generate a client secret, which can then be used by the Jamf Pro API to generate access tokens. Requirements At least one API role created in Jamf Pro In Jamf Pro, click Settings in the sidebar. In the System section, click API roles and clients. Click the...",
-          "version": "11.32.0",
-          "docType": "documentation",
-          "mapId": "A4LI4vM0BILraYeOD89WGg",
-          "contentId": "Gzm_I7vshd9eh3SQH~T88w",
-          "mapTitle": "Jamf Pro Documentation 11.32.0",
-          "otherVersions": [
-            "11.31.0",
-            "11.30.0",
-            "11.29.0",
-            "11.28.0",
-            "11.27.0",
-            "11.26.0",
-            "11.25.0",
-            "11.24.0",
-            "11.23.0",
-            "11.22.0",
-            "11.21.0",
-            "11.20.0",
-            "11.19.0",
-            "11.18.0",
-            "11.17.0",
-            "11.16.0",
-            "11.15.0",
-            "11.14.0",
-            "11.13.0"
-          ],
-          "product": "Jamf Pro",
-          "breadcrumb": [
-            "System Settings",
-            "API Roles and Clients",
-            "Creating an API Client"
-          ]
         }
       ],
       "otherSources": [
         {
-          "title": "ADFS Federation and Jamf Connect Authentication Errors",
+          "title": "ADFS Federation and Jamf Connect Authentication errors",
           "url": "https://support.jamf.com/en/articles/11003570-adfs-federation-and-jamf-connect-authentication-errors",
           "source": "Jamf Support Knowledge Base"
         }
@@ -2953,7 +3113,7 @@
   {
     "key": "toc-shallow",
     "label": "TOC — small product",
-    "why": "A short flat TOC, where indentation carries nothing and the layout has to hold up anyway.",
+    "why": "A short TOC: 13 entries, two levels deep, on one page, so there is nothing to page and little to indent, and the layout has to hold up anyway. Until 2026-09-28 this said it was flat.",
     "tool": "jamf_docs_get_toc",
     "arguments": {
       "product": "jamf-routines",
@@ -3431,7 +3591,7 @@
   {
     "key": "article-zh",
     "label": "Article — zh-TW request",
-    "why": "A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. It does not reach the notice for an untranslated page, which reads contentLocale, and only an ArticleProvider sets that; until 2026-09-28 this said it returned en-US with a localeNote.",
+    "why": "A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. Its contentLocale, on a server that gives a learn.jamf.com topic one, is zh-TW, the language asked for, so it does not reach the notice for a page shown in another language than asked for: \"Article — no translation\" does. Until 2026-09-28 this said only an ArticleProvider set contentLocale, which a concepts.jamf.com or support.jamf.com page has too since #378, and before that that it returned en-US with a localeNote.",
     "tool": "jamf_docs_get_article",
     "arguments": {
       "url": "https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html",
@@ -3501,6 +3661,210 @@
       "tokenCount": 403,
       "sections": [],
       "truncated": false
+    }
+  },
+  {
+    "key": "article-untranslated",
+    "label": "Article — no translation",
+    "why": "A support.jamf.com article asked for in ja-JP, which Jamf publishes in en-US only, so it comes back in en-US, and contentLocale says so. The view says \"Shown in en-US\", and why: no translation for your locale on a ja-JP host, no ja-JP translation on an en-US one, and none for your locale available here on a ko-KR one, whose language the tools do not take. Until 2026-09-28 the view compared contentLocale with the host's locale, and the harness had no page that reached it.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now",
+      "language": "ja-JP",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "title": "Get Started with Jamf Now",
+      "url": "https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now",
+      "product": "Jamf Support Knowledge Base",
+      "lastUpdated": "2026-03-26",
+      "breadcrumb": [
+        "Jamf Now",
+        "App Management"
+      ],
+      "contentLocale": "en-US",
+      "content": "## Description\n\nIf you have a new Jamf Now account, we suggest following the steps in the Jamf Now documentation [Getting Started](https://learn.jamf.com/r/en-US/jamf-now-documentation/Getting_Started_with_Jamf_Now) guide to get your Jamf Now instance setup.\n\n## Getting Started\n\nThe guide provides links to progress through the steps you need to take in Jamf Now before enrolling devices for management:\n\n1. Integrating with Apple Push Notification Service\n2. Integrating with Automated Device Enrollment in Apple Business Manager or Apple School Manager\n3. Integrating with Volume Purchasing in Apple Business Manager or Apple School Manager\n4. Creating blueprints\n\n> Note: It is not obligatory to use Automated Device Enrollment or Volume Purchasing from Apple Business Manager or Apple School Manager, but doing so provides more management capabilities.\n\n---\n\n*Source: Jamf Support Knowledge Base (support.jamf.com). Troubleshooting and known-issue articles, edited separately from the product documentation on learn.jamf.com.*\n\n\n---\n*Note: Jamf does not publish this article in ja-JP. Showing the en-US edition instead.*\n",
+      "tokenCount": 282,
+      "sections": [
+        {
+          "id": "description",
+          "title": "Description",
+          "level": 2,
+          "tokenCount": 65
+        },
+        {
+          "id": "getting-started",
+          "title": "Getting Started",
+          "level": 2,
+          "tokenCount": 194
+        }
+      ],
+      "truncated": false
+    }
+  },
+  {
+    "key": "article-collection",
+    "label": "Article — support.jamf.com collection",
+    "why": "A support.jamf.com collection, read as the list of its articles. Their titles are written into links with markdown's characters escaped, as in \"\\(JCDS\\)\" and \"ENROLLMENT\\_STATUS\\_FAIL\", and the view shows each escaped character as itself. Until 2026-09-28 it showed each with its backslash.",
+    "tool": "jamf_docs_get_article",
+    "arguments": {
+      "url": "https://support.jamf.com/en/collections/12369024-jamf-pro",
+      "responseFormat": "json"
+    },
+    "structuredContent": {
+      "title": "Jamf Pro",
+      "url": "https://support.jamf.com/en/collections/12369024-jamf-pro",
+      "product": "Jamf Support Knowledge Base",
+      "contentLocale": "en-US",
+      "content": "Articles for managing devices using Jamf Pro.\n\n- [Grant Secure Token to Enable FileVault](https://support.jamf.com/en/articles/11584648-grant-secure-token-to-enable-filevault)\n- [Limiting \"Find My\" on iOS/iPadOS with Jamf Pro](https://support.jamf.com/en/articles/11730276-limiting-find-my-on-ios-ipados-with-jamf-pro)\n- [Jamf Pro computer extension attribute to collect OS language](https://support.jamf.com/en/articles/11731521-jamf-pro-computer-extension-attribute-to-collect-os-language)\n- [Jamf Teacher documentation for Jamf Pro](https://support.jamf.com/en/articles/11731608-jamf-teacher-documentation-for-jamf-pro)\n- [Deploying Apple Background Security Updates with DDM and Blueprints](https://support.jamf.com/en/articles/14125447-deploying-apple-background-security-updates-with-ddm-and-blueprints)\n- [Suppressing Rosetta Notifications with Jamf Pro Blueprints](https://support.jamf.com/en/articles/14809650-suppressing-rosetta-notifications-with-jamf-pro-blueprints)\n- [Jamf Pro 11.28.0 and 11.28.1 Releases](https://support.jamf.com/en/articles/15177900-jamf-pro-11-28-0-and-11-28-1-releases)\n- [Managing Session Timeouts for Jamf Pro](https://support.jamf.com/en/articles/15296850-managing-session-timeouts-for-jamf-pro)\n- [MFA Compatibility with Platform SSO and Microsoft Entra ID](https://support.jamf.com/en/articles/15290326-mfa-compatibility-with-platform-sso-and-microsoft-entra-id)\n- [Jamf Pro 11.29.0, 11.29.1, and 11.29.2 Releases](https://support.jamf.com/en/articles/15520000-jamf-pro-11-29-0-11-29-1-and-11-29-2-releases)\n- [Jamf Pro 11.30.x Releases](https://support.jamf.com/en/articles/15934810-jamf-pro-11-30-x-releases)\n\n## Self Service+\n\nSelf Service+ is an end user application for macOS that allows users to access content and updates that have been preconfigured in Jamf Pro.\n\n- [Self Service must be associated with Jamf Server](https://support.jamf.com/en/articles/10631329-self-service-must-be-associated-with-jamf-server)\n- [Self Service Crashes on Launch](https://support.jamf.com/en/articles/11030013-self-service-crashes-on-launch)\n- [Self Service Policy Icons Incorrect](https://support.jamf.com/en/articles/11030014-self-service-policy-icons-incorrect)\n- [Update Icon for Self Service Policy in Jamf Pro](https://support.jamf.com/en/articles/11030069-update-icon-for-self-service-policy-in-jamf-pro)\n- [App request with Self Service](https://support.jamf.com/en/articles/11032396-app-request-with-self-service)\n- [Self Service Header](https://support.jamf.com/en/articles/11032402-self-service-header)\n- [How to Apply \"Feature the app\" Category](https://support.jamf.com/en/articles/11032416-how-to-apply-feature-the-app-category)\n- [Create Custom Notifications for macOS Self Service](https://support.jamf.com/en/articles/11032419-create-custom-notifications-for-macos-self-service)\n- [Editing Self Service Description of Manually Added Mac App Store Apps Including iOS Apps](https://support.jamf.com/en/articles/11032427-editing-self-service-description-of-manually-added-mac-app-store-apps-including-ios-apps)\n- [Self Service - \"Failed to initialize the applications saved data\"](https://support.jamf.com/en/articles/11032447-self-service-failed-to-initialize-the-applications-saved-data)\n- [Jamf Pro Self Service showing \"There was an error enrolling your device: ENROLLMENT\\_STATUS\\_FAIL\"](https://support.jamf.com/en/articles/11032515-jamf-pro-self-service-showing-there-was-an-error-enrolling-your-device-enrollment_status_fail)\n- [Deploy Jamf Pro Self Service Notifications to Specific Users](https://support.jamf.com/en/articles/11032525-deploy-jamf-pro-self-service-notifications-to-specific-users)\n- [Clean Re-install of Self Service for macOS](https://support.jamf.com/en/articles/11032544-clean-re-install-of-self-service-for-macos)\n- [Jamf Pro Branding self service Icon](https://support.jamf.com/en/articles/11032548-jamf-pro-branding-self-service-icon)\n- [Self Service with MFA Auth Crashes Upon Login Due to Fido2 Auth Not Being Enabled in Jamf Pro](https://support.jamf.com/en/articles/11032558-self-service-with-mfa-auth-crashes-upon-login-due-to-fido2-auth-not-being-enabled-in-jamf-pro)\n- [Bundle Identifier for Self Service+](https://support.jamf.com/en/articles/11032599-bundle-identifier-for-self-service)\n- [Adding Jamf Protect to the Security Dashboard in Self Service+](https://support.jamf.com/en/articles/11038489-adding-jamf-protect-to-the-security-dashboard-in-self-service)\n- [Jamf Pro User unable to save Scripts](https://support.jamf.com/en/articles/11030543-jamf-pro-user-unable-to-save-scripts)\n- [Self Service Error - Can't Connect to Server after Jamf Pro Re-enrollment](https://support.jamf.com/en/articles/11032539-self-service-error-can-t-connect-to-server-after-jamf-pro-re-enrollment)\n- [Self Service Unable to Connect to Server on macOS Catalina \\(Jamf Pro 11.11+\\)](https://support.jamf.com/en/articles/11032569-self-service-unable-to-connect-to-server-on-macos-catalina-jamf-pro-11-11)\n- [SMTP Failure in Jamf Pro](https://support.jamf.com/en/articles/11032678-smtp-failure-in-jamf-pro)\n- [Missing MIME Type for In-House Ebooks on Window Servers](https://support.jamf.com/en/articles/11034103-missing-mime-type-for-in-house-ebooks-on-window-servers)\n- [Self Service+ 2.9.x Releases](https://support.jamf.com/en/articles/12401638-self-service-2-9-x-releases)\n- [Communication Errors with Self Service +](https://support.jamf.com/en/articles/16128039-communication-errors-with-self-service)\n- [Self Service+ Installation Troubleshooting on macOS](https://support.jamf.com/en/articles/16892835-self-service-installation-troubleshooting-on-macos)\n- [Uninstalling Self Service +](https://support.jamf.com/en/articles/16988414-uninstalling-self-service)\n- [Troubleshooting Self Service+ Slowness on iOS Devices](https://support.jamf.com/en/articles/17068611-troubleshooting-self-service-slowness-on-ios-devices)\n\n## API & Scripting\n\nAPI, Scripted Extension Attributes, Scripting, Webhooks, etc.\n\n- [Get JAMF computer inventory via API](https://support.jamf.com/en/articles/11729786-get-jamf-computer-inventory-via-api)\n\n## App Packaging & Distribution\n\nApp Installers, JCDS, Local Distribution Points, Other Cloud Distribution Points, Packaging, Patch Management\n\n- [Package Installations from Jamf Failing to Install with \"Authorization Required\"](https://support.jamf.com/en/articles/11024622-package-installations-from-jamf-failing-to-install-with-authorization-required)\n- [Create a Package in Composer with a PostInstall Script](https://support.jamf.com/en/articles/11028789-create-a-package-in-composer-with-a-postinstall-script)\n- [Setting OS Requirement for Packages in Jamf Pro](https://support.jamf.com/en/articles/11028806-setting-os-requirement-for-packages-in-jamf-pro)\n- [The Package Could Not Be Verified when Deployed from Jamf Pro](https://support.jamf.com/en/articles/11028921-the-package-could-not-be-verified-when-deployed-from-jamf-pro)\n- [Downloading and Installing Composer](https://support.jamf.com/en/articles/11028942-downloading-and-installing-composer)\n- [Deploy a .app file with Composer and Jamf Pro](https://support.jamf.com/en/articles/11029020-deploy-a-app-file-with-composer-and-jamf-pro)\n- [Autopkgr Resources](https://support.jamf.com/en/articles/11029044-autopkgr-resources)\n- [Package Installation Failing with \"There was an error.  Message has no content\"](https://support.jamf.com/en/articles/11034122-package-installation-failing-with-there-was-an-error-message-has-no-content)\n- [Upload failed: Undefined error when uploading packages to Jamf Pro](https://support.jamf.com/en/articles/11034126-upload-failed-undefined-error-when-uploading-packages-to-jamf-pro)\n- [Troubleshooting Jamf Pro Package Download Issues with JCDS](https://support.jamf.com/en/articles/11034130-troubleshooting-jamf-pro-package-download-issues-with-jcds)\n- [Troubleshooting Jamf Pro Package Upload Issues with the Jamf Cloud Distribution Service \\(JCDS\\)](https://support.jamf.com/en/articles/11034132-troubleshooting-jamf-pro-package-upload-issues-with-the-jamf-cloud-distribution-service-jcds)\n- [Attain a List of Packages From Your JCDS Using the GET Command With Jamf Pro API](https://support.jamf.com/en/articles/11034133-attain-a-list-of-packages-from-your-jcds-using-the-get-command-with-jamf-pro-api)\n- [Missing MD5 Error When Uploading Packages to JCDS](https://support.jamf.com/en/articles/11037623-missing-md5-error-when-uploading-packages-to-jcds)\n- [Retrieve a Package from the Jamf Cloud Distribution Point](https://support.jamf.com/en/articles/11037716-retrieve-a-package-from-the-jamf-cloud-distribution-point)\n- [No option to upload package in Jamf Pro](https://support.jamf.com/en/articles/11037815-no-option-to-upload-package-in-jamf-pro)\n- [\"Upload failed: undefined\" error when attempting to upload packages to Jamf Cloud Distribution Point](https://support.jamf.com/en/articles/11037826-upload-failed-undefined-error-when-attempting-to-upload-packages-to-jamf-cloud-distribution-point)\n- [File Replication with Jamf Sync for Jamf Pro Packages](https://support.jamf.com/en/articles/11037832-file-replication-with-jamf-sync-for-jamf-pro-packages)\n- [Package Uploads in Jamf Pro 11.4 and Later](https://support.jamf.com/en/articles/11037840-package-uploads-in-jamf-pro-11-4-and-later)\n- [How to Package, Upload, and Deploy Parallels  \"Single App Mode\" Desktop Feature with Jamf Pro](https://support.jamf.com/en/articles/11038470-how-to-package-upload-and-deploy-parallels-single-app-mode-desktop-feature-with-jamf-pro)\n- [Unable to Add Jamf Connect Package to Jamf Pro PreStage Enrollment](https://support.jamf.com/en/articles/11038502-unable-to-add-jamf-connect-package-to-jamf-pro-prestage-enrollment)\n- [Users prompted to installer older version of application from Jamf App Catalog](https://support.jamf.com/en/articles/11025100-users-prompted-to-installer-older-version-of-application-from-jamf-app-catalog)\n- [App installer stuck at \"in progress\" status with Jamf Pro](https://support.jamf.com/en/articles/11025112-app-installer-stuck-at-in-progress-status-with-jamf-pro)\n- [App Installer Network Information](https://support.jamf.com/en/articles/11034037-app-installer-network-information)\n- [New Computer Group Not Visible in Jamf App Catalog App's Target Group List](https://support.jamf.com/en/articles/11034040-new-computer-group-not-visible-in-jamf-app-catalog-app-s-target-group-list)\n- [Error message \"the app installer deployment status cannot be retrieved\" with Jamf Pro App Installers](https://support.jamf.com/en/articles/11034042-error-message-the-app-installer-deployment-status-cannot-be-retrieved-with-jamf-pro-app-installers)\n- [Errors after updating JetBrains Intellij IDEA Ultimate app using Jamf App Installers in Jamf Pro](https://support.jamf.com/en/articles/11038486-errors-after-updating-jetbrains-intellij-idea-ultimate-app-using-jamf-app-installers-in-jamf-pro)\n- [Disabling Self Service Update Notifications For Patch Management Patch Policies](https://support.jamf.com/en/articles/11024993-disabling-self-service-update-notifications-for-patch-management-patch-policies)\n- [Using The Patch Management Update Deadline](https://support.jamf.com/en/articles/11025049-using-the-patch-management-update-deadline)\n- [Mozilla Firefox Has An Extension Attribute Requiring Attention](https://support.jamf.com/en/articles/11025115-mozilla-firefox-has-an-extension-attribute-requiring-attention)\n- [Patch Management Title Not Available in Jamf Pro](https://support.jamf.com/en/articles/11025119-patch-management-title-not-available-in-jamf-pro)\n- [Microsoft Teams classic vs Microsoft Teams in Jamf Pro](https://support.jamf.com/en/articles/11025137-microsoft-teams-classic-vs-microsoft-teams-in-jamf-pro)\n- [Title Editor Instance loads to 400 Error](https://support.jamf.com/en/articles/11025143-title-editor-instance-loads-to-400-error)\n- [Unable to Export Patch Management Results to a .csv file ](https://support.jamf.com/en/articles/11025145-unable-to-export-patch-management-results-to-a-csv-file)\n- [Jamf Pro Patch Management Policy not Updating](https://support.jamf.com/en/articles/11025155-jamf-pro-patch-management-policy-not-updating)\n- [Using Patch management for packages that have separate installers for M1 and Intel processor](https://support.jamf.com/en/articles/11028799-using-patch-management-for-packages-that-have-separate-installers-for-m1-and-intel-processor)\n- [Composer Debug Logging](https://support.jamf.com/en/articles/10998441-composer-debug-logging)\n- [Downgrade Application Versions on Computers Managed by Jamf Pro](https://support.jamf.com/en/articles/11028786-downgrade-application-versions-on-computers-managed-by-jamf-pro)\n- [Download Older Versions of Composer from Jamf Account](https://support.jamf.com/en/articles/11029083-download-older-versions-of-composer-from-jamf-account)\n- [Find the Expiration Date of a Provisioning Profile](https://support.jamf.com/en/articles/11034112-find-the-expiration-date-of-a-provisioning-profile)\n- [Unable to Upload .ipa File](https://support.jamf.com/en/articles/11034110-unable-to-upload-ipa-file)\n- [App Installer Deployment Failed due to Restriction Blocking 'Mounting Disk Images'](https://support.jamf.com/en/articles/12062295-app-installer-deployment-failed-due-to-restriction-blocking-mounting-disk-images)\n- [Using Jamf Sync to Migrate Packages Between Cloud Distribution Points](https://support.jamf.com/en/articles/12870193-using-jamf-sync-to-migrate-packages-between-cloud-distribution-points)\n- [App Installers show indefinitely as in progress](https://support.jamf.com/en/articles/13862288-app-installers-show-indefinitely-as-in-progress)\n- [Jamf Connect Extension Attribute Requires Attention](https://support.jamf.com/en/articles/13933400-jamf-connect-extension-attribute-requires-attention)\n\n## Push Certificates\n\nAPNs, Push Proxy\n\n- [Push Certificate for Jamf Pro downloads as .cer file during renewal attempt](https://support.jamf.com/en/articles/11016566-push-certificate-for-jamf-pro-downloads-as-cer-file-during-renewal-attempt)\n- [Invalid Certificate Signing Request Error](https://support.jamf.com/en/articles/11016577-invalid-certificate-signing-request-error)\n- [Finding the Apple Account used for Push Certificate creation](https://support.jamf.com/en/articles/11016585-finding-the-apple-account-used-for-push-certificate-creation)\n- [Jamf Pro APNs renewal shows \"403 access denied\"](https://support.jamf.com/en/articles/11016591-jamf-pro-apns-renewal-shows-403-access-denied)\n- [\"You have uploaded an invalid file type\" when renewing Jamf Pro Push Certificate](https://support.jamf.com/en/articles/11016594-you-have-uploaded-an-invalid-file-type-when-renewing-jamf-pro-push-certificate)\n- [Renew your MDM Push Notification Certificate in Jamf Pro](https://support.jamf.com/en/articles/11016634-renew-your-mdm-push-notification-certificate-in-jamf-pro)\n- [Jamf Pro Push Proxy Certificate Expired -- Unable to Renew](https://support.jamf.com/en/articles/11032279-jamf-pro-push-proxy-certificate-expired-unable-to-renew)\n- [\"Incorrect Username or Password\" when creating Push Proxy in Jamf Pro](https://support.jamf.com/en/articles/11032299-incorrect-username-or-password-when-creating-push-proxy-in-jamf-pro)\n- [Push Certificate User Permissions Won't Save in Jamf Pro](https://support.jamf.com/en/articles/11032693-push-certificate-user-permissions-won-t-save-in-jamf-pro)\n\n## Apps & Books\n\neBooks, In-House Apps, VPP Token/Locations, VPP Licensing/Distribution\n\n- [App Version vs App Short Version in Jamf Pro Searches](https://support.jamf.com/en/articles/11032641-app-version-vs-app-short-version-in-jamf-pro-searches)\n- [Target Version on Mac App Deployment Missing in Jamf Pro](https://support.jamf.com/en/articles/11034036-target-version-on-mac-app-deployment-missing-in-jamf-pro)\n- [Jamf Pro App Deployment Status is Unqualified for Devices](https://support.jamf.com/en/articles/11034043-jamf-pro-app-deployment-status-is-unqualified-for-devices)\n- [App Updates within Jamf Pro](https://support.jamf.com/en/articles/11034048-app-updates-within-jamf-pro)\n- [What to do when apps do not appear in Jamf Pro](https://support.jamf.com/en/articles/11034053-what-to-do-when-apps-do-not-appear-in-jamf-pro)\n- [Manage an Unmanaged App with Jamf Pro](https://support.jamf.com/en/articles/11034054-manage-an-unmanaged-app-with-jamf-pro)\n- [Volume Content section vs Mobile Device Apps Section in Jamf Pro](https://support.jamf.com/en/articles/11034058-volume-content-section-vs-mobile-device-apps-section-in-jamf-pro)\n- [Install Applications Failed: \"The app with iTunes Store ID xxxx is already scheduled for management\"](https://support.jamf.com/en/articles/11034060-install-applications-failed-the-app-with-itunes-store-id-xxxx-is-already-scheduled-for-management)\n- [How to Reinstall Native iOS Apps to Devices](https://support.jamf.com/en/articles/11034061-how-to-reinstall-native-ios-apps-to-devices)\n- [Universal Applications License Location](https://support.jamf.com/en/articles/11034063-universal-applications-license-location)\n- [AppStore request \\(submitVPPRequest\\) Timed Out for Jamf Pro](https://support.jamf.com/en/articles/11034065-appstore-request-submitvpprequest-timed-out-for-jamf-pro)\n- [Uninstall iOS Apps When MDM Profile is Removed](https://support.jamf.com/en/articles/11034069-uninstall-ios-apps-when-mdm-profile-is-removed)\n- [Mobile Device App Record Accidentally Deleted from Jamf Pro](https://support.jamf.com/en/articles/11034076-mobile-device-app-record-accidentally-deleted-from-jamf-pro)\n- [How to Find the Bundle ID of an App on macOS or iOS](https://support.jamf.com/en/articles/11034093-how-to-find-the-bundle-id-of-an-app-on-macos-or-ios)\n\n---\n\n*[Content truncated due to token limit]*\n\n**Remaining sections:**\n  - Apple Business or Apple School Manager (~99 tokens)\n  - Apple Education Support (~113 tokens)\n  - Client Certificates (~233 tokens)\n  - Directory Services (~325 tokens)\n  - Enrollment (~1202 tokens)\n  - FileVault (~55 tokens)\n  - Jamf Apps (~841 tokens)\n  - Jamf Pro Migration/Cloud Upgrade (~434 tokens)\n  - Jamf Pro Settings (~778 tokens)\n  - Management Framework (~355 tokens)\n\n*...and 9 more sections*\n\n*Use the `section` parameter to retrieve specific sections.*",
+      "tokenCount": 4566,
+      "sections": [
+        {
+          "id": "self-service",
+          "title": "Self Service+",
+          "level": 2,
+          "tokenCount": 1062
+        },
+        {
+          "id": "api-scripting",
+          "title": "API & Scripting",
+          "level": 2,
+          "tokenCount": 52
+        },
+        {
+          "id": "app-packaging-distribution",
+          "title": "App Packaging & Distribution",
+          "level": 2,
+          "tokenCount": 1931
+        },
+        {
+          "id": "push-certificates",
+          "title": "Push Certificates",
+          "level": 2,
+          "tokenCount": 398
+        },
+        {
+          "id": "apps-books",
+          "title": "Apps & Books",
+          "level": 2,
+          "tokenCount": 2272
+        },
+        {
+          "id": "apple-business-or-apple-school-manager",
+          "title": "Apple Business or Apple School Manager",
+          "level": 2,
+          "tokenCount": 99
+        },
+        {
+          "id": "apple-education-support",
+          "title": "Apple Education Support",
+          "level": 2,
+          "tokenCount": 113
+        },
+        {
+          "id": "client-certificates",
+          "title": "Client Certificates",
+          "level": 2,
+          "tokenCount": 233
+        },
+        {
+          "id": "directory-services",
+          "title": "Directory Services",
+          "level": 2,
+          "tokenCount": 325
+        },
+        {
+          "id": "enrollment",
+          "title": "Enrollment",
+          "level": 2,
+          "tokenCount": 1202
+        },
+        {
+          "id": "filevault",
+          "title": "FileVault",
+          "level": 2,
+          "tokenCount": 55
+        },
+        {
+          "id": "jamf-apps",
+          "title": "Jamf Apps",
+          "level": 2,
+          "tokenCount": 841
+        },
+        {
+          "id": "jamf-pro-migration-cloud-upgrade",
+          "title": "Jamf Pro Migration/Cloud Upgrade",
+          "level": 2,
+          "tokenCount": 434
+        },
+        {
+          "id": "jamf-pro-settings",
+          "title": "Jamf Pro Settings",
+          "level": 2,
+          "tokenCount": 778
+        },
+        {
+          "id": "management-framework",
+          "title": "Management Framework",
+          "level": 2,
+          "tokenCount": 355
+        },
+        {
+          "id": "server-infrastrucutre",
+          "title": "Server & Infrastrucutre",
+          "level": 2,
+          "tokenCount": 114
+        },
+        {
+          "id": "sso-integrations",
+          "title": "SSO Integrations",
+          "level": 2,
+          "tokenCount": 86
+        },
+        {
+          "id": "gsx",
+          "title": "GSX",
+          "level": 2,
+          "tokenCount": 256
+        },
+        {
+          "id": "os-updates",
+          "title": "OS Updates",
+          "level": 2,
+          "tokenCount": 686
+        },
+        {
+          "id": "configuration-profiles",
+          "title": "Configuration Profiles",
+          "level": 2,
+          "tokenCount": 1203
+        },
+        {
+          "id": "jamf-pro-scoping-groups",
+          "title": "Jamf Pro Scoping Groups",
+          "level": 2,
+          "tokenCount": 319
+        },
+        {
+          "id": "local-account-management",
+          "title": "Local Account Management",
+          "level": 2,
+          "tokenCount": 208
+        },
+        {
+          "id": "endpoint-management",
+          "title": "Endpoint Management",
+          "level": 2,
+          "tokenCount": 1366
+        },
+        {
+          "id": "inventory-management",
+          "title": "Inventory Management",
+          "level": 2,
+          "tokenCount": 560
+        }
+      ],
+      "truncated": true
     }
   },
   {
@@ -3861,7 +4225,7 @@
   {
     "key": "glossary",
     "label": "Glossary lookup",
-    "why": "The fourth tool, which has an output schema and no view yet.",
+    "why": "The glossary view with one definition, which it shows as the answer: the term, its product and its definition, not a list of one. Until 2026-09-28 this said the tool had no view.",
     "tool": "jamf_docs_glossary_lookup",
     "arguments": {
       "term": "PreStage",

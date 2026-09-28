@@ -53,7 +53,7 @@ const CAPTURES = [
   {
     key: 'search',
     label: 'Search — typical',
-    why: 'The common case: ten hits, breadcrumbs, mixed docTypes.',
+    why: 'The common case: ten hits of a product\'s documentation, each with its breadcrumb. Until 2026-09-28 this said their docTypes were mixed; all ten were documentation then too. "Search — filter relaxed" mixes documentation and training.',
     tool: 'jamf_docs_search',
     args: { query: 'automated device enrollment', product: 'jamf-pro', responseFormat: 'json' },
   },
@@ -72,6 +72,20 @@ const CAPTURES = [
     args: { query: 'FileVault escrow', product: 'jamf-pro', version: '10.1.0', responseFormat: 'json' },
   },
   {
+    key: 'search-nothing',
+    label: 'Search — nothing matched',
+    why: 'A search with no results, no suggestion to run and no match on another site, so the view says "Nothing matched." and gives no advice: "xyzzyq" has none of the three in en-US (live 2026-09-28). Until that day the harness had no such search.',
+    tool: 'jamf_docs_search',
+    args: { query: 'xyzzyq', responseFormat: 'json' },
+  },
+  {
+    key: 'search-training',
+    label: 'Search — training courses',
+    why: 'Jamf Training Catalog courses among the results, marked external: each opens in a browser rather than in the panel, and names trainingcatalog.jamf.com where an article shows its breadcrumb. The third result is one, so the inline view shows it (live 2026-09-28). Until that day the search dropped them.',
+    tool: 'jamf_docs_search',
+    args: { query: 'FileVault', docType: 'training', responseFormat: 'json' },
+  },
+  {
     key: 'search-other-sources',
     label: 'Search — other sources',
     why: 'Populates otherSources, the separate population the server refuses to interleave.',
@@ -88,7 +102,7 @@ const CAPTURES = [
   {
     key: 'toc-shallow',
     label: 'TOC — small product',
-    why: 'A short flat TOC, where indentation carries nothing and the layout has to hold up anyway.',
+    why: 'A short TOC: 13 entries, two levels deep, on one page, so there is nothing to page and little to indent, and the layout has to hold up anyway. Until 2026-09-28 this said it was flat.',
     tool: 'jamf_docs_get_toc',
     args: { product: 'jamf-routines', responseFormat: 'json' },
   },
@@ -133,13 +147,31 @@ const CAPTURES = [
   {
     key: 'article-zh',
     label: 'Article — zh-TW request',
-    why: 'A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. It does not reach the notice for an untranslated page, which reads contentLocale, and only an ArticleProvider sets that; until 2026-09-28 this said it returned en-US with a localeNote.',
+    why: 'A zh-TW request for a page given by its en-US url. Jamf translates this page, so it comes back in zh-TW, with a note that the url was en-US: the CJK line-breaking case. Its contentLocale, on a server that gives a learn.jamf.com topic one, is zh-TW, the language asked for, so it does not reach the notice for a page shown in another language than asked for: "Article — no translation" does. Until 2026-09-28 this said only an ArticleProvider set contentLocale, which a concepts.jamf.com or support.jamf.com page has too since #378, and before that that it returned en-US with a localeNote.',
     tool: 'jamf_docs_get_article',
     args: {
       url: 'https://learn.jamf.com/en-US/bundle/jamf-pro-documentation-current/page/Smart_Groups.html',
       language: 'zh-TW',
       responseFormat: 'json',
     },
+  },
+  {
+    key: 'article-untranslated',
+    label: 'Article — no translation',
+    why: 'A support.jamf.com article asked for in ja-JP, which Jamf publishes in en-US only, so it comes back in en-US, and contentLocale says so. The view says "Shown in en-US", and why: no translation for your locale on a ja-JP host, no ja-JP translation on an en-US one, and none for your locale available here on a ko-KR one, whose language the tools do not take. Until 2026-09-28 the view compared contentLocale with the host\'s locale, and the harness had no page that reached it.',
+    tool: 'jamf_docs_get_article',
+    args: {
+      url: 'https://support.jamf.com/en/articles/10631322-get-started-with-jamf-now',
+      language: 'ja-JP',
+      responseFormat: 'json',
+    },
+  },
+  {
+    key: 'article-collection',
+    label: 'Article — support.jamf.com collection',
+    why: 'A support.jamf.com collection, read as the list of its articles. Their titles are written into links with markdown\'s characters escaped, as in "\\(JCDS\\)" and "ENROLLMENT\\_STATUS\\_FAIL", and the view shows each escaped character as itself. Until 2026-09-28 it showed each with its backslash.',
+    tool: 'jamf_docs_get_article',
+    args: { url: 'https://support.jamf.com/en/collections/12369024-jamf-pro', responseFormat: 'json' },
   },
   {
     key: 'article-sections',
@@ -173,7 +205,7 @@ const CAPTURES = [
   {
     key: 'glossary',
     label: 'Glossary lookup',
-    why: 'The fourth tool, which has an output schema and no view yet.',
+    why: 'The glossary view with one definition, which it shows as the answer: the term, its product and its definition, not a list of one. Until 2026-09-28 this said the tool had no view.',
     tool: 'jamf_docs_glossary_lookup',
     args: { term: 'PreStage', responseFormat: 'json' },
   },
