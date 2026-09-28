@@ -138,8 +138,13 @@ describe('titleFromSlug on a percent-encoded slug', () => {
   });
 
   it('keeps the digits of a Latin run with it, as a word keeps them', () => {
-    expect(titleFromSlug('2fa')).toBe('2fa');
-    expect(titleFromSlug(encoded('2faで'))).toBe('2faで');
+    // Cased as the word would be, table and all: without its digit the run
+    // would be `fa`, and come out "2Faで".
+    expect(titleFromSlug('2fa')).toBe('2FA');
+    expect(titleFromSlug(encoded('2faで'))).toBe('2FAで');
+    // A word the table does not hold, whose first character has no case.
+    expect(titleFromSlug('4k')).toBe('4k');
+    expect(titleFromSlug(encoded('4kで'))).toBe('4kで');
   });
 
   it('still cases a word in one script as one word, whichever script', () => {

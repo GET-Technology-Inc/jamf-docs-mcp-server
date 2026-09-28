@@ -115,7 +115,7 @@ describe('what the other sources matched reaches every channel', () => {
       expect(reply.text).toMatch(/^No results found for "jamformer"/);
       expect(reply.text).toContain(
         '\n---\n\n## Also found outside the product documentation\n\n**Jamf Concepts**\n\n' +
-        `- [Jamformer](${CONCEPTS_MATCH.jamformer.url})\n\n${NO_RESULTS_CAVEAT}\n`,
+        `- [jamformer](${CONCEPTS_MATCH.jamformer.url})\n\n${NO_RESULTS_CAVEAT}\n`,
       );
       // The caveat under results that were ranked. There are none here.
       expect(reply.text).not.toContain('ranked separately from the results above');

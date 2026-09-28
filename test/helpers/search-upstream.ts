@@ -52,7 +52,8 @@ const CONCEPTS_SITEMAP_XML = '<urlset>'
 /** The other-source match each of those queries gets, as structuredContent carries it. */
 export const CONCEPTS_MATCH = {
   jamformer: {
-    title: 'Jamformer',
+    // Lower case, as the site titles it (2026-09-28).
+    title: 'jamformer',
     url: 'https://concepts.jamf.com/en/concepts/jamformer/',
     source: 'Jamf Concepts',
   },
