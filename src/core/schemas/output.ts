@@ -56,8 +56,10 @@ export const ProductListOutputSchema = z.object({
      * support.jamf.com collection (`jamf-support-*`), the locales whose home
      * page lists it: until 2026-09-28 every such row named all six locales
      * the site publishes in, and 32 of those 54 pairs have no translation.
-     * `jamf_docs_get_toc` still serves either kind in its site's other
-     * languages, as the en-US edition with a `localeNote`.
+     * `jamf_docs_get_toc` serves any publication in every other language
+     * `language` accepts, as the en-US edition with a `localeNote`. (Until
+     * 2026-09-28 a Jamf Concepts or support.jamf.com publication in a
+     * language its site does not publish at all was an error.)
      */
     locales: z.array(z.string()),
     versions: z.array(z.string()),

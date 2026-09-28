@@ -142,8 +142,8 @@ is strict, so an unrecognised key is rejected
 
 Each publication's `locales` are the languages Jamf publishes it in. For a
 `jamf-support-*` publication, they are the languages whose support.jamf.com home
-page lists it. `jamf_docs_get_toc` serves a publication in another of its site's
-languages as the en-US edition, with a `localeNote`.
+page lists it. `jamf_docs_get_toc` serves a publication in any other language as
+its en-US edition, with a `localeNote`.
 
 If a source cannot be read, the reply lists what it could and says so:
 `incomplete` names each unavailable source, and the markdown reply says the same
@@ -218,7 +218,7 @@ passing both, or neither, is an error. (Before 5.1, `product` was required and
 | `product` | string | — | Product ID (see supported products below) |
 | `publication` | string (1–200 chars) | — | Bundle family ID of one publication, e.g. `jamf-pro-release-notes` or `technical-paper-laps`. `jamf_docs_list_products` lists them |
 | `version` | string | latest | Specific version to fetch (e.g., `"11.13.0"`) or `"current"` |
-| `language` | string | `en-US` | Documentation language/locale |
+| `language` | string | `en-US` | Documentation language/locale. A product or publication Jamf does not publish in it is served as its en-US edition, with a `localeNote` |
 | `page` | number (1–100) | `1` | Page number for paginated TOC |
 | `maxTokens` | number (100–50000) | `5000` | Maximum tokens in response |
 | `outputMode` | `"full"` \| `"compact"` | `"full"` | Use `"compact"` for a flat list without nested children |

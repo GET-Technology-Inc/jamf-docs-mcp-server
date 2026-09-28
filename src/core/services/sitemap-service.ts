@@ -317,11 +317,12 @@ export async function fetchStaticToc(
 
   return {
     ...paginateTocEntries(allToc, page, maxTokens),
-    // The locale that answered is the one asked for: unlike Fluid Topics,
-    // where a family may exist in en-US only, a static section either
-    // publishes the locale or `resolveTocSource` refused before reaching here.
-    // Live, each of concepts.jamf.com's ten locale codes lists the same 99
-    // pages (2026-09-28).
+    // The locale that answered is the one `sourceLocale` names. `get_toc`
+    // passes the default locale's code for a locale the source does not
+    // publish, so it is reported as that one, and `localeNote` says so. A
+    // locale the source does publish has every section: live, each of
+    // concepts.jamf.com's ten locale codes lists the same 99 pages
+    // (2026-09-28).
     //
     // Reported as this server's id, as every other path reports it, because
     // `get_toc` compares it with the `language` it was asked in. Until

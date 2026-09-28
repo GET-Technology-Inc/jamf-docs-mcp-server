@@ -10,7 +10,10 @@
  * the source's locale table; `ko` and `pl` are not, since no `language`
  * value names them. The other three `language` values, th-TH, it-IT and
  * pt-BR, have no edition: `/th/`, `/th-TH/`, `/it/`, `/it-IT/`, `/pt/` and
- * `/pt-BR/` all answer 404.
+ * `/pt-BR/` all answer 404. Those get the en edition with a `localeNote`, as
+ * a Fluid Topics publication with no map in the language does. Until
+ * 2026-09-28 they were an error: "Jamf Concepts does not publish in th-TH.
+ * Available: en-US, ja-JP, de-DE, es-ES, fr-FR, nl-NL, zh-TW, zh-CN."
  *
  * The sitemap path reported the site's own code (`ja`) as the locale that
  * answered, and `get_toc` compared that with the `language` it was asked in
@@ -195,22 +198,39 @@ describe('jamf_docs_get_toc: a concepts.jamf.com section in a language the site 
     expect([...UNPUBLISHED].sort()).toEqual(['it-IT', 'pt-BR', 'th-TH']);
   });
 
-  const cases = SECTIONS.flatMap(([publication]) =>
-    UNPUBLISHED.map(language => [publication, language] as const));
+  const cases = SECTIONS.flatMap(([publication, path]) =>
+    UNPUBLISHED.map(language => [publication, language, path] as const));
 
-  it.each(cases)('answers %s in %s with an error naming the languages it is in', async (publication, language) => {
-    for (const responseFormat of ['json', 'markdown'] as const) {
-      const result = await getToc(publication, language, responseFormat);
+  it.each(cases)('serves %s in %s as the en edition, and says so', async (publication, language, path) => {
+    const json = await getToc(publication, language, 'json');
+    const markdown = await getToc(publication, language, 'markdown');
 
-      expect(result.isError).toBe(true);
-      // This server's ids, the ones `language` accepts, and never the site's
-      // own codes, which no request can send.
-      expect(textOf(result)).toBe(
-        `${CONCEPTS.name} does not publish in ${language}. ` +
-        `Available: ${PUBLISHED.map(([id]) => id).join(', ')}.`,
-      );
-    }
-    // Refused before the sitemap is read.
-    expect(requests).toEqual([]);
+    expect(json.isError, textOf(json)).not.toBe(true);
+    expect(markdown.isError, textOf(markdown)).not.toBe(true);
+    expect(editionsOf(json)).toEqual(['en']);
+    expect((json.structuredContent?.entries as { url: string }[]).every(entry =>
+      new URL(entry.url).pathname.startsWith(`/en/${path}/`))).toBe(true);
+    // The language to send back with the next page is still the one asked in.
+    expect(json.structuredContent?.language).toBe(language);
+    expect(markdown.structuredContent?.language).toBe(language);
+    // The note every other path gives an edition in another language, on all
+    // three channels, naming this server's id for the edition, never `en`.
+    const note = `Jamf does not publish this document in ${language}. Showing the en-US edition instead.`;
+    expect(json.structuredContent?.localeNote).toBe(note);
+    expect((JSON.parse(textOf(json)) as Record<string, unknown>).localeNote).toBe(note);
+    expect(markdown.structuredContent?.localeNote).toBe(note);
+    expect(textOf(markdown)).toContain(`> **Language Note:** ${note}`);
+    // Read from the sitemap an en-US request reads, once.
+    expect(requests).toEqual([`${ORIGIN}/sitemap.xml`]);
+  });
+
+  it.each(cases)('lists %s in %s exactly as it lists it in en-US', async (publication, language) => {
+    const asked = await getToc(publication, language, 'json');
+    const english = await getToc(publication, 'en-US', 'json');
+
+    const apartFrom = (reply: CallResult, ...keys: string[]): Record<string, unknown> =>
+      Object.fromEntries(Object.entries(reply.structuredContent ?? {}).filter(([key]) => !keys.includes(key)));
+    expect(apartFrom(asked, 'language', 'localeNote')).toEqual(apartFrom(english, 'language'));
+    expect(asked.structuredContent?.totalEntries).toBeGreaterThan(0);
   });
 });
