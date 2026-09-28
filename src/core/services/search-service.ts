@@ -40,6 +40,7 @@ import type { MapsRegistry } from './maps-registry.js';
 import { describeMapsListFailure } from './maps-list-failure.js';
 import { cleanSnippet, titleProductSnippet } from './content-parser.js';
 import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import type { ProductId } from '../constants.js';
 import { extractBundleStemFromUrl } from '../utils/url.js';
 import { getMetaValue, getMetaValues, FT_META } from '../utils/ft-metadata.js';
@@ -1748,7 +1749,14 @@ async function resolveSearchResults(
       filters,
     };
     const key = buildSearchCacheKey(request);
+    // One request for these results however many searches want them at once
+    // (load-once.ts). Until 2026-09-28 each search made its own: five at once
+    // for one query made five, offline and live.
+    return await loadOnce(ctx.cache, key, async () => await readOrSearch(request, key));
+  };
 
+  /** The cached results for `request`, or the ones fetched and stored: the load `fetchFiltered` shares. */
+  const readOrSearch = async (request: FtSearchRequest, key: CacheKey): Promise<SearchResultWithMeta[]> => {
     const cached = await ctx.cache.get<SearchResultWithMeta[]>(key);
     if (cached !== null) {
       log.debug(`Search cache hit: key="${key}", ${cached.length} results`);
@@ -1757,7 +1765,7 @@ async function resolveSearchResults(
 
     log.debug(
       `FT search: query="${request.query}", product=${params.product ?? 'all'}, ` +
-      `locale=${locale}, filters=${JSON.stringify(filters)}`
+      `locale=${locale}, filters=${JSON.stringify(request.filters)}`
     );
 
     const ftResponse: FtClusteredSearchResponse = await ftSearch(ctx.http, request)

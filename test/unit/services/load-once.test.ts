@@ -18,12 +18,15 @@ import { loadStaticIndex } from '../../../src/core/services/static-search-servic
 import { loadListedTitles } from '../../../src/core/services/static-titles.js';
 import { fetchStaticArticle } from '../../../src/core/services/static-article-service.js';
 import { fetchTableOfContents } from '../../../src/core/services/toc-service.js';
+import { loadMapToc } from '../../../src/core/services/ft-internal-link.js';
+import { fetchArticleFromFt } from '../../../src/core/services/article-service.js';
+import { searchDocumentation } from '../../../src/core/services/search-service.js';
 import { cacheKey, type CacheKey } from '../../../src/core/services/cache-key.js';
 import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../../src/core/constants/sources.js';
 import { HttpError, type HttpClient } from '../../../src/core/http-client.js';
 import type { CacheProvider } from '../../../src/core/services/interfaces/cache.js';
 import type { ServerContext } from '../../../src/core/types/context.js';
-import type { FtTocNode } from '../../../src/core/types.js';
+import type { FtClusteredSearchResponse, FtTocNode, FtTopicInfo } from '../../../src/core/types.js';
 import { createMockCache, createMockContext, createStubMapsRegistry } from '../../helpers/mock-context.js';
 import { collectionIn, createSupportUpstream, homeUrl, listedUrl, nextDataPage } from '../../helpers/support-upstream.js';
 import { CONCEPTS_GUIDE_HTML, CONCEPTS_GUIDE_URL } from '../../fixtures/concepts-guide-page.js';
@@ -113,6 +116,9 @@ const MAP_ID = 'A4LI4vM0BILraYeOD89WGg';
 
 const CONCEPTS_SITEMAP = `${CONCEPTS.baseUrl}/sitemap.xml`;
 const MAP_TOC = `https://learn.jamf.com/api/khub/maps/${MAP_ID}/toc`;
+const TOPIC = `https://learn.jamf.com/api/khub/maps/${MAP_ID}/topics/content-root`;
+const TOPIC_BODY = `${TOPIC}/content`;
+const CLUSTERED_SEARCH = 'https://learn.jamf.com/api/khub/clustered-search';
 const SUPPORT_ARTICLE = `${SUPPORT.baseUrl}/en/articles/11584648-grant-secure-token-to-enable-filevault`;
 
 /** Jamf Pro's collection, as en's home page lists it. */
@@ -131,6 +137,22 @@ const MAP_TOC_NODES: FtTocNode[] = [{
   title: 'Managing Computers',
   prettyUrl: '/r/en-US/jamf-pro-documentation-current/Managing_Computers',
 }];
+
+/** The one topic in that map, as its metadata answers. */
+const TOPIC_INFO: FtTopicInfo = {
+  title: 'Managing Computers',
+  id: 'content-root',
+  contentApiEndpoint: `/api/khub/maps/${MAP_ID}/topics/content-root/content`,
+  metadata: [],
+};
+
+/** Learn.jamf.com's search, finding nothing: what is under test is how often it is asked. */
+const NO_RESULTS: FtClusteredSearchResponse = {
+  facets: [],
+  announcements: [],
+  paging: { currentPage: 1, isLastPage: true, totalResultsCount: 0, totalClustersCount: 0 },
+  results: [],
+};
 
 interface Deferred {
   promise: Promise<void>;
@@ -224,14 +246,20 @@ function held(): Held {
   const http: HttpClient = {
     getText: async (url) => {
       await asked(url);
+      if (url === TOPIC_BODY) { return '<div class="body conbody"><p class="p">Body.</p></div>'; }
       return await page(url);
     },
     getJson: async <T>(url: string) => {
       await asked(url);
-      if (url !== MAP_TOC) { throw new HttpError(404, 'Not Found', url); }
-      return MAP_TOC_NODES as T;
+      if (url === MAP_TOC) { return MAP_TOC_NODES as T; }
+      if (url === TOPIC) { return TOPIC_INFO as T; }
+      throw new HttpError(404, 'Not Found', url);
     },
-    postJson: async url => await Promise.reject(new HttpError(404, 'Not Found', url)),
+    postJson: async <T>(url: string) => {
+      if (url !== CLUSTERED_SEARCH) { throw new HttpError(404, 'Not Found', url); }
+      await asked(url);
+      return NO_RESULTS as T;
+    },
   };
 
   const mapsRegistry = Object.assign(createStubMapsRegistry([]), {
@@ -322,6 +350,26 @@ const READERS: Reader[] = [
     entry: namespaceIs('ft-toc-v2'),
     page: MAP_TOC,
     read: async ctx => await fetchTableOfContents(ctx, 'jamf-pro'),
+  },
+  {
+    name: 'loadMapToc (a Fluid Topics map\'s TOC index, which holds its tree)',
+    entry: namespaceIs('ft-tocindex-v3'),
+    page: MAP_TOC,
+    read: async ctx => await loadMapToc({ http: ctx.http, cache: ctx.cache, mapId: MAP_ID }),
+  },
+  {
+    // With the map's TOC index, which it reads through a reader of its own.
+    name: 'fetchArticleFromFt (a Fluid Topics topic)',
+    entry: namespaceIs('ft-article-v3'),
+    page: TOPIC,
+    alsoRequests: [TOPIC_BODY, MAP_TOC],
+    read: async ctx => await fetchArticleFromFt(ctx.cache, MAP_ID, 'content-root', '', { http: ctx.http }),
+  },
+  {
+    name: 'searchDocumentation (learn.jamf.com\'s results for a query)',
+    entry: namespaceIs('ft-search-v3'),
+    page: CLUSTERED_SEARCH,
+    read: async ctx => await searchDocumentation(ctx, { query: 'filevault' }),
   },
 ];
 

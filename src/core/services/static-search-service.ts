@@ -150,10 +150,18 @@ async function readStaticIndex(
   //
   // Read side by side, so a cold index waits on the slower of the two, not
   // on both. The listings never throw; a sitemap that cannot be read fails
-  // the index, as it always has.
+  // the index, as it always has, and from then on no listing page is asked
+  // for that has not been already. Until 2026-09-28 the listings went on
+  // being read after the search had replied without them: with
+  // support.jamf.com's sitemap answering 404, offline, the nine collection
+  // pages its en listing names were all requested after the reply.
+  const sitemapFailed = new AbortController();
   const [sitemap, listed] = await Promise.all([
-    loadSitemap(ctx, source),
-    loadListedTitles(ctx, source, locale),
+    loadSitemap(ctx, source).catch((error: unknown) => {
+      sitemapFailed.abort();
+      throw error;
+    }),
+    loadListedTitles(ctx, source, locale, source.sections, sitemapFailed.signal),
   ]);
   const entries: StaticSearchEntry[] = [];
   for (const sitemapEntry of sitemap) {

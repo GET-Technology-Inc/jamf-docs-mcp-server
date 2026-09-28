@@ -5,7 +5,7 @@
  * via ft-client + MapsRegistry.
  */
 
-import { fetchMapToc } from './ft-client.js';
+import { loadMapToc } from './ft-internal-link.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import {
   JAMF_PRODUCTS,
@@ -76,6 +76,18 @@ interface CachedToc {
   toc: TocEntry[];
   mapId: string;
   resolvedLocale: string;
+  /**
+   * `Date.now()` when the map's `/toc` the tree was built from was
+   * downloaded, which the tree's age counts from, as the maps list's does
+   * (maps-registry.ts). The download can be older than this entry: since
+   * 2026-09-28 the tree is read from the map's TOC index, which an article in
+   * the map may have cached first (see {@link readTableOfContents}). A hit
+   * older than `cacheTtl.toc` is read as a miss.
+   *
+   * Absent from an entry a build before that day wrote, which downloaded the
+   * tree as it stored it, so that its age is its time in the cache.
+   */
+  fetchedAt?: number;
 }
 
 // ─── Main fetch function ───────────────────────────────────────
@@ -116,7 +128,8 @@ function bundleStemFor(source: TocSource): string {
  *
  * Resolution order:
  *   1. ctx.tocProvider (if configured)
- *   2. MapsRegistry → mapId → ft-client.fetchMapToc
+ *   2. MapsRegistry → mapId → the map's TOC, read with its TOC index
+ *      (ft-internal-link.ts `loadMapToc`)
  *   3. Transform FtTocNode[] → TocEntry[]
  *
  * Results are cached under the `ft-toc-v2` namespace, keyed on locale, product
@@ -163,6 +176,15 @@ export async function fetchTableOfContents(
 /**
  * The cached tree, or the one the registry's map for it carries, fetched and
  * stored: the load {@link fetchTableOfContents} shares between calls.
+ *
+ * The map's `/toc` is read through the map's TOC index, which an article in
+ * the map reads its links, breadcrumb and navigation from, so one download of
+ * it builds both, whichever tool reads it first (ft-internal-link.ts
+ * `loadMapToc`). Until 2026-09-28 this downloaded `/toc` for itself, and a
+ * TOC and an article in one map downloaded it twice. A tree read from an
+ * index an article cached is as old as that index, so it is served only
+ * until `cacheTtl.toc` after that download (see {@link CachedToc.fetchedAt}),
+ * not for `cacheTtl.toc` from this read.
  */
 async function readTableOfContents(
   ctx: ServerContext,
@@ -172,8 +194,9 @@ async function readTableOfContents(
   key: CacheKey,
 ): Promise<CachedToc> {
   let cached = await ctx.cache.get<CachedToc>(key);
+  const downloaded = cached?.fetchedAt;
 
-  if (cached === null) {
+  if (cached === null || (downloaded !== undefined && Date.now() - downloaded >= ctx.config.cacheTtl.toc)) {
     const resolved = await ctx.mapsRegistry.resolveMap(
       bundleStemFor(source),
       version !== 'current' ? version : undefined,
@@ -187,14 +210,20 @@ async function readTableOfContents(
       );
     }
 
-    const ftNodes = await fetchMapToc(ctx.http, resolved.mapId);
+    const { nodes, fetchedAt } = await loadMapToc({
+      http: ctx.http,
+      cache: ctx.cache,
+      mapId: resolved.mapId,
+      ttl: ctx.config.cacheTtl.toc,
+    });
 
     // The locale that answered is kept with the tree: a cached English tree
     // served to a zh-TW request must still say it is English.
     cached = {
-      toc: transformFtTocToTocEntries(ftNodes),
+      toc: transformFtTocToTocEntries(nodes),
       mapId: resolved.mapId,
       resolvedLocale: resolved.resolvedLocale,
+      fetchedAt,
     };
 
     await ctx.cache.set(key, cached, ctx.config.cacheTtl.toc);

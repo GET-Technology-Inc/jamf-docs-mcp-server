@@ -14,7 +14,11 @@
  * of contents and both its definitions five times (measured offline,
  * test/unit/tools/support-and-sitemap-fanout.test.ts and
  * glossary-lookup-fanout.test.ts). Live, one of those pages takes up to
- * 1.25 s and weighs up to 551 KB (2026-09-28).
+ * 1.25 s and weighs up to 551 KB (2026-09-28). A Fluid Topics article and
+ * learn.jamf.com's search results had none either, until later that day:
+ * five `jamf_docs_get_article` calls at once for one topic requested its
+ * metadata and its body five times each, and five `jamf_docs_search` calls
+ * for one query made five searches (fluid-topics-fanout.test.ts).
  *
  * A map's TOC index (`loadMapTocIndex` in ft-internal-link.ts, #341 for
  * #339) and topic index (`TopicResolver.getTopicIndex`, #78) had guards of
