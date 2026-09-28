@@ -230,7 +230,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `product` | string | 擇一 | 產品 ID (詳見支援產品表) |
 | `publication` | string | 擇一 | 單一出版品的 bundle family ID (1-200 字元)，例如 `jamf-pro-release-notes` 或 `technical-paper-laps`；可用 `jamf_docs_list_products` 查詢 |
 | `version` | string | 否 | 特定版本 (例如 `"11.13.0"`) 或 `"current"` (預設: 最新版) |
-| `language` | string | 否 | 文件語系 (預設: `en-US`) |
+| `language` | string | 否 | 文件語系 (預設: `en-US`)。Jamf 未以該語系發布的產品或出版品，會提供 en-US 版本，並附上 `localeNote` 說明 |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
 | `outputMode` | string | 否 | 輸出詳細程度: `"full"` 或 `"compact"` (預設: `"full"`) |
@@ -280,7 +280,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 參數會直接被拒絕 (`Unrecognized key: "language"`)，而不是默默忽略。
 
 每個出版品的 `locales` 列出 Jamf 以哪些語系發布它。`jamf-support-*` 開頭的出版品，則是
-support.jamf.com 首頁有列出它的語系。以該網站的其他語系呼叫 `jamf_docs_get_toc` 時，會提供
+support.jamf.com 首頁有列出它的語系。以其他任何語系呼叫 `jamf_docs_get_toc` 時，會提供
 en-US 版本，並附上 `localeNote` 說明。
 
 若有來源無法讀取，回應會列出能取得的部分並加以註明：`incomplete` 會列出每個無法讀取的

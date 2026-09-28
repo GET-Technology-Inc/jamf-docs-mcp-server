@@ -79,7 +79,9 @@ export interface StaticDocSource {
    * concepts.jamf.com uses bare short codes (`en`, `ja`, `de`) and is
    * case-sensitive; only `zh-TW` and `zh-CN` match this server's form
    * exactly. Locales absent from this map are not published by the source at
-   * all — th-TH is a hard gap, `/th` and `/th-TH` both 404.
+   * all — th-TH is a hard gap, `/th` and `/th-TH` both 404. `jamf_docs_get_toc`
+   * serves such a locale the `en-US` edition, with a `localeNote`, as it does
+   * a Fluid Topics publication with no map in the language.
    *
    * Each code appears at most once, because `fetchStaticToc` maps the code
    * that answered back to this server's id through this table.
@@ -218,8 +220,9 @@ export const STATIC_DOC_SOURCES = {
       'and known-issue articles, edited separately from the product ' +
       'documentation on learn.jamf.com.',
     // Six locales route and carry content. `nl` and `th` route but return an
-    // empty collection list, so they are absent rather than listed and
-    // silently empty.
+    // empty collection list, as `it`, `pt-BR` and `zh-CN` do (2026-09-28), so
+    // they are absent: `jamf_docs_get_toc` serves each of them the en-US
+    // edition without reading a home page that lists nothing.
     locales: {
       'en-US': 'en',
       'de-DE': 'de',

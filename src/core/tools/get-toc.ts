@@ -310,7 +310,8 @@ Args:
     "technical-paper-laps" or "jamf-pro-release-notes". Call
     jamf_docs_list_products for the available ids
   - version (string, optional): Specific version (e.g., "11.13.0") or "current" (defaults to latest)
-  - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE})
+  - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE}). A product or
+    publication Jamf does not publish in it is served as its ${DEFAULT_LOCALE} edition, and localeNote says so
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
   - maxTokens (number, optional): Maximum tokens in response ${TOKEN_CONFIG.MIN_TOKENS}-${TOKEN_CONFIG.MAX_TOKENS_LIMIT} (default: ${TOKEN_CONFIG.DEFAULT_MAX_TOKENS})
   - outputMode ('full' | 'compact'): Output detail level (default: 'full'). Use 'compact' for flat list without nested children
@@ -491,7 +492,11 @@ interface ResolvedTocSource {
   staticSection?: {
     source: StaticDocSource;
     section: StaticSection;
-    /** The source's own code for the requested locale, e.g. `ja` for ja-JP. */
+    /**
+     * The source's own code for the edition to serve: the requested
+     * locale's, e.g. `ja` for ja-JP, or the default locale's where the
+     * source does not publish that one.
+     */
     sourceLocale: string;
   };
   /** Set when this names one collection of an Intercom Help Center. */
@@ -547,6 +552,53 @@ async function listedCollections(
 }
 
 /**
+ * The two listings {@link resolveDynamicSection} reads for `locale`:
+ * `collections`, the locale's own, and `listed`, the one ids are named from
+ * (see {@link listedCollections}).
+ *
+ * A locale the source's locale table leaves out publishes nothing there, so
+ * its own listing is empty and is not asked for, and every id gets the
+ * default locale's edition, as in a locale whose home page lists nothing.
+ * Live on 2026-09-28, support.jamf.com's home page listed no collection in
+ * any of the five it leaves out (`/th/`, `/nl/`, `/it/`, `/pt-BR/` and
+ * `/zh-CN/`). Until that day each was an error for every id
+ * `jamf_docs_list_products` gives: "Jamf Support Knowledge Base does not
+ * publish in th-TH. Available: en-US, de-DE, es-ES, fr-FR, ja-JP, zh-TW."
+ *
+ * Null for a source with no edition in `locale` or in the default locale,
+ * which no source is.
+ */
+async function listingsIn(
+  ctx: ServerContext,
+  source: StaticDocSource,
+  locale: string,
+): Promise<{ collections: IntercomCollection[]; listed: IntercomCollection[] } | null> {
+  const sourceLocale = source.locales[locale];
+  if (sourceLocale !== undefined) {
+    const collections = await listIntercomCollections(ctx, source, sourceLocale);
+    return { collections, listed: await listedCollections(ctx, source, sourceLocale, collections) };
+  }
+  const defaultLocale = source.locales[DEFAULT_LOCALE];
+  if (defaultLocale === undefined) { return null; }
+  return { collections: [], listed: await listIntercomCollections(ctx, source, defaultLocale) };
+}
+
+/**
+ * The error for a `locale` a static source has no edition in, and no
+ * default-locale edition to serve in its place. Every source has a
+ * default-locale edition (2026-09-28), so a locale a source does not publish
+ * is served that edition, with a `localeNote`, as an untranslated Fluid
+ * Topics publication is. Only the synthetic sources in
+ * test/unit/tools/get-toc-no-default-locale.test.ts reach this.
+ */
+function notPublishedIn(source: StaticDocSource, locale: string): { error: string } {
+  return {
+    error: `${source.name} does not publish in ${locale}. ` +
+      `Available: ${Object.keys(source.locales).join(', ')}.`,
+  };
+}
+
+/**
  * Resolve a publication id that names a runtime-discovered section.
  *
  * An Intercom Help Center's collections are content, not configuration —
@@ -566,8 +618,9 @@ async function listedCollections(
  * es: 5 of the 22 locale editions support.jamf.com publishes (2026-09-28). An
  * id built from `locale`'s own slug still names its collection.
  *
- * An id is served in every locale the source declares, and 32 of those 54
- * pairs have no translation upstream. Those get the default locale's
+ * An id is served in every locale `language` accepts. 32 of the 54 pairs in
+ * the six locales the source declares have no translation upstream, and the
+ * five it does not declare have none at all. Those get the default locale's
  * edition, the way an untranslated Fluid Topics publication gets its en-US
  * map, and `localeNote` says so. `jamf_docs_list_products` reads each
  * collection's `locales` from the same listings, so the locales it names are
@@ -576,8 +629,10 @@ async function listedCollections(
  *
  * `locale`'s own listing is needed, and when it cannot be read the call
  * fails, as it always has for a 503. When it lists nothing, the locale
- * publishes nothing, and every id gets the default locale's edition. Only
- * the default locale's listing has a fallback, in `listedCollections`.
+ * publishes nothing, and every id gets the default locale's edition. A
+ * locale the source does not declare is read so without asking (see
+ * {@link listingsIn}). Only the default locale's listing has a fallback, in
+ * `listedCollections`.
  *
  * Returns null when the id names no dynamic source, so the caller falls
  * through to the Fluid Topics path.
@@ -591,16 +646,10 @@ async function resolveDynamicSection(
     const prefix = source.dynamicSections?.idPrefix ?? source.id;
     if (!publication.startsWith(`${prefix}-`)) { continue; }
 
-    const sourceLocale = source.locales[locale];
-    if (sourceLocale === undefined) {
-      return {
-        error: `${source.name} does not publish in ${locale}. ` +
-          `Available: ${Object.keys(source.locales).join(', ')}.`,
-      };
-    }
+    const listings = await listingsIn(ctx, source, locale);
+    if (listings === null) { return notPublishedIn(source, locale); }
 
-    const collections = await listIntercomCollections(ctx, source, sourceLocale);
-    const listed = await listedCollections(ctx, source, sourceLocale, collections);
+    const { collections, listed } = listings;
     const listedIds = new Map(listed.map(c => [c.id, dynamicSectionId(source, c.slug)]));
     const idOf = (c: IntercomCollection): string => listedIds.get(c.id) ?? dynamicSectionId(source, c.slug);
     const named = listed.find(c => dynamicSectionId(source, c.slug) === publication)
@@ -682,13 +731,14 @@ async function resolveTocSource(
   const staticRow = staticSectionById(publication);
   if (staticRow !== undefined) {
     const locale = params.language ?? DEFAULT_LOCALE;
-    const sourceLocale = staticRow.source.locales[locale];
-    if (sourceLocale === undefined) {
-      return {
-        error: `${staticRow.source.name} does not publish in ${locale}. ` +
-          `Available: ${Object.keys(staticRow.source.locales).join(', ')}.`,
-      };
-    }
+    // A locale the source does not publish gets the default locale's edition,
+    // which `fetchStaticToc` reports as the locale that answered, so
+    // `localeNote` says so, as it does for an untranslated Fluid Topics
+    // publication. Until 2026-09-28 it was an error: "Jamf Concepts does not
+    // publish in th-TH. Available: en-US, ja-JP, …", for th-TH, it-IT and
+    // pt-BR, which concepts.jamf.com answers with a 404.
+    const sourceLocale = staticRow.source.locales[locale] ?? staticRow.source.locales[DEFAULT_LOCALE];
+    if (sourceLocale === undefined) { return notPublishedIn(staticRow.source, locale); }
     return {
       source: publication,
       sourceLabel: staticRow.section.title,
