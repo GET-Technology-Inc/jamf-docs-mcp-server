@@ -83,7 +83,16 @@ export interface CacheKeySpaces {
   // read, so rather than teach the filter a v1 fallback, the namespace moves
   // and no build reads a v1 entry; those expire on their search TTL
   // (CACHE_TTL_SEARCH, 30 minutes by default).
-  'ft-search-v2': {
+  //
+  // v3 (2026-09-28): a cached result's `snippet` is its excerpt's text, each
+  // character reference decoded once (`cleanSnippet`). A v2 entry holds it as
+  // Fluid Topics sent it, "Devices &gt; Settings", which markdown now writes
+  // as `\&gt;`, so it would read "&gt;" where it used to render ">", for as
+  // long as CACHE_TTL_SEARCH keeps it: 30 minutes by default, up to 30 days.
+  // The shape is unchanged, but nothing tells an encoded snippet from a
+  // decoded one on read, so the namespace moves; v2 entries expire on their
+  // TTL.
+  'ft-search-v3': {
     query: string;
     contentLocale: string | null;
     sortId: string | null;
@@ -238,7 +247,7 @@ type IsKeyMaterial<T> =
 const CACHE_NAMESPACE_REGISTRY: {
   readonly [N in CacheNamespace]: IsKeyMaterial<CacheKeySpaces[N]>;
 } = {
-  'ft-search-v2': true,
+  'ft-search-v3': true,
   'ft-article-v3': true,
   'ft-toc-v2': true,
   'ft-tocindex-v3': true,

@@ -288,7 +288,7 @@ describe('on the Fluid Topics path the filter reads every classification value',
     await searchDocumentation(ctx, { query: 'q', product: 'jamf-protect' });
 
     expect(ctx.cache.set).toHaveBeenCalledWith(
-      expect.stringMatching(/^ft-search-v2:/),
+      expect.stringMatching(/^ft-search-v3:/),
       [expect.objectContaining({ classification: ['Jamf Protect'] })],
       ctx.config.cacheTtl.search,
     );

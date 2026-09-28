@@ -8,9 +8,17 @@
 /**
  * Escape Markdown special characters in text to prevent Markdown injection.
  * Use this for titles, snippets, and other text interpolated into Markdown.
+ *
+ * `<` is escaped because CommonMark passes an HTML tag or comment in text
+ * through as HTML, and an `&` that starts a named character reference
+ * because CommonMark decodes the reference: the text "&lt;" would render as
+ * "<". A numeric one (`&#60;`) is already broken by its escaped `#`. A
+ * search snippet needs both since 2026-09-28: it now holds the excerpt's
+ * text, which can quote a plist's `<key>`, where it used to drop every `<`
+ * and keep the references undecoded.
  */
 export function sanitizeMarkdownText(text: string): string {
-  return text.replace(/[[\]()#*_`~>!|\\]/g, '\\$&');
+  return text.replace(/[[\]()#*_`~<>!|\\]|&(?=[A-Za-z][A-Za-z0-9]*;)/g, '\\$&');
 }
 
 /**

@@ -119,14 +119,13 @@ describe('snippet quality with problematic inputs', () => {
     expect(cleaned).toContain('Jamf Pro');
   });
 
-  it('should handle snippet with HTML entities that survived stripping', () => {
+  it('should decode HTML entities that survived stripping', () => {
     const cleaned = cleanSnippet(
       'Configure SSO &amp; LDAP integration for your organization&#39;s directory services.',
       'SSO Configuration',
       'Jamf Pro'
     );
-    // The raw snippet might still have entities; cleanSnippet should handle them
-    expect(cleaned.length).toBeGreaterThanOrEqual(10);
+    expect(cleaned).toBe('Configure SSO & LDAP integration for your organization\'s directory services.');
   });
 
   it('should handle very long snippet by not exceeding max length', () => {

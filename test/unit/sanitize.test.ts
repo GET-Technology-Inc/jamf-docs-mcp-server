@@ -36,9 +36,31 @@ describe('sanitizeMarkdownText', () => {
   });
 
   it('should escape all special characters', () => {
-    const input = '[]()#*_`~>!|\\';
+    const input = '[]()#*_`~<>!|\\';
     const result = sanitizeMarkdownText(input);
-    expect(result).toBe('\\[\\]\\(\\)\\#\\*\\_\\`\\~\\>\\!\\|\\\\');
+    expect(result).toBe('\\[\\]\\(\\)\\#\\*\\_\\`\\~\\<\\>\\!\\|\\\\');
+  });
+
+  it('should escape a tag, a comment and an autolink, which CommonMark passes through as HTML', () => {
+    expect(sanitizeMarkdownText('<img src=x onerror=alert(1)>'))
+      .toBe('\\<img src=x onerror=alert\\(1\\)\\>');
+    expect(sanitizeMarkdownText('<!-- c -->')).toBe('\\<\\!-- c --\\>');
+    expect(sanitizeMarkdownText('<https://example.com>')).toBe('\\<https://example.com\\>');
+  });
+
+  it('should keep a character reference from being decoded, which CommonMark does', () => {
+    // A named one by escaping its `&`; a numeric one by escaping its `#`.
+    expect(sanitizeMarkdownText('&lt;key&gt; &amp; &nbsp; &#60; &#x3C;'))
+      .toBe('\\&lt;key\\&gt; \\&amp; \\&nbsp; &\\#60; &\\#x3C;');
+    // Names are case-sensitive and can hold digits, and CommonMark decodes
+    // these too: `&LT;` is "<", `&frac12;` "½", `&sup2;` "²", `&Ouml;` "Ö".
+    expect(sanitizeMarkdownText('&LT; &AMP; &frac12; &sup2; &Ouml;'))
+      .toBe('\\&LT; \\&AMP; \\&frac12; \\&sup2; \\&Ouml;');
+  });
+
+  it('should leave an & that starts no reference as it is', () => {
+    expect(sanitizeMarkdownText('Authentication & Assurance, AT&T, R&D, a&b=c, &;, & amp;, &lt'))
+      .toBe('Authentication & Assurance, AT&T, R&D, a&b=c, &;, & amp;, &lt');
   });
 
   it('should escape javascript: injection via Markdown link syntax', () => {

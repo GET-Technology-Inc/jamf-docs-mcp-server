@@ -353,7 +353,8 @@ const NAV_PATTERNS = [
 ];
 
 /**
- * Clean an HTML search snippet: strip tags, clean breadcrumb prefixes.
+ * Clean an HTML search snippet: strip tags, clean breadcrumb prefixes, and
+ * decode its character references, so what is returned is the excerpt's text.
  */
 export function cleanSnippet(
   snippet: string,
@@ -372,10 +373,26 @@ export function cleanSnippet(
     cleaned = cleaned.replace(pattern, '').trim();
   }
 
-  // As an extra safety step, strip any remaining angle brackets to avoid
-  // residual fragments like "<script" from being interpreted as HTML.
+  // Strip any raw angle bracket left by cut markup, such as a "<script" whose
+  // `>` fell outside the excerpt. Only a raw one: a bracket the page shows as
+  // text arrives as `&lt;` or `&gt;`, is decoded below, and is kept, so since
+  // 2026-09-28 the snippet can hold "<script>" as text. Where it is written
+  // into markdown, sanitizeMarkdownText escapes it, and the MCP App escapes
+  // what it shows (esc() in app-ui).
   cleaned = cleaned.replace(/[<>]/g, '').trim();
 
+  // Fluid Topics writes `'`, `"`, `&`, `<` and `>` in an excerpt as `&#x27;`,
+  // `&quot;`, `&amp;`, `&lt;` and `&gt;`, and until 2026-09-28 they were
+  // returned that way: 756 of the 3,584 results of 77 searches replayed that
+  // day read "the organization&#x27;s" or "Devices &gt; Settings". Decoded
+  // after the steps above, which work on the markup, so a `<` a page shows as
+  // text is kept as text and not stripped as a tag. And decoded once, in one
+  // pass: `&amp;lt;` is the text "&lt;" (see decodeEntities in
+  // static-article-service.ts). The input holds no `<` by now, so the parser
+  // can make no element of it, only the one text node.
+  cleaned = cheerio.load(cleaned, null, false).text().trim();
+
+  // Counted as decoded: the length a reader sees.
   if (cleaned.length < MIN_SNIPPET_LENGTH) {
     return titleProductSnippet(title, product);
   }

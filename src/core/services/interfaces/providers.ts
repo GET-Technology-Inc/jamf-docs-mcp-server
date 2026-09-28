@@ -66,6 +66,17 @@ import type {
  * whose every result is left out, is read as `null`, so Fluid Topics answers;
  * return `[]` for "no results". See the module comment for the rest.
  *
+ * A result's `title`, `snippet`, `mapTitle` and `breadcrumb` are plain text,
+ * not HTML, and core does not decode them: structuredContent and the JSON
+ * text carry them as they are, the MCP App shows them as text, and markdown
+ * escapes them. Since 2026-09-28 that escaping covers a `<` and an `&` that
+ * starts a named character reference too, so a `<b class=hit>` or `&amp;` in
+ * a snippet reads as the characters it is written with. Before, a markdown
+ * renderer read such a tag (one with an unquoted attribute) as HTML, and
+ * `&amp;` as "&". A backend that holds HTML excerpts should return their
+ * text, the tags stripped and each character reference decoded once, as the
+ * Fluid Topics path does (`cleanSnippet`).
+ *
  * Return all matched results as a flat array, in the order you rank them:
  * the core keeps that order, and a JSON reply says the configured search
  * backend ranked it. The core handles version deduplication, pagination,

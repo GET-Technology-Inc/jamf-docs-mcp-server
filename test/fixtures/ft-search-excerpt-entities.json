@@ -1,0 +1,309 @@
+{
+  "source": "POST https://learn.jamf.com/api/khub/clustered-search, 2026-09-28, perPage 50, no filters; one entry per group, trimmed to the fields the search reads. Each group names the query and locale it came back for.",
+  "menuBarGoogleCloudId": {
+    "query": "menu bar",
+    "locale": "en-US",
+    "entry": {
+      "type": "TOPIC",
+      "missingTerms": [],
+      "topic": {
+        "mapId": "ovlpAWLVkl7iKw8_KJEqaQ",
+        "contentId": "ft2X3JIO3bouTi4lGIEFCA",
+        "tocId": "gbnMqVwMU~s1ngZsINZ1Pg",
+        "title": "Configuring the Menu Bar App for Google Cloud ID",
+        "htmlTitle": "<span class=\"kwicstring\">Configuring the </span><span class=\"kwicmatch\">Menu Bar</span><span class=\"kwicstring\"> App for Google Cloud ID</span>",
+        "mapTitle": "Jamf Connect Documentation 2.45.0",
+        "breadcrumb": [
+          "Jamf Connect App for macOS",
+          "Password Syncing",
+          "Password Syncing with Jamf Connect",
+          "Configuring the Menu Bar App for Google Cloud ID"
+        ],
+        "htmlExcerpt": "<span class=\"kwicstring\">You can configure the Jamf Connect </span><span class=\"kwicmatch\">menu bar</span><span class=\"kwicstring\"> app with the Application &amp; Custom Settings payload in Jamf Pro or the Jamf Connect Configuration app. In the IdPSettings dictionary, set the Identity Provider (Provider) setting to GoogleID, like the following: &lt;key&gt;IdPSettings&lt;/key&gt; &lt;dict&gt; &lt;key&gt;Provider&lt;/</span><span class=\"kwictruncate\">...</span>",
+        "metadata": [
+          {
+            "key": "version",
+            "label": "version",
+            "values": [
+              "2.45.0"
+            ]
+          },
+          {
+            "key": "zoominmetadata",
+            "label": "Legacy Zoomin Metadata",
+            "values": [
+              "content-techdocs",
+              "product-connect",
+              "role-administrator",
+              "product-connect-2.45.0",
+              "release-status-ga"
+            ]
+          },
+          {
+            "key": "ft:clusterId",
+            "label": "ft:clusterId",
+            "values": [
+              "jamf-connect-documentation-2.45.0/Configuring_the_Menu_Bar_App_for_Google_Cloud_ID"
+            ]
+          },
+          {
+            "key": "ft:locale",
+            "label": "ft:locale",
+            "values": [
+              "en-US"
+            ]
+          },
+          {
+            "key": "jamf:app",
+            "label": "Application",
+            "values": [
+              "Jamf Connect"
+            ]
+          },
+          {
+            "key": "jamf:portal",
+            "label": "Portal",
+            "values": []
+          },
+          {
+            "key": "jamf:utility",
+            "label": "Utilities & Services",
+            "values": []
+          },
+          {
+            "key": "ft:prettyUrl",
+            "label": "ft:prettyUrl",
+            "values": [
+              "en-US/jamf-connect-documentation-2.45.0/Configuring_the_Menu_Bar_App_for_Google_Cloud_ID"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "generalRequirementsGoogle": {
+    "query": "General Requirements",
+    "locale": "en-US",
+    "entry": {
+      "type": "TOPIC",
+      "missingTerms": [],
+      "topic": {
+        "mapId": "A4LI4vM0BILraYeOD89WGg",
+        "contentId": "O9Gpl2YFC5HC64yvVG8dqA",
+        "tocId": "2gJTEU~J_wfLxOA6VdWAwg",
+        "title": "General Requirements",
+        "htmlTitle": "<span class=\"kwicmatch\">General Requirements</span>",
+        "mapTitle": "Jamf Pro Documentation 11.32.0",
+        "breadcrumb": [
+          "Global Management Settings",
+          "Context-Aware Access with Google Integration",
+          "General Requirements"
+        ],
+        "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">organization&#x27;s Google integration To check if this is enabled, log in to the Google Admin portal, navigate to Devices &gt; Settings &gt; Universal &gt; </span><span class=\"kwicmatch\">General</span><span class=\"kwicstring\"> &gt; Mobile Management, and ensure that the iOS setting is set to &quot;Basic&quot;. A Jamf Pro User account with Conditional Access and Smart Group privileges</span><span class=\"kwictruncate\">...</span>",
+        "metadata": [
+          {
+            "key": "version",
+            "label": "version",
+            "values": [
+              "11.32.0"
+            ]
+          },
+          {
+            "key": "zoominmetadata",
+            "label": "Legacy Zoomin Metadata",
+            "values": [
+              "content-techdocs",
+              "role-administrator",
+              "product-pro",
+              "product-pro-11.32.0",
+              "release-status-ga"
+            ]
+          },
+          {
+            "key": "ft:clusterId",
+            "label": "ft:clusterId",
+            "values": [
+              "jamf-pro-documentation-current/GenReq_BeyondCorp"
+            ]
+          },
+          {
+            "key": "ft:locale",
+            "label": "ft:locale",
+            "values": [
+              "en-US"
+            ]
+          },
+          {
+            "key": "jamf:app",
+            "label": "Application",
+            "values": []
+          },
+          {
+            "key": "jamf:portal",
+            "label": "Portal",
+            "values": [
+              "Jamf Pro"
+            ]
+          },
+          {
+            "key": "jamf:utility",
+            "label": "Utilities & Services",
+            "values": []
+          },
+          {
+            "key": "ft:prettyUrl",
+            "label": "ft:prettyUrl",
+            "values": [
+              "en-US/jamf-pro-documentation-current/GenReq_BeyondCorp"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "entraExtraPrompts": {
+    "query": "Entra ID",
+    "locale": "en-US",
+    "entry": {
+      "type": "TOPIC",
+      "missingTerms": [],
+      "topic": {
+        "mapId": "z4D9NauuOznmw4bcf~x1iw",
+        "contentId": "tmhSzzsb5hdp9iV9Yk4tlA",
+        "tocId": "_gkz7x4QjdyFI07s7sPxIg",
+        "title": "Troubleshooting Extra Login Prompts from Entra ID",
+        "htmlTitle": "<span class=\"kwicstring\">Troubleshooting Extra Login Prompts from </span><span class=\"kwicmatch\">Entra ID</span>",
+        "mapTitle": "RapidIdentity Platform Documentation",
+        "breadcrumb": [
+          "Identity Solutions",
+          "Authentication & Assurance",
+          "Configuration Module",
+          "SAML-Based SSO Integrations",
+          "SSO Authentication with Entra ID",
+          "Troubleshooting Extra Login Prompts from Entra ID"
+        ],
+        "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">through Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> (formerly Azure AD) may not pass users&#x27; identities to </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> after the initial</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">ID from Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\">. For more information, see Application and service principal objects in Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> (Microsoft).</span><span class=\"kwictruncate\">...</span><span class=\"kwicstring\">in Microsoft </span><span class=\"kwicmatch\">Entra ID</span><span class=\"kwicstring\"> Tenant </span><span class=\"kwicmatch\">ID</span><span class=\"kwicstring\"> Your Microsoft Entra</span><span class=\"kwictruncate\">...</span>",
+        "metadata": [
+          {
+            "key": "zoominmetadata",
+            "label": "Legacy Zoomin Metadata",
+            "values": [
+              "content-techdocs",
+              "product-rapididentity"
+            ]
+          },
+          {
+            "key": "ft:clusterId",
+            "label": "ft:clusterId",
+            "values": [
+              "jamf-rapididentity-documentation/Troubleshooting_Double_Login_Prompts_from_Entra_ID"
+            ]
+          },
+          {
+            "key": "ft:locale",
+            "label": "ft:locale",
+            "values": [
+              "en-US"
+            ]
+          },
+          {
+            "key": "jamf:app",
+            "label": "Application",
+            "values": []
+          },
+          {
+            "key": "jamf:portal",
+            "label": "Portal",
+            "values": [
+              "RapidIdentity"
+            ]
+          },
+          {
+            "key": "jamf:utility",
+            "label": "Utilities & Services",
+            "values": []
+          },
+          {
+            "key": "ft:prettyUrl",
+            "label": "ft:prettyUrl",
+            "values": [
+              "en-US/jamf-rapididentity-documentation/Troubleshooting_Double_Login_Prompts_from_Entra_ID"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "fileVaultUnableToChangeKey": {
+    "query": "FileVault",
+    "locale": "en-US",
+    "entry": {
+      "type": "TOPIC",
+      "missingTerms": [],
+      "topic": {
+        "mapId": "VtT2s4tzZgWnlMWVuiQI2A",
+        "contentId": "X3HJ6LlmWScuTah3Hk6Qog",
+        "tocId": "rhiO02jVsttyo3xaWja1zg",
+        "title": "Resolving an \"Unable to Change Key\" FileVault Error",
+        "htmlTitle": "<span class=\"kwicstring\">Resolving an &quot;Unable to Change Key&quot; </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> Error</span>",
+        "mapTitle": "Jamf Now Documentation",
+        "breadcrumb": [
+          "Device Management",
+          "Generating a New FileVault Key for Escrowing with Jamf Now",
+          "Resolving an \"Unable to Change Key\" FileVault Error"
+        ],
+        "htmlExcerpt": "<span class=\"kwictruncate\">...</span><span class=\"kwicstring\">-enable </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> on the Mac. Manually disable </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> on the Mac. For instructions, see Turn off </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\"> on Mac in the macOS User Guide. Log out of the Mac by clicking the Apple logo and selecting Log Out. After you have logged out, enter your Mac password when prompted to enable </span><span class=\"kwicmatch\">FileVault</span><span class=\"kwicstring\">. Log</span><span class=\"kwictruncate\">...</span>",
+        "metadata": [
+          {
+            "key": "zoominmetadata",
+            "label": "Legacy Zoomin Metadata",
+            "values": [
+              "content-techdocs",
+              "role-administrator",
+              "release-status-ga",
+              "product-now"
+            ]
+          },
+          {
+            "key": "ft:clusterId",
+            "label": "ft:clusterId",
+            "values": [
+              "jamf-now-documentation/Resolving_a_Terminal_Command_Error"
+            ]
+          },
+          {
+            "key": "ft:locale",
+            "label": "ft:locale",
+            "values": [
+              "en-US"
+            ]
+          },
+          {
+            "key": "jamf:app",
+            "label": "Application",
+            "values": []
+          },
+          {
+            "key": "jamf:portal",
+            "label": "Portal",
+            "values": [
+              "Jamf Now"
+            ]
+          },
+          {
+            "key": "jamf:utility",
+            "label": "Utilities & Services",
+            "values": []
+          },
+          {
+            "key": "ft:prettyUrl",
+            "label": "ft:prettyUrl",
+            "values": [
+              "en-US/jamf-now-documentation/Resolving_a_Terminal_Command_Error"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

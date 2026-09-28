@@ -22,7 +22,7 @@ import type { FtMapInfo } from '../../../src/core/types.js';
 import { createMockCache, createMockContext, createMockLogger } from '../../helpers/mock-context.js';
 
 /** A key whose payload is a query, which the log must not carry. */
-const SEARCH_KEY = cacheKey('ft-search-v2', {
+const SEARCH_KEY = cacheKey('ft-search-v3', {
   query: 'setup manager', contentLocale: 'en-US', sortId: 'relevance', perPage: 50, page: 1, filters: [],
 });
 const TOPICS_KEY = cacheKey('metadata-topics');
@@ -64,7 +64,7 @@ describe('get', () => {
     await expect(guard.get(SEARCH_KEY)).resolves.toBeNull();
 
     expect(warnings).toEqual([
-      '[cache] Cache read failed (ft-search-v2), read as a miss: Error: KV GET failed: 503 Service Unavailable',
+      '[cache] Cache read failed (ft-search-v3), read as a miss: Error: KV GET failed: 503 Service Unavailable',
     ]);
   });
 
@@ -124,7 +124,7 @@ describe('set', () => {
     await expect(guard.set(SEARCH_KEY, [], 1000)).resolves.toBeUndefined();
 
     expect(warnings).toEqual([
-      '[cache] Cache write failed (ft-search-v2), the reply goes on without it: ' +
+      '[cache] Cache write failed (ft-search-v3), the reply goes on without it: ' +
       'Error: KV PUT failed: 429 Too Many Requests',
     ]);
   });

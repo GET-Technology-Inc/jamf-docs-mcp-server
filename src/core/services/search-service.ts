@@ -1490,7 +1490,7 @@ export async function searchDocumentation(
  * always fetches one over-fetched page and paginates client-side.
  */
 export function buildSearchCacheKey(request: FtSearchRequest): CacheKey {
-  return cacheKey('ft-search-v2', {
+  return cacheKey('ft-search-v3', {
     query: request.query,
     // `?? null` rather than passing `undefined` through: the space declares
     // these nullable so that "absent" is one value, not two. `cacheKey` drops
