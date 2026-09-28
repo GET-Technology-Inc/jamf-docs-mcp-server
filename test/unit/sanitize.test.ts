@@ -58,6 +58,40 @@ describe('sanitizeMarkdownText', () => {
       .toBe('\\&LT; \\&AMP; \\&frac12; \\&sup2; \\&Ouml;');
   });
 
+  it('should write the text on one line: a line break or tab, with the spaces around it, is one space', () => {
+    // A newline ends the list item, heading or quote the text is written
+    // into, and the next line can start a block of its own: a list item.
+    expect(sanitizeMarkdownText('Policies\n- Injected')).toBe('Policies - Injected');
+    expect(sanitizeMarkdownText('Policies\n1. Injected')).toBe('Policies 1. Injected');
+    expect(sanitizeMarkdownText('a \r\n\t b')).toBe('a b');
+    // Each line break Unicode or a Markdown reader knows: CR, LF, VT, FF,
+    // NEL, the line and paragraph separators.
+    expect(sanitizeMarkdownText('a\rb\nc\vd\fe\u0085f\u2028g\u2029h\ti')).toBe('a b c d e f g h i');
+  });
+
+  it('should leave the spaces of a line as they are', () => {
+    // A no-break space before a French colon, a double space, a leading and
+    // a trailing one: none ends a line.
+    expect(sanitizeMarkdownText(' Remarque\u00a0: a  b\u202fc ')).toBe(' Remarque\u00a0: a  b\u202fc ');
+  });
+
+  it('should drop the other controls, and the bidi marks, embeddings, overrides and isolates', () => {
+    expect(sanitizeMarkdownText('a\u0000b\u0007c\u001bd\u007fe\u0080f\u009bg')).toBe('abcdefg');
+    // "Policies" then a right-to-left override that shows "exe.gnp" as "png.exe".
+    expect(sanitizeMarkdownText('Policies\u202eexe.gnp')).toBe('Policiesexe.gnp');
+    expect(sanitizeMarkdownText('\u200ea\u200fb\u061cc\u202ad\u202be\u202cf\u202dg\u2066h\u2067i\u2068j\u2069'))
+      .toBe('abcdefghij');
+  });
+
+  it('should keep the joiners some scripts and emoji need', () => {
+    expect(sanitizeMarkdownText('\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645 \ud83d\udc69\u200d\ud83d\udcbb'))
+      .toBe('\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645 \ud83d\udc69\u200d\ud83d\udcbb');
+  });
+
+  it('should escape what dropping a control brings together', () => {
+    expect(sanitizeMarkdownText('&\u0000lt; <\u200eb>')).toBe('\\&lt; \\<b\\>');
+  });
+
   it('should leave an & that starts no reference as it is', () => {
     expect(sanitizeMarkdownText('Authentication & Assurance, AT&T, R&D, a&b=c, &;, & amp;, &lt'))
       .toBe('Authentication & Assurance, AT&T, R&D, a&b=c, &;, & amp;, &lt');

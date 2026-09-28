@@ -97,8 +97,12 @@ function formatSearchResult(result: SearchResult): string {
   output += formatResultBreadcrumb(result);
   output += `> ${sanitizeMarkdownText(result.snippet)}\n\n`;
   const meta: string[] = [];
+  // The product, the version and the other versions are escaped as the title
+  // is. Fluid Topics gives a product name and a version number, which hold
+  // nothing to escape; a SearchProvider can give any text. Until 2026-09-28
+  // they were written as they came, so its `<img …>` was an image tag.
   if (result.product !== null && result.product !== '') {
-    meta.push(`**Product**: ${result.product}`);
+    meta.push(`**Product**: ${sanitizeMarkdownText(result.product)}`);
   }
   // A product search shows every result under the product searched for, and
   // Jamf files some documents under several. Where the product would pass one
@@ -109,13 +113,13 @@ function formatSearchResult(result: SearchResult): string {
     meta.push(`**Publication**: ${sanitizeMarkdownText(result.mapTitle)}`);
   }
   if (result.version !== undefined) {
-    meta.push(`**Version**: ${result.version}`);
+    meta.push(`**Version**: ${sanitizeMarkdownText(result.version)}`);
   }
   // Say what was collapsed, and how to get it. Naming the newest few rather
   // than all of them keeps a release-notes hit readable — one topic can span
   // forty-three versions — while still proving the older ones exist.
   if (result.otherVersions !== undefined && result.otherVersions.length > 0) {
-    const shown = result.otherVersions.slice(0, 3).join(', ');
+    const shown = result.otherVersions.slice(0, 3).map(sanitizeMarkdownText).join(', ');
     const rest = result.otherVersions.length - 3;
     meta.push(
       `**Also in**: ${shown}${rest > 0 ? ` +${String(rest)} more` : ''}` +

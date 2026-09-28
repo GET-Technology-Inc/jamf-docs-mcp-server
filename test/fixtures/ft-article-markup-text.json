@@ -1,0 +1,117 @@
+{
+  "source": "GET https://learn.jamf.com/api/khub/maps/{mapId}/topics/{contentId} and its /content, 2026-09-28. The metadata is trimmed to the keys the article reads; each /content is verbatim except where the entry says otherwise.",
+  "entityEquivalents": {
+    "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+    "contentId": "D_ET04unAyiBJFifFzXSEg",
+    "topic": {
+      "title": "Entity Equivalents for Disallowed XML Characters",
+      "id": "D_ET04unAyiBJFifFzXSEg",
+      "contentApiEndpoint": "/api/khub/maps/ZlB_0jgM2084m7JxZgV1KQ/topics/D_ET04unAyiBJFifFzXSEg/content",
+      "metadata": [
+        {
+          "key": "ft:lastEdition",
+          "label": "ft:lastEdition",
+          "values": [
+            "2022-12-23"
+          ]
+        },
+        {
+          "key": "ft:locale",
+          "label": "ft:locale",
+          "values": [
+            "en-US"
+          ]
+        },
+        {
+          "key": "ft:prettyUrl",
+          "label": "ft:prettyUrl",
+          "values": [
+            "en-US/technical-articles/Entity_Equivalents_for_Disallowed_XML_Characters"
+          ]
+        }
+      ]
+    },
+    "content": "<div class=\"content-locale-en-US content-locale-en\"><div id=\"reference-1232\"><div class=\"body refbody\"><p class=\"shortdesc\"> \n    </p><section class=\"section\" id=\"reference-1232__section-2335\"><p class=\"p\">XML contains certain reserved characters that must be referenced as entities when the literal character is needed. For example, the open angle bracket (&lt;) is a reserved character that must be referenced using the entity <code class=\"ph codeph\">&amp;lt;</code> to attain the literal character in XML.</p><div class=\"p\">A common scenario that requires the use of entities is when creating XML to be submitted to the Jamf Pro server via the Jamf API using cURL.<div class=\"note note note_note\"><span class=\"note__title\">Note:</span><p class=\"p\">If you submit XML to the Jamf Pro server via the Jamf API and the XML contains literal reserved characters instead of entities, an <samp class=\"ph systemoutput sysout\">\"HTTP 400 (bad request)\"</samp> error could result.</p></div></div></section><section class=\"section\"><h2 class=\"title sectiontitle\">XML Reserved Characters and Entity Equivalents</h2><p class=\"p\">The following table lists the XML reserved characters and their entity equivalents:</p><div class=\"p\"><table class=\"table\"><caption></caption><colgroup><col><col></colgroup><thead class=\"thead\"><tr class=\"row\"><th class=\"entry colsep-1\" id=\"reference-1232__entry__1\">Reserved Character</th><th class=\"entry colsep-1\" id=\"reference-1232__entry__2\">Entity Name</th></tr></thead><tbody class=\"tbody\"><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-1232__entry__1\">&lt;</td><td class=\"entry colsep-1\" headers=\"reference-1232__entry__2\"> &amp;lt;</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-1232__entry__1\">&gt;</td><td class=\"entry colsep-1\" headers=\"reference-1232__entry__2\"> &amp;gt;</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-1232__entry__1\">&amp;</td><td class=\"entry colsep-1\" headers=\"reference-1232__entry__2\"> &amp;amp;</td></tr></tbody></table></div></section></div></div></div>"
+  },
+  "commonRegexPatterns": {
+    "mapId": "ZlB_0jgM2084m7JxZgV1KQ",
+    "contentId": "dw1IsqSUaooueZ0wTn~faA",
+    "topic": {
+      "title": "Common Regex Patterns",
+      "id": "dw1IsqSUaooueZ0wTn~faA",
+      "contentApiEndpoint": "/api/khub/maps/ZlB_0jgM2084m7JxZgV1KQ/topics/dw1IsqSUaooueZ0wTn~faA/content",
+      "metadata": [
+        {
+          "key": "ft:locale",
+          "label": "ft:locale",
+          "values": [
+            "en-US"
+          ]
+        },
+        {
+          "key": "ft:lastEdition",
+          "label": "ft:lastEdition",
+          "values": [
+            "2026-09-23"
+          ]
+        },
+        {
+          "key": "ft:prettyUrl",
+          "label": "ft:prettyUrl",
+          "values": [
+            "en-US/technical-articles/Common_Regex_Patterns"
+          ]
+        }
+      ]
+    },
+    "content": "<div class=\"content-locale-en-US content-locale-en\"><div id=\"reference-9013\"><div class=\"body refbody\"><section class=\"section\" id=\"reference-9013__section-121\"> \n            <p class=\"p\">The following table lists some of the common regex patterns:</p>\n            <div class=\"p\">\n                <table class=\"table\"><caption></caption><colgroup><col style=\"width:16.666666666666664%\"><col style=\"width:83.33333333333334%\"></colgroup><thead class=\"thead\"><tr class=\"row\"><th class=\"entry colsep-1\" id=\"reference-9013__section-121__entry__1\">\n                                    <p class=\"p\">Regex Patterns</p>\n                                </th><th class=\"entry colsep-1\" id=\"reference-9013__section-121__entry__2\">\n                                    <p class=\"p\">Description</p>\n                                </th></tr></thead><tbody class=\"tbody\"><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">. </td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\"> Matches any character, excluding new lines </td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">^</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches the beginning of a line</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">?</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches 0 or 1 occurrences of a value</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">+</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches 1 or more times</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">*</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches 0 or more times</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">$</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches the end of a line</td></tr><tr class=\"row\"><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__1\">\\d</td><td class=\"entry colsep-1\" headers=\"reference-9013__section-121__entry__2\">Matches a numeric digit</td></tr></tbody></table>\n            </div>\n            <p class=\"p\">There are many additional regex patterns that can be used to search for information in Jamf Pro, and you are not limited to the ones listed here.</p>\n            <div class=\"p\">\n                <div class=\"note note note_note\"><span class=\"note__title\">Note:</span>\n                    <p class=\"p\"> The &gt; &amp; &lt; characters are XML reserved characters that overlap with valid regex characters. These reserved characters must be referenced as entities when the literal character is needed.</p>\n                </div>\n            </div>\n        </section></div></div></div>"
+  },
+  "hostnameOptions": {
+    "mapId": "A4LI4vM0BILraYeOD89WGg",
+    "contentId": "NS0Soh7l~U_AffIZyHLUSw",
+    "topic": {
+      "title": "Updating the Hostname and the Local Hostname Using a Policy",
+      "id": "NS0Soh7l~U_AffIZyHLUSw",
+      "contentApiEndpoint": "/api/khub/maps/A4LI4vM0BILraYeOD89WGg/topics/NS0Soh7l~U_AffIZyHLUSw/content",
+      "metadata": [
+        {
+          "key": "version",
+          "label": "version",
+          "values": [
+            "11.32.0"
+          ]
+        },
+        {
+          "key": "jamf:portal",
+          "label": "Portal",
+          "values": [
+            "Jamf Pro"
+          ]
+        },
+        {
+          "key": "ft:lastEdition",
+          "label": "ft:lastEdition",
+          "values": [
+            "2024-04-02"
+          ]
+        },
+        {
+          "key": "ft:locale",
+          "label": "ft:locale",
+          "values": [
+            "en-US"
+          ]
+        },
+        {
+          "key": "ft:prettyUrl",
+          "label": "ft:prettyUrl",
+          "values": [
+            "en-US/jamf-pro-documentation-current/Updating_the_Hostname_and_the_Local_Hostname_Using_a_Policy"
+          ]
+        }
+      ]
+    },
+    "content": "<div class=\"content-locale-en-US content-locale-en\"><div id=\"ID-0001e63f\"><div class=\"body taskbody\"><section class=\"section context\"><p class=\"p\">To update the hostname, computer name, and the local hostname, you need to create a script that includes the new computer name. Then, you can run the script using a policy. The command used in this script can update computers dynamically when DNS services are configured on the network.</p><p class=\"p\">When updating the hostname and the local hostname, use the following guidelines:</p><ul class=\"ul\"><li class=\"li\"><p class=\"p\">Use a hyphen instead of spaces.</p></li><li class=\"li\"><p class=\"p\">The only special character you can use is a hyphen.</p></li><li class=\"li\"><p class=\"p\">Case is not sensitive.</p></li><li class=\"li\"><p class=\"p\">Non-alphanumeric characters are ignored.</p></li></ul><p class=\"p\">You can also add the following options to the command used in the script:</p><dl class=\"dl\"><dt class=\"dt dlterm\">-target &lt;target volume&gt;</dt><dd class=\"dd\"><p class=\"p\">Sets the name when the computer is booted to the specified target volume</p></dd><dt class=\"dt dlterm\">-name &lt;name&gt;</dt><dd class=\"dd\"><p class=\"p\">The new name for the computer</p></dd><dt class=\"dt dlterm\">-useMACAddress</dt><dd class=\"dd\"><p class=\"p\">Changes the name to the primary MAC address</p></dd><dt class=\"dt dlterm\">-useSerialNumber</dt><dd class=\"dd\"><p class=\"p\">Changes the name to the serial number</p></dd><dt class=\"dt dlterm\">-suffix &lt;suffix&gt;</dt><dd class=\"dd\"><p class=\"p\">Adds this suffix to the MAC address or serial number. For example: </p><code class=\"ph codeph\">sudo jamf setComputerName -useMACAddress -suffix '-example'</code></dd><dt class=\"dt dlterm\">-prefix &lt;prefix&gt;</dt><dd class=\"dd\"><p class=\"p\">Adds this prefix to the MAC address or serial number. For example: </p><code class=\"ph codeph\">sudo jamf setComputerName -useMACAddress -prefix '-example'</code></dd><dt class=\"dt dlterm\">-fromFile &lt;file path&gt;</dt><dd class=\"dd\"><p class=\"p\">The path to a CSV file containing the computer's MAC address or serial number, followed by the new name. For example: </p><code class=\"ph codeph\">sudo jamf setComputerName -fromFile '/file/path'</code></dd></dl></section></div></div></div>",
+    "trimmed": "The /content is cut after its first section, which lists the command's options; the steps that follow are left out."
+  }
+}

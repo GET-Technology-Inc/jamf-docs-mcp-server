@@ -6,7 +6,8 @@
  */
 
 /**
- * Escape Markdown special characters in text to prevent Markdown injection.
+ * Escape Markdown special characters in text to prevent Markdown injection,
+ * and keep the text on one line.
  * Use this for titles, snippets, and other text interpolated into Markdown.
  *
  * `<` is escaped because CommonMark passes an HTML tag or comment in text
@@ -16,10 +17,27 @@
  * search snippet needs both since 2026-09-28: it now holds the excerpt's
  * text, which can quote a plist's `<key>`, where it used to drop every `<`
  * and keep the references undecoded.
+ *
+ * Each such text is written into one line: a heading, a list item, a quote.
+ * So a run of whitespace that holds a line break or a tab is one space, and
+ * the other characters of {@link UNSAFE_IN_TITLE} are dropped, before
+ * anything is escaped. Until 2026-09-28 a title holding a newline ended its
+ * line, and the next could start a block of its own: a TOC title
+ * "Policies\n- [x](…)" added an item to the list. The spaces of a line, a
+ * no-break space among them, are left as they are.
  */
 export function sanitizeMarkdownText(text: string): string {
-  return text.replace(/[[\]()#*_`~<>!|\\]|&(?=[A-Za-z][A-Za-z0-9]*;)/g, '\\$&');
+  return text
+    .replace(/[\s\u0085]+/g, run => (LINE_BREAK_OR_TAB.test(run) ? ' ' : run))
+    .replace(UNSAFE_IN_TITLE, '')
+    .replace(/[[\]()#*_`~<>!|\\]|&(?=[A-Za-z][A-Za-z0-9]*;)/g, '\\$&');
 }
+
+/**
+ * The whitespace that ends a line, in Markdown or in a reader of it: CR, LF,
+ * VT, FF, NEL and the line and paragraph separators; and the tab.
+ */
+const LINE_BREAK_OR_TAB = /[\t\n\v\f\r\u0085\u2028\u2029]/;
 
 /**
  * Sanitize a URL for use in Markdown link syntax.
@@ -74,7 +92,9 @@ export function sanitizeErrorMessage(message: string): string {
  * A slug can spell any of them as an escape, which `titleFromSlug` keeps as
  * written. A title a static source lists for a page is stripped of them
  * ({@link listedTitle}), since 2026-09-28, when this moved here from
- * sitemap-service.ts. `sanitizeMarkdownText` removes none of them.
+ * sitemap-service.ts. Since the same day, `sanitizeMarkdownText` removes
+ * them from any text it writes into markdown, and writes a line break or tab
+ * among them as a space.
  */
 export const UNSAFE_IN_TITLE = /[\p{Cc}\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
 
