@@ -1,15 +1,17 @@
 /**
- * `splitCjkWords`, which cuts a Chinese, Japanese or Korean run into its
- * words and leaves the rest of a text to the caller's own splitter, and
+ * `splitWords`, which cuts a Chinese, Japanese or Korean run into its words
+ * and leaves the rest of a text to the caller's own splitter, and
  * `cjkWritingOf`, which says what such a run is written in, and so which
- * languages' documentation can have its words.
+ * languages' documentation can have its words. Thai, which `splitWords` and
+ * `foreignWritingOf` also read, is in writing-of-each-locale.test.ts.
  *
  * Two promises the search suggestions rest on:
  *
- * - Text with no Chinese, Japanese or Korean character goes to the caller's
- *   splitter whole, so a Latin query has exactly the words it had before
- *   (2026-09-28). That includes text whose only such marks are ー, ・, 、 or
- *   。: they are in the Common script, and a run of them alone is not cut.
+ * - Text with no Chinese, Japanese, Korean or Thai character goes to the
+ *   caller's splitter whole, so a Latin query has exactly the words it had
+ *   before (2026-09-28). That includes text whose only such marks are ー, ・,
+ *   、 or 。: they are in the Common script, and a run of them alone is not
+ *   cut.
  * - The module imports on a runtime without `Intl.Segmenter`. The schemas,
  *   the search suggestions and the glossary all import it, so a segmenter
  *   made at import would stop the server from starting there.
@@ -19,8 +21,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   NON_LATIN_LETTER,
   cjkWritingOf,
-  documentationCanHaveCjkOf,
-  splitCjkWords,
+  foreignWritingOf,
+  splitWords,
 } from '../../../src/core/utils/cjk.js';
 
 /** Split the way the search suggestions split Latin text, dropping empty words. */
@@ -30,9 +32,9 @@ function latin(part: string): string[] {
 
 const MIXED = '推送證書、續約 renew パスワード・リセット';
 
-describe('splitCjkWords', () => {
+describe('splitWords', () => {
   it('cuts a run into its words, and leaves its punctuation out', () => {
-    expect(splitCjkWords(MIXED, latin)).toEqual(['推送', '證書', '續約', 'renew', 'パスワード', 'リセット']);
+    expect(splitWords(MIXED, latin)).toEqual(['推送', '證書', '續約', 'renew', 'パスワード', 'リセット']);
   });
 
   it.each([
@@ -43,7 +45,7 @@ describe('splitCjkWords', () => {
   ])('hands %j to the other splitter whole', (text) => {
     const parts: string[] = [];
 
-    const words = splitCjkWords(text, (part) => { parts.push(part); return ['word']; });
+    const words = splitWords(text, (part) => { parts.push(part); return ['word']; });
 
     expect(parts).toEqual([text]);
     expect(words).toEqual(['word']);
@@ -93,7 +95,7 @@ describe('cjkWritingOf', () => {
   );
 });
 
-describe('documentationCanHaveCjkOf', () => {
+describe('foreignWritingOf', () => {
   it.each([
     ['推送證書', 'zh-TW', true],
     ['推送證書', 'zh-CN', true],
@@ -105,9 +107,11 @@ describe('documentationCanHaveCjkOf', () => {
     ['인증서', 'en-US', false],
     // Nothing to rule out.
     ['renew push certificate', 'en-US', true],
-    ['ใบรับรอง', 'en-US', true],
-  ])('%j in %s: %s', (text, language, expected) => {
-    expect(documentationCanHaveCjkOf(text, language)).toBe(expected);
+    // Thai, which the en-US documentation is not written in, ruled out since
+    // 2026-09-28.
+    ['ใบรับรอง', 'en-US', false],
+  ])('%j can be in the documentation in %s: %s', (text, language, expected) => {
+    expect(foreignWritingOf(text, language) === undefined).toBe(expected);
   });
 });
 
@@ -122,7 +126,7 @@ describe('on a runtime without Intl.Segmenter', () => {
 
       // No dictionary to find 推送 and 證書 in 推送證書 by, so it is one word,
       // as a Latin word written without spaces would be.
-      expect(cjk.splitCjkWords(MIXED, latin)).toEqual(['推送證書', '續約', 'renew', 'パスワード', 'リセット']);
+      expect(cjk.splitWords(MIXED, latin)).toEqual(['推送證書', '續約', 'renew', 'パスワード', 'リセット']);
       expect(SearchInputSchema.safeParse({ query: '鎖' }).success).toBe(true);
     } finally {
       if (segmenter !== undefined) { Object.defineProperty(Intl, 'Segmenter', segmenter); }

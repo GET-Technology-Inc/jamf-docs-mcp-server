@@ -191,7 +191,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 
 搜尋結果依 `maxTokens` 分頁。每頁最多 `limit` 筆結果，放得下多少就放多少，下一頁從第一筆放不下的結果開始。每筆結果都恰好出現在某一頁，但在第幾頁取決於 `limit` 與 `maxTokens`，所以翻頁時請維持這兩個參數不變。當它們不是預設值時，markdown 頁尾會在下一個 `page` 旁註明；`structuredContent` 會回傳翻頁時該重送的參數：`filters`、`limit` 與 `maxTokens`。MCP App 的「Show more」會全部重送。若某筆結果本身就超過 `maxTokens`，它會獨佔一頁，摘要 (snippet) 會截短到放得下為止並以 `…` 結尾。只有這種頁面的 `tokenInfo.truncated` 為 `true`，`truncatedResult` 會註明是哪一筆結果，以及整筆結果需要多少 token (`estimatedTokens`)；`outputMode: "full"` 的 markdown 會註明重新呼叫時該用多少 `maxTokens`。若 `limit` 與 `maxTokens` 使頁數超過 `page` 可接受的上限 (100)，第 100 頁不會再提供下一頁，`paginationNote` 會說明如何讀到其餘結果。
 
-「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若查詢含有中文、日文或韓文字詞，而搜尋的語言其文件並非以這些文字撰寫（例如預設的 `en-US`，其文件為英文），則不會建議這些字詞，回應會說明可改用英文術語搜尋，或改用哪個 `language` 搜尋（JSON 為 `localeNote`）。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
+「No results found」表示已完成搜尋，但產品文件中沒有符合的內容（使用 `responseFormat: "json"` 時，則是 `total: 0` 的 JSON 內容）。回應仍會列出產品文件以外的相符頁面（`otherSources`），以及可改用的查詢（`suggestions`）。若查詢含有中文、日文、韓文或泰文字詞，而搜尋的語言其文件並非以這些文字撰寫（例如預設的 `en-US`，其文件為英文），則不會建議這些字詞，回應會說明可改用英文術語搜尋，或改用哪個 `language` 搜尋（JSON 為 `localeNote`）。查詢若沒有以雙引號括住的片語，也沒有以 `+` 或 `-` 標示的字詞，Fluid Topics 只要頁面含有其中任一字詞即視為符合；因此這類查詢沒有結果時，不會建議只用其中較少的字詞（同樣找不到），而是在 markdown 回應中提示檢查拼字或改用其他詞彙。彎引號（“ ” „ ‟）與全形 ＂ 會以直雙引號送往 Fluid Topics，因此以它們括住的片語會當作片語搜尋。若無法完成搜尋（learn.jamf.com 無法連線、逾時或回應錯誤，或自訂的搜尋後端 `SearchProvider` 失敗），工具會回傳錯誤（`isError: true`），說明是哪一步失敗、這並不代表「沒有結果」，以及重試是否可能有幫助。產品文件以外的相符頁面會接在錯誤之後，放在第二個文字區塊。
 
 ### jamf_docs_get_article
 

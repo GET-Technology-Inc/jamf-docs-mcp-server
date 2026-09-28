@@ -87,6 +87,55 @@ a query with no hits. Measured 2026-09-26, en-US: `madeupkey`, `foo_bar`,
 filtered and unfiltered counts, and by checking that every hit carries the
 value, never by the absence of an error.
 
+**A query matches a page with any one of its words**, unless it says
+otherwise. Measured 2026-09-28, en-US: `certificate` 2,768,
+`certificate xyzzyq qwvzx plokm zzqqa jjjkk` 2,768, `certificate renewal`
+3,007 (`renewal` alone 339); each entry's `missingTerms` lists the words it
+lacks. What says otherwise: a phrase in straight double quotes, which a page
+must have (`"push certificate renewal failed"` 0, and 0 with `certificate`
+after it; `"push certificate"` 398, against 462 unquoted), a word with `+`
+before it, which a page must have (`certificate +xyzzyq` 0), and a word with
+`-` before it, which a page must not have (`certificate -push` 2,188,
+`certificate -certificate` 0). A quote that pairs with none is read as no
+quote (`"push certificate` 462), and so are the other quotation marks:
+`“push certificate renewal failed”` 1,978, the unquoted count, and
+`‘push certificate’`, `'push certificate'`, `«push certificate»` and
+`＇push certificate＇` 462 each, as are `„Zertifikat erneuern“` and
+`Zertifikat erneuern` in de-DE (2,352 each). A hyphen inside or between words
+is a space (`wi-fi` and `wi fi` 501 each, `certificate - push` and
+`certificate push` 3,010 each); `AND`, `OR` and `NOT` in capitals are dropped
+(`certificate AND xyzzyq` and `NOT certificate` 2,768 each).
+
+**A query with the full-width quotation mark ＂ (U+FF02) finds nothing**,
+paired or not, whatever its words. Measured 2026-09-28: `＂push certificate＂`
+0 (`"push certificate"` 398), `＂push certificate` 0, `push ＂certificate＂
+renewal` 0 in en-US; `＂プッシュ証明書＂` 0 (`"プッシュ証明書"` 442,
+`プッシュ証明書` 2,449) in ja-JP; and 0 in zh-TW, zh-CN and de-DE. An input
+method in full-width mode can type it. So the search sends ＂ and the curly
+double quotes (“ ” „ ‟) as a straight double quote, and ‘ ’ as a straight
+single one (`straightenQuotes` in `src/core/services/search-suggestions.ts`):
+a phrase quoted with them is then searched as a phrase, as the one who typed
+it meant. „ is straightened with “ because a German phrase opens with „ and
+closes with “; with “ alone straightened, `„Zertifikat erneuern“ „Push“` was
+the phrase `" „Push"` (20, against 42 for `"Zertifikat erneuern" "Push"`).
+The single quotes change no count (`Apple’s` and `Apple's` 9,811 each).
+
+Words are split at every character that is not a letter or digit (`11.32.0`
+and `11 32 0` 21,744 each; `xyzzyq_pro` has the count of `pro`, and
+`Jamf Pro™` the 22,191 of `pro`, while `protm` has 0), and Chinese and Thai
+are cut into words as the Unicode rules cut them (`推送證書續約失敗` and
+`推送 證書 續約 失敗` 992 each in zh-TW). Each language's analysis then
+applies to the words: in de-DE, compounds are taken apart, so the entries
+found for `Zertifikat erneuern fehlgeschlagen` (2,986) list `fehl` and
+`geschlagen` among their `missingTerms`. Accents are folded (`politica` and
+`política` 2,409 each in es-ES), whether typed with the letter or as a
+combining mark after it (`política` in NFD 2,409 too). Full-width Latin is
+folded in ja-JP and zh-TW (`ＭＤＭ` and `MDM` 2,397 each in ja-JP) but not in
+en-US (`ＳＳＯ` 0, `SSO` 1,228). So a query with none of those parts that
+finds nothing has none of its words in the documentation searched, and fewer
+of them find nothing either, since they are analysed as the query's are: see
+`generateSearchSuggestions` in `src/core/services/search-suggestions.ts`.
+
 **Do not send `latestVersion=yes`.** See architectural note 4 below.
 
 **Response shape:**

@@ -53,6 +53,7 @@ import { dedupeResultsToLatestVersions, namedVersion } from './search-result-ver
 import { readSearchProviderResults } from './provider-results.js';
 import { estimateTokens, buildPaginationNote } from './tokenizer.js';
 import { pageStarts, pagesPastTheLastNote } from './budget-pages.js';
+import { straightenQuotes } from './search-suggestions.js';
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -1586,7 +1587,11 @@ async function resolveSearchResults(
   /** One cached round-trip to FT for a given filter set. */
   const fetchFiltered = async (filters: FtSearchFilter[]): Promise<SearchResultWithMeta[]> => {
     const request: FtSearchRequest = {
-      query: params.query,
+      // With ＂ and the curly quotes straightened since 2026-09-28: Fluid
+      // Topics reads a phrase in curly quotes as loose words, and finds
+      // nothing for a query with ＂ in it (see straightenQuotes). The
+      // provider above is handed the query as typed.
+      query: straightenQuotes(params.query),
       contentLocale: locale,
       // Sent explicitly even though it matches Fluid Topics' default, so the
       // ordering this server promises its callers is a stated request
@@ -1606,7 +1611,7 @@ async function resolveSearchResults(
     }
 
     log.debug(
-      `FT search: query="${params.query}", product=${params.product ?? 'all'}, ` +
+      `FT search: query="${request.query}", product=${params.product ?? 'all'}, ` +
       `locale=${locale}, filters=${JSON.stringify(filters)}`
     );
 

@@ -133,14 +133,17 @@ describe('what the other sources matched reaches every channel', () => {
 });
 
 describe('a no-results reply with nothing else to say is unchanged', () => {
-  it('in markdown, word for word', async () => {
+  it('in markdown, word for word but for one tip', async () => {
     const { ctx } = searchUpstream();
 
     const reply = await callSearch(ctx, { query: 'xqzvbnmplk' });
 
-    // As 6.0.12 answered it live.
+    // As 6.0.12 answered it live, with the tip that says what can find
+    // something, added on 2026-09-28 (see search-suggestions-any-word.test.ts).
     expect(reply.text).toBe(
       'No results found for "xqzvbnmplk"\n\n## Search Suggestions\n\n**Tips**:\n' +
+      '- Check the spelling, or try other terms: the search finds pages with any one word of a query, ' +
+      'so none of these words is in the documentation searched\n' +
       '- Browse the table of contents with `jamf_docs_get_toc`\n',
     );
     expect(reply.texts).toHaveLength(1);

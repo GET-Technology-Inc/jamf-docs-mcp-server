@@ -29,7 +29,7 @@ import {
   searchStaticSources,
   type StaticSearchHit,
 } from '../services/static-search-service.js';
-import { NON_LATIN_LETTER, cjkWritingOf, documentationCanHaveCjkOf, type CjkWriting } from '../utils/cjk.js';
+import { NON_LATIN_LETTER, foreignWritingOf, type Writing } from '../utils/cjk.js';
 
 interface SearchFilters {
   product?: string;
@@ -412,7 +412,9 @@ const EXAMPLES_BLOCK = SEARCH_EXAMPLES.map(formatSearchExample).join('\n');
  * SearchInputSchema); the bullet says so, as the schema's description does.
  * The same day, `localeNote` began to be set in en-US too, for a query with
  * words in a script the documentation searched is not written in (see
- * `noResultsLocaleNote`), and its comment says so.
+ * `noResultsLocaleNote`), and its comment says so. Thai is such a script
+ * since 2026-09-28 as well, when a Thai query began to be sent to th-TH, and
+ * the comment names it.
  */
 export const TOOL_DESCRIPTION = `Search Jamf documentation for articles matching your query.
 
@@ -469,7 +471,7 @@ Returns:
     // Queries to try instead, when "results" is empty.
     "suggestions"?: [string],
     // When "results" is empty and language is not ${DEFAULT_LOCALE}, as not all documentation is
-    // in it, or the query has Chinese, Japanese or Korean words and the documentation in
+    // in it, or the query has Chinese, Japanese, Korean or Thai words and the documentation in
     // language is not written in them: which documentation to search instead, and how.
     "localeNote"?: string,
     // Only on a page that is one result cut to fit; see the Note on paging.
@@ -814,12 +816,17 @@ function buildSearchStructuredContent(
  */
 function buildNoResultsResponse(
   params: SearchInput,
-  found: Pick<SearchDocumentationResult, 'pagination' | 'tokenInfo' | 'filterRelaxation'>,
+  found: Pick<SearchDocumentationResult, 'pagination' | 'tokenInfo' | 'filterRelaxation' | 'rankedBy'>,
   otherSources: StaticSearchHit[],
 ): ToolResult {
   const { query } = params;
+  // Which backend found nothing says which queries can find something: Fluid
+  // Topics matches a page on any one word of a query (see
+  // generateSearchSuggestions). "current" is no version filter (see
+  // buildSearchFilters).
   const suggestions = generateSearchSuggestions(
     query, params.product !== undefined, params.topic !== undefined, params.language,
+    { searchedBy: found.rankedBy, hasVersionFilter: params.version !== undefined && params.version !== 'current' },
   );
 
   /**
@@ -899,16 +906,18 @@ function buildNoResultsResponse(
  * The locale caveat on a search with no results: which documentation to
  * search instead, or undefined when there is nothing to say.
  *
- * - A query with Chinese, Japanese or Korean words, in a language whose
- *   documentation is not written as they are (see `cjkWritingOf`), is told so,
- *   and sent to the English terms and to the languages whose documentation is
- *   written as they are. That includes en-US, the default: its documentation
- *   is in English. Until
- *   2026-09-28 such a query had no note in en-US, and nothing said that its
- *   words were not in the documentation searched: live that day,
- *   推送 證書 續約 ("push certificate renewal") had no results in en-US and
- *   50 in zh-TW. Such a query is suggested its Latin words only there (see
- *   `generateSearchSuggestions`).
+ * - A query with Chinese, Japanese, Korean or Thai words, in a language whose
+ *   documentation is not written as they are (see `foreignWritingOf`), is
+ *   told so, and sent to the English terms and to the languages whose
+ *   documentation is written as they are. That includes en-US, the default:
+ *   its documentation is in English. Until 2026-09-28 such a query had no
+ *   note in en-US, and nothing said that its words were not in the
+ *   documentation searched: live that day, 推送 證書 續約 ("push certificate
+ *   renewal") had no results in en-US and 50 in zh-TW. Such a query is
+ *   suggested its Latin words only there (see `generateSearchSuggestions`).
+ *   Thai was not such a script until 2026-09-28: live that day, ใบรับรอง
+ *   ("certificate") had no results and no note in en-US, and in de-DE was
+ *   sent to the English terms alone.
  * - Otherwise, in a language other than en-US: not all documentation is in
  *   it, and the en-US documentation may have what it does not. A query with
  *   a letter of a script other than Latin is told to search that for the
@@ -916,9 +925,9 @@ function buildNoResultsResponse(
  */
 function noResultsLocaleNote(query: string, language: string | undefined): string | undefined {
   const searched = language ?? DEFAULT_LOCALE;
-  const writing = cjkWritingOf(query);
-  if (writing !== undefined && !documentationCanHaveCjkOf(query, searched)) {
-    return cjkElsewhereNote(writing, searched, language === undefined);
+  const writing = foreignWritingOf(query, searched);
+  if (writing !== undefined) {
+    return elsewhereNote(writing, searched, language === undefined);
   }
   if (searched === DEFAULT_LOCALE) { return undefined; }
   const unavailable = `Not all documentation is available in "${searched}".`;
@@ -933,7 +942,7 @@ function noResultsLocaleNote(query: string, language: string | undefined): strin
  * documentation is not written that way: the English terms, which en-US has,
  * and the languages whose documentation is written as the query is.
  */
-function cjkElsewhereNote(writing: CjkWriting, language: string, byDefault: boolean): string {
+function elsewhereNote(writing: Writing, language: string, byDefault: boolean): string {
   const has = `This query has words in ${writing.name}, and the documentation in "${language}"`;
   const english = language === DEFAULT_LOCALE
     ? `${has}${byDefault ? ' (the default language)' : ''} is in English, so it does not have them. ` +
