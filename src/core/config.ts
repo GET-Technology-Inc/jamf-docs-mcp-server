@@ -74,7 +74,7 @@ export interface RequestConfig {
   maxRetries: number;
   /** Base for the exponential backoff between retries, in ms. */
   retryDelay: number;
-  /** Minimum gap between outbound requests from one client, in ms. */
+  /** Minimum gap between outbound requests from one client, retries included, in ms. */
   rateLimitDelay: number;
   /** Sent as the User-Agent header on every request. */
   userAgent: string;

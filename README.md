@@ -563,6 +563,8 @@ on every request, which defeats the limit.
 ## Configuration
 
 All settings are optional. Set them as environment variables before launching the server.
+A numeric setting must be a whole number within its range. Any other value is ignored,
+with a warning on stderr, and the default is used; an empty one counts as unset.
 
 ### Cache Settings
 
@@ -644,7 +646,7 @@ Applied to every outbound request to a documentation host.
 | `REQUEST_TIMEOUT` | `15000` | 1000–60000 ms | Per-attempt HTTP timeout |
 | `MAX_RETRIES` | `0` | 0–10 | Retry attempts after the first. Only 429, 5xx, network errors and timeouts are retried, with exponential backoff and `Retry-After` honoured. `0` disables retrying |
 | `RETRY_DELAY` | `1000` | 100–30000 ms | Base for the backoff between retries. No effect while `MAX_RETRIES` is `0` |
-| `RATE_LIMIT_DELAY` | `0` | 0–10000 ms | Minimum gap between outbound requests. `0` lets parallel fetches stay parallel |
+| `RATE_LIMIT_DELAY` | `0` | 0–10000 ms | Minimum gap between outbound requests, retries included. `0` lets parallel fetches stay parallel |
 | `USER_AGENT` | `jamf-docs-mcp-server/<version> (+<repo url>)` | — | Sent on every request so this client is identifiable to Jamf |
 
 ### HTTP Transport Settings

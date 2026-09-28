@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createHttpClient } from '../../../src/core/http-client.js';
+import { createHttpClient, type HttpClient } from '../../../src/core/http-client.js';
 import { createDefaultConfig, defaultUserAgent } from '../../../src/core/config.js';
 import type { RequestConfig } from '../../../src/core/config.js';
 
@@ -17,6 +17,18 @@ const URL_A = 'https://learn.jamf.com/a';
 function config(overrides: Partial<RequestConfig> = {}): RequestConfig {
   return { ...createDefaultConfig().request, ...overrides };
 }
+
+/**
+ * One call of each method, on URL_A. The retry cases run over all three:
+ * each method makes its own retries, and until 2026-09-28 only getText's
+ * were checked. The maps list, whose retry the fix was measured on, is a
+ * getJson call.
+ */
+const METHODS: readonly (readonly [string, (client: HttpClient) => Promise<unknown>])[] = [
+  ['getText', async client => await client.getText(URL_A)],
+  ['getJson', async client => await client.getJson(URL_A)],
+  ['postJson', async client => await client.postJson(URL_A, {})],
+];
 
 /** Capture every fetch the client makes, answering each one 200 OK. */
 function captureFetch(responder?: () => Response): {
@@ -90,12 +102,11 @@ describe('maxRetries', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('makes 1 + maxRetries attempts when configured', async () => {
+  it.each(METHODS)('%s makes 1 + maxRetries attempts when configured', async (_method, send) => {
     const { calls } = captureFetch(() => new Response('nope', { status: 503 }));
 
-    await expect(
-      createHttpClient(config({ maxRetries: 2, retryDelay: 1 })).getText(URL_A),
-    ).rejects.toThrow();
+    await expect(send(createHttpClient(config({ maxRetries: 2, retryDelay: 1 })))).rejects.toThrow();
+    // Not 9: the attempt the client makes retries nothing itself.
     expect(calls).toHaveLength(3);
   });
 
@@ -150,6 +161,23 @@ describe('rateLimitDelay', () => {
     const gaps = starts.slice(1).map((t, i) => t - starts[i]);
     // Allow slack for timer coarseness; the point is that a gap exists at all.
     for (const gap of gaps) {
+      expect(gap).toBeGreaterThanOrEqual(30);
+    }
+  });
+
+  it.each(METHODS)('%s spaces a retry from the attempt before it, although its backoff is shorter', async (_method, send) => {
+    const starts: number[] = [];
+    vi.stubGlobal('fetch', async () => {
+      starts.push(Date.now());
+      return await Promise.resolve(new Response('nope', { status: 503 }));
+    });
+
+    await expect(send(createHttpClient(config({ rateLimitDelay: 40, maxRetries: 2, retryDelay: 1 })))).rejects.toThrow();
+
+    // Until 2026-09-28 only the call waited its turn, and these were a few
+    // milliseconds apart: the backoff alone.
+    expect(starts).toHaveLength(3);
+    for (const gap of starts.slice(1).map((t, i) => t - starts[i])) {
       expect(gap).toBeGreaterThanOrEqual(30);
     }
   });

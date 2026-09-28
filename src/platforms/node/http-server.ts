@@ -11,7 +11,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 
 import { createHttpHandler } from '../../transport/http-handler.js';
 import { createStderrLogger } from '../../core/services/logging.js';
-import { createNodeConfig, getEnvNumber } from './config.js';
+import { getEnvNumber, packageVersion } from './config.js';
 import type { HttpHandlerConfig, ClientIpExtractor } from '../../transport/http-types.js';
 import { DEFAULT_HTTP_CONFIG } from '../../transport/http-types.js';
 
@@ -144,8 +144,16 @@ function getNodeClientIp(req: IncomingMessage, trustProxy: boolean): string {
 // Configuration from environment
 // ============================================================================
 
+/**
+ * The adapter's own settings, and the version /health reports.
+ *
+ * The version is read from package.json, not from a `createNodeConfig()` of
+ * its own. Until 2026-09-28 it was, after src/index.ts had built the config
+ * for the context, so in HTTP mode every warning that config prints appeared
+ * twice: with REQUEST_TIMEOUT=5 and CACHE_DIR=/etc/jamf-probe, each of the
+ * two warnings was on stderr twice.
+ */
 function buildConfig(): HttpHandlerConfig {
-  const nodeConfig = createNodeConfig();
   const corsAllowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? '')
     .split(',')
     .map(s => s.trim())
@@ -158,7 +166,7 @@ function buildConfig(): HttpHandlerConfig {
 
   return {
     ...DEFAULT_HTTP_CONFIG,
-    serverVersion: nodeConfig.version,
+    serverVersion: packageVersion(),
     corsAllowedOrigins,
     trustProxy,
     rateLimitRpm,

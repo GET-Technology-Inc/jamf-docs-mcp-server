@@ -373,7 +373,8 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 
 ## 環境變數
 
-可選的環境變數設定：
+可選的環境變數設定。數值設定必須是有效範圍內的整數，其他值會被忽略，在 stderr 輸出警告並改用
+預設值；空值視同未設定。
 
 ### 快取設定
 
@@ -441,7 +442,7 @@ map TOC 索引沿用 `CACHE_TTL_ARTICLE`，concepts.jamf.com 與 support.jamf.co
 | `REQUEST_TIMEOUT` | 單次嘗試的 HTTP 逾時 (ms) | `15000` | 1 秒 - 60 秒 |
 | `MAX_RETRIES` | 首次之後的重試次數。僅重試 429、 5xx、網路錯誤與逾時，採指數退避並尊重 `Retry-After`。`0` 表示不重試 | `0` | 0 - 10 |
 | `RETRY_DELAY` | 重試退避的基準時間 (ms)。`MAX_RETRIES` 為 `0` 時無作用 | `1000` | 100ms - 30 秒 |
-| `RATE_LIMIT_DELAY` | 對外請求的最小間隔 (ms)。`0` 讓平行抓取維持平行 | `0` | 0 - 10 秒 |
+| `RATE_LIMIT_DELAY` | 對外請求 (含重試) 的最小間隔 (ms)。`0` 讓平行抓取維持平行 | `0` | 0 - 10 秒 |
 | `USER_AGENT` | 每個請求都會送出，讓 Jamf 能辨識這個 client | `jamf-docs-mcp-server/<version> (+<repo url>)` | 任意字串 |
 
 ### HTTP 傳輸設定
