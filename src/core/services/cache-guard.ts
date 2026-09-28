@@ -146,10 +146,10 @@ const guards = new WeakMap<CacheProvider, GuardedCache>();
  * - `clear`, `stats` and `prune` are the provider's own.
  *
  * One provider always gets the same guard, and a guard is its own. That
- * matters: the glossary's and the static sources' Fuse indexes, the map TOC
- * loads in flight, and the loads in flight of load-once.ts, are kept per
- * `CacheProvider`, and src/index.ts creates a server per HTTP request over
- * one context. `loggers`, when given, is where the guard logs; see
+ * matters: the glossary's and the static sources' Fuse indexes, and the
+ * loads in flight of load-once.ts, are kept per `CacheProvider`, and
+ * src/index.ts creates a server per HTTP request over one context.
+ * `loggers`, when given, is where the guard logs; see
  * {@link GuardedCache.adopt}.
  */
 export function guardCache(cache: CacheProvider, loggers?: LoggerFactory): CacheProvider {

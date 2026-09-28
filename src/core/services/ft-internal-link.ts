@@ -38,7 +38,8 @@ import type { HttpClient } from '../http-client.js';
 import { buildDisplayUrl } from './topic-resolver.js';
 import type { CacheProvider } from './interfaces/cache.js';
 import type { Logger } from './interfaces/logger.js';
-import { cacheKey } from './cache-key.js';
+import { cacheKey, type CacheKey } from './cache-key.js';
+import { loadOnce } from './load-once.js';
 import type { ArticleNavigation, ArticleNavigationLink, FtTocNode } from '../types.js';
 
 // ─── Markup constants ──────────────────────────────────────────
@@ -209,72 +210,46 @@ function indexTocNodes(
 }
 
 /**
- * Loads of a map's TOC index still in flight, per cache and then per map.
+ * A map's TOC index, in one load however many callers want it at once
+ * (load-once.ts).
  *
- * Collapses a burst of loads of one map into one. `batch_get_articles` runs up
- * to five articles at once, and in a cold map every one of them missed the
- * cache and fetched the TOC for itself: the workers start together and fetch
- * their topics in about the same time, so they reach the index within
- * milliseconds of each other, well inside one `/toc` download (#339).
- * `TopicResolver.inflight` and `MapsRegistry.buildPromise` guard the topic
- * index and the map list against the same fan-out.
+ * `batch_get_articles` runs up to five articles at once, and in a cold map
+ * every one of them missed the cache and fetched the TOC for itself: the
+ * workers start together and fetch their topics in about the same time, so
+ * they reach the index within milliseconds of each other, well inside one
+ * `/toc` download (#339). #341 gave this load a guard of its own, per cache
+ * and map, which #370 generalised as load-once.ts. Until 2026-09-28 this
+ * kept its own copy.
  *
- * Keyed by the `CacheProvider` rather than module-level, for the reason
- * `TopicResolver.inflight` is an instance member: a guard scoped to one server
- * cannot reach across requests in a runtime where module scope persists
- * (Cloudflare Workers). The glossary's and the static sources' Fuse indexes are
- * scoped the same way. It holds a load only while it runs and nothing after
- * it settles, so it can neither serve a stale index nor pin a failure: the
- * cache stays the only store of the index.
+ * A caller that joins gets the load as the first caller started it, with the
+ * first caller's client and TTL. Both come from one server's config.
  */
-const loadsInFlight = new WeakMap<CacheProvider, Map<string, Promise<MapTocIndex>>>();
-
 async function loadMapTocIndex(
   http: HttpClient,
   cache: CacheProvider,
   mapId: string,
   ttl: number | undefined,
 ): Promise<MapTocIndex> {
-  let inFlight = loadsInFlight.get(cache);
-  if (inFlight === undefined) {
-    inFlight = new Map();
-    loadsInFlight.set(cache, inFlight);
-  }
-  // A caller that joins gets the load as the first caller started it, with the
-  // first caller's client and TTL. Both come from one server's config.
-  const pending = inFlight.get(mapId);
-  if (pending !== undefined) {
-    return await pending;
-  }
-
-  const load = readOrBuildMapTocIndex(http, cache, mapId, ttl);
-  inFlight.set(mapId, load);
-  // Cleaned up in a `finally` around the await, not with `load.finally(...)`:
-  // that returns a second promise which rejects along with `load` and which
-  // nothing handles, and an unhandled rejection terminates the process. It is
-  // the bug test/unit/services/topic-resolver-crash.test.ts pins.
-  try {
-    return await load;
-  } finally {
-    inFlight.delete(mapId);
-  }
+  const key = cacheKey('ft-tocindex-v3', { mapId });
+  return await loadOnce(cache, key, async () => await readOrBuildMapTocIndex(http, cache, mapId, key, ttl));
 }
 
 /**
- * The cached index, or one built from a fresh fetch and stored.
+ * The cached index, or one built from a fresh fetch and stored: the load
+ * {@link loadMapTocIndex} shares.
  *
- * The cache read is inside the guarded load, not ahead of it. A caller that
- * read the cache first and checked the guard second could miss both, reading
- * before the index was written and checking after the load had cleared, and
+ * The cache read is inside the shared load, not ahead of it. A caller that
+ * read the cache first and looked for a load second could miss both, reading
+ * before the index was written and looking after the load had cleared, and
  * fetch the TOC again.
  */
 async function readOrBuildMapTocIndex(
   http: HttpClient,
   cache: CacheProvider,
   mapId: string,
+  key: CacheKey,
   ttl: number | undefined,
 ): Promise<MapTocIndex> {
-  const key = cacheKey('ft-tocindex-v3', { mapId });
   const cached = await cache.get<MapTocIndex>(key);
   if (cached !== null) {
     return cached;
