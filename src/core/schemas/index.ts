@@ -38,8 +38,16 @@ const OutputModeSchema = z.nativeEnum(OutputMode);
  * this shape (`11.13.0` … `11.31.1`, `2.45.0`, `current`); nothing upstream
  * accepts a wildcard, so the old `"10.x"` example in the description below was
  * never a working input.
+ *
+ * Bounded as well: until 2026-09-28 the pattern took a version of any length,
+ * and a 100,000-digit one went upstream whole (see
+ * `CONTENT_LIMITS.MAX_VERSION_LENGTH`).
  */
 const VersionSchema = z.string()
+  .max(
+    CONTENT_LIMITS.MAX_VERSION_LENGTH,
+    `Version must not exceed ${String(CONTENT_LIMITS.MAX_VERSION_LENGTH)} characters`
+  )
   .regex(
     /^(?:current|\d+(?:\.\d+)*)$/,
     'Version must be dotted numerals (e.g. "11.13.0") or "current"'
@@ -173,7 +181,10 @@ export const SearchInputSchema = z.object({
   version: completable(
     VersionSchema
       .optional()
-      .describe('Filter by version (e.g., "11.13.0") or "current"'),
+      .describe(
+        'Filter by version (e.g., "11.13.0") or "current", ' +
+        `at most ${String(CONTENT_LIMITS.MAX_VERSION_LENGTH)} characters`
+      ),
     completeVersion
   ),
 
@@ -251,9 +262,17 @@ export const GetArticleInputSchema = z.object({
     completeLanguage
   ),
 
+  // Bounded since 2026-09-28: see CONTENT_LIMITS.MAX_SECTION_LENGTH.
   section: z.string()
+    .max(
+      CONTENT_LIMITS.MAX_SECTION_LENGTH,
+      `Section must not exceed ${String(CONTENT_LIMITS.MAX_SECTION_LENGTH)} characters`
+    )
     .optional()
-    .describe('Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration")'),
+    .describe(
+      'Extract only a specific section by title or ID (e.g., "Prerequisites", "Configuration"), ' +
+      `at most ${String(CONTENT_LIMITS.MAX_SECTION_LENGTH)} characters`
+    ),
 
   summaryOnly: z.boolean()
     .default(false)
@@ -312,7 +331,10 @@ export const GetTocInputSchema = z.object({
   version: completable(
     VersionSchema
       .optional()
-      .describe('Specific version (e.g. "11.13.0"); defaults to latest'),
+      .describe(
+        `Specific version (e.g. "11.13.0"), at most ${String(CONTENT_LIMITS.MAX_VERSION_LENGTH)} characters; ` +
+        'defaults to latest'
+      ),
     completeVersion
   ),
 

@@ -181,7 +181,7 @@ npx @modelcontextprotocol/inspector npx -y @get-technology-inc/jamf-docs-mcp-ser
 | `product` | string | 否 | 依產品 ID 篩選 (詳見支援產品表) |
 | `topic` | string | 否 | 依主題篩選 (enrollment、profiles、security 等) |
 | `docType` | string | 否 | 依文件類型篩選: `documentation`、`release-notes`、`training`、`solution-guide`、`glossary`、`getting-started` |
-| `version` | string | 否 | 依版本篩選 (例如 `"11.13.0"`) 或 `"current"` |
+| `version` | string | 否 | 依版本篩選 (例如 `"11.13.0"`) 或 `"current"`，最長 50 個字元 |
 | `language` | string | 否 | 文件語系 (預設: `en-US`) |
 | `limit` | number | 否 | 每頁最多結果數 1-50 (預設: 10) |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
@@ -212,7 +212,7 @@ support.jamf.com 的每個子 collection，傳入這種網址會回傳該 collec
 | `url` | string | 擇一 | 文章完整 `https://` URL (須來自 `learn.jamf.com`、`docs.jamf.com`、`concepts.jamf.com` 或 `support.jamf.com`，最長 2,048 個字元) |
 | `mapId` | string | 擇一 | Fluid Topics map ID (取自搜尋結果或目錄)，須與 `contentId` 一起提供，可取代 `url` 或與其並用 |
 | `contentId` | string | 擇一 | Fluid Topics content ID (取自搜尋結果或目錄)，須與 `mapId` 一起提供，可取代 `url` 或與其並用 |
-| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
+| `section` | string | 否 | 依標題或 ID 擷取特定段落 (例如 `"Prerequisites"`)，最長 200 個字元。找不到符合的標題不算錯誤：回應會列出文章的段落，或說明文章沒有段落，並附上子主題及其網址；learn.jamf.com 頁面上看到的段落大多其實是子主題 |
 | `summaryOnly` | boolean | 否 | 只回傳文章摘要與大綱 (文章有子主題時一併列出)，節省 token (預設: `false`) |
 | `includeRelated` | boolean | 否 | 回應中包含相關文章連結 (預設: `false`) |
 | `language` | string | 否 | 文件語系 (預設: `url` 本身的語系)。會覆寫 `url` 中的語系。在 concepts.jamf.com、support.jamf.com 上，頁面若沒有該語系的版本，會回傳 `url` 所指的頁面並附註說明。對 `mapId` + `contentId` 組合 (每個 map 已固定為單一語系) 沒有作用 |
@@ -232,7 +232,7 @@ support.jamf.com 的每個子 collection，傳入這種網址會回傳該 collec
 |------|------|------|------|
 | `product` | string | 擇一 | 產品 ID (詳見支援產品表) |
 | `publication` | string | 擇一 | 單一出版品的 bundle family ID (1-200 字元)，例如 `jamf-pro-release-notes` 或 `technical-paper-laps`；可用 `jamf_docs_list_products` 查詢 |
-| `version` | string | 否 | 特定版本 (例如 `"11.13.0"`) 或 `"current"` (預設: 最新版) |
+| `version` | string | 否 | 特定版本 (例如 `"11.13.0"`) 或 `"current"` (預設: 最新版)，最長 50 個字元 |
 | `language` | string | 否 | 文件語系 (預設: `en-US`)。Jamf 未以該語系發布的產品或出版品，會提供 en-US 版本，並附上 `localeNote` 說明 |
 | `page` | number | 否 | 分頁頁碼 1-100 (預設: 1) |
 | `maxTokens` | number | 否 | 回應最大 token 數 100-50000 (預設: 5000) |
@@ -304,7 +304,7 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 | Product Table of Contents | `jamf://products/{productId}/toc` | 特定產品目前版本文件的完整目錄結構 (範本資源，詳見下方) |
 | Product Documentation Versions | `jamf://products/{productId}/versions` | 特定產品的可用文件版本清單 (範本資源) |
 
-範本資源 (`jamf://products/{productId}/toc` 與 `jamf://products/{productId}/versions`) 支援 MCP 自動補全：輸入 `{productId}` 時會提供所有有效產品 ID 的建議選項。
+範本資源 (`jamf://products/{productId}/toc` 與 `jamf://products/{productId}/versions`) 支援 MCP 自動補全：輸入 `{productId}` 時會提供所有有效產品 ID 的建議選項。超過 100 個字元的 `productId` 會以參數無效 (invalid params) 拒絕；不是任何產品的 `productId` 則會回傳說明此事並列出所有產品 ID 的內容。
 
 `jamf://products/{productId}/toc` 包含該產品目前版本 en-US 文件的完整目錄，巢狀結構與 `jamf_docs_get_toc` 的 JSON 回應相同，上限為 20000 token (與該工具計算 `maxTokens` 的方式相同，只計算項目標題)。這是標題的上限，不是 JSON 的大小；JSON 還包含每個項目的 URL 與 ID。2026-09-28 量測時所有產品都在上限內：最大的 Jamf Pro 約 8,400 token (794 個項目，JSON 為 267 KB)。`complete` 表示 `toc` 是否為完整目錄；若不完整，`shownEntries` 為其中的項目數，`missing` 會說明缺少哪些項目，以及在 `jamf_docs_get_toc` 能取得時該如何呼叫。`mapId` 是這些項目所屬的 map，與項目的 `contentId` 組成 `jamf_docs_get_article` 取得該項目文章所用的 `mapId` + `contentId`。每個 map 已固定為單一版本與單一語系，因此不需另外指定版本或語系。無法確定這些項目屬於哪一個 map 時不會有 `mapId`，此時仍可用各項目的 `url` 取得文章。
 
@@ -319,7 +319,7 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `problem` | string | 是 | 問題描述 (最多 2000 字元) |
-| `product` | string | 否 | Jamf 產品 ID (支援自動補全) |
+| `product` | string | 否 | Jamf 產品 ID (支援自動補全，最多 100 字元) |
 
 執行步驟：搜尋相關文件 → 以 `summaryOnly` 快速評估相關性 → 深入閱讀解決方案 → 提供根本原因分析與逐步解決方案。
 
@@ -330,7 +330,7 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `feature` | string | 是 | 要設定的功能或能力 (最多 2000 字元) |
-| `product` | string | 否 | Jamf 產品 ID (支援自動補全) |
+| `product` | string | 否 | Jamf 產品 ID (支援自動補全，最多 100 字元) |
 
 執行步驟：搜尋設定文件 → 找到主要設定文章 → 擷取詳細步驟 → 整理成含前置需求、設定步驟、驗證方法的完整指南。
 
@@ -341,8 +341,8 @@ learn.jamf.com，或自訂的 `MapsProvider`），出版品清單與產品版本
 | 參數 | 類型 | 必填 | 說明 |
 |------|------|------|------|
 | `product` | string | 是 | Jamf 產品 ID (支援自動補全，最多 100 字元) |
-| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.13.0"`) |
-| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.32.0"`) |
+| `version_a` | string | 是 | 第一個比較版本 (例如 `"11.13.0"`，最多 50 字元) |
+| `version_b` | string | 是 | 第二個比較版本 (例如 `"11.32.0"`，最多 50 字元) |
 
 執行步驟：取得兩個版本的目錄 → 識別結構差異 → 審閱關鍵變更文章 → 彙整新增功能、移除功能及遷移注意事項。
 

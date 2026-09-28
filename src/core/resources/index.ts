@@ -7,9 +7,9 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/server';
-import { ResourceTemplate } from '@modelcontextprotocol/server';
+import { ProtocolError, ProtocolErrorCode, ResourceTemplate } from '@modelcontextprotocol/server';
 import type { ServerContext } from '../types/context.js';
-import { JAMF_PRODUCTS, type ProductId } from '../constants.js';
+import { CONTENT_LIMITS, JAMF_PRODUCTS, type ProductId } from '../constants.js';
 import {
   getProductsResourceData,
   getTopicsResourceData,
@@ -40,15 +40,34 @@ interface ResourceContents {
   cacheScope?: 'public' | 'private';
 }
 
+/**
+ * The product a template's `{productId}` names, or the body that says it
+ * names none.
+ *
+ * A `productId` longer than `CONTENT_LIMITS.MAX_PRODUCT_LENGTH` is refused as
+ * invalid params, with an error that does not quote it: a body would, in its
+ * `uri`, which is the uri read. Until 2026-09-28 it got that body, quoting it
+ * twice, whatever its length. Until the same day a key every object has,
+ * such as `constructor` or `toString`, was taken for a product too, being
+ * `in` JAMF_PRODUCTS: offline, `jamf://products/constructor/versions`
+ * answered `"product": "Object"` and versions `[null]`, and its `/toc` an
+ * error reading `undefined`.
+ */
 function validateProductId(
   productId: string | string[] | number | undefined,
   uri: URL
 ): { valid: true; id: ProductId } | { valid: false; errorResponse: ResourceContents } {
   const productIdStr = String(productId);
-  if (productIdStr in JAMF_PRODUCTS) {
+  const validIds = Object.keys(JAMF_PRODUCTS).join(', ');
+  if (productIdStr.length > CONTENT_LIMITS.MAX_PRODUCT_LENGTH) {
+    throw new ProtocolError(
+      ProtocolErrorCode.InvalidParams,
+      `Product ID must not exceed ${String(CONTENT_LIMITS.MAX_PRODUCT_LENGTH)} characters. Valid products: ${validIds}`
+    );
+  }
+  if (Object.hasOwn(JAMF_PRODUCTS, productIdStr)) {
     return { valid: true, id: productIdStr as ProductId };
   }
-  const validIds = Object.keys(JAMF_PRODUCTS).join(', ');
   return {
     valid: false,
     errorResponse: {

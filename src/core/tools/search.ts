@@ -458,7 +458,7 @@ Args:
   - product (string, optional): Filter by product ID (use jamf_docs_list_products to see all)
   - topic (string, optional): ${TOPIC_HINT}
   - docType (string, optional): Filter by document type: documentation, release-notes, training, solution-guide, glossary, getting-started
-  - version (string, optional): Filter by version (e.g., "11.13.0") or "current"
+  - version (string, optional): Filter by version (e.g., "11.13.0") or "current", at most ${CONTENT_LIMITS.MAX_VERSION_LENGTH} characters
   - language (string, optional): Documentation language/locale (default: ${DEFAULT_LOCALE})
   - limit (number, optional): Maximum results per page 1-${CONTENT_LIMITS.MAX_SEARCH_RESULTS} (default: ${CONTENT_LIMITS.DEFAULT_SEARCH_RESULTS})
   - page (number, optional): Page number for pagination 1-${PAGINATION_CONFIG.MAX_PAGE} (default: ${PAGINATION_CONFIG.DEFAULT_PAGE})
