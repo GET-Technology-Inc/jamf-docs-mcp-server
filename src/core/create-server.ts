@@ -8,7 +8,7 @@
 
 import { McpServer } from '@modelcontextprotocol/server';
 import type { ServerContext } from './types/context.js';
-import { SERVER_ICON, PRODUCT_ID_LIST, TOKEN_CONFIG } from './constants.js';
+import { SERVER_ICON, PRODUCT_ID_LIST, TOKEN_CONFIG, CONTENT_LIMITS } from './constants.js';
 import { guardCache } from './services/cache-guard.js';
 
 import { registerListProductsTool } from './tools/list-products.js';
@@ -165,6 +165,7 @@ export function createMcpServer(serverCtx: ServerContext, options?: CreateServer
     {
       instructions: SERVER_INSTRUCTIONS,
       cacheHints: CACHE_HINTS,
+      maxToolInputElements: CONTENT_LIMITS.MAX_TOOL_INPUT_ELEMENTS,
       capabilities: {
         // MCP Apps (SEP-2133 extensions framework). Hosts that negotiate this
         // render search results, tables of contents and articles in the
