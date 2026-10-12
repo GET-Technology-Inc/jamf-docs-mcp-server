@@ -346,7 +346,8 @@ describe('Jamf classification', () => {
    * are present on every map —
    * an unclassified one carries them with an empty `values` array, which is
    * why `jamf-technical-glossary` below spells them out rather than omitting
-   * them.
+   * them. The one exception is a map with no bundle at all, which the
+   * registry does not list (see the last test below).
    */
   const CLASSIFIED_MAPS = [
     makeMap('course-170-en', 'Jamf 170 Course', {
@@ -438,5 +439,28 @@ describe('Jamf classification', () => {
     const trust = await find('jamf-trust-documentation');
     expect(trust.locales).toEqual(['en-US', 'ja-JP']);
     expect(trust.portal).toEqual(['Jamf Safe Internet', 'Jamf Protect']);
+  });
+
+  it('does not list a map published without a bundle, which carries no classification key', async () => {
+    // Live since 2026-10-08: "JamfProShorts" (iRGXFASEd8BG9xiO72krFw), a copy
+    // of training-video-shorts-jamf-pro uploaded with none of Jamf's metadata
+    // — no bundle, no jamf:* key. With no stem it has no publication to join
+    // and none of its own, so it must not surface as a nameless one, and its
+    // missing keys must not reach any family's classification.
+    mockedFetchMaps.mockResolvedValue([
+      ...CLASSIFIED_MAPS,
+      makeMap('iRGXFASEd8BG9xiO72krFw', 'JamfProShorts', {
+        'ft:locale': ['en-US'],
+        'ft:clusterId': ['m_JamfProShorts.ditamap'],
+        'jamf:contentType': [],
+      }),
+    ]);
+    const withStray = new MapsRegistry(createMockCache());
+
+    const publications = await withStray.listPublications();
+    expect(publications.map(p => p.id).sort()).toEqual([
+      'jamf-170-course', 'jamf-technical-glossary', 'jamf-trust-documentation', 'title-editor',
+    ]);
+    expect((await withStray.getProducts()).map(p => p.bundleStem)).not.toContain('');
   });
 });
