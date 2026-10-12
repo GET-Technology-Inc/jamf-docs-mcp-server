@@ -465,7 +465,7 @@ map TOC 索引沿用 `CACHE_TTL_ARTICLE`，concepts.jamf.com 與 support.jamf.co
 | 變數 | 說明 | 預設值 | 有效範圍 |
 |------|------|--------|----------|
 | `RATE_LIMIT_RPM` | HTTP 模式每 IP 每分鐘請求上限 | `60` | 1 - 10000 |
-| `CORS_ALLOWED_ORIGINS` | CORS 允許的來源 (逗號分隔) | `""` (停用 CORS) | 逗號分隔的 URL 列表 |
+| `CORS_ALLOWED_ORIGINS` | CORS 允許的來源 (逗號分隔)。`<scheme>://*` 允許該 scheme 的所有來源，例如 `chrome-extension://*`、`moz-extension://*`；`http://*` 與 `https://*` 不適用 | `""` (停用 CORS) | 逗號分隔的 URL 列表 |
 | `TRUST_PROXY` | 改以 `X-Forwarded-For` 最右側的位址作為每 IP 速率限制的客戶端 IP，而非連線來源位址。僅限在反向代理後方啟用，詳見下方說明 | 關閉 | `true` 或 `1` |
 
 `RATE_LIMIT_RPM` 的「每 IP」預設指的是 TCP 連線的來源位址。放在反向代理後方時，所有

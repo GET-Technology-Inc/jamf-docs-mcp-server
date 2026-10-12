@@ -546,7 +546,13 @@ By default the server does not set CORS headers (cross-origin requests are block
 CORS_ALLOWED_ORIGINS=https://myapp.example.com node dist/index.js --transport http
 ```
 
-Multiple origins are separated by commas.
+Multiple origins are separated by commas. An entry of the form `<scheme>://*` allows every origin of that scheme, for browser extensions whose IDs differ per install:
+
+```bash
+CORS_ALLOWED_ORIGINS=https://myapp.example.com,moz-extension://*,chrome-extension://*
+```
+
+`http://*` and `https://*` are not honoured; list websites by full origin, or use `*` to allow every origin.
 
 ### Rate Limiting
 
@@ -677,7 +683,7 @@ Applied to every outbound request to a documentation host.
 | Variable | Default | Range | Description |
 |----------|---------|-------|-------------|
 | `RATE_LIMIT_RPM` | `60` | 1–10000 | Inbound requests per minute per IP (HTTP transport only) |
-| `CORS_ALLOWED_ORIGINS` | `` (empty) | — | Comma-separated list of allowed CORS origins (HTTP transport only) |
+| `CORS_ALLOWED_ORIGINS` | `` (empty) | — | Comma-separated list of allowed CORS origins; `<scheme>://*` allows a whole non-HTTP scheme such as `chrome-extension://*` (HTTP transport only) |
 | `TRUST_PROXY` | off | `true` or `1` | Take the client IP for the per-IP rate limit from the rightmost `X-Forwarded-For` entry instead of the socket. Enable only behind a reverse proxy — see [Rate Limiting](#rate-limiting) (HTTP transport only) |
 
 ## Development

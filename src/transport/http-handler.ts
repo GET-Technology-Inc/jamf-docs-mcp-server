@@ -55,6 +55,26 @@ export const CORS_ALLOWED_HEADERS = [
 /** Response headers a browser-based MCP client is allowed to read. */
 export const CORS_EXPOSED_HEADERS = ['Mcp-Session-Id'].join(', ');
 
+/**
+ * Whether `origin` is one `allowedOrigins` lists. An entry is either a whole
+ * origin, matched exactly, or `<scheme>://*`, which allows every origin of
+ * that scheme — the form the SDK's `validateOriginHeader` takes since 2.3.0,
+ * for browser extensions: a Firefox extension's origin
+ * (`moz-extension://<uuid>`) differs on every install, so it cannot be listed
+ * whole. `http://*` and `https://*` are not honoured, as there: that would be
+ * `*`, spelled so it is not obviously everything. Websites are listed whole.
+ */
+function isAllowedOrigin(origin: string, allowedOrigins: readonly string[]): boolean {
+  if (allowedOrigins.includes(origin)) { return true; }
+  let scheme: string;
+  try {
+    scheme = new URL(origin).protocol;
+  } catch {
+    return false;
+  }
+  return scheme !== 'http:' && scheme !== 'https:' && allowedOrigins.includes(`${scheme}//*`);
+}
+
 function getCorsHeaders(
   origin: string | null,
   allowedOrigins: string[],
@@ -75,8 +95,8 @@ function getCorsHeaders(
     return headers;
   }
 
-  // Otherwise, check exact match against the allowed list
-  if (origin !== null && allowedOrigins.includes(origin)) {
+  // Otherwise, match the origin against the allowed list
+  if (origin !== null && isAllowedOrigin(origin, allowedOrigins)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
     headers['Access-Control-Allow-Headers'] = CORS_ALLOWED_HEADERS;

@@ -356,6 +356,60 @@ describe('CORS — exact origin matching', () => {
 });
 
 // ============================================================================
+// CORS headers — scheme wildcard (`<scheme>://*`)
+// ============================================================================
+
+describe('CORS — scheme wildcard origin', () => {
+  let handler: (request: Request) => Promise<Response>;
+  let cleanup: () => void;
+
+  // A Firefox extension's origin is a per-install uuid, so it can only be
+  // allowed by scheme. `https://*` is listed to show it is NOT honoured.
+  const allowedOrigins = ['moz-extension://*', 'https://*', 'https://app.example.com'];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    shared.createMcpHandler.mockReturnValue(shared.mcpHandlerInstance);
+    ({ handler, cleanup } = createHttpHandler(
+      (() => makeMockMcpServer()) as never,
+      makeConfig({ corsAllowedOrigins: allowedOrigins }),
+      alwaysLocalIp,
+    ));
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  const allowOriginFor = async (origin: string): Promise<string | null> =>
+    (await handler(makeRequest({ path: '/health', headers: { origin } })))
+      .headers.get('access-control-allow-origin');
+
+  it('reflects any origin of a listed non-HTTP scheme, never `*`', async () => {
+    const origin = 'moz-extension://3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f';
+    const res = await handler(makeRequest({ path: '/health', headers: { origin } }));
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+    expect(res.headers.get('vary')).toBe('Origin');
+  });
+
+  it('does not allow a scheme that is not listed', async () => {
+    expect(await allowOriginFor('chrome-extension://abcdefghijklmnop')).toBeNull();
+  });
+
+  it('does not honour `https://*` as a scheme wildcard', async () => {
+    expect(await allowOriginFor('https://evil.example.com')).toBeNull();
+  });
+
+  it('still matches a whole origin listed beside it', async () => {
+    expect(await allowOriginFor('https://app.example.com')).toBe('https://app.example.com');
+  });
+
+  it('allows nothing for an Origin that is not a url', async () => {
+    expect(await allowOriginFor('null')).toBeNull();
+  });
+});
+
+// ============================================================================
 // CORS headers — wildcard origin
 // ============================================================================
 
