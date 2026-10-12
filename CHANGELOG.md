@@ -1,3 +1,17 @@
+## [6.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.14...v6.1.0) (2026-10-12)
+
+### Features
+
+* adopt MCP SDK 2.3 — tool input cap and scheme-wildcard CORS origins ([#405](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/405)) ([9e0b979](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9e0b979e6dc0d57d8c7c582fb90c193e60383401))
+
+### Dependencies
+
+* bump brace-expansion in the security group across 1 directory ([#397](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/397)) ([c82b5f0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c82b5f001d13b9123f3fdd870fe17b4b4bb6d7f3))
+* bump source-map-js ([#400](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/400)) ([be1f339](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/be1f339cd5257b8ab86ad9f1260d6f92331b221d))
+* bump the dev-dependencies group with 3 updates ([#396](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/396)) ([9ef1ccb](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/9ef1ccba3204a386c3ece0f86c676fac655c3c24))
+* bump vitest from 5.0.1 to 5.0.2 in the vitest group ([#395](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/395)) ([486d7ff](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/486d7ff8a421f0471a0e62a2beb2a6357557f33c))
+* bump vitest from 5.0.2 to 5.0.3 in the vitest group ([#398](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/398)) ([6eea45d](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/6eea45dd8e3d84bf7878a645bce26b24d6815dae))
+
 ## [6.0.14](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.13...v6.0.14) (2026-09-29)
 
 ### Bug Fixes
