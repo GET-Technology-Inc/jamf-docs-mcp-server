@@ -44,6 +44,16 @@ export const CONTENT_LIMITS = {
    */
   MAX_SECTION_LENGTH: 200,
   /**
+   * The most array elements and object members, counted together, one
+   * `tools/call` `arguments` payload may hold — the SDK's
+   * `maxToolInputElements` (2.3.0). The largest valid payload any tool takes
+   * is `jamf_docs_batch_get_articles`' 10 urls plus its handful of options,
+   * under 25; 256 leaves room for every tool to grow ten-fold. A call over it
+   * is answered `isError: true` before its schema is validated, so a payload
+   * of millions of members is never walked by zod.
+   */
+  MAX_TOOL_INPUT_ELEMENTS: 256,
+  /**
    * The longest `version` a tool takes, in characters: 50, as for
    * `jamf_compare_versions`' `version_a` and `version_b`. The longest of the
    * 46 versions in the maps list on 2026-09-28 was 7 (`11.32.1`). Until
