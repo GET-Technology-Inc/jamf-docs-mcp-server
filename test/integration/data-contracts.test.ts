@@ -358,13 +358,30 @@ describe('FT API data contracts', () => {
       // for "Jamf assigns none" — there is no "key missing" case to tell
       // apart. Most maps carry at least one value; the assertion below only
       // needs that it is not vanishingly few.
+      //
+      // Scoped to the maps the registry reads, those with a bundle stem: it
+      // skips every other one (`bundleStem === ''`), so on those an absent key
+      // and [] cannot be told apart by anything. Since 2026-10-08 one map is
+      // such a map — "JamfProShorts" (iRGXFASEd8BG9xiO72krFw), a copy of
+      // training-video-shorts-jamf-pro published with none of Jamf's metadata:
+      // no bundle, no jamf:* key, no prettyUrl in its TOC. The floor on the
+      // scoped set keeps this from passing over nothing should bundle-less maps
+      // become the rule rather than a stray upload.
+      const registered = maps.filter(m => deriveBundleStem(m.metadata) !== '');
+      expect(
+        registered.length,
+        `Only ${String(registered.length)} of ${String(maps.length)} maps carry a bundle stem ` +
+        '(696 of 697 on 2026-10-12). Jamf may have stopped publishing bundle metadata.'
+      ).toBeGreaterThan(maps.length * 0.9);
       for (const key of ['jamf:portal', 'jamf:app', 'jamf:utility']) {
-        const present = maps.filter(m => metaOf(m).some(meta => meta.key === key));
+        const missing = registered
+          .filter(m => !metaOf(m).some(meta => meta.key === key))
+          .map(m => `${m.id} (${m.title ?? ''})`);
         expect(
-          present.length,
-          `${key} is missing entirely from ${String(maps.length - present.length)} maps; ` +
+          missing,
+          `${key} is missing entirely from these maps; ` +
           'an absent key and an empty values array would then mean different things.'
-        ).toBe(maps.length);
+        ).toEqual([]);
       }
 
       const classified = maps.filter(m => metaOf(m).some(
