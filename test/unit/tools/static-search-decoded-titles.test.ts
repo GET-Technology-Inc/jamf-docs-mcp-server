@@ -22,6 +22,12 @@
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 
+// Pins the multi-locale sitemap machinery against concepts.jamf.com as it was
+// published until November 2026; see test/helpers/multilingual-concepts.ts.
+vi.mock('../../../src/core/constants/sources.js', async (importOriginal) =>
+  (await import('../../helpers/multilingual-concepts.js'))
+    .withMultilingualConcepts(await importOriginal()));
+
 vi.mock('../../../src/core/http-client.js', async () => {
   const actual = await import('../../../src/core/http-client.js');
   return {

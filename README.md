@@ -197,7 +197,8 @@ URL whose path starts with no locale code, which the site answers with a page
 that only redirects to the en page, returns that page, under its own URL. The
 site root, `https://concepts.jamf.com/`, which picks a language in the browser,
 returns the en home page, `/en/`. With `language`, either returns that
-language's edition where the site has one.
+language's edition where the site has one. Since November 2026 concepts.jamf.com
+publishes in English only, so every other `language` gets the en page with a note.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

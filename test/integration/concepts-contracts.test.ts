@@ -42,10 +42,10 @@ import * as cheerio from 'cheerio';
 import { parseSitemap, type SitemapEntry } from '../../src/core/services/sitemap-service.js';
 import { fetchStaticArticle } from '../../src/core/services/static-article-service.js';
 import { titlesOnIndexPage } from '../../src/core/services/static-titles.js';
-import { STATIC_DOC_SOURCES, canonicalStaticUrl } from '../../src/core/constants/sources.js';
+import { STATIC_DOC_SOURCES, canonicalStaticUrl, type StaticDocSource } from '../../src/core/constants/sources.js';
 import { createMockContext } from '../helpers/mock-context.js';
 
-const SOURCE = STATIC_DOC_SOURCES['jamf-concepts'];
+const SOURCE: StaticDocSource = STATIC_DOC_SOURCES['jamf-concepts'];
 
 /** Enough pages to cross both sections and more than one locale. */
 const SAMPLE_SIZE = 12;
@@ -54,11 +54,12 @@ const CONCURRENCY = 4;
 /**
  * A floor, not a count.
  *
- * The live sitemap carries 990 entries — 99 per locale across 10 — and Jamf
- * publishing a guide must not turn this suite red. What would matter is the
- * sitemap collapsing.
+ * The sitemap carried 990 entries — 99 per locale across 10 — until the site
+ * went English-only in early November 2026; on 2026-11-09 it lists 85, all
+ * under /en/. Jamf publishing a guide must not turn this suite red. What
+ * would matter is the sitemap collapsing.
  */
-const MIN_SITEMAP_ENTRIES = 400;
+const MIN_SITEMAP_ENTRIES = 60;
 
 /**
  * The one page known to carry `<h1>`s in its body that are not its title: a
@@ -190,7 +191,7 @@ describe('concepts.jamf.com contracts', () => {
    * another.
    */
   it('encodes the hierarchy in the sitemap paths', () => {
-    const locales = [...Object.values(SOURCE.locales), ...SOURCE.otherLocales];
+    const locales = [...Object.values(SOURCE.locales), ...(SOURCE.otherLocales ?? [])];
     expect(locales.length, 'locales declared for this source').toBeGreaterThan(0);
 
     for (const locale of locales) {
