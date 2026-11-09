@@ -1,0 +1,129 @@
+name: Dependabot App UI Bundle
+
+# Rebuilds src/core/apps/generated/app-html.ts on a Dependabot PR and commits
+# it to the PR branch. The bundle inlines zod, the MCP SDK and ext-apps, and is
+# committed so consumers never need esbuild; Dependabot bumps the lockfile
+# only, so every bump of one of those turned CI red at "App UI bundle is up to
+# date" (#402, #408, #413, #414) and waited for someone to rebuild by hand.
+#
+# pull_request_target, because a Dependabot `pull_request` run gets a
+# read-only token and no secrets, and the commit has to come from
+# jamf-docs-release-bot: a push made with GITHUB_TOKEN starts no workflow, so
+# CI would never run on the fixed head. pull_request_target with the PR's code
+# checked out is the dangerous combination, so the two halves are split:
+#
+# - `build` runs the PR's code with no secret referenced and a read-only
+#   token, `npm ci --ignore-scripts` so no dependency's install script runs at
+#   all, and checkout keeps no credentials. Its only output is the generated
+#   file, as an artifact.
+# - `commit` holds the App token and runs none of the PR's code: it checks
+#   out the built commit, copies in that one file, and pushes. A push to a
+#   branch that has moved on is refused rather than forced.
+#
+# The bot's own push is a `synchronize` by jamf-docs-release-bot, not by
+# Dependabot, so it does not start this workflow again.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-app-ui-bundle-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Rebuild the App UI bundle
+    runs-on: ubuntu-latest
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      - name: Install dependencies (no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Build the bundle
+        run: npm run build:app-ui
+
+      - name: Compare with the committed bundle
+        id: diff
+        run: |
+          if git diff --quiet -- src/core/apps/generated/app-html.ts; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Hand the bundle to the commit job
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-ui-bundle
+          path: src/core/apps/generated/app-html.ts
+          if-no-files-found: error
+          retention-days: 1
+
+  commit:
+    name: Commit the rebuilt bundle
+    runs-on: ubuntu-latest
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          # jamf-docs-release-bot's Client ID; release.yml says why it is a
+          # secret and why pull_request_target can read it.
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      # Unpacked outside the work tree and read as data: exactly one file, of
+      # the name the build job uploaded, is copied over the committed one.
+      - name: Download the bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: app-ui-bundle
+          path: ${{ runner.temp }}/app-ui-bundle
+
+      - name: Commit and push
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BUNDLE_DIR: ${{ runner.temp }}/app-ui-bundle
+        run: |
+          files=$(find "$BUNDLE_DIR" -type f | wc -l)
+          if [ "$files" -ne 1 ] || [ ! -f "$BUNDLE_DIR/app-html.ts" ]; then
+            echo "::error::expected exactly app-html.ts in the artifact"
+            exit 1
+          fi
+          cp "$BUNDLE_DIR/app-html.ts" src/core/apps/generated/app-html.ts
+          if git diff --quiet -- src/core/apps/generated/app-html.ts; then
+            echo "Bundle already up to date."
+            exit 0
+          fi
+          git config user.name 'jamf-docs-release-bot[bot]'
+          git config user.email '271597946+jamf-docs-release-bot[bot]@users.noreply.github.com'
+          git add src/core/apps/generated/app-html.ts
+          git commit -m 'deps: rebuild the app-ui bundle for this update'
+          git push origin "HEAD:refs/heads/$BRANCH"
