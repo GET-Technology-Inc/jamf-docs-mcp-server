@@ -29,7 +29,7 @@ import ts from 'typescript';
 
 import { hostLanguage, translationNote } from '../../../app-ui/language.js';
 import { urlLocale } from '../../../app-ui/search.js';
-import { STATIC_DOC_SOURCES } from '../../../src/core/constants/sources.js';
+import { STATIC_DOC_SOURCES, type StaticDocSource } from '../../../src/core/constants/sources.js';
 import { APP_HTML } from '../../../src/core/apps/generated/app-html.js';
 import { bundleSource, bundledFunction, bundledFunctionsContaining } from '../../helpers/app-bundle.js';
 
@@ -101,13 +101,14 @@ describe('the language a url names, which a call with no `language` asks for', (
 
   it('is the server\'s locale for the code a concepts.jamf.com or support.jamf.com url starts with', () => {
     // As `staticLocaleId` in src/core/constants/sources.ts reads it.
-    for (const source of Object.values(STATIC_DOC_SOURCES)) {
+    for (const source of Object.values(STATIC_DOC_SOURCES) as StaticDocSource[]) {
       for (const [locale, code] of Object.entries(source.locales)) {
         const url = `${source.baseUrl}/${code}/articles/1-a`;
         expect({ url, locale: urlLocale(url) }).toEqual({ url, locale });
       }
-      // A code no `language` value names: concepts.jamf.com's `ko` and `pl`.
-      for (const code of 'otherLocales' in source ? source.otherLocales : []) {
+      // A code no `language` value names, as concepts.jamf.com's `ko` and `pl`
+      // were until it went English-only in November 2026.
+      for (const code of source.otherLocales ?? []) {
         expect(urlLocale(`${source.baseUrl}/${code}/guides/a/`)).toBeUndefined();
       }
     }

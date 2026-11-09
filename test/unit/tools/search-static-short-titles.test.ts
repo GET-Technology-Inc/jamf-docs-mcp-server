@@ -23,7 +23,13 @@
  * finds the page too.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Pins the multi-locale sitemap machinery against concepts.jamf.com as it was
+// published until November 2026; see test/helpers/multilingual-concepts.ts.
+vi.mock('../../../src/core/constants/sources.js', async (importOriginal) =>
+  (await import('../../helpers/multilingual-concepts.js'))
+    .withMultilingualConcepts(await importOriginal()));
 import { callSearch, CLUSTERED_SEARCH, CONCEPTS_SITEMAP, MAPS_LIST, PRO_DOCUMENTATION_MAP } from '../../helpers/search-upstream.js';
 import { conceptsIndexPages } from '../../helpers/concepts-index-pages.js';
 import { createMockContext, createMockCache } from '../../helpers/mock-context.js';

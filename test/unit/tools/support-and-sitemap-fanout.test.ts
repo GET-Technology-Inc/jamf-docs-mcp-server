@@ -40,6 +40,12 @@
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+
+// Pins the multi-locale sitemap machinery against concepts.jamf.com as it was
+// published until November 2026; see test/helpers/multilingual-concepts.ts.
+vi.mock('../../../src/core/constants/sources.js', async (importOriginal) =>
+  (await import('../../helpers/multilingual-concepts.js'))
+    .withMultilingualConcepts(await importOriginal()));
 import { McpServer } from '@modelcontextprotocol/server';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { createMcpServer } from '../../../src/core/create-server.js';

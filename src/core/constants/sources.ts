@@ -204,22 +204,16 @@ export const STATIC_DOC_SOURCES = {
       'Source: Jamf Concepts (concepts.jamf.com), Jamf\'s innovation lab. ' +
       'This is exploratory material, not official product documentation — ' +
       'see learn.jamf.com for the supported configuration steps.',
+    // English only since early November 2026. Until then the sitemap listed
+    // ten locale codes, each with the same 99 paths (2026-09-28); on
+    // 2026-11-09 it lists 85 paths, all under /en/, and /ja/, /de/, /zh-TW/
+    // and the rest answer 404, their section indexes included. Every other
+    // language is served the en edition with a `localeNote`, as a language
+    // the site never published was before.
     locales: {
       'en-US': 'en',
-      'ja-JP': 'ja',
-      'de-DE': 'de',
-      'es-ES': 'es',
-      'fr-FR': 'fr',
-      'nl-NL': 'nl',
-      'zh-TW': 'zh-TW',
-      'zh-CN': 'zh-CN',
     },
-    otherLocales: ['ko', 'pl'],
-    // Each of the sitemap's ten locale codes lists the same 99 paths as en,
-    // and a page's title is translated where its slug is not: the og:title of
-    // /ja/guides/threat-and-risk-management/ is 脅威とリスク管理 (2026-09-28).
-    // Each section's index page lists those titles (`titleList`); a page it
-    // does not list is titled from its en slug.
+    // A page's slug is English, whatever language it is asked for in.
     slugLocale: 'en',
     sections: [
       { id: 'jamf-concepts-guides', path: 'guides', title: 'Jamf Concepts: Guides', titleList: 'nav' },
