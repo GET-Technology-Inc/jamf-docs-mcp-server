@@ -1,3 +1,17 @@
+## [6.1.1](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.1.0...v6.1.1) (2026-11-10)
+
+### Bug Fixes
+
+* **concepts:** serve concepts.jamf.com as the English-only site it now is ([#416](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/416)) ([016c9b3](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/016c9b329e8173913dc0ed3b7b697eaa453207da)), closes [#414](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/414) [#413](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/413) [#408](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/408) [#402](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/402) [#408](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/408) [#413](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/413)
+
+### Dependencies
+
+* bump handlebars ([#406](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/406)) ([e8e1828](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/e8e1828cacdcf4698c6012b2d0099677a9f7d66c))
+* bump the dev-dependencies group with 3 updates ([#407](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/407)) ([c8f0cfb](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/c8f0cfb7abd38840f25c9bc58191bb2f526c9f6d))
+* bump the dev-dependencies group with 4 updates ([#410](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/410)) ([3a86396](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/3a863960c9c98c52efda741dbd7565d727f3cbe9))
+* bump the security group across 1 directory with 1 update ([#412](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/412)) ([63fc0fa](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/63fc0fa74769fdd20dd4dcc3d6aa757510edde2e))
+* bump vitest from 5.0.3 to 5.0.5 in the vitest group ([#409](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/issues/409)) ([d817396](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/commit/d817396301c8e5b2f4d87326a3dbcc36920aa5cb))
+
 ## [6.1.0](https://github.com/GET-Technology-Inc/jamf-docs-mcp-server/compare/v6.0.14...v6.1.0) (2026-10-12)
 
 ### Features
